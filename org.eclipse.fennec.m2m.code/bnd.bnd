@@ -1,0 +1,5 @@
+# sets the usually required buildpath using the bnd library, you can extend it with the normal -buildpath to your liking
+-library: enableEMF
+
+-buildpath: \
+	org.osgi.service.condition;version=latest

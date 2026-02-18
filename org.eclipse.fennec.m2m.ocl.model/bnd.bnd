@@ -1,0 +1,14 @@
+-library: enableEMF
+
+-generate:\
+	model/ocl.genmodel;\
+		generate=fennecEMF;\
+		genmodel=model/ocl.genmodel;\
+		output=src
+
+-includeresource.model: model=model
+
+Bundle-Version: 1.0.0.SNAPSHOT
+
+-buildpath: \
+	org.osgi.service.condition;version=latest
