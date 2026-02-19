@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.fennec.m2m.model.ocl.Constraint;
@@ -28,10 +27,10 @@ import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclEngine;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2m.ocl.api.OclExpressionParser;
-import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvaluator;
 
 /**
  * Plain Java implementation of the {@link OclEngine} facade.
@@ -106,10 +105,7 @@ public class OclEngineImpl implements OclEngine {
 		Objects.requireNonNull(context, "context must not be null");
 		Objects.requireNonNull(options, "options must not be null");
 
-		// TODO: delegate to OclEvaluator (step 4)
-		return new OclResult(OclInvalid.INSTANCE, List.of(
-				new BasicDiagnostic(Diagnostic.ERROR, "ocl.engine", 0,
-						"Evaluation not yet implemented", null)));
+		return OclEvaluator.evaluate(expression, context, options);
 	}
 
 	// --- Validation ---
