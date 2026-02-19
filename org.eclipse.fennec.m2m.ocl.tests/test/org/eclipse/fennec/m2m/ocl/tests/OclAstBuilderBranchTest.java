@@ -24,6 +24,7 @@ import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclUnlimitedNatural;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -244,8 +245,8 @@ class OclAstBuilderBranchTest extends AbstractOclTest {
 	void unlimitedNaturalLiteral() throws OclParseException {
 		Object result = eval("*", alice);
 		assertNotNull(result);
-		// * is represented as -1 (narrowed from Long to Integer by OclEngineImpl)
-		assertEquals(-1, result);
+		// * is represented as OclUnlimitedNatural sentinel (not -1L)
+		assertEquals(OclUnlimitedNatural.INSTANCE, result);
 	}
 
 	// === Implicit operation calls (without source) ===

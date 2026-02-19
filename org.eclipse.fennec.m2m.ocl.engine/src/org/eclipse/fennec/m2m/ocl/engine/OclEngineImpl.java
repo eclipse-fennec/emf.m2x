@@ -39,13 +39,14 @@ import org.eclipse.fennec.m2m.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2m.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
-import org.eclipse.fennec.m2m.ocl.engine.internal.OclDelegateUtil;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclBag;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclDelegateUtil;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvaluator;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclInvocationDelegateFactory;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclOrderedSet;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclSettingDelegateFactory;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclUnlimitedNatural;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclValidationDelegateFactory;
 
 /**
@@ -248,6 +249,9 @@ public class OclEngineImpl implements OclEngine {
 	 * in 32 bits are also returned as {@code Integer}.
 	 */
 	private static Object narrowResult(Object value) {
+		if (value instanceof OclUnlimitedNatural) {
+			return value; // preserve * sentinel as-is
+		}
 		if (value instanceof Long l) {
 			if (l >= Integer.MIN_VALUE && l <= Integer.MAX_VALUE) {
 				return l.intValue();

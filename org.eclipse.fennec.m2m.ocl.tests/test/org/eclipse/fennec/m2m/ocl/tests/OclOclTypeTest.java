@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2m.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2m.model.ocl.CollectionType;
 import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
@@ -160,7 +162,7 @@ class OclOclTypeTest extends AbstractOclTest {
 	@Test
 	void oclType_collection() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}.oclType()", person);
-		assertInstanceOf(PrimitiveType.class, result);
-		assertEquals("Collection", ((PrimitiveType) result).getName());
+		assertInstanceOf(CollectionType.class, result);
+		assertEquals(CollectionKind.SEQUENCE, ((CollectionType) result).getKind());
 	}
 }

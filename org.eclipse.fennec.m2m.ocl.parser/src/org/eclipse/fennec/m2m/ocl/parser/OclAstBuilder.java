@@ -21,6 +21,7 @@ import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EOperation;
@@ -75,10 +76,16 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	private static final OclFactory FACTORY = OclFactory.eINSTANCE;
 
 	private final EClassifier contextType;
+	private final EPackage.Registry packageRegistry;
 	private OclEnvironment environment;
 
 	OclAstBuilder(EClassifier contextType) {
+		this(contextType, null);
+	}
+
+	OclAstBuilder(EClassifier contextType, EPackage.Registry packageRegistry) {
 		this.contextType = contextType;
+		this.packageRegistry = packageRegistry;
 		Variable selfVar = FACTORY.createVariable();
 		selfVar.setName("self");
 		selfVar.setType(createClassifierType(contextType));
@@ -826,15 +833,23 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 	private void resolveOperation(OperationCallExp exp, String opName) {
 		exp.setName(opName);
-		// TODO: full operation resolution including stdlib
-		// For now, store via a placeholder EOperation
 		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());
 		if (sourceType instanceof EClass eClass) {
+			int argCount = exp.getOwnedArguments().size();
+			EOperation bestMatch = null;
 			for (EOperation op : eClass.getEAllOperations()) {
 				if (opName.equals(op.getName())) {
-					exp.setReferredOperation(op);
-					break;
+					if (op.getEParameters().size() == argCount) {
+						bestMatch = op;
+						break; // exact match by name + param count
+					}
+					if (bestMatch == null) {
+						bestMatch = op; // fallback: name-only match
+					}
 				}
+			}
+			if (bestMatch != null) {
+				exp.setReferredOperation(bestMatch);
 			}
 		}
 	}
@@ -876,15 +891,67 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	}
 
 	private EClassifier resolveClassifier(List<String> segments) {
-		// TODO: qualified name resolution against available packages
-		// For now, check against context type's package
-		if (segments.size() == 1 && contextType instanceof EClass contextClass) {
-			EClassifier found = contextClass.getEPackage().getEClassifier(segments.get(0));
-			if (found != null) {
-				return found;
+		// 1. Single segment: try context package first
+		if (segments.size() == 1) {
+			String name = segments.get(0);
+			if (contextType instanceof EClass contextClass) {
+				EClassifier found = contextClass.getEPackage().getEClassifier(name);
+				if (found != null) {
+					return found;
+				}
+			}
+			// Fallback: search all registered packages
+			EClassifier fromRegistry = findInRegistry(name);
+			if (fromRegistry != null) {
+				return fromRegistry;
+			}
+			return contextType;
+		}
+		// 2. Multi-segment: last = classifier name, preceding = package name/nsURI
+		String classifierName = segments.get(segments.size() - 1);
+		String packageName = String.join("::", segments.subList(0, segments.size() - 1));
+
+		// Try context package by name match
+		if (contextType instanceof EClass contextClass) {
+			EPackage ctxPkg = contextClass.getEPackage();
+			if (ctxPkg.getName().equals(packageName) || ctxPkg.getNsURI().equals(packageName)) {
+				EClassifier found = ctxPkg.getEClassifier(classifierName);
+				if (found != null) {
+					return found;
+				}
+			}
+		}
+		// Search registry by package name/nsURI
+		if (packageRegistry != null) {
+			for (Object key : packageRegistry.keySet().toArray()) {
+				EPackage pkg = packageRegistry.getEPackage((String) key);
+				if (pkg != null && (pkg.getName().equals(packageName)
+						|| pkg.getNsURI().equals(packageName))) {
+					EClassifier found = pkg.getEClassifier(classifierName);
+					if (found != null) {
+						return found;
+					}
+				}
 			}
 		}
 		return contextType;
+	}
+
+	/** Searches the package registry for a classifier by simple name. */
+	private EClassifier findInRegistry(String name) {
+		if (packageRegistry == null) {
+			return null;
+		}
+		for (Object key : packageRegistry.keySet().toArray()) {
+			EPackage pkg = packageRegistry.getEPackage((String) key);
+			if (pkg != null) {
+				EClassifier found = pkg.getEClassifier(name);
+				if (found != null) {
+					return found;
+				}
+			}
+		}
+		return null;
 	}
 
 	private OclExpression resolveImplicitProperty(String name) {
@@ -917,6 +984,13 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 				}
 			}
 		}
+		// Try type name in registry
+		EClassifier fromRegistry = findInRegistry(name);
+		if (fromRegistry != null) {
+			TypeExp typeExp = FACTORY.createTypeExp();
+			typeExp.setReferredType(createClassifierType(fromRegistry));
+			return typeExp;
+		}
 		// Unknown name — create a variable expression (may be external variable)
 		Variable extVar = FACTORY.createVariable();
 		extVar.setName(name);
@@ -926,15 +1000,38 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	private EnumLiteralExp tryResolveEnumLiteral(List<String> segments) {
 		String enumName = segments.get(0);
 		String literalName = segments.get(1);
+		// Search context package
 		if (contextType instanceof EClass contextClass) {
-			for (EClassifier classifier : contextClass.getEPackage().getEClassifiers()) {
-				if (classifier instanceof EEnum eEnum && eEnum.getName().equals(enumName)) {
-					EEnumLiteral literal = eEnum.getEEnumLiteral(literalName);
-					if (literal != null) {
-						EnumLiteralExp exp = FACTORY.createEnumLiteralExp();
-						exp.setReferredLiteral(literal);
-						return exp;
+			EnumLiteralExp result = findEnumLiteralInPackage(
+					contextClass.getEPackage(), enumName, literalName);
+			if (result != null) {
+				return result;
+			}
+		}
+		// Search registry
+		if (packageRegistry != null) {
+			for (Object key : packageRegistry.keySet().toArray()) {
+				EPackage pkg = packageRegistry.getEPackage((String) key);
+				if (pkg != null) {
+					EnumLiteralExp result = findEnumLiteralInPackage(pkg, enumName, literalName);
+					if (result != null) {
+						return result;
 					}
+				}
+			}
+		}
+		return null;
+	}
+
+	private static EnumLiteralExp findEnumLiteralInPackage(EPackage pkg,
+			String enumName, String literalName) {
+		for (EClassifier classifier : pkg.getEClassifiers()) {
+			if (classifier instanceof EEnum eEnum && eEnum.getName().equals(enumName)) {
+				EEnumLiteral literal = eEnum.getEEnumLiteral(literalName);
+				if (literal != null) {
+					EnumLiteralExp exp = FACTORY.createEnumLiteralExp();
+					exp.setReferredLiteral(literal);
+					return exp;
 				}
 			}
 		}

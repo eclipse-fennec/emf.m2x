@@ -298,7 +298,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
 			EClassifier contextType) {
-		return (OclExpression) new OclAstBuilder(contextType).visit(ctx);
+		return (OclExpression) new OclAstBuilder(contextType, packageRegistry).visit(ctx);
 	}
 
 	// ==================== Classifier Resolution ====================

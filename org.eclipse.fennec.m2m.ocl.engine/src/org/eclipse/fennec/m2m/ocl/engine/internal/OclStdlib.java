@@ -27,8 +27,11 @@ import java.util.regex.PatternSyntaxException;
 
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2m.model.ocl.AnyType;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
+import org.eclipse.fennec.m2m.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2m.model.ocl.CollectionType;
+import org.eclipse.fennec.m2m.model.ocl.MapType;
 import org.eclipse.fennec.m2m.model.ocl.OclFactory;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
 import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
@@ -75,6 +78,9 @@ class OclStdlib {
 		}
 
 		// Type-specific dispatch
+		if (source instanceof OclUnlimitedNatural) {
+			return dispatchUnlimitedNatural(name, source, args);
+		}
 		if (source instanceof Boolean b) {
 			return dispatchBoolean(name, b, args);
 		}
@@ -123,6 +129,9 @@ class OclStdlib {
 			case "oclIsTypeOf" -> oclIsTypeOf(source, args[0]);
 			case "oclAsType" -> oclAsType(source, args[0]);
 			case "oclAsSet" -> {
+				if (source instanceof Collection<?> col) {
+					yield new LinkedHashSet<>(col);
+				}
 				Set<Object> set = new LinkedHashSet<>();
 				if (source != null) {
 					set.add(source);
@@ -135,29 +144,63 @@ class OclStdlib {
 		};
 	}
 
+	// Cached primitive type singletons so oclType() = oclType() holds
+	private static final Map<String, PrimitiveType> PRIMITIVE_TYPE_CACHE;
+	static {
+		PRIMITIVE_TYPE_CACHE = new LinkedHashMap<>();
+		for (String name : List.of("Integer", "Real", "String", "Boolean", "UnlimitedNatural")) {
+			PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
+			pt.setName(name);
+			PRIMITIVE_TYPE_CACHE.put(name, pt);
+		}
+	}
+
 	private static Object oclType(Object source) {
 		if (source == null) return OclInvalid.INSTANCE;
 		if (source == OclInvalid.INSTANCE) return OclInvalid.INSTANCE;
+		if (source instanceof OclUnlimitedNatural) return PRIMITIVE_TYPE_CACHE.get("UnlimitedNatural");
 		if (source instanceof EObject eo) return eo.eClass();
-		if (source instanceof Long || source instanceof Integer) return createPrimitiveType("Integer");
-		if (source instanceof Double || source instanceof Float) return createPrimitiveType("Real");
-		if (source instanceof String) return createPrimitiveType("String");
-		if (source instanceof Boolean) return createPrimitiveType("Boolean");
-		if (source instanceof Collection<?>) return createPrimitiveType("Collection");
-		if (source instanceof Map<?, ?>) return createPrimitiveType("Map");
+		if (source instanceof Long || source instanceof Integer) return PRIMITIVE_TYPE_CACHE.get("Integer");
+		if (source instanceof Double || source instanceof Float) return PRIMITIVE_TYPE_CACHE.get("Real");
+		if (source instanceof String) return PRIMITIVE_TYPE_CACHE.get("String");
+		if (source instanceof Boolean) return PRIMITIVE_TYPE_CACHE.get("Boolean");
+		if (source instanceof OclOrderedSet<?>) return createCollectionType(CollectionKind.ORDERED_SET);
+		if (source instanceof OclBag<?>) return createCollectionType(CollectionKind.BAG);
+		if (source instanceof Set<?>) return createCollectionType(CollectionKind.SET);
+		if (source instanceof List<?>) return createCollectionType(CollectionKind.SEQUENCE);
+		if (source instanceof Collection<?>) return createCollectionType(CollectionKind.COLLECTION);
+		if (source instanceof Map<?, ?>) {
+			return OclFactory.eINSTANCE.createMapType();
+		}
 		return OclInvalid.INSTANCE;
 	}
 
-	private static PrimitiveType createPrimitiveType(String name) {
-		PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
-		pt.setName(name);
-		return pt;
+	private static CollectionType createCollectionType(CollectionKind kind) {
+		CollectionType ct = OclFactory.eINSTANCE.createCollectionType();
+		ct.setKind(kind);
+		return ct;
 	}
 
 	private static Boolean oclEquals(Object left, Object right) {
+		// UnlimitedNatural equality: * = * is true, * = anything else is false
+		if (left instanceof OclUnlimitedNatural || right instanceof OclUnlimitedNatural) {
+			return left instanceof OclUnlimitedNatural && right instanceof OclUnlimitedNatural;
+		}
 		// Collection equality — kind must match
 		if (left instanceof Collection<?> || right instanceof Collection<?>) {
 			return collectionEquals(left, right);
+		}
+		// Tuple (Map) equality — recursive OCL equality on values
+		if (left instanceof Map<?, ?> lm && right instanceof Map<?, ?> rm) {
+			if (!lm.keySet().equals(rm.keySet())) return false;
+			for (var entry : lm.entrySet()) {
+				if (!Boolean.TRUE.equals(oclEquals(entry.getValue(), rm.get(entry.getKey())))) return false;
+			}
+			return true;
+		}
+		// OclType equality by name (so cached singletons and fresh instances compare equal)
+		if (left instanceof OclType lt && right instanceof OclType rt) {
+			return Objects.equals(lt.getName(), rt.getName());
 		}
 		if (left instanceof EObject le && right instanceof EObject re) {
 			return org.eclipse.emf.ecore.util.EcoreUtil.equals(le, re);
@@ -288,19 +331,36 @@ class OclStdlib {
 				&& classifier.getInstanceClass().equals(source.getClass());
 	}
 
-	private static boolean matchesPrimitiveType(Object source, String typeName) {
+	static boolean matchesPrimitiveType(Object source, String typeName) {
 		return switch (typeName) {
 			case "Integer" -> source instanceof Long || source instanceof Integer;
 			case "Real" -> source instanceof Double || source instanceof Float;
 			case "String" -> source instanceof String;
 			case "Boolean" -> source instanceof Boolean;
-			case "UnlimitedNatural" -> source instanceof Long || source instanceof Integer;
+			case "UnlimitedNatural" -> source instanceof OclUnlimitedNatural
+					|| source instanceof Long || source instanceof Integer;
 			case "OclVoid" -> source == null;
 			default -> false;
 		};
 	}
 
 	private static Object oclAsType(Object source, Object typeArg) {
+		// Handle primitive types (PrimitiveType has no EClassifier)
+		if (typeArg instanceof PrimitiveType pt) {
+			return matchesPrimitiveType(source, pt.getName()) ? source : OclInvalid.INSTANCE;
+		}
+		// Handle collection types
+		if (typeArg instanceof CollectionType) {
+			return source instanceof Collection<?> ? source : OclInvalid.INSTANCE;
+		}
+		// Handle map types
+		if (typeArg instanceof MapType) {
+			return source instanceof Map<?, ?> ? source : OclInvalid.INSTANCE;
+		}
+		// Handle AnyType — everything is OclAny
+		if (typeArg instanceof AnyType) {
+			return source;
+		}
 		EClassifier classifier = extractClassifier(typeArg);
 		if (classifier == null) {
 			return OclInvalid.INSTANCE;
@@ -339,9 +399,43 @@ class OclStdlib {
 		};
 	}
 
+	// --- UnlimitedNatural (OCL v2.5 §11.5.5) ---
+
+	private static Object dispatchUnlimitedNatural(String name, Object source, Object[] args) {
+		boolean argUnlimited = args.length > 0 && args[0] instanceof OclUnlimitedNatural;
+		return switch (name) {
+			case "<" -> false; // * is not less than anything
+			case "<=" -> argUnlimited;
+			case ">" -> !argUnlimited;
+			case ">=" -> true;
+			case "max" -> argUnlimited ? source : OclUnlimitedNatural.INSTANCE;
+			case "min" -> {
+				if (argUnlimited) yield OclUnlimitedNatural.INSTANCE;
+				yield args[0]; // finite arg is smaller than *
+			}
+			case "toInteger" -> OclInvalid.INSTANCE;
+			case "toString" -> "*";
+			// Arithmetic on * is undefined per spec
+			case "+", "-", "*", "/", "div", "mod", "abs",
+				 "floor", "ceiling", "round", "toReal" -> OclInvalid.INSTANCE;
+			default -> NOT_FOUND;
+		};
+	}
+
 	// --- Integer (OCL v2.4 Section 11.5) ---
 
 	private static Object dispatchInteger(String name, Long source, Object[] args) {
+		// Guard: if arg is OclUnlimitedNatural, special-case comparison/max/min
+		if (args.length > 0 && args[0] instanceof OclUnlimitedNatural) {
+			return switch (name) {
+				case "<", "<=" -> true; // any finite < *
+				case ">", ">=" -> false;
+				case "max" -> OclUnlimitedNatural.INSTANCE;
+				case "min" -> source;
+				case "+", "-", "*", "/", "div", "mod" -> OclInvalid.INSTANCE;
+				default -> NOT_FOUND;
+			};
+		}
 		return switch (name) {
 			case "+" -> {
 				if (args.length == 0) yield source; // unary +
@@ -393,6 +487,9 @@ class OclStdlib {
 			case ">=" -> source >= asNumber(args[0]).doubleValue();
 			case "toReal" -> (double) source;
 			case "toInteger" -> source;
+			case "floor" -> source;
+			case "ceiling" -> source;
+			case "round" -> source;
 			case "toString" -> source.toString();
 			default -> NOT_FOUND;
 		};
@@ -751,8 +848,12 @@ class OclStdlib {
 				yield source.get(idx - 1); // 1-based
 			}
 			case "indexOf" -> {
-				int idx = source.indexOf(args[0]);
-				yield (long) (idx + 1); // 0 means not found (1-based)
+				for (int i = 0; i < source.size(); i++) {
+					if (Boolean.TRUE.equals(oclEquals(source.get(i), args[0]))) {
+						yield (long) (i + 1);
+					}
+				}
+				yield 0L;
 			}
 			case "reverse" -> {
 				List<Object> result = new ArrayList<>(source);

@@ -18,10 +18,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Set;
+import java.util.Collection;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclOrderedSet;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -45,9 +46,10 @@ class OclClosureIteratorTest extends AbstractOclTest {
 	void closure_identity() throws OclParseException {
 		// closure on a non-collection body element stops after one level
 		Object result = eval("Set{1, 2, 3}->closure(i | i)", self);
-		assertInstanceOf(Set.class, result);
+		// OCL §11.9.1: closure always returns OrderedSet
+		assertInstanceOf(OclOrderedSet.class, result);
 		@SuppressWarnings("unchecked")
-		Set<Object> set = (Set<Object>) result;
+		Collection<Object> set = (Collection<Object>) result;
 		assertEquals(3, set.size());
 		assertTrue(set.contains(1));
 		assertTrue(set.contains(2));
@@ -60,9 +62,9 @@ class OclClosureIteratorTest extends AbstractOclTest {
 	void closure_nestedSets() throws OclParseException {
 		// closure flattens nested collections recursively
 		Object result = eval("Set{Set{1, 2}, Set{3, 4}}->closure(s | s)", self);
-		assertInstanceOf(Set.class, result);
+		assertInstanceOf(OclOrderedSet.class, result);
 		@SuppressWarnings("unchecked")
-		Set<Object> set = (Set<Object>) result;
+		Collection<Object> set = (Collection<Object>) result;
 		// Should contain: Set{1,2}, Set{3,4}, 1, 2, 3, 4
 		assertTrue(set.contains(1));
 		assertTrue(set.contains(2));
@@ -75,16 +77,16 @@ class OclClosureIteratorTest extends AbstractOclTest {
 	@Test
 	void closure_empty() throws OclParseException {
 		Object result = eval("Set{}->closure(i | i)", self);
-		assertInstanceOf(Set.class, result);
-		assertTrue(((Set<?>) result).isEmpty());
+		assertInstanceOf(OclOrderedSet.class, result);
+		assertTrue(((Collection<?>) result).isEmpty());
 	}
 
-	// --- Closure result is always a Set ---
+	// --- Closure result is always an OrderedSet ---
 
 	@Test
-	void closure_returnsSet() throws OclParseException {
+	void closure_returnsOrderedSet() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->closure(i | i)", self);
-		assertInstanceOf(Set.class, result);
+		assertInstanceOf(OclOrderedSet.class, result);
 	}
 
 	// --- Closure with computation ---
@@ -95,9 +97,9 @@ class OclClosureIteratorTest extends AbstractOclTest {
 		// Since we only have integers and closure stops on duplicates, this would be infinite
 		// Let's test with a bounded example instead
 		Object result = eval("Set{1}->closure(i | if i < 4 then Set{i + 1} else Set{} endif)", self);
-		assertInstanceOf(Set.class, result);
+		assertInstanceOf(OclOrderedSet.class, result);
 		@SuppressWarnings("unchecked")
-		Set<Object> set = (Set<Object>) result;
+		Collection<Object> set = (Collection<Object>) result;
 		assertTrue(set.contains(1));
 		assertTrue(set.contains(2));
 		assertTrue(set.contains(3));

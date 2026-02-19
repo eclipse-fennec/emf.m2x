@@ -32,8 +32,10 @@ import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.fennec.m2m.model.ocl.AnyType;
 import org.eclipse.fennec.m2m.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
+import org.eclipse.fennec.m2m.model.ocl.CollectionType;
 import org.eclipse.fennec.m2m.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2m.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2m.model.ocl.CollectionLiteralExp;
@@ -52,6 +54,7 @@ import org.eclipse.fennec.m2m.model.ocl.NullLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
 import org.eclipse.fennec.m2m.model.ocl.OperationCallExp;
+import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2m.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2m.model.ocl.RealLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.StringLiteralExp;
@@ -186,7 +189,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	@Override
 	public Object caseUnlimitedNaturalLiteralExp(UnlimitedNaturalLiteralExp exp) {
-		return exp.getUnlimitedNaturalSymbol();
+		long value = exp.getUnlimitedNaturalSymbol();
+		if (value == -1L) {
+			return OclUnlimitedNatural.INSTANCE;
+		}
+		return value;
 	}
 
 	@Override
@@ -521,6 +528,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object bodyResult = eval(body);
+				if (bodyResult == OclInvalid.INSTANCE || bodyResult == null) {
+					return OclInvalid.INSTANCE;
+				}
 				if (Boolean.TRUE.equals(bodyResult)) {
 					result.add(element);
 				}
@@ -539,6 +549,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object bodyResult = eval(body);
+				if (bodyResult == OclInvalid.INSTANCE || bodyResult == null) {
+					return OclInvalid.INSTANCE;
+				}
 				if (!Boolean.TRUE.equals(bodyResult)) {
 					result.add(element);
 				}
@@ -771,7 +784,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 			Integer[] indices = new Integer[elements.size()];
 			for (int i = 0; i < indices.length; i++) indices[i] = i;
 			java.util.Arrays.sort(indices, (i, j) -> compareOcl(keys.get(i), keys.get(j)));
-			List<Object> sorted = new ArrayList<>(elements.size());
+			// sortedBy on Set/OrderedSet → OclOrderedSet; on Sequence → Sequence
+			List<Object> sorted;
+			if (source instanceof Set<?> || source instanceof OclOrderedSet<?>) {
+				sorted = new OclOrderedSet<>(elements.size());
+			} else {
+				sorted = new ArrayList<>(elements.size());
+			}
 			for (int idx : indices) sorted.add(elements.get(idx));
 			return sorted;
 		} finally {
@@ -798,7 +817,8 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private Object iteratorClosure(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
-		Set<Object> result = new LinkedHashSet<>();
+		// OCL §11.9.1: closure always produces OrderedSet
+		OclOrderedSet<Object> result = new OclOrderedSet<>();
 		List<Object> workList = new ArrayList<>(source);
 		OclEvalEnvironment previousEnv = env;
 		try {
@@ -927,12 +947,29 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private Object dispatchCustomOperation(String opName, Object source, Object[] args) {
 		for (OclOperationProvider provider : customProviders) {
 			for (OclOperation op : provider.getOperations()) {
-				if (opName.equals(op.name())) {
+				if (opName.equals(op.name()) && isCompatibleOwner(op.ownerType(), source)) {
 					return op.implementation().apply(source, args);
 				}
 			}
 		}
 		return OclStdlib.NOT_FOUND;
+	}
+
+	private static boolean isCompatibleOwner(OclType ownerType, Object source) {
+		if (ownerType instanceof AnyType) {
+			return true;
+		}
+		if (ownerType instanceof PrimitiveType pt) {
+			return OclStdlib.matchesPrimitiveType(source, pt.getName());
+		}
+		if (ownerType instanceof ClassifierType ct) {
+			EClassifier ec = ct.getReferredClassifier();
+			return ec != null && ec.isInstance(source);
+		}
+		if (ownerType instanceof CollectionType) {
+			return source instanceof Collection<?>;
+		}
+		return true; // unknown type → allow (backward compat)
 	}
 
 	private Object addError(String message) {
