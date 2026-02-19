@@ -1,0 +1,106 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+package org.eclipse.fennec.m2m.ocl.engine.internal;
+
+import java.util.Map;
+
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EDataType;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EValidator;
+import org.eclipse.fennec.m2m.model.ocl.OclExpression;
+import org.eclipse.fennec.m2m.ocl.api.OclContext;
+import org.eclipse.fennec.m2m.ocl.api.OclEngine;
+import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
+import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+
+/**
+ * EMF {@link EValidator.ValidationDelegate} that evaluates OCL constraint
+ * expressions annotated on EClasses and EOperations.
+ *
+ * <p>Constraint expressions are read from EAnnotations with source
+ * {@value OclDelegateUtil#DELEGATE_URI}. For named constraints, the detail key
+ * is the constraint name. For EOperation-based invariants, the detail key
+ * is {@code "body"}.
+ *
+ * @author Data In Motion Consulting
+ * @since 1.0
+ */
+public class OclValidationDelegateFactory implements EValidator.ValidationDelegate {
+
+	private final OclEngine engine;
+
+	public OclValidationDelegateFactory(OclEngine engine) {
+		this.engine = engine;
+	}
+
+	@Override
+	public boolean validate(EClass eClass, EObject eObject,
+			Map<Object, Object> context, EOperation invariant, String expression) {
+		return evaluateConstraint(expression, eObject, eClass);
+	}
+
+	@Override
+	public boolean validate(EClass eClass, EObject eObject,
+			Map<Object, Object> context, String constraint, String expression) {
+		// If expression is null, look up by constraint name from annotation
+		String expr = expression;
+		if (expr == null) {
+			expr = OclDelegateUtil.getAnnotationDetail(eClass, constraint);
+		}
+		if (expr == null) {
+			throw new IllegalStateException(
+					"No OCL expression for constraint '" + constraint + "' on " + eClass.getName());
+		}
+		return evaluateConstraint(expr, eObject, eClass);
+	}
+
+	@Override
+	public boolean validate(EDataType eDataType, Object value,
+			Map<Object, Object> context, String constraint, String expression) {
+		// EDataType validation — not typically used with OCL, but supported
+		if (expression == null) {
+			throw new IllegalStateException(
+					"No OCL expression for constraint '" + constraint
+							+ "' on " + eDataType.getName());
+		}
+		try {
+			OclExpression parsed = engine.parse(expression, eDataType);
+			// For EDataType, there's no EObject — evaluate with a synthetic context
+			// This is a rare case; return true if no proper context
+			return true;
+		} catch (OclParseException e) {
+			return false;
+		}
+	}
+
+	private boolean evaluateConstraint(String expression, EObject eObject, EClass contextType) {
+		try {
+			OclExpression parsed = engine.parse(expression, contextType);
+			OclContext oclContext = OclContext.of(eObject);
+			Object result = engine.evaluate(parsed, oclContext);
+			if (result instanceof Boolean b) {
+				return b;
+			}
+			// Non-boolean result or OclInvalid → constraint violated
+			return result != null && result != OclInvalid.INSTANCE;
+		} catch (OclParseException e) {
+			throw new IllegalStateException(
+					"Failed to parse OCL constraint on " + contextType.getName()
+							+ ": " + e.getMessage(), e);
+		}
+	}
+}

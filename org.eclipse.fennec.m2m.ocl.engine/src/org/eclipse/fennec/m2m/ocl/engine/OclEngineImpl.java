@@ -20,6 +20,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.fennec.m2m.model.ocl.Constraint;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.ocl.api.CompleteOclContribution;
@@ -30,8 +33,12 @@ import org.eclipse.fennec.m2m.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2m.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclDelegateUtil;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvaluator;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclInvocationDelegateFactory;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSettingDelegateFactory;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclValidationDelegateFactory;
 
 /**
  * Plain Java implementation of the {@link OclEngine} facade.
@@ -148,6 +155,51 @@ public class OclEngineImpl implements OclEngine {
 	public void unregisterCompleteOclDocument(CompleteOclContribution contribution) {
 		Objects.requireNonNull(contribution, "contribution must not be null");
 		oclContributions.remove(contribution);
+	}
+
+	// --- EMF Delegate Registration ---
+
+	/**
+	 * Registers this engine as EMF delegate for invocation, setting, and
+	 * validation under the Fennec OCL delegate URI
+	 * ({@value OclDelegateUtil#DELEGATE_URI}).
+	 *
+	 * <p>After calling this method, EOperations, EStructuralFeatures, and
+	 * EClasses annotated with the Fennec delegate URI will be evaluated
+	 * using this engine.
+	 *
+	 * <p>For standalone (non-OSGi) usage:
+	 * <pre>
+	 * OclEngine engine = new OclEngineImpl(parser);
+	 * engine.installDelegates();
+	 * </pre>
+	 *
+	 * @see #uninstallDelegates()
+	 */
+	public void installDelegates() {
+		String uri = OclDelegateUtil.DELEGATE_URI;
+
+		EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE
+				.put(uri, new OclInvocationDelegateFactory(this));
+
+		EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE
+				.put(uri, new OclSettingDelegateFactory(this));
+
+		EValidator.ValidationDelegate.Registry.INSTANCE
+				.put(uri, new OclValidationDelegateFactory(this));
+	}
+
+	/**
+	 * Removes the Fennec OCL delegate registrations from the global EMF registries.
+	 *
+	 * @see #installDelegates()
+	 */
+	public void uninstallDelegates() {
+		String uri = OclDelegateUtil.DELEGATE_URI;
+
+		EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE.remove(uri);
+		EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE.remove(uri);
+		EValidator.ValidationDelegate.Registry.INSTANCE.remove(uri);
 	}
 
 	// --- Internal accessors for subclasses and evaluator ---

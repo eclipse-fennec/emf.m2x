@@ -16,10 +16,13 @@ package org.eclipse.fennec.m2m.ocl.engine.internal;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.BasicEList;
@@ -38,6 +41,8 @@ import org.eclipse.fennec.m2m.model.ocl.EnumLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.IfExp;
 import org.eclipse.fennec.m2m.model.ocl.IntegerLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.InvalidLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.IterateExp;
+import org.eclipse.fennec.m2m.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2m.model.ocl.LetExp;
 import org.eclipse.fennec.m2m.model.ocl.MapLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.MapLiteralPart;
@@ -337,6 +342,292 @@ public class OclEvaluator extends OclSwitch<Object> {
 			map.put(key, value);
 		}
 		return map;
+	}
+
+	// --- Iterator Expressions (OCL v2.4 Section 11.9) ---
+
+	@Override
+	public Object caseIteratorExp(IteratorExp exp) {
+		Object source = doSwitch(exp.getOwnedSource());
+
+		if (source == null && exp.isIsSafe()) {
+			return null;
+		}
+		Object nullCheck = checkNullInvalid(source, "iterator '" + exp.getName() + "'");
+		if (nullCheck != null) {
+			return nullCheck;
+		}
+		if (!(source instanceof Collection<?> coll)) {
+			return addError("Iterator source must be a Collection, got: "
+					+ source.getClass().getSimpleName());
+		}
+
+		List<Variable> iterVars = exp.getOwnedIterators();
+		String iterName = exp.getName();
+
+		return switch (iterName) {
+			case "select" -> iteratorSelect(coll, iterVars, exp.getOwnedBody());
+			case "reject" -> iteratorReject(coll, iterVars, exp.getOwnedBody());
+			case "collect" -> iteratorCollect(coll, iterVars, exp.getOwnedBody());
+			case "collectNested" -> iteratorCollectNested(coll, iterVars, exp.getOwnedBody());
+			case "forAll" -> iteratorForAll(coll, iterVars, exp.getOwnedBody());
+			case "exists" -> iteratorExists(coll, iterVars, exp.getOwnedBody());
+			case "any" -> iteratorAny(coll, iterVars, exp.getOwnedBody());
+			case "one" -> iteratorOne(coll, iterVars, exp.getOwnedBody());
+			case "isUnique" -> iteratorIsUnique(coll, iterVars, exp.getOwnedBody());
+			case "sortedBy" -> iteratorSortedBy(coll, iterVars, exp.getOwnedBody());
+			case "closure" -> iteratorClosure(coll, iterVars, exp.getOwnedBody());
+			default -> addError("Unknown iterator: " + iterName);
+		};
+	}
+
+	@Override
+	public Object caseIterateExp(IterateExp exp) {
+		Object source = doSwitch(exp.getOwnedSource());
+
+		if (source == null && exp.isIsSafe()) {
+			return null;
+		}
+		Object nullCheck = checkNullInvalid(source, "iterate");
+		if (nullCheck != null) {
+			return nullCheck;
+		}
+		if (!(source instanceof Collection<?> coll)) {
+			return addError("Iterate source must be a Collection, got: "
+					+ source.getClass().getSimpleName());
+		}
+
+		Variable accVar = exp.getOwnedResult();
+		Object accValue = accVar.getOwnedInit() != null ? doSwitch(accVar.getOwnedInit()) : null;
+		List<Variable> iterVars = exp.getOwnedIterators();
+
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : coll) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				env = env.nested(accVar.getName(), accValue);
+				accValue = doSwitch(exp.getOwnedBody());
+				if (accValue == OclInvalid.INSTANCE) {
+					return OclInvalid.INSTANCE;
+				}
+			}
+			return accValue;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	// --- Iterator implementations ---
+
+	private Object iteratorSelect(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		List<Object> result = new ArrayList<>();
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				if (Boolean.TRUE.equals(bodyResult)) {
+					result.add(element);
+				}
+			}
+			return source instanceof Set<?> ? new LinkedHashSet<>(result) : result;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorReject(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		List<Object> result = new ArrayList<>();
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				if (!Boolean.TRUE.equals(bodyResult)) {
+					result.add(element);
+				}
+			}
+			return source instanceof Set<?> ? new LinkedHashSet<>(result) : result;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorCollect(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		List<Object> result = new ArrayList<>();
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				// collect flattens one level
+				if (bodyResult instanceof Collection<?> nested) {
+					result.addAll(nested);
+				} else {
+					result.add(bodyResult);
+				}
+			}
+			return result; // collect always yields a Bag (List)
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorCollectNested(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		List<Object> result = new ArrayList<>();
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				result.add(doSwitch(body));
+			}
+			return result; // collectNested does NOT flatten
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorForAll(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				if (!Boolean.TRUE.equals(bodyResult)) {
+					return false; // short-circuit
+				}
+			}
+			return true;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorExists(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				if (Boolean.TRUE.equals(bodyResult)) {
+					return true; // short-circuit
+				}
+			}
+			return false;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorAny(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				if (Boolean.TRUE.equals(bodyResult)) {
+					return element;
+				}
+			}
+			return null; // OclVoid — no element matched
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorOne(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		Object found = null;
+		boolean foundOne = false;
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				if (Boolean.TRUE.equals(bodyResult)) {
+					if (foundOne) {
+						return false; // more than one
+					}
+					found = element;
+					foundOne = true;
+				}
+			}
+			return foundOne;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorIsUnique(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		Set<Object> seen = new HashSet<>();
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				if (!seen.add(bodyResult)) {
+					return false; // duplicate
+				}
+			}
+			return true;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	@SuppressWarnings("unchecked")
+	private Object iteratorSortedBy(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		List<Object> elements = new ArrayList<>(source);
+		OclEvalEnvironment previousEnv = env;
+		try {
+			elements.sort((a, b) -> {
+				env = previousEnv.nested(iterVars.get(0).getName(), a);
+				Object keyA = doSwitch(body);
+				env = previousEnv.nested(iterVars.get(0).getName(), b);
+				Object keyB = doSwitch(body);
+				if (keyA instanceof Comparable ca && keyB instanceof Comparable) {
+					return ca.compareTo(keyB);
+				}
+				return 0;
+			});
+			return elements; // sortedBy yields a Sequence
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorClosure(Collection<?> source, List<Variable> iterVars,
+			OclExpression body) {
+		Set<Object> result = new LinkedHashSet<>();
+		List<Object> workList = new ArrayList<>(source);
+		OclEvalEnvironment previousEnv = env;
+		try {
+			while (!workList.isEmpty()) {
+				Object element = workList.remove(0);
+				if (!result.add(element)) {
+					continue; // already visited
+				}
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object bodyResult = doSwitch(body);
+				if (bodyResult instanceof Collection<?> nested) {
+					workList.addAll(nested);
+				} else if (bodyResult != null && bodyResult != OclInvalid.INSTANCE) {
+					workList.add(bodyResult);
+				}
+			}
+			return result;
+		} finally {
+			env = previousEnv;
+		}
 	}
 
 	// --- Fallback ---

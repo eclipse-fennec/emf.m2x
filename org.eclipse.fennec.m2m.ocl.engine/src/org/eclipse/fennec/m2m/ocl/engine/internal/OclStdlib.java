@@ -16,8 +16,11 @@ package org.eclipse.fennec.m2m.ocl.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.PatternSyntaxException;
@@ -86,6 +89,21 @@ class OclStdlib {
 		}
 		if (source instanceof String s) {
 			return dispatchString(name, s, args);
+		}
+		if (source instanceof Map<?, ?> m) {
+			return dispatchMap(name, m, args);
+		}
+		if (source instanceof Collection<?> c) {
+			// Ordered collections: List (Sequence/Bag) and LinkedHashSet (OrderedSet)
+			if (source instanceof List<?> l) {
+				Object ordered = dispatchOrderedCollection(name, l, args);
+				if (ordered != NOT_FOUND) return ordered;
+			} else if (source instanceof LinkedHashSet<?>) {
+				// OrderedSet: convert to List for ordered operations
+				Object ordered = dispatchOrderedCollection(name, new ArrayList<>(c), args);
+				if (ordered != NOT_FOUND) return ordered;
+			}
+			return dispatchCollection(name, c, args);
 		}
 
 		return NOT_FOUND;
@@ -344,6 +362,252 @@ class OclStdlib {
 			case "toString" -> source;
 			default -> NOT_FOUND;
 		};
+	}
+
+	// --- Collection (OCL v2.4 Section 11.7) ---
+
+	private static Object dispatchCollection(String name, Collection<?> source, Object[] args) {
+		return switch (name) {
+			case "size" -> (long) source.size();
+			case "isEmpty" -> source.isEmpty();
+			case "notEmpty" -> !source.isEmpty();
+			case "includes" -> source.contains(args[0]);
+			case "excludes" -> !source.contains(args[0]);
+			case "includesAll" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				yield source.containsAll(other);
+			}
+			case "excludesAll" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				yield Collections.disjoint(source, other);
+			}
+			case "count" -> source.stream().filter(e -> Objects.equals(e, args[0])).count();
+			case "flatten" -> {
+				List<Object> flat = new ArrayList<>();
+				flatten(source, flat);
+				yield source instanceof Set<?> ? new LinkedHashSet<>(flat) : flat;
+			}
+			case "including" -> {
+				if (source instanceof Set<?>) {
+					Set<Object> result = new LinkedHashSet<>(source);
+					result.add(args[0]);
+					yield result;
+				}
+				List<Object> result = new ArrayList<>(source);
+				result.add(args[0]);
+				yield result;
+			}
+			case "excluding" -> {
+				if (source instanceof Set<?>) {
+					Set<Object> result = new LinkedHashSet<>(source);
+					result.remove(args[0]);
+					yield result;
+				}
+				List<Object> result = new ArrayList<>(source);
+				result.remove(args[0]);
+				yield result;
+			}
+			case "union" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				if (source instanceof Set<?>) {
+					Set<Object> result = new LinkedHashSet<>(source);
+					result.addAll(other);
+					yield result;
+				}
+				List<Object> result = new ArrayList<>(source);
+				result.addAll(other);
+				yield result;
+			}
+			case "intersection" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				if (source instanceof Set<?>) {
+					Set<Object> result = new LinkedHashSet<>(source);
+					result.retainAll(other);
+					yield result;
+				}
+				List<Object> result = new ArrayList<>(source);
+				result.retainAll(other);
+				yield result;
+			}
+			case "-" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				if (source instanceof Set<?>) {
+					Set<Object> result = new LinkedHashSet<>(source);
+					result.removeAll(other);
+					yield result;
+				}
+				List<Object> result = new ArrayList<>(source);
+				result.removeAll(other);
+				yield result;
+			}
+			case "symmetricDifference" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				Set<Object> result = new LinkedHashSet<>(source);
+				for (Object o : other) {
+					if (!result.remove(o)) {
+						result.add(o);
+					}
+				}
+				yield result;
+			}
+			case "asSet" -> new LinkedHashSet<>(source);
+			case "asBag" -> new ArrayList<>(source);
+			case "asSequence" -> new ArrayList<>(source);
+			case "asOrderedSet" -> new LinkedHashSet<>(source);
+			case "sum" -> {
+				double sum = 0;
+				boolean allLong = true;
+				for (Object e : source) {
+					if (e instanceof Long l) {
+						sum += l;
+					} else if (e instanceof Number n) {
+						sum += n.doubleValue();
+						allLong = false;
+					} else {
+						yield OclInvalid.INSTANCE;
+					}
+				}
+				yield allLong ? (long) sum : sum;
+			}
+			case "max" -> {
+				Comparable<?> max = null;
+				for (Object e : source) {
+					if (!(e instanceof Comparable)) yield OclInvalid.INSTANCE;
+					@SuppressWarnings("unchecked")
+					Comparable<Object> c = (Comparable<Object>) e;
+					if (max == null || c.compareTo(max) > 0) {
+						max = c;
+					}
+				}
+				yield max == null ? OclInvalid.INSTANCE : max;
+			}
+			case "min" -> {
+				Comparable<?> min = null;
+				for (Object e : source) {
+					if (!(e instanceof Comparable)) yield OclInvalid.INSTANCE;
+					@SuppressWarnings("unchecked")
+					Comparable<Object> c = (Comparable<Object>) e;
+					if (min == null || c.compareTo(min) < 0) {
+						min = c;
+					}
+				}
+				yield min == null ? OclInvalid.INSTANCE : min;
+			}
+			case "product" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				Set<Map<String, Object>> result = new LinkedHashSet<>();
+				for (Object a : source) {
+					for (Object b : other) {
+						Map<String, Object> tuple = new LinkedHashMap<>();
+						tuple.put("first", a);
+						tuple.put("second", b);
+						result.add(tuple);
+					}
+				}
+				yield result;
+			}
+			case "toString" -> source.toString();
+			default -> NOT_FOUND;
+		};
+	}
+
+	// --- Ordered Collection: Sequence, OrderedSet (OCL v2.4 Section 11.7.3/11.7.4) ---
+
+	private static Object dispatchOrderedCollection(String name, List<?> source, Object[] args) {
+		return switch (name) {
+			case "first" -> source.isEmpty() ? OclInvalid.INSTANCE : source.get(0);
+			case "last" -> source.isEmpty() ? OclInvalid.INSTANCE : source.get(source.size() - 1);
+			case "at" -> {
+				int idx = (int) asLong(args[0]);
+				if (idx < 1 || idx > source.size()) yield OclInvalid.INSTANCE;
+				yield source.get(idx - 1); // 1-based
+			}
+			case "indexOf" -> {
+				int idx = source.indexOf(args[0]);
+				yield (long) (idx + 1); // 0 means not found (1-based)
+			}
+			case "reverse" -> {
+				List<Object> result = new ArrayList<>(source);
+				Collections.reverse(result);
+				yield result;
+			}
+			case "append" -> {
+				List<Object> result = new ArrayList<>(source);
+				result.add(args[0]);
+				yield result;
+			}
+			case "prepend" -> {
+				List<Object> result = new ArrayList<>(source.size() + 1);
+				result.add(args[0]);
+				result.addAll(source);
+				yield result;
+			}
+			case "insertAt" -> {
+				int idx = (int) asLong(args[0]);
+				if (idx < 1 || idx > source.size() + 1) yield OclInvalid.INSTANCE;
+				List<Object> result = new ArrayList<>(source);
+				result.add(idx - 1, args[1]); // 1-based
+				yield result;
+			}
+			case "subSequence", "subOrderedSet" -> {
+				int lower = (int) asLong(args[0]);
+				int upper = (int) asLong(args[1]);
+				if (lower < 1 || upper > source.size() || lower > upper + 1) {
+					yield OclInvalid.INSTANCE;
+				}
+				yield new ArrayList<>(source.subList(lower - 1, upper)); // 1-based, inclusive
+			}
+			default -> NOT_FOUND;
+		};
+	}
+
+	// --- Set-specific operations (OCL v2.4 Section 11.7.1) ---
+
+	private static Object dispatchSet(String name, Set<?> source, Object[] args) {
+		// Most Set operations are already handled by dispatchCollection.
+		// Only Set-specific operations that override Collection behavior go here.
+		return NOT_FOUND;
+	}
+
+	// --- Map (OCL v2.5) ---
+
+	private static Object dispatchMap(String name, Map<?, ?> source, Object[] args) {
+		return switch (name) {
+			case "size" -> (long) source.size();
+			case "isEmpty" -> source.isEmpty();
+			case "notEmpty" -> !source.isEmpty();
+			case "includes" -> source.containsKey(args[0]);
+			case "excludes" -> !source.containsKey(args[0]);
+			case "includesValue" -> source.containsValue(args[0]);
+			case "excludesValue" -> !source.containsValue(args[0]);
+			case "get" -> source.get(args[0]);
+			case "keys" -> new LinkedHashSet<>(source.keySet());
+			case "values" -> new ArrayList<>(source.values());
+			case "including" -> {
+				Map<Object, Object> result = new LinkedHashMap<>(source);
+				result.put(args[0], args[1]);
+				yield result;
+			}
+			case "excluding" -> {
+				Map<Object, Object> result = new LinkedHashMap<>(source);
+				result.remove(args[0]);
+				yield result;
+			}
+			case "toString" -> source.toString();
+			default -> NOT_FOUND;
+		};
+	}
+
+	// --- Collection flatten helper ---
+
+	private static void flatten(Collection<?> source, List<Object> result) {
+		for (Object element : source) {
+			if (element instanceof Collection<?> nested) {
+				flatten(nested, result);
+			} else {
+				result.add(element);
+			}
+		}
 	}
 
 	// --- Type coercion helpers ---
