@@ -1,8 +1,9 @@
+Bundle-Name: Fennec OCL Parser
+Bundle-Description: ANTLR4-based parser for OCL v2.5 expressions and Complete OCL documents
+
 -library: enableEMF
 
 src=${^src},src-gen
-
-Bundle-Version: 1.0.0.SNAPSHOT
 
 antlr4-version = 4.13.2
 

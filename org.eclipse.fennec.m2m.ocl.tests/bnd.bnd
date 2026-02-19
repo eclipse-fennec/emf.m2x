@@ -1,0 +1,23 @@
+Bundle-Name: Fennec OCL Tests
+Bundle-Description: Unit tests, delegate tests, and spec compliance tests for the Fennec OCL engine
+
+-library: enableEMF
+
+src=${^src},src-gen
+
+# Uncomment after genmodel is created in Eclipse:
+#-generate:\
+#	model/company.genmodel;\
+#		generate=fennecEMF;\
+#		genmodel=model/company.genmodel;\
+#		output=src-gen
+
+-includeresource.model: model=model
+
+-buildpath: \
+	org.antlr.antlr4-runtime;version=latest,\
+	org.eclipse.fennec.m2m.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2m.ocl.parser;version=snapshot,\
+	org.eclipse.fennec.m2m.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2m.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2m;version=snapshot

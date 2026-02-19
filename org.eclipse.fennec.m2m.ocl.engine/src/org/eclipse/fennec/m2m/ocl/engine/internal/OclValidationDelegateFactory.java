@@ -78,9 +78,9 @@ public class OclValidationDelegateFactory implements EValidator.ValidationDelega
 							+ "' on " + eDataType.getName());
 		}
 		try {
-			OclExpression parsed = engine.parse(expression, eDataType);
-			// For EDataType, there's no EObject — evaluate with a synthetic context
-			// This is a rare case; return true if no proper context
+			// Validate that the expression parses, but for EDataType there's no
+			// EObject to evaluate against — return true if parsing succeeds
+			engine.parse(expression, eDataType);
 			return true;
 		} catch (OclParseException e) {
 			return false;

@@ -1,0 +1,4 @@
+Bundle-Name: Fennec M2M
+Bundle-Description: Fennec M2M commons
+
+-library: enableEMF 

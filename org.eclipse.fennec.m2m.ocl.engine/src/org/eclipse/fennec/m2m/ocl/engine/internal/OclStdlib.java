@@ -115,7 +115,7 @@ class OclStdlib {
 		return switch (name) {
 			case "=" -> oclEquals(source, args[0]);
 			case "<>" -> !((Boolean) oclEquals(source, args[0]));
-			case "oclIsUndefined" -> source == null;
+			case "oclIsUndefined" -> source == null || source == OclInvalid.INSTANCE;
 			case "oclIsInvalid" -> source == OclInvalid.INSTANCE;
 			case "oclIsKindOf" -> oclIsKindOf(source, args[0]);
 			case "oclIsTypeOf" -> oclIsTypeOf(source, args[0]);
@@ -293,7 +293,6 @@ class OclStdlib {
 
 	// --- String (OCL v2.4 Section 11.7) ---
 
-	@SuppressWarnings("unchecked")
 	private static Object dispatchString(String name, String source, Object[] args) {
 		return switch (name) {
 			case "size" -> (long) source.length();
@@ -467,7 +466,10 @@ class OclStdlib {
 						yield OclInvalid.INSTANCE;
 					}
 				}
-				yield allLong ? (long) sum : sum;
+				if (allLong) {
+					yield (long) sum;
+				}
+				yield sum;
 			}
 			case "max" -> {
 				Comparable<?> max = null;
@@ -559,14 +561,6 @@ class OclStdlib {
 			}
 			default -> NOT_FOUND;
 		};
-	}
-
-	// --- Set-specific operations (OCL v2.4 Section 11.7.1) ---
-
-	private static Object dispatchSet(String name, Set<?> source, Object[] args) {
-		// Most Set operations are already handled by dispatchCollection.
-		// Only Set-specific operations that override Collection behavior go here.
-		return NOT_FOUND;
 	}
 
 	// --- Map (OCL v2.5) ---

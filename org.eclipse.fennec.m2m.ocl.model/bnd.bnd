@@ -1,3 +1,6 @@
+Bundle-Name: Fennec OCL Model
+Bundle-Description: OCL v2.5 EMF metamodel (48 EClasses + 2 EEnums)
+
 -library: enableEMF
 
 -generate:\
@@ -7,8 +10,6 @@
 		output=src
 
 -includeresource.model: model=model
-
-Bundle-Version: 1.0.0.SNAPSHOT
 
 -buildpath: \
 	org.osgi.service.condition;version=latest

@@ -1,6 +1,7 @@
--library: enableEMF
+Bundle-Name: Fennec OCL Engine
+Bundle-Description: OCL v2.5 evaluator, standard library, and EMF delegate integration
 
-Bundle-Version: 1.0.0.SNAPSHOT
+-library: enableEMF
 
 -buildpath: \
 	org.eclipse.fennec.m2m.ocl.api;version=latest,\

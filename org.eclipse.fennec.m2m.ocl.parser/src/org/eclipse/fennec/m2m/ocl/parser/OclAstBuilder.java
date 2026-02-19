@@ -17,9 +17,11 @@ package org.eclipse.fennec.m2m.ocl.parser;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -515,7 +517,9 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 		OclEnvironment savedEnv = this.environment;
 
-		// Iterator variables
+		// Iterator variables — infer element type from source collection
+		OclType elementType = inferElementType(source);
+
 		OclParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
 		List<Variable> iterVars = new ArrayList<>();
 		for (int i = 0; i < varsCtx.IDENTIFIER().size(); i++) {
@@ -523,6 +527,8 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 			iterVar.setName(varsCtx.IDENTIFIER(i).getText());
 			if (i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null) {
 				iterVar.setType(resolveTypeExpression(varsCtx.typeExpression(i)));
+			} else if (elementType != null) {
+				iterVar.setType(elementType);
 			}
 			iterVars.add(iterVar);
 			exp.getOwnedIterators().add(iterVar);
@@ -531,6 +537,19 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 		// Body
 		exp.setOwnedBody((OclExpression) visit(ctx.expression()));
+
+		// Set result type: select/reject/closure preserve element type,
+		// collect yields the body type, forAll/exists/one/isUnique yield Boolean
+		String iterName = ctx.IDENTIFIER().getText();
+		if (elementType != null) {
+			switch (iterName) {
+				case "select", "reject", "sortedBy", "closure":
+					exp.setType(elementType);
+					break;
+				default:
+					break;
+			}
+		}
 
 		this.environment = savedEnv;
 		return exp;
@@ -666,15 +685,25 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	// These will be fully implemented when the type resolver is connected.
 
 	private void resolveProperty(PropertyCallExp exp, String propName) {
-		// TODO: resolve EStructuralFeature from source type
-		// For now, store the name for later resolution
 		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());
 		if (sourceType instanceof EClass eClass) {
 			EStructuralFeature feature = eClass.getEStructuralFeature(propName);
 			if (feature != null) {
 				exp.setReferredProperty(feature);
+				// Set result type so chained navigations can resolve
+				EClassifier featureType = feature.getEType();
+				if (featureType != null) {
+					ClassifierType ct = FACTORY.createClassifierType();
+					ct.setReferredClassifier(featureType);
+					exp.setType(ct);
+				}
+				return;
 			}
 		}
+		// Unresolved (e.g. tuple part access) — create synthetic EAttribute so name is available
+		EAttribute synth = EcoreFactory.eINSTANCE.createEAttribute();
+		synth.setName(propName);
+		exp.setReferredProperty(synth);
 	}
 
 	private void resolveOperation(OperationCallExp exp, String opName) {
@@ -703,6 +732,20 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		return null;
 	}
 
+	/**
+	 * Infers the element type for iterator variables from the source expression.
+	 * For collection navigation (e.g., self.employees), the element type is the
+	 * type of the collection elements (e.g., Person).
+	 */
+	private OclType inferElementType(OclExpression source) {
+		// For property navigation, the type is set to the feature's EType
+		// which for collection references is the element type (e.g., Person)
+		if (source != null && source.getType() != null) {
+			return source.getType();
+		}
+		return null;
+	}
+
 	private EClassifier resolveClassifier(List<String> segments) {
 		// TODO: qualified name resolution against available packages
 		// For now, check against context type's package
@@ -724,6 +767,10 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 				exp.setIsImplicit(true);
 				exp.setOwnedSource(createVariableExp(environment.lookup("self").orElseThrow()));
 				exp.setReferredProperty(feature);
+				EClassifier featureType = feature.getEType();
+				if (featureType != null) {
+					exp.setType(createClassifierType(featureType));
+				}
 				return exp;
 			}
 		}

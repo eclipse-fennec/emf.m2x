@@ -104,7 +104,6 @@ public record OclResult(Object value, List<Diagnostic> diagnostics) {
 	 * @throws ClassCastException if the value is not assignable to the given type
 	 * @throws NullPointerException if type is {@code null}
 	 */
-	@SuppressWarnings("unchecked")
 	public <T> T getValueAs(Class<T> type) {
 		Objects.requireNonNull(type, "type must not be null");
 		return type.cast(value);

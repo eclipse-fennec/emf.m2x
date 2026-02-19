@@ -14,13 +14,12 @@
  */
 package org.eclipse.fennec.m2m.ocl.engine;
 
+import org.eclipse.fennec.m2m.ocl.api.OclEngine;
+import org.eclipse.fennec.m2m.ocl.api.OclExpressionParser;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
-
-import org.eclipse.fennec.m2m.ocl.api.OclEngine;
-import org.eclipse.fennec.m2m.ocl.api.OclExpressionParser;
 
 /**
  * OSGi Declarative Services component that publishes the {@link OclEngine}

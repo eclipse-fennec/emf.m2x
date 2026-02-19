@@ -59,7 +59,6 @@ import org.eclipse.fennec.m2m.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.Variable;
 import org.eclipse.fennec.m2m.model.ocl.VariableExp;
 import org.eclipse.fennec.m2m.model.ocl.util.OclSwitch;
-import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions.NullHandling;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
@@ -75,7 +74,7 @@ import org.eclipse.fennec.m2m.ocl.api.OclResult;
  * {@link OclEvalEnvironment} — no shared mutable state, thread-safe by design.
  *
  * <p>The evaluator is a recursive interpreter: each {@code caseXxx} method evaluates
- * its child expressions recursively via {@link #doSwitch(EObject)}.
+ * its child expressions recursively via {@link #eval(EObject)}.
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -83,6 +82,19 @@ import org.eclipse.fennec.m2m.ocl.api.OclResult;
 public class OclEvaluator extends OclSwitch<Object> {
 
 	private static final String SOURCE_ID = "org.eclipse.fennec.m2m.ocl.engine";
+
+	/**
+	 * Internal sentinel for OCL null (OclVoid). The EMF-generated OclSwitch
+	 * treats a Java {@code null} return from {@code caseXxx} as "not handled"
+	 * and falls through to the next case. We use this sentinel to distinguish
+	 * "OCL null" from "case not handled", and unwrap it in {@link #evaluate}.
+	 */
+	private static final Object OCL_NULL = new Object() {
+		@Override
+		public String toString() {
+			return "OCL_NULL";
+		}
+	};
 
 	private final OclEvaluationOptions options;
 	private final List<OclOperationProvider> customProviders;
@@ -110,8 +122,30 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * @return the evaluation result with diagnostics
 	 */
 	public OclResult evaluate(OclExpression expression) {
-		Object result = doSwitch(expression);
+		Object result = eval(expression);
 		return new OclResult(result, diagnostics);
+	}
+
+	/**
+	 * Internal evaluation entry point. Calls the EMF switch and unwraps
+	 * the {@link #OCL_NULL} sentinel to Java {@code null}.
+	 *
+	 * <p>All recursive evaluation within {@code caseXxx} methods must use
+	 * this method instead of {@code doSwitch} directly, so that OCL null
+	 * values are correctly propagated through the expression tree.
+	 */
+	private Object eval(OclExpression expression) {
+		Object result = doSwitch(expression);
+		return result == OCL_NULL ? null : result;
+	}
+
+	/**
+	 * Wraps a value for return from {@code caseXxx} methods: replaces
+	 * Java {@code null} with {@link #OCL_NULL} so the EMF Switch does not
+	 * treat it as "not handled".
+	 */
+	private static Object wrapNull(Object value) {
+		return value == null ? OCL_NULL : value;
 	}
 
 	// --- Literal Expressions ---
@@ -138,7 +172,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	@Override
 	public Object caseNullLiteralExp(NullLiteralExp exp) {
-		return null;
+		return OCL_NULL;
 	}
 
 	@Override
@@ -168,14 +202,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 		Variable variable = exp.getReferredVariable();
 		String name = variable.getName();
 		if (env.contains(name)) {
-			return env.lookup(name);
+			return wrapNull(env.lookup(name));
 		}
 		return addError("Unresolved variable: " + name);
 	}
 
 	@Override
 	public Object caseIfExp(IfExp exp) {
-		Object condition = doSwitch(exp.getOwnedCondition());
+		Object condition = eval(exp.getOwnedCondition());
 		if (condition == OclInvalid.INSTANCE) {
 			return OclInvalid.INSTANCE;
 		}
@@ -183,9 +217,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 			return addError("if-condition must be Boolean, got: "
 					+ (condition == null ? "null" : condition.getClass().getSimpleName()));
 		}
-		return (Boolean) condition
-				? doSwitch(exp.getOwnedThen())
-				: doSwitch(exp.getOwnedElse());
+		return wrapNull((Boolean) condition
+				? eval(exp.getOwnedThen())
+				: eval(exp.getOwnedElse()));
 	}
 
 	@Override
@@ -193,12 +227,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 		Variable variable = exp.getOwnedVariable();
 		Object value = null;
 		if (variable.getOwnedInit() != null) {
-			value = doSwitch(variable.getOwnedInit());
+			value = eval(variable.getOwnedInit());
 		}
 		OclEvalEnvironment previousEnv = env;
 		try {
 			env = env.nested(variable.getName(), value);
-			return doSwitch(exp.getOwnedIn());
+			return wrapNull(eval(exp.getOwnedIn()));
 		} finally {
 			env = previousEnv;
 		}
@@ -208,44 +242,55 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	@Override
 	public Object casePropertyCallExp(PropertyCallExp exp) {
-		Object source = doSwitch(exp.getOwnedSource());
+		EStructuralFeature sf = exp.getReferredProperty();
+		if (sf == null) {
+			return addError("Unresolved property on " + exp.eClass().getName());
+		}
+
+		Object source = eval(exp.getOwnedSource());
 
 		// Safe navigation
 		if (source == null && exp.isIsSafe()) {
-			return null;
+			return OCL_NULL;
 		}
 
 		// Null/Invalid handling
-		Object nullCheck = checkNullInvalid(source, "property '" + exp.getReferredProperty().getName() + "'");
+		Object nullCheck = checkNullInvalid(source, "property '" + sf.getName() + "'");
 		if (nullCheck != null) {
 			return nullCheck;
 		}
 
+		// Tuple part access (tuples are represented as Map<String, Object>)
+		if (source instanceof Map<?, ?> map) {
+			Object value = map.get(sf.getName());
+			return value == null ? OCL_NULL : value;
+		}
+
 		if (!(source instanceof EObject eo)) {
-			return addError("Property access requires an EObject, got: "
+			return addError("Property access requires an EObject or Tuple, got: "
 					+ source.getClass().getSimpleName());
 		}
 
-		EStructuralFeature sf = exp.getReferredProperty();
-		return eo.eGet(sf);
+		Object value = eo.eGet(sf);
+		return value == null ? OCL_NULL : value;
 	}
 
 	// --- Operation Call ---
 
 	@Override
 	public Object caseOperationCallExp(OperationCallExp exp) {
-		Object source = doSwitch(exp.getOwnedSource());
+		Object source = eval(exp.getOwnedSource());
 		String opName = exp.getName();
 
 		// Safe navigation
 		if (source == null && exp.isIsSafe()) {
-			return null;
+			return OCL_NULL;
 		}
 
 		// OclAny null/invalid-safe operations (must work on null/invalid source)
 		if (isNullSafeOperation(opName)) {
 			Object[] args = evaluateArguments(exp.getOwnedArguments());
-			return OclStdlib.dispatch(opName, source, args);
+			return wrapNull(OclStdlib.dispatch(opName, source, args));
 		}
 
 		// Null/Invalid handling for other operations
@@ -263,7 +308,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 				EList<Object> eArgs = args.length > 0
 						? new BasicEList<>(List.of(args))
 						: ECollections.emptyEList();
-				return eo.eInvoke(exp.getReferredOperation(), eArgs);
+				return wrapNull(eo.eInvoke(exp.getReferredOperation(), eArgs));
 			} catch (InvocationTargetException e) {
 				return addError("Operation invocation failed: " + opName + " - " + e.getCause().getMessage());
 			}
@@ -272,13 +317,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// 2. Try standard library
 		Object result = OclStdlib.dispatch(opName, source, args);
 		if (result != OclStdlib.NOT_FOUND) {
-			return result;
+			return wrapNull(result);
 		}
 
 		// 3. Try custom operation providers
 		result = dispatchCustomOperation(opName, source, args);
 		if (result != OclStdlib.NOT_FOUND) {
-			return result;
+			return wrapNull(result);
 		}
 
 		return addError("Unknown operation: " + opName + " on "
@@ -294,10 +339,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 		for (CollectionLiteralPart part : exp.getOwnedParts()) {
 			if (part instanceof CollectionItem item) {
-				elements.add(doSwitch(item.getOwnedItem()));
+				elements.add(eval(item.getOwnedItem()));
 			} else if (part instanceof CollectionRange range) {
-				Object first = doSwitch(range.getOwnedFirst());
-				Object last = doSwitch(range.getOwnedLast());
+				Object first = eval(range.getOwnedFirst());
+				Object last = eval(range.getOwnedLast());
 				if (!(first instanceof Long f) || !(last instanceof Long l)) {
 					return addError("Collection range requires Integer bounds");
 				}
@@ -324,7 +369,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		for (TupleLiteralPart part : exp.getOwnedParts()) {
 			Object value = null;
 			if (part.getOwnedInit() != null) {
-				value = doSwitch(part.getOwnedInit());
+				value = eval(part.getOwnedInit());
 			}
 			tuple.put(part.getName(), value);
 		}
@@ -337,8 +382,8 @@ public class OclEvaluator extends OclSwitch<Object> {
 	public Object caseMapLiteralExp(MapLiteralExp exp) {
 		Map<Object, Object> map = new LinkedHashMap<>();
 		for (MapLiteralPart part : exp.getOwnedParts()) {
-			Object key = doSwitch(part.getOwnedKey());
-			Object value = doSwitch(part.getOwnedValue());
+			Object key = eval(part.getOwnedKey());
+			Object value = eval(part.getOwnedValue());
 			map.put(key, value);
 		}
 		return map;
@@ -348,10 +393,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	@Override
 	public Object caseIteratorExp(IteratorExp exp) {
-		Object source = doSwitch(exp.getOwnedSource());
+		Object source = eval(exp.getOwnedSource());
 
 		if (source == null && exp.isIsSafe()) {
-			return null;
+			return OCL_NULL;
 		}
 		Object nullCheck = checkNullInvalid(source, "iterator '" + exp.getName() + "'");
 		if (nullCheck != null) {
@@ -365,7 +410,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		List<Variable> iterVars = exp.getOwnedIterators();
 		String iterName = exp.getName();
 
-		return switch (iterName) {
+		return wrapNull(switch (iterName) {
 			case "select" -> iteratorSelect(coll, iterVars, exp.getOwnedBody());
 			case "reject" -> iteratorReject(coll, iterVars, exp.getOwnedBody());
 			case "collect" -> iteratorCollect(coll, iterVars, exp.getOwnedBody());
@@ -378,15 +423,15 @@ public class OclEvaluator extends OclSwitch<Object> {
 			case "sortedBy" -> iteratorSortedBy(coll, iterVars, exp.getOwnedBody());
 			case "closure" -> iteratorClosure(coll, iterVars, exp.getOwnedBody());
 			default -> addError("Unknown iterator: " + iterName);
-		};
+		});
 	}
 
 	@Override
 	public Object caseIterateExp(IterateExp exp) {
-		Object source = doSwitch(exp.getOwnedSource());
+		Object source = eval(exp.getOwnedSource());
 
 		if (source == null && exp.isIsSafe()) {
-			return null;
+			return OCL_NULL;
 		}
 		Object nullCheck = checkNullInvalid(source, "iterate");
 		if (nullCheck != null) {
@@ -398,7 +443,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 
 		Variable accVar = exp.getOwnedResult();
-		Object accValue = accVar.getOwnedInit() != null ? doSwitch(accVar.getOwnedInit()) : null;
+		Object accValue = accVar.getOwnedInit() != null ? eval(accVar.getOwnedInit()) : null;
 		List<Variable> iterVars = exp.getOwnedIterators();
 
 		OclEvalEnvironment previousEnv = env;
@@ -406,12 +451,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 			for (Object element : coll) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				env = env.nested(accVar.getName(), accValue);
-				accValue = doSwitch(exp.getOwnedBody());
+				accValue = eval(exp.getOwnedBody());
 				if (accValue == OclInvalid.INSTANCE) {
 					return OclInvalid.INSTANCE;
 				}
 			}
-			return accValue;
+			return wrapNull(accValue);
 		} finally {
 			env = previousEnv;
 		}
@@ -426,7 +471,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				if (Boolean.TRUE.equals(bodyResult)) {
 					result.add(element);
 				}
@@ -444,7 +489,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				if (!Boolean.TRUE.equals(bodyResult)) {
 					result.add(element);
 				}
@@ -462,7 +507,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				// collect flattens one level
 				if (bodyResult instanceof Collection<?> nested) {
 					result.addAll(nested);
@@ -483,7 +528,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				result.add(doSwitch(body));
+				result.add(eval(body));
 			}
 			return result; // collectNested does NOT flatten
 		} finally {
@@ -497,7 +542,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				if (!Boolean.TRUE.equals(bodyResult)) {
 					return false; // short-circuit
 				}
@@ -514,7 +559,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				if (Boolean.TRUE.equals(bodyResult)) {
 					return true; // short-circuit
 				}
@@ -531,7 +576,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				if (Boolean.TRUE.equals(bodyResult)) {
 					return element;
 				}
@@ -544,18 +589,16 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private Object iteratorOne(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
-		Object found = null;
 		boolean foundOne = false;
 		OclEvalEnvironment previousEnv = env;
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				if (Boolean.TRUE.equals(bodyResult)) {
 					if (foundOne) {
 						return false; // more than one
 					}
-					found = element;
 					foundOne = true;
 				}
 			}
@@ -572,7 +615,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				if (!seen.add(bodyResult)) {
 					return false; // duplicate
 				}
@@ -591,9 +634,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			elements.sort((a, b) -> {
 				env = previousEnv.nested(iterVars.get(0).getName(), a);
-				Object keyA = doSwitch(body);
+				Object keyA = eval(body);
 				env = previousEnv.nested(iterVars.get(0).getName(), b);
-				Object keyB = doSwitch(body);
+				Object keyB = eval(body);
 				if (keyA instanceof Comparable ca && keyB instanceof Comparable) {
 					return ca.compareTo(keyB);
 				}
@@ -617,7 +660,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 					continue; // already visited
 				}
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = doSwitch(body);
+				Object bodyResult = eval(body);
 				if (bodyResult instanceof Collection<?> nested) {
 					workList.addAll(nested);
 				} else if (bodyResult != null && bodyResult != OclInvalid.INSTANCE) {
@@ -642,7 +685,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private Object[] evaluateArguments(List<OclExpression> argExps) {
 		Object[] args = new Object[argExps.size()];
 		for (int i = 0; i < argExps.size(); i++) {
-			args[i] = doSwitch(argExps.get(i));
+			args[i] = eval(argExps.get(i));
 		}
 		return args;
 	}

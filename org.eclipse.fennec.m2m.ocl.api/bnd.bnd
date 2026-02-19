@@ -1,6 +1,7 @@
--library: enableEMF
+Bundle-Name: Fennec OCL API
+Bundle-Description: Public API interfaces for the Fennec OCL engine
 
-Bundle-Version: 1.0.0.SNAPSHOT
+-library: enableEMF
 
 -buildpath: \
 	org.eclipse.fennec.m2m.ocl.model;version=latest,\
