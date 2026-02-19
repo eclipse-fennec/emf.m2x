@@ -1,0 +1,170 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+package org.eclipse.fennec.m2m.ocl.tests;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests for OCL string indexing and search operations.
+ * OCL uses 1-based indexing for strings.
+ */
+class OclStringIndexTest extends AbstractOclTest {
+
+	static EObject self;
+
+	@BeforeAll
+	static void setUp() {
+		self = createPerson("Alice", 30, 50000.0, true);
+	}
+
+	// --- substring (1-based, inclusive) ---
+
+	@Test
+	void substring_middle() throws OclParseException {
+		assertEquals("bcd", eval("'abcdef'.substring(2, 4)", self));
+	}
+
+	@Test
+	void substring_firstChar() throws OclParseException {
+		assertEquals("a", eval("'abcdef'.substring(1, 1)", self));
+	}
+
+	@Test
+	void substring_lastChar() throws OclParseException {
+		assertEquals("f", eval("'abcdef'.substring(6, 6)", self));
+	}
+
+	@Test
+	void substring_whole() throws OclParseException {
+		assertEquals("abc", eval("'abc'.substring(1, 3)", self));
+	}
+
+	// --- indexOf ---
+
+	@Test
+	void indexOf_found() throws OclParseException {
+		assertEquals(3L, eval("'abcdef'.indexOf('cd')", self));
+	}
+
+	@Test
+	void indexOf_first() throws OclParseException {
+		assertEquals(1L, eval("'abcdef'.indexOf('a')", self));
+	}
+
+	@Test
+	void indexOf_last() throws OclParseException {
+		assertEquals(6L, eval("'abcdef'.indexOf('f')", self));
+	}
+
+	@Test
+	void indexOf_notFound() throws OclParseException {
+		assertEquals(0L, eval("'abcdef'.indexOf('xyz')", self));
+	}
+
+	@Test
+	void indexOf_multiChar() throws OclParseException {
+		assertEquals(2L, eval("'hello world'.indexOf('ello')", self));
+	}
+
+	// --- characters ---
+
+	@Test
+	void characters_size() throws OclParseException {
+		assertEquals(3L, eval("'abc'.characters()->size()", self));
+	}
+
+	@Test
+	void characters_first() throws OclParseException {
+		assertEquals("a", eval("'abc'.characters()->first()", self));
+	}
+
+	@Test
+	void characters_last() throws OclParseException {
+		assertEquals("c", eval("'abc'.characters()->last()", self));
+	}
+
+	@Test
+	void characters_at() throws OclParseException {
+		assertEquals("b", eval("'abc'.characters()->at(2)", self));
+	}
+
+	// --- String + operator ---
+
+	@Test
+	void stringPlus_concat() throws OclParseException {
+		assertEquals("helloworld", eval("'hello' + 'world'", self));
+	}
+
+	@Test
+	void stringPlus_withSpace() throws OclParseException {
+		assertEquals("hello world", eval("'hello' + ' ' + 'world'", self));
+	}
+
+	// --- Chained string operations ---
+
+	@Test
+	void chainedOps_substringThenSize() throws OclParseException {
+		assertEquals(3L, eval("'hello'.substring(1, 3).size()", self));
+	}
+
+	@Test
+	void chainedOps_concatThenSubstring() throws OclParseException {
+		assertEquals("low", eval("'helloworld'.substring(4, 6)", self));
+	}
+
+	@Test
+	void chainedOps_upperThenSubstring() throws OclParseException {
+		assertEquals("HEL", eval("'hello'.toUpperCase().substring(1, 3)", self));
+	}
+
+	// --- matches ---
+
+	@Test
+	void matches_true() throws OclParseException {
+		assertEquals(true, eval("'hello123'.matches('[a-z]+[0-9]+')", self));
+	}
+
+	@Test
+	void matches_false() throws OclParseException {
+		assertEquals(false, eval("'hello'.matches('[0-9]+')", self));
+	}
+
+	@Test
+	void matches_fullMatch() throws OclParseException {
+		assertEquals(true, eval("'42'.matches('[0-9]+')", self));
+	}
+
+	// --- Comparison with property access ---
+
+	@Test
+	void stringFromProperty_size() throws OclParseException {
+		assertEquals(5L, eval("self.name.size()", self));
+	}
+
+	@Test
+	void stringFromProperty_toUpper() throws OclParseException {
+		assertEquals("ALICE", eval("self.name.toUpperCase()", self));
+	}
+
+	@Test
+	void stringFromProperty_substring() throws OclParseException {
+		assertEquals("Ali", eval("self.name.substring(1, 3)", self));
+	}
+}
