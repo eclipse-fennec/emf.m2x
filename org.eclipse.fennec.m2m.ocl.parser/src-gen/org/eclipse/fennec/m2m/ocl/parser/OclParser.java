@@ -2190,6 +2190,8 @@ public class OclParser extends Parser {
 	}
 	@SuppressWarnings("CheckReturnValue")
 	public static class IterateCallContext extends IteratorOrOperationCallContext {
+		public TypeExpressionContext iterType;
+		public TypeExpressionContext accType;
 		public List<TerminalNode> IDENTIFIER() { return getTokens(OclParser.IDENTIFIER); }
 		public TerminalNode IDENTIFIER(int i) {
 			return getToken(OclParser.IDENTIFIER, i);
@@ -2274,7 +2276,7 @@ public class OclParser extends Parser {
 					setState(357);
 					match(T__3);
 					setState(358);
-					typeExpression();
+					((IterateCallContext)_localctx).iterType = typeExpression();
 					}
 				}
 
@@ -2290,7 +2292,7 @@ public class OclParser extends Parser {
 					setState(363);
 					match(T__3);
 					setState(364);
-					typeExpression();
+					((IterateCallContext)_localctx).accType = typeExpression();
 					}
 				}
 

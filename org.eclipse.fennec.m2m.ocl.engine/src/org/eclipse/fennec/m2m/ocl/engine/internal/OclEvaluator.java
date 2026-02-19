@@ -302,6 +302,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// Evaluate arguments
 		Object[] args = evaluateArguments(exp.getOwnedArguments());
 
+		// Check for OclInvalid in arguments — propagate invalid
+		for (Object arg : args) {
+			if (arg == OclInvalid.INSTANCE) {
+				return OclInvalid.INSTANCE;
+			}
+		}
+
 		// 1. Try Ecore model operation (referredOperation set by parser)
 		if (exp.getReferredOperation() != null && source instanceof EObject eo) {
 			try {

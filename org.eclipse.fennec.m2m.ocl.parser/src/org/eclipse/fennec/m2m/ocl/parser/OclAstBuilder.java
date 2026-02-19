@@ -566,16 +566,22 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		// Iterator variable (IDENTIFIER(0) = "iterate", IDENTIFIER(1) = iter var)
 		Variable iterVar = FACTORY.createVariable();
 		iterVar.setName(ctx.IDENTIFIER(1).getText());
-		if (ctx.typeExpression(0) != null) {
-			iterVar.setType(resolveTypeExpression(ctx.typeExpression(0)));
+		if (ctx.iterType != null) {
+			iterVar.setType(resolveTypeExpression(ctx.iterType));
+		} else {
+			// Infer element type from source collection
+			OclType elementType = inferElementType(source);
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
 		}
 		exp.getOwnedIterators().add(iterVar);
 
 		// Accumulator variable (second IDENTIFIER after ';')
 		Variable accVar = FACTORY.createVariable();
 		accVar.setName(ctx.IDENTIFIER(2).getText());
-		if (ctx.typeExpression().size() > 1 && ctx.typeExpression(1) != null) {
-			accVar.setType(resolveTypeExpression(ctx.typeExpression(1)));
+		if (ctx.accType != null) {
+			accVar.setType(resolveTypeExpression(ctx.accType));
 		}
 		accVar.setOwnedInit((OclExpression) visit(ctx.expression(0)));
 		exp.setOwnedResult(accVar);
@@ -740,8 +746,10 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	private OclType inferElementType(OclExpression source) {
 		// For property navigation, the type is set to the feature's EType
 		// which for collection references is the element type (e.g., Person)
-		if (source != null && source.getType() != null) {
-			return source.getType();
+		if (source != null && source.getType() instanceof ClassifierType ct
+				&& ct.getReferredClassifier() != null) {
+			// Must create a copy — EMF containment would move the original
+			return createClassifierType(ct.getReferredClassifier());
 		}
 		return null;
 	}

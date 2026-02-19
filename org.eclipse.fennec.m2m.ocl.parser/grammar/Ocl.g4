@@ -141,8 +141,8 @@ propertyOrCallSuffix
 
 iteratorOrOperationCall
     : IDENTIFIER '(' iteratorVariables '|' expression ')'                                # IteratorCall
-    | IDENTIFIER '(' IDENTIFIER (':' typeExpression)?
-      ';' IDENTIFIER (':' typeExpression)? '=' expression '|' expression ')'             # IterateCall
+    | IDENTIFIER '(' IDENTIFIER (':' iterType=typeExpression)?
+      ';' IDENTIFIER (':' accType=typeExpression)? '=' expression '|' expression ')'     # IterateCall
     | IDENTIFIER '(' argumentList? ')'                                                   # CollectionOperationCall
     ;
 
