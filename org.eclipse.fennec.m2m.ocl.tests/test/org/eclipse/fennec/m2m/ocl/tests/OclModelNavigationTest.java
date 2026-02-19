@@ -159,7 +159,7 @@ class OclModelNavigationTest extends AbstractOclTest {
 
 	@Test
 	void employees_size() throws OclParseException {
-		assertEquals(3L, eval("self.employees->size()", company));
+		assertEquals(3, eval("self.employees->size()", company));
 	}
 
 	@Test
@@ -176,7 +176,7 @@ class OclModelNavigationTest extends AbstractOclTest {
 
 	@Test
 	void chainedNav_employerEmployeesSize() throws OclParseException {
-		assertEquals(3L, eval("self.employer.employees->size()", alice));
+		assertEquals(3, eval("self.employer.employees->size()", alice));
 	}
 
 	@Test
@@ -193,8 +193,8 @@ class OclModelNavigationTest extends AbstractOclTest {
 
 	@Test
 	void sum_ages() throws OclParseException {
-		// age is EInt, so eGet returns Integer; sum sees Number → double
-		assertEquals(90.0, eval("self.employees->collect(e | e.age)->sum()", company));
+		// age is EInt, internally widened to Long, sum returns Long, narrowed to Integer (fits in int)
+		assertEquals(90, eval("self.employees->collect(e | e.age)->sum()", company));
 	}
 
 	// --- Nested iterator ---

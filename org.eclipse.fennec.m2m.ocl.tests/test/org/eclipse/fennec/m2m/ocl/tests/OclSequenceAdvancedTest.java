@@ -41,17 +41,17 @@ class OclSequenceAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void insertAt_beginning() throws OclParseException {
-		assertEquals(0L, eval("Sequence{1, 2, 3}->insertAt(1, 0)->first()", self));
+		assertEquals(0, eval("Sequence{1, 2, 3}->insertAt(1, 0)->first()", self));
 	}
 
 	@Test
 	void insertAt_middle() throws OclParseException {
-		assertEquals(4L, eval("Sequence{1, 2, 3}->insertAt(2, 99)->size()", self));
+		assertEquals(4, eval("Sequence{1, 2, 3}->insertAt(2, 99)->size()", self));
 	}
 
 	@Test
 	void insertAt_end() throws OclParseException {
-		assertEquals(99L, eval("Sequence{1, 2, 3}->insertAt(4, 99)->last()", self));
+		assertEquals(99, eval("Sequence{1, 2, 3}->insertAt(4, 99)->last()", self));
 	}
 
 	// --- subSequence ---
@@ -59,99 +59,99 @@ class OclSequenceAdvancedTest extends AbstractOclTest {
 	@Test
 	void subSequence_middle() throws OclParseException {
 		Object result = eval("Sequence{10, 20, 30, 40, 50}->subSequence(2, 4)", self);
-		assertEquals(List.of(20L, 30L, 40L), result);
+		assertEquals(List.of(20, 30, 40), result);
 	}
 
 	@Test
 	void subSequence_first() throws OclParseException {
 		Object result = eval("Sequence{10, 20, 30}->subSequence(1, 2)", self);
-		assertEquals(List.of(10L, 20L), result);
+		assertEquals(List.of(10, 20), result);
 	}
 
 	@Test
 	void subSequence_single() throws OclParseException {
 		Object result = eval("Sequence{10, 20, 30}->subSequence(2, 2)", self);
-		assertEquals(List.of(20L), result);
+		assertEquals(List.of(20), result);
 	}
 
 	@Test
 	void subSequence_all() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->subSequence(1, 3)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	// --- indexOf ---
 
 	@Test
 	void indexOf_found() throws OclParseException {
-		assertEquals(2L, eval("Sequence{10, 20, 30}->indexOf(20)", self));
+		assertEquals(2, eval("Sequence{10, 20, 30}->indexOf(20)", self));
 	}
 
 	@Test
 	void indexOf_first() throws OclParseException {
-		assertEquals(1L, eval("Sequence{10, 20, 30}->indexOf(10)", self));
+		assertEquals(1, eval("Sequence{10, 20, 30}->indexOf(10)", self));
 	}
 
 	@Test
 	void indexOf_duplicate_returnsFirst() throws OclParseException {
-		assertEquals(1L, eval("Sequence{10, 20, 10, 30}->indexOf(10)", self));
+		assertEquals(1, eval("Sequence{10, 20, 10, 30}->indexOf(10)", self));
 	}
 
 	// --- count ---
 
 	@Test
 	void count_single() throws OclParseException {
-		assertEquals(1L, eval("Sequence{1, 2, 3}->count(2)", self));
+		assertEquals(1, eval("Sequence{1, 2, 3}->count(2)", self));
 	}
 
 	@Test
 	void count_multiple() throws OclParseException {
-		assertEquals(3L, eval("Sequence{1, 2, 1, 3, 1}->count(1)", self));
+		assertEquals(3, eval("Sequence{1, 2, 1, 3, 1}->count(1)", self));
 	}
 
 	@Test
 	void count_absent() throws OclParseException {
-		assertEquals(0L, eval("Sequence{1, 2, 3}->count(5)", self));
+		assertEquals(0, eval("Sequence{1, 2, 3}->count(5)", self));
 	}
 
 	// --- append / prepend ---
 
 	@Test
 	void append_element() throws OclParseException {
-		assertEquals(99L, eval("Sequence{1, 2, 3}->append(99)->last()", self));
+		assertEquals(99, eval("Sequence{1, 2, 3}->append(99)->last()", self));
 	}
 
 	@Test
 	void append_size() throws OclParseException {
-		assertEquals(4L, eval("Sequence{1, 2, 3}->append(4)->size()", self));
+		assertEquals(4, eval("Sequence{1, 2, 3}->append(4)->size()", self));
 	}
 
 	@Test
 	void prepend_element() throws OclParseException {
-		assertEquals(99L, eval("Sequence{1, 2, 3}->prepend(99)->first()", self));
+		assertEquals(99, eval("Sequence{1, 2, 3}->prepend(99)->first()", self));
 	}
 
 	@Test
 	void prepend_size() throws OclParseException {
-		assertEquals(4L, eval("Sequence{1, 2, 3}->prepend(0)->size()", self));
+		assertEquals(4, eval("Sequence{1, 2, 3}->prepend(0)->size()", self));
 	}
 
 	// --- including / excluding ---
 
 	@Test
 	void including_adds() throws OclParseException {
-		assertEquals(4L, eval("Sequence{1, 2, 3}->including(4)->size()", self));
+		assertEquals(4, eval("Sequence{1, 2, 3}->including(4)->size()", self));
 	}
 
 	@Test
 	void excluding_removes() throws OclParseException {
-		assertEquals(2L, eval("Sequence{1, 2, 3}->excluding(2)->size()", self));
+		assertEquals(2, eval("Sequence{1, 2, 3}->excluding(2)->size()", self));
 	}
 
 	@Test
 	void excluding_removesOne() throws OclParseException {
 		// excluding removes one occurrence
-		assertEquals(3L, eval("Sequence{1, 2, 1, 3}->excluding(1)->size()", self));
+		assertEquals(3, eval("Sequence{1, 2, 1, 3}->excluding(1)->size()", self));
 	}
 
 	// --- reverse ---
@@ -159,31 +159,31 @@ class OclSequenceAdvancedTest extends AbstractOclTest {
 	@Test
 	void reverse_sequence() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->reverse()", self);
-		assertEquals(List.of(3L, 2L, 1L), result);
+		assertEquals(List.of(3, 2, 1), result);
 	}
 
 	@Test
 	void reverse_preservesDuplicates() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 2, 3}->reverse()", self);
-		assertEquals(List.of(3L, 2L, 2L, 1L), result);
+		assertEquals(List.of(3, 2, 2, 1), result);
 	}
 
 	// --- Chained Sequence operations ---
 
 	@Test
 	void chain_appendPrependSize() throws OclParseException {
-		assertEquals(5L, eval(
+		assertEquals(5, eval(
 				"Sequence{1, 2, 3}->append(4)->prepend(0)->size()", self));
 	}
 
 	@Test
 	void chain_reverseFirst() throws OclParseException {
-		assertEquals(3L, eval("Sequence{1, 2, 3}->reverse()->first()", self));
+		assertEquals(3, eval("Sequence{1, 2, 3}->reverse()->first()", self));
 	}
 
 	@Test
 	void chain_sortReverseLast() throws OclParseException {
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"Sequence{3, 1, 2}->sortedBy(i | i)->reverse()->last()", self));
 	}
 

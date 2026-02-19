@@ -39,12 +39,12 @@ class OclOperatorPrecedenceTest extends AbstractOclTest {
 
 	@Test
 	void multiplyBeforeAdd() throws OclParseException {
-		assertEquals(7L, eval("1 + 2 * 3", self));
+		assertEquals(7, eval("1 + 2 * 3", self));
 	}
 
 	@Test
 	void multiplyBeforeSubtract() throws OclParseException {
-		assertEquals(-5L, eval("1 - 2 * 3", self));
+		assertEquals(-5, eval("1 - 2 * 3", self));
 	}
 
 	@Test
@@ -54,13 +54,13 @@ class OclOperatorPrecedenceTest extends AbstractOclTest {
 
 	@Test
 	void parensOverrideArithmetic() throws OclParseException {
-		assertEquals(9L, eval("(1 + 2) * 3", self));
+		assertEquals(9, eval("(1 + 2) * 3", self));
 	}
 
 	@Test
 	void leftAssociativity_addition() throws OclParseException {
 		// (1 - 2) + 3 = 2, not 1 - (2 + 3) = -4
-		assertEquals(2L, eval("1 - 2 + 3", self));
+		assertEquals(2, eval("1 - 2 + 3", self));
 	}
 
 	@Test
@@ -145,13 +145,13 @@ class OclOperatorPrecedenceTest extends AbstractOclTest {
 	@Test
 	void unaryMinusBeforeMultiply() throws OclParseException {
 		// -2 * 3 → (-2) * 3 → -6
-		assertEquals(-6L, eval("-2 * 3", self));
+		assertEquals(-6, eval("-2 * 3", self));
 	}
 
 	@Test
 	void unaryMinusBeforeAdd() throws OclParseException {
 		// -2 + 3 → (-2) + 3 → 1
-		assertEquals(1L, eval("-2 + 3", self));
+		assertEquals(1, eval("-2 + 3", self));
 	}
 
 	// --- xor precedence ---
@@ -182,7 +182,7 @@ class OclOperatorPrecedenceTest extends AbstractOclTest {
 
 	@Test
 	void complex_nestedArithmetic() throws OclParseException {
-		assertEquals(14L, eval("2 + 3 * 4", self));
+		assertEquals(14, eval("2 + 3 * 4", self));
 	}
 
 	@Test

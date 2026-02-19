@@ -46,7 +46,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_sum() throws OclParseException {
-		assertEquals(15L, eval(
+		assertEquals(15, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc: Integer = 0 | acc + i)",
 				self));
 	}
@@ -62,7 +62,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_product() throws OclParseException {
-		assertEquals(120L, eval(
+		assertEquals(120, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc: Integer = 1 | acc * i)",
 				self));
 	}
@@ -71,7 +71,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_countPositive() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"Sequence{-1, 2, -3, 4, 5}->iterate(i; acc: Integer = 0 | " +
 				"  if i > 0 then acc + 1 else acc endif)",
 				self));
@@ -79,7 +79,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_countEven() throws OclParseException {
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc: Integer = 0 | " +
 				"  if i.mod(2) = 0 then acc + 1 else acc endif)",
 				self));
@@ -89,7 +89,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_min() throws OclParseException {
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"Sequence{3, 1, 4, 1, 5}->iterate(i; acc: Integer = 999 | " +
 				"  if i < acc then i else acc endif)",
 				self));
@@ -99,7 +99,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_max() throws OclParseException {
-		assertEquals(5L, eval(
+		assertEquals(5, eval(
 				"Sequence{3, 1, 4, 1, 5}->iterate(i; acc: Integer = 0 | " +
 				"  if i > acc then i else acc endif)",
 				self));
@@ -142,7 +142,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_emptySum() throws OclParseException {
-		assertEquals(0L, eval(
+		assertEquals(0, eval(
 				"Sequence{}->iterate(i; acc: Integer = 0 | acc + i)",
 				self));
 	}
@@ -158,7 +158,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_setSum() throws OclParseException {
-		assertEquals(6L, eval(
+		assertEquals(6, eval(
 				"Set{1, 2, 3}->iterate(i; acc: Integer = 0 | acc + i)",
 				self));
 	}
@@ -187,7 +187,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_countMarried() throws OclParseException {
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"self.employees->iterate(e; acc: Integer = 0 | " +
 				"  if e.isMarried then acc + 1 else acc endif)",
 				company));
@@ -197,7 +197,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 
 	@Test
 	void iterate_sumOfSquares() throws OclParseException {
-		assertEquals(55L, eval(
+		assertEquals(55, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc: Integer = 0 | acc + i * i)",
 				self));
 	}
@@ -206,7 +206,7 @@ class OclIteratePatternTest extends AbstractOclTest {
 	void iterate_alternatingSum() throws OclParseException {
 		// 1 - 2 + 3 - 4 + 5 = 3 ... but iterate doesn't have index
 		// Instead: sum of elements > 2
-		assertEquals(12L, eval(
+		assertEquals(12, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc: Integer = 0 | " +
 				"  if i > 2 then acc + i else acc endif)",
 				self));

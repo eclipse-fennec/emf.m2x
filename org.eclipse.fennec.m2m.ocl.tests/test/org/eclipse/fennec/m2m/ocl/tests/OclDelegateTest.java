@@ -1,0 +1,252 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+package org.eclipse.fennec.m2m.ocl.tests;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.emf.ecore.EAttribute;
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EFactory;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.EValidator;
+import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.InternalEObject;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclDelegateUtil;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+
+/**
+ * Tests for EMF delegate registration: invocation, setting, and validation delegates.
+ *
+ * <p>Creates a small in-memory Ecore model with OCL annotations, installs delegates
+ * via {@code engine.installDelegates()}, and verifies that EMF delegate calls
+ * are evaluated by the OCL engine.
+ */
+class OclDelegateTest extends AbstractOclTest {
+
+	private static final String DELEGATE_URI = OclDelegateUtil.DELEGATE_URI;
+
+	static EPackage testPackage;
+	static EClass employeeClass;
+
+	@BeforeAll
+	static void setUpDelegateModel() {
+		// Create a small Ecore model with OCL-annotated features and operations
+		testPackage = EcoreFactory.eINSTANCE.createEPackage();
+		testPackage.setName("delegateTest");
+		testPackage.setNsURI("http://test/delegateTest");
+		testPackage.setNsPrefix("delegateTest");
+
+		// EMF requires these EAnnotations on the EPackage to activate delegates
+		EAnnotation ecoreAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+		ecoreAnn.setSource("http://www.eclipse.org/emf/2002/Ecore");
+		ecoreAnn.getDetails().put("invocationDelegates", DELEGATE_URI);
+		ecoreAnn.getDetails().put("settingDelegates", DELEGATE_URI);
+		ecoreAnn.getDetails().put("validationDelegates", DELEGATE_URI);
+		testPackage.getEAnnotations().add(ecoreAnn);
+
+		employeeClass = EcoreFactory.eINSTANCE.createEClass();
+		employeeClass.setName("Employee");
+		testPackage.getEClassifiers().add(employeeClass);
+
+		// name : EString
+		EAttribute nameAttr = EcoreFactory.eINSTANCE.createEAttribute();
+		nameAttr.setName("name");
+		nameAttr.setEType(EcorePackage.Literals.ESTRING);
+		employeeClass.getEStructuralFeatures().add(nameAttr);
+
+		// age : EInt
+		EAttribute ageAttr = EcoreFactory.eINSTANCE.createEAttribute();
+		ageAttr.setName("age");
+		ageAttr.setEType(EcorePackage.Literals.EINT);
+		employeeClass.getEStructuralFeatures().add(ageAttr);
+
+		// salary : EDouble
+		EAttribute salaryAttr = EcoreFactory.eINSTANCE.createEAttribute();
+		salaryAttr.setName("salary");
+		salaryAttr.setEType(EcorePackage.Literals.EDOUBLE);
+		employeeClass.getEStructuralFeatures().add(salaryAttr);
+
+		// derived feature: nameLength : EInt (derivation = self.name.size())
+		EAttribute nameLengthAttr = EcoreFactory.eINSTANCE.createEAttribute();
+		nameLengthAttr.setName("nameLength");
+		nameLengthAttr.setEType(EcorePackage.Literals.EINT);
+		nameLengthAttr.setDerived(true);
+		nameLengthAttr.setTransient(true);
+		nameLengthAttr.setVolatile(true);
+		addAnnotation(nameLengthAttr, "derivation", "self.name.size()");
+		employeeClass.getEStructuralFeatures().add(nameLengthAttr);
+
+		// operation: isAdult() : EBoolean (body = self.age >= 18)
+		EOperation isAdultOp = EcoreFactory.eINSTANCE.createEOperation();
+		isAdultOp.setName("isAdult");
+		isAdultOp.setEType(EcorePackage.Literals.EBOOLEAN);
+		addAnnotation(isAdultOp, "body", "self.age >= 18");
+		employeeClass.getEOperations().add(isAdultOp);
+
+		// operation: greeting() : EString (body = 'Hello, '.concat(self.name))
+		EOperation greetingOp = EcoreFactory.eINSTANCE.createEOperation();
+		greetingOp.setName("greeting");
+		greetingOp.setEType(EcorePackage.Literals.ESTRING);
+		addAnnotation(greetingOp, "body", "'Hello, '.concat(self.name)");
+		employeeClass.getEOperations().add(greetingOp);
+
+		// Register the package
+		EPackage.Registry.INSTANCE.put(testPackage.getNsURI(), testPackage);
+
+		// Install delegates
+		engine.installDelegates();
+	}
+
+	@AfterAll
+	static void tearDownDelegates() {
+		engine.uninstallDelegates();
+		EPackage.Registry.INSTANCE.remove(testPackage.getNsURI());
+	}
+
+	private static void addAnnotation(org.eclipse.emf.ecore.EModelElement element,
+			String key, String value) {
+		EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
+		ann.setSource(DELEGATE_URI);
+		ann.getDetails().put(key, value);
+		element.getEAnnotations().add(ann);
+	}
+
+	private static EObject createEmployee(String name, int age, double salary) {
+		EFactory factory = testPackage.getEFactoryInstance();
+		EObject emp = factory.create(employeeClass);
+		emp.eSet(employeeClass.getEStructuralFeature("name"), name);
+		emp.eSet(employeeClass.getEStructuralFeature("age"), age);
+		emp.eSet(employeeClass.getEStructuralFeature("salary"), salary);
+		return emp;
+	}
+
+	// --- Delegate registration ---
+
+	@Test
+	void installDelegates_registersInvocationDelegate() {
+		assertNotNull(EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE.get(DELEGATE_URI));
+	}
+
+	@Test
+	void installDelegates_registersSettingDelegate() {
+		assertNotNull(EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE.get(DELEGATE_URI));
+	}
+
+	@Test
+	void installDelegates_registersValidationDelegate() {
+		assertNotNull(EValidator.ValidationDelegate.Registry.INSTANCE.get(DELEGATE_URI));
+	}
+
+	// --- Setting delegate (derived features) ---
+
+	@Test
+	void settingDelegate_nameLength() {
+		EObject emp = createEmployee("Alice", 30, 50000.0);
+		Object nameLength = emp.eGet(employeeClass.getEStructuralFeature("nameLength"));
+		assertEquals(5, nameLength);
+	}
+
+	@Test
+	void settingDelegate_nameLength_differentName() {
+		EObject emp = createEmployee("Bob", 25, 40000.0);
+		Object nameLength = emp.eGet(employeeClass.getEStructuralFeature("nameLength"));
+		assertEquals(3, nameLength);
+	}
+
+	@Test
+	void settingDelegate_derivedFeature_isSet() {
+		EObject emp = createEmployee("Alice", 30, 50000.0);
+		assertTrue(emp.eIsSet(employeeClass.getEStructuralFeature("nameLength")));
+	}
+
+	// --- Invocation delegate (operations) ---
+
+	@Test
+	void invocationDelegate_isAdult_true() throws Exception {
+		EObject emp = createEmployee("Alice", 30, 50000.0);
+		EOperation isAdultOp = employeeClass.getEOperations().get(0);
+		Object result = ((InternalEObject) emp).eInvoke(isAdultOp, null);
+		assertEquals(true, result);
+	}
+
+	@Test
+	void invocationDelegate_isAdult_false() throws Exception {
+		EObject emp = createEmployee("Child", 10, 0.0);
+		EOperation isAdultOp = employeeClass.getEOperations().get(0);
+		Object result = ((InternalEObject) emp).eInvoke(isAdultOp, null);
+		assertEquals(false, result);
+	}
+
+	@Test
+	void invocationDelegate_greeting() throws Exception {
+		EObject emp = createEmployee("Bob", 25, 40000.0);
+		EOperation greetingOp = employeeClass.getEOperations().get(1);
+		Object result = ((InternalEObject) emp).eInvoke(greetingOp, null);
+		assertEquals("Hello, Bob", result);
+	}
+
+	// --- Validation delegate ---
+
+	@Test
+	void validationDelegate_exists() {
+		Object delegate = EValidator.ValidationDelegate.Registry.INSTANCE.get(DELEGATE_URI);
+		assertNotNull(delegate);
+	}
+
+	@Test
+	void validationDelegate_validConstraint() {
+		EObject emp = createEmployee("Alice", 30, 50000.0);
+		EValidator.ValidationDelegate delegate =
+				(EValidator.ValidationDelegate) EValidator.ValidationDelegate.Registry.INSTANCE.get(DELEGATE_URI);
+		boolean valid = delegate.validate(employeeClass, emp, null,
+				"agePositive", "self.age > 0");
+		assertTrue(valid);
+	}
+
+	@Test
+	void validationDelegate_violatedConstraint() {
+		EObject emp = createEmployee("Alice", -5, 50000.0);
+		EValidator.ValidationDelegate delegate =
+				(EValidator.ValidationDelegate) EValidator.ValidationDelegate.Registry.INSTANCE.get(DELEGATE_URI);
+		boolean valid = delegate.validate(employeeClass, emp, null,
+				"agePositive", "self.age > 0");
+		assertFalse(valid);
+	}
+
+	// --- Uninstall delegates ---
+
+	@Test
+	void uninstallAndReinstall() {
+		engine.uninstallDelegates();
+		assertNull(EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE.get(DELEGATE_URI));
+		assertNull(EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE.get(DELEGATE_URI));
+		assertNull(EValidator.ValidationDelegate.Registry.INSTANCE.get(DELEGATE_URI));
+
+		// Reinstall for other tests
+		engine.installDelegates();
+		assertNotNull(EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE.get(DELEGATE_URI));
+	}
+}

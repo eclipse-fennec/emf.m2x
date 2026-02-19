@@ -64,7 +64,7 @@ class OclFlattenCollectTest extends AbstractOclTest {
 
 	@Test
 	void explicitCollect_chainedWithSize() throws OclParseException {
-		assertEquals(2L, eval("self.employees->collect(e | e.name)->size()", company));
+		assertEquals(2, eval("self.employees->collect(e | e.name)->size()", company));
 	}
 
 	@Test
@@ -90,7 +90,7 @@ class OclFlattenCollectTest extends AbstractOclTest {
 	void collect_preservesOrder() throws OclParseException {
 		Object result = eval("Sequence{3, 1, 2}->collect(i | i * 10)", alice);
 		assertInstanceOf(List.class, result);
-		assertEquals(List.of(30L, 10L, 20L), result);
+		assertEquals(List.of(30, 10, 20), result);
 	}
 
 	@Test
@@ -116,12 +116,12 @@ class OclFlattenCollectTest extends AbstractOclTest {
 	@Test
 	void flatten_alreadyFlat() throws OclParseException {
 		// Flattening a non-nested collection returns same content
-		assertEquals(3L, eval("Sequence{1, 2, 3}->flatten()->size()", alice));
+		assertEquals(3, eval("Sequence{1, 2, 3}->flatten()->size()", alice));
 	}
 
 	@Test
 	void flatten_size() throws OclParseException {
-		assertEquals(4L, eval("Sequence{Sequence{1, 2}, Sequence{3, 4}}->flatten()->size()", alice));
+		assertEquals(4, eval("Sequence{Sequence{1, 2}, Sequence{3, 4}}->flatten()->size()", alice));
 	}
 
 	// --- collectNested ---
@@ -138,7 +138,7 @@ class OclFlattenCollectTest extends AbstractOclTest {
 
 	@Test
 	void reject_integers() throws OclParseException {
-		assertEquals(3L, eval("Sequence{1, 2, 3, 4, 5}->reject(i | i > 3)->size()", alice));
+		assertEquals(3, eval("Sequence{1, 2, 3, 4, 5}->reject(i | i > 3)->size()", alice));
 	}
 
 	@Test

@@ -48,19 +48,19 @@ class OclBagOperationsTest extends AbstractOclTest {
 
 	@Test
 	void bag_allowsDuplicates() throws OclParseException {
-		assertEquals(5L, eval("Bag{1, 1, 2, 2, 3}->size()", self));
+		assertEquals(5, eval("Bag{1, 1, 2, 2, 3}->size()", self));
 	}
 
 	// --- count ---
 
 	@Test
 	void bag_count() throws OclParseException {
-		assertEquals(3L, eval("Bag{1, 1, 1, 2, 3}->count(1)", self));
+		assertEquals(3, eval("Bag{1, 1, 1, 2, 3}->count(1)", self));
 	}
 
 	@Test
 	void bag_count_absent() throws OclParseException {
-		assertEquals(0L, eval("Bag{1, 2, 3}->count(5)", self));
+		assertEquals(0, eval("Bag{1, 2, 3}->count(5)", self));
 	}
 
 	// --- includes / excludes ---
@@ -79,24 +79,24 @@ class OclBagOperationsTest extends AbstractOclTest {
 
 	@Test
 	void bag_including() throws OclParseException {
-		assertEquals(4L, eval("Bag{1, 2, 3}->including(4)->size()", self));
+		assertEquals(4, eval("Bag{1, 2, 3}->including(4)->size()", self));
 	}
 
 	@Test
 	void bag_excluding() throws OclParseException {
-		assertEquals(2L, eval("Bag{1, 2, 3}->excluding(1)->size()", self));
+		assertEquals(2, eval("Bag{1, 2, 3}->excluding(1)->size()", self));
 	}
 
 	// --- union ---
 
 	@Test
 	void bag_union() throws OclParseException {
-		assertEquals(5L, eval("Bag{1, 2}->union(Bag{3, 4, 5})->size()", self));
+		assertEquals(5, eval("Bag{1, 2}->union(Bag{3, 4, 5})->size()", self));
 	}
 
 	@Test
 	void bag_union_preservesDuplicates() throws OclParseException {
-		assertEquals(4L, eval("Bag{1, 2}->union(Bag{1, 2})->size()", self));
+		assertEquals(4, eval("Bag{1, 2}->union(Bag{1, 2})->size()", self));
 	}
 
 	// --- intersection ---
@@ -122,14 +122,14 @@ class OclBagOperationsTest extends AbstractOclTest {
 
 	@Test
 	void bag_sum() throws OclParseException {
-		assertEquals(9L, eval("Bag{1, 2, 3, 3}->sum()", self));
+		assertEquals(9, eval("Bag{1, 2, 3, 3}->sum()", self));
 	}
 
 	// --- Iterators ---
 
 	@Test
 	void bag_select() throws OclParseException {
-		assertEquals(2L, eval("Bag{1, 2, 3, 4}->select(i | i > 2)->size()", self));
+		assertEquals(2, eval("Bag{1, 2, 3, 4}->select(i | i > 2)->size()", self));
 	}
 
 	@Test
@@ -145,19 +145,19 @@ class OclBagOperationsTest extends AbstractOclTest {
 	@Test
 	void bag_collect() throws OclParseException {
 		// collect on Bag produces Bag (preserves duplicates)
-		assertEquals(6L, eval("Bag{1, 1, 2, 2, 3, 3}->collect(i | i * 2)->size()", self));
+		assertEquals(6, eval("Bag{1, 1, 2, 2, 3, 3}->collect(i | i * 2)->size()", self));
 	}
 
 	// --- Conversion ---
 
 	@Test
 	void bag_asSet() throws OclParseException {
-		assertEquals(3L, eval("Bag{1, 1, 2, 2, 3}->asSet()->size()", self));
+		assertEquals(3, eval("Bag{1, 1, 2, 2, 3}->asSet()->size()", self));
 	}
 
 	@Test
 	void bag_asSequence() throws OclParseException {
-		assertEquals(5L, eval("Bag{1, 1, 2, 2, 3}->asSequence()->size()", self));
+		assertEquals(5, eval("Bag{1, 1, 2, 2, 3}->asSequence()->size()", self));
 	}
 
 	// --- flatten ---

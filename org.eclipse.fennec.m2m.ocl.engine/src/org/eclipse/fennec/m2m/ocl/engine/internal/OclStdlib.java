@@ -28,7 +28,9 @@ import java.util.regex.PatternSyntaxException;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
+import org.eclipse.fennec.m2m.model.ocl.CollectionType;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
+import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 
 /**
@@ -94,13 +96,12 @@ class OclStdlib {
 			return dispatchMap(name, m, args);
 		}
 		if (source instanceof Collection<?> c) {
-			// Ordered collections: List (Sequence/Bag) and LinkedHashSet (OrderedSet)
-			if (source instanceof List<?> l) {
-				Object ordered = dispatchOrderedCollection(name, l, args);
+			// Ordered collections: Sequence (plain List), OrderedSet — NOT Bag
+			if (source instanceof OclOrderedSet<?> os) {
+				Object ordered = dispatchOrderedCollection(name, os, args);
 				if (ordered != NOT_FOUND) return ordered;
-			} else if (source instanceof LinkedHashSet<?>) {
-				// OrderedSet: convert to List for ordered operations
-				Object ordered = dispatchOrderedCollection(name, new ArrayList<>(c), args);
+			} else if (source instanceof List<?> l && !(source instanceof OclBag<?>)) {
+				Object ordered = dispatchOrderedCollection(name, l, args);
 				if (ordered != NOT_FOUND) return ordered;
 			}
 			return dispatchCollection(name, c, args);
@@ -133,21 +134,128 @@ class OclStdlib {
 	}
 
 	private static Boolean oclEquals(Object left, Object right) {
+		// Collection equality — kind must match
+		if (left instanceof Collection<?> || right instanceof Collection<?>) {
+			return collectionEquals(left, right);
+		}
 		if (left instanceof EObject le && right instanceof EObject re) {
 			return org.eclipse.emf.ecore.util.EcoreUtil.equals(le, re);
+		}
+		// Numeric cross-type equality: 5.0 = 5 → true (OCL v2.4 §11.5.1)
+		if (left instanceof Number ln && right instanceof Number rn) {
+			return Double.compare(ln.doubleValue(), rn.doubleValue()) == 0;
 		}
 		return Objects.equals(left, right);
 	}
 
-	private static Boolean oclIsKindOf(Object source, Object typeArg) {
+	/**
+	 * Collection equality per OCL spec: collections of different kinds are never equal.
+	 * Set: unordered, unique (element equality). Bag: unordered, non-unique (frequency equality).
+	 * Sequence: ordered, non-unique (positional equality). OrderedSet: ordered, unique (positional equality).
+	 */
+	private static Boolean collectionEquals(Object left, Object right) {
+		if (!(left instanceof Collection<?> lc) || !(right instanceof Collection<?> rc)) {
+			return false;
+		}
+		int lKind = collectionKindTag(lc);
+		int rKind = collectionKindTag(rc);
+		if (lKind != rKind) {
+			return false;
+		}
+		return switch (lKind) {
+			case 0 -> setEquals(lc, rc); // SET: unordered, unique — OCL element equality
+			case 1 -> elementWiseEquals(lc, rc); // ORDERED_SET: order-sensitive
+			case 2 -> elementWiseEquals(lc, rc); // SEQUENCE: order-sensitive
+			case 3 -> bagEquals(lc, rc); // BAG: frequency-based
+			default -> false;
+		};
+	}
+
+	/** Returns 0=SET, 1=ORDERED_SET, 2=SEQUENCE, 3=BAG. */
+	private static int collectionKindTag(Collection<?> c) {
+		if (c instanceof OclOrderedSet<?>) return 1;
+		if (c instanceof OclBag<?>) return 3;
+		if (c instanceof Set<?>) return 0;
+		return 2; // List → Sequence
+	}
+
+	/** Set equality: same size and each element in left has an OCL-equal match in right. */
+	private static boolean setEquals(Collection<?> left, Collection<?> right) {
+		if (left.size() != right.size()) return false;
+		for (Object e : left) {
+			boolean found = false;
+			for (Object r : right) {
+				if (oclEquals(e, r)) { found = true; break; }
+			}
+			if (!found) return false;
+		}
+		return true;
+	}
+
+	/** Order-sensitive element comparison using OCL equality. */
+	private static boolean elementWiseEquals(Collection<?> left, Collection<?> right) {
+		if (left.size() != right.size()) return false;
+		var li = left.iterator();
+		var ri = right.iterator();
+		while (li.hasNext()) {
+			if (!oclEquals(li.next(), ri.next())) return false;
+		}
+		return true;
+	}
+
+	/** Frequency-based comparison for Bags (order-insensitive). */
+	private static boolean bagEquals(Collection<?> left, Collection<?> right) {
+		if (left.size() != right.size()) return false;
+		// Count frequencies in left, then verify against right
+		List<Object> remaining = new ArrayList<>(right);
+		for (Object e : left) {
+			boolean found = false;
+			for (int i = 0; i < remaining.size(); i++) {
+				if (oclEquals(e, remaining.get(i))) {
+					remaining.remove(i);
+					found = true;
+					break;
+				}
+			}
+			if (!found) return false;
+		}
+		return remaining.isEmpty();
+	}
+
+	private static boolean oclContains(Collection<?> col, Object element) {
+		return col.stream().anyMatch(e -> oclEquals(e, element));
+	}
+
+	private static Object oclIsKindOf(Object source, Object typeArg) {
+		if (source == OclInvalid.INSTANCE) {
+			return OclInvalid.INSTANCE;
+		}
+		// Check primitive type match first
+		if (typeArg instanceof PrimitiveType pt) {
+			return matchesPrimitiveType(source, pt.getName());
+		}
+		if (typeArg instanceof CollectionType) {
+			return source instanceof Collection<?>;
+		}
 		EClassifier classifier = extractClassifier(typeArg);
 		if (classifier == null) {
+			// Check for OclAny — everything is a kind of OclAny
+			if (typeArg instanceof OclType ot && "OclAny".equals(ot.getName())) {
+				return true;
+			}
 			return false;
 		}
 		return classifier.isInstance(source);
 	}
 
-	private static Boolean oclIsTypeOf(Object source, Object typeArg) {
+	private static Object oclIsTypeOf(Object source, Object typeArg) {
+		if (source == OclInvalid.INSTANCE) {
+			return OclInvalid.INSTANCE;
+		}
+		// Check primitive type match first
+		if (typeArg instanceof PrimitiveType pt) {
+			return matchesPrimitiveType(source, pt.getName());
+		}
 		EClassifier classifier = extractClassifier(typeArg);
 		if (classifier == null || source == null) {
 			return false;
@@ -157,6 +265,18 @@ class OclStdlib {
 		}
 		return classifier.isInstance(source) && classifier.getInstanceClass() != null
 				&& classifier.getInstanceClass().equals(source.getClass());
+	}
+
+	private static boolean matchesPrimitiveType(Object source, String typeName) {
+		return switch (typeName) {
+			case "Integer" -> source instanceof Long || source instanceof Integer;
+			case "Real" -> source instanceof Double || source instanceof Float;
+			case "String" -> source instanceof String;
+			case "Boolean" -> source instanceof Boolean;
+			case "UnlimitedNatural" -> source instanceof Long || source instanceof Integer;
+			case "OclVoid" -> source == null;
+			default -> false;
+		};
 	}
 
 	private static Object oclAsType(Object source, Object typeArg) {
@@ -370,23 +490,33 @@ class OclStdlib {
 			case "size" -> (long) source.size();
 			case "isEmpty" -> source.isEmpty();
 			case "notEmpty" -> !source.isEmpty();
-			case "includes" -> source.contains(args[0]);
-			case "excludes" -> !source.contains(args[0]);
+			case "includes" -> oclContains(source, args[0]);
+			case "excludes" -> !oclContains(source, args[0]);
 			case "includesAll" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
-				yield source.containsAll(other);
+				yield other.stream().allMatch(e -> oclContains(source, e));
 			}
 			case "excludesAll" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
-				yield Collections.disjoint(source, other);
+				yield other.stream().noneMatch(e -> oclContains(source, e));
 			}
-			case "count" -> source.stream().filter(e -> Objects.equals(e, args[0])).count();
+			case "count" -> source.stream().filter(e -> oclEquals(e, args[0])).count();
 			case "flatten" -> {
 				List<Object> flat = new ArrayList<>();
 				flatten(source, flat);
-				yield source instanceof Set<?> ? new LinkedHashSet<>(flat) : flat;
+				yield preserveCollectionKind(source, flat);
 			}
 			case "including" -> {
+				if (source instanceof OclOrderedSet<?>) {
+					OclOrderedSet<Object> result = new OclOrderedSet<>(source);
+					result.add(args[0]);
+					yield result;
+				}
+				if (source instanceof OclBag<?>) {
+					OclBag<Object> result = new OclBag<>(source);
+					result.add(args[0]);
+					yield result;
+				}
 				if (source instanceof Set<?>) {
 					Set<Object> result = new LinkedHashSet<>(source);
 					result.add(args[0]);
@@ -397,6 +527,16 @@ class OclStdlib {
 				yield result;
 			}
 			case "excluding" -> {
+				if (source instanceof OclOrderedSet<?>) {
+					OclOrderedSet<Object> result = new OclOrderedSet<>(source);
+					result.remove(args[0]);
+					yield result;
+				}
+				if (source instanceof OclBag<?>) {
+					OclBag<Object> result = new OclBag<>(source);
+					result.remove(args[0]);
+					yield result;
+				}
 				if (source instanceof Set<?>) {
 					Set<Object> result = new LinkedHashSet<>(source);
 					result.remove(args[0]);
@@ -408,34 +548,55 @@ class OclStdlib {
 			}
 			case "union" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
-				if (source instanceof Set<?>) {
+				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
 					Set<Object> result = new LinkedHashSet<>(source);
 					result.addAll(other);
 					yield result;
 				}
-				List<Object> result = new ArrayList<>(source);
+				List<Object> result;
+				if (source instanceof OclBag<?>) {
+					result = new OclBag<>(source);
+				} else if (source instanceof OclOrderedSet<?>) {
+					result = new OclOrderedSet<>(source);
+				} else {
+					result = new ArrayList<>(source);
+				}
 				result.addAll(other);
 				yield result;
 			}
 			case "intersection" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
-				if (source instanceof Set<?>) {
+				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
 					Set<Object> result = new LinkedHashSet<>(source);
 					result.retainAll(other);
 					yield result;
 				}
-				List<Object> result = new ArrayList<>(source);
+				List<Object> result;
+				if (source instanceof OclBag<?>) {
+					result = new OclBag<>(source);
+				} else if (source instanceof OclOrderedSet<?>) {
+					result = new OclOrderedSet<>(source);
+				} else {
+					result = new ArrayList<>(source);
+				}
 				result.retainAll(other);
 				yield result;
 			}
 			case "-" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
-				if (source instanceof Set<?>) {
+				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
 					Set<Object> result = new LinkedHashSet<>(source);
 					result.removeAll(other);
 					yield result;
 				}
-				List<Object> result = new ArrayList<>(source);
+				List<Object> result;
+				if (source instanceof OclBag<?>) {
+					result = new OclBag<>(source);
+				} else if (source instanceof OclOrderedSet<?>) {
+					result = new OclOrderedSet<>(source);
+				} else {
+					result = new ArrayList<>(source);
+				}
 				result.removeAll(other);
 				yield result;
 			}
@@ -450,9 +611,27 @@ class OclStdlib {
 				yield result;
 			}
 			case "asSet" -> new LinkedHashSet<>(source);
-			case "asBag" -> new ArrayList<>(source);
+			case "asBag" -> new OclBag<>(source);
 			case "asSequence" -> new ArrayList<>(source);
-			case "asOrderedSet" -> new LinkedHashSet<>(source);
+			case "asOrderedSet" -> new OclOrderedSet<>(source);
+			case "selectByKind" -> {
+				List<Object> filtered = new ArrayList<>();
+				for (Object e : source) {
+					if (Boolean.TRUE.equals(oclIsKindOf(e, args[0]))) {
+						filtered.add(e);
+					}
+				}
+				yield preserveCollectionKind(source, filtered);
+			}
+			case "selectByType" -> {
+				List<Object> filtered = new ArrayList<>();
+				for (Object e : source) {
+					if (Boolean.TRUE.equals(oclIsTypeOf(e, args[0]))) {
+						filtered.add(e);
+					}
+				}
+				yield preserveCollectionKind(source, filtered);
+			}
 			case "sum" -> {
 				double sum = 0;
 				boolean allLong = true;
@@ -472,25 +651,21 @@ class OclStdlib {
 				yield sum;
 			}
 			case "max" -> {
-				Comparable<?> max = null;
+				Object max = null;
 				for (Object e : source) {
 					if (!(e instanceof Comparable)) yield OclInvalid.INSTANCE;
-					@SuppressWarnings("unchecked")
-					Comparable<Object> c = (Comparable<Object>) e;
-					if (max == null || c.compareTo(max) > 0) {
-						max = c;
+					if (max == null || compareOcl(e, max) > 0) {
+						max = e;
 					}
 				}
 				yield max == null ? OclInvalid.INSTANCE : max;
 			}
 			case "min" -> {
-				Comparable<?> min = null;
+				Object min = null;
 				for (Object e : source) {
 					if (!(e instanceof Comparable)) yield OclInvalid.INSTANCE;
-					@SuppressWarnings("unchecked")
-					Comparable<Object> c = (Comparable<Object>) e;
-					if (min == null || c.compareTo(min) < 0) {
-						min = c;
+					if (min == null || compareOcl(e, min) < 0) {
+						min = e;
 					}
 				}
 				yield min == null ? OclInvalid.INSTANCE : min;
@@ -574,7 +749,7 @@ class OclStdlib {
 			case "excludes" -> !source.containsKey(args[0]);
 			case "includesValue" -> source.containsValue(args[0]);
 			case "excludesValue" -> !source.containsValue(args[0]);
-			case "get" -> source.get(args[0]);
+			case "get", "at" -> source.get(args[0]);
 			case "keys" -> new LinkedHashSet<>(source.keySet());
 			case "values" -> new ArrayList<>(source.values());
 			case "including" -> {
@@ -587,12 +762,42 @@ class OclStdlib {
 				result.remove(args[0]);
 				yield result;
 			}
+			case "union" -> {
+				if (!(args[0] instanceof Map<?, ?> other)) yield OclInvalid.INSTANCE;
+				Map<Object, Object> result = new LinkedHashMap<>(source);
+				result.putAll(other);
+				yield result;
+			}
 			case "toString" -> source.toString();
 			default -> NOT_FOUND;
 		};
 	}
 
-	// --- Collection flatten helper ---
+	/** Cross-type numeric comparison for OCL: Long vs Double etc. */
+	@SuppressWarnings("unchecked")
+	private static int compareOcl(Object a, Object b) {
+		if (a instanceof Number na && b instanceof Number nb) {
+			return Double.compare(na.doubleValue(), nb.doubleValue());
+		}
+		if (a instanceof Comparable<?> ca) {
+			try {
+				return ((Comparable<Object>) ca).compareTo(b);
+			} catch (ClassCastException e) {
+				return 0;
+			}
+		}
+		return 0;
+	}
+
+	// --- Collection helpers ---
+
+	/** Returns a collection of the same kind as the source. */
+	private static Collection<Object> preserveCollectionKind(Collection<?> source, List<Object> elements) {
+		if (source instanceof OclOrderedSet<?>) return new OclOrderedSet<>(elements);
+		if (source instanceof OclBag<?>) return new OclBag<>(elements);
+		if (source instanceof Set<?>) return new LinkedHashSet<>(elements);
+		return elements; // Sequence
+	}
 
 	private static void flatten(Collection<?> source, List<Object> result) {
 		for (Object element : source) {

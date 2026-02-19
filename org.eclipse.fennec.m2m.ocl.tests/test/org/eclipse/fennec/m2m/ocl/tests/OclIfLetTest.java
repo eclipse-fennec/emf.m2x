@@ -37,12 +37,12 @@ class OclIfLetTest extends AbstractOclTest {
 
 	@Test
 	void ifTrue() throws OclParseException {
-		assertEquals(1L, eval("if true then 1 else 2 endif", self));
+		assertEquals(1, eval("if true then 1 else 2 endif", self));
 	}
 
 	@Test
 	void ifFalse() throws OclParseException {
-		assertEquals(2L, eval("if false then 1 else 2 endif", self));
+		assertEquals(2, eval("if false then 1 else 2 endif", self));
 	}
 
 	@Test
@@ -58,7 +58,7 @@ class OclIfLetTest extends AbstractOclTest {
 
 	@Test
 	void ifNested() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"if false then 1 else if false then 2 else 3 endif endif", self));
 	}
 
@@ -71,7 +71,7 @@ class OclIfLetTest extends AbstractOclTest {
 
 	@Test
 	void letSimple() throws OclParseException {
-		assertEquals(10L, eval("let x : Integer = 5 in x + x", self));
+		assertEquals(10, eval("let x : Integer = 5 in x + x", self));
 	}
 
 	@Test
@@ -81,14 +81,14 @@ class OclIfLetTest extends AbstractOclTest {
 
 	@Test
 	void letNested() throws OclParseException {
-		assertEquals(8L, eval(
+		assertEquals(8, eval(
 				"let x : Integer = 3 in let y : Integer = 5 in x + y", self));
 	}
 
 	@Test
 	void letShadowing() throws OclParseException {
 		// Inner let shadows outer
-		assertEquals(10L, eval(
+		assertEquals(10, eval(
 				"let x : Integer = 5 in let x : Integer = 10 in x", self));
 	}
 

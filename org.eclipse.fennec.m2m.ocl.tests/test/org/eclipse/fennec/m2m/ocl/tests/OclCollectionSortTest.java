@@ -48,37 +48,37 @@ class OclCollectionSortTest extends AbstractOclTest {
 
 	@Test
 	void sortIntegers_ascending() throws OclParseException {
-		assertEquals(List.of(1L, 2L, 3L, 4L, 5L),
+		assertEquals(List.of(1, 2, 3, 4, 5),
 				eval("Sequence{3, 1, 4, 5, 2}->sortedBy(i | i)", alice));
 	}
 
 	@Test
 	void sortIntegers_alreadySorted() throws OclParseException {
-		assertEquals(List.of(1L, 2L, 3L),
+		assertEquals(List.of(1, 2, 3),
 				eval("Sequence{1, 2, 3}->sortedBy(i | i)", alice));
 	}
 
 	@Test
 	void sortIntegers_reverseSorted() throws OclParseException {
-		assertEquals(List.of(1L, 2L, 3L),
+		assertEquals(List.of(1, 2, 3),
 				eval("Sequence{3, 2, 1}->sortedBy(i | i)", alice));
 	}
 
 	@Test
 	void sortIntegers_withDuplicates() throws OclParseException {
-		assertEquals(List.of(1L, 2L, 2L, 3L),
+		assertEquals(List.of(1, 2, 2, 3),
 				eval("Sequence{2, 3, 1, 2}->sortedBy(i | i)", alice));
 	}
 
 	@Test
 	void sortIntegers_singleton() throws OclParseException {
-		assertEquals(List.of(42L),
+		assertEquals(List.of(42),
 				eval("Sequence{42}->sortedBy(i | i)", alice));
 	}
 
 	@Test
 	void sortIntegers_negative() throws OclParseException {
-		assertEquals(List.of(-3L, -1L, 0L, 2L, 5L),
+		assertEquals(List.of(-3, -1, 0, 2, 5),
 				eval("Sequence{5, -1, 0, 2, -3}->sortedBy(i | i)", alice));
 	}
 
@@ -105,7 +105,7 @@ class OclCollectionSortTest extends AbstractOclTest {
 
 	@Test
 	void sortDescending() throws OclParseException {
-		assertEquals(List.of(5L, 4L, 3L, 2L, 1L),
+		assertEquals(List.of(5, 4, 3, 2, 1),
 				eval("Sequence{3, 1, 4, 5, 2}->sortedBy(i | i)->reverse()", alice));
 	}
 
@@ -147,29 +147,29 @@ class OclCollectionSortTest extends AbstractOclTest {
 	@Test
 	void sortSet() throws OclParseException {
 		Object result = eval("Set{5, 3, 1, 4, 2}->sortedBy(i | i)->first()", alice);
-		assertEquals(1L, result);
+		assertEquals(1, result);
 	}
 
 	@Test
 	void sortSet_last() throws OclParseException {
-		assertEquals(5L, eval("Set{5, 3, 1, 4, 2}->sortedBy(i | i)->last()", alice));
+		assertEquals(5, eval("Set{5, 3, 1, 4, 2}->sortedBy(i | i)->last()", alice));
 	}
 
 	// --- Sort then access ---
 
 	@Test
 	void sort_thenFirst() throws OclParseException {
-		assertEquals(1L, eval("Sequence{3, 1, 2}->sortedBy(i | i)->first()", alice));
+		assertEquals(1, eval("Sequence{3, 1, 2}->sortedBy(i | i)->first()", alice));
 	}
 
 	@Test
 	void sort_thenLast() throws OclParseException {
-		assertEquals(3L, eval("Sequence{3, 1, 2}->sortedBy(i | i)->last()", alice));
+		assertEquals(3, eval("Sequence{3, 1, 2}->sortedBy(i | i)->last()", alice));
 	}
 
 	@Test
 	void sort_thenAt() throws OclParseException {
-		assertEquals(2L, eval("Sequence{3, 1, 2}->sortedBy(i | i)->at(2)", alice));
+		assertEquals(2, eval("Sequence{3, 1, 2}->sortedBy(i | i)->at(2)", alice));
 	}
 
 	// --- Sort by computed value ---
@@ -181,20 +181,20 @@ class OclCollectionSortTest extends AbstractOclTest {
 				"Sequence{-3, 1, -2, 4}->sortedBy(i | i.abs())", alice);
 		assertInstanceOf(List.class, result);
 		List<?> sorted = (List<?>) result;
-		assertEquals(1L, sorted.get(0));
+		assertEquals(1, sorted.get(0));
 	}
 
 	// --- Sort + select ---
 
 	@Test
 	void select_thenSort() throws OclParseException {
-		assertEquals(List.of(3L, 4L, 5L), eval(
+		assertEquals(List.of(3, 4, 5), eval(
 				"Sequence{5, 1, 3, 2, 4}->select(i | i > 2)->sortedBy(i | i)", alice));
 	}
 
 	@Test
 	void sort_thenSelect() throws OclParseException {
-		assertEquals(List.of(3L, 4L, 5L), eval(
+		assertEquals(List.of(3, 4, 5), eval(
 				"Sequence{5, 1, 3, 2, 4}->sortedBy(i | i)->select(i | i > 2)", alice));
 	}
 }

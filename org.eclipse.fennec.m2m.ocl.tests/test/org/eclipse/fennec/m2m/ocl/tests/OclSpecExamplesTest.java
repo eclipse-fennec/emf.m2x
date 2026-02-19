@@ -67,7 +67,7 @@ class OclSpecExamplesTest extends AbstractOclTest {
 	@Test
 	void spec_sizeOperation() throws OclParseException {
 		// self.employees->size()
-		assertEquals(3L, eval("self.employees->size()", company));
+		assertEquals(3, eval("self.employees->size()", company));
 	}
 
 	@Test
@@ -139,7 +139,7 @@ class OclSpecExamplesTest extends AbstractOclTest {
 
 	@Test
 	void spec_integerArithmetic() throws OclParseException {
-		assertEquals(7L, eval("3 + 4", alice));
+		assertEquals(7, eval("3 + 4", alice));
 	}
 
 	@Test
@@ -151,41 +151,41 @@ class OclSpecExamplesTest extends AbstractOclTest {
 	@Test
 	void spec_integerDiv() throws OclParseException {
 		// div returns Integer
-		assertEquals(2L, eval("5.div(2)", alice));
+		assertEquals(2, eval("5.div(2)", alice));
 	}
 
 	@Test
 	void spec_integerMod() throws OclParseException {
-		assertEquals(1L, eval("5.mod(2)", alice));
+		assertEquals(1, eval("5.mod(2)", alice));
 	}
 
 	@Test
 	void spec_integerAbs() throws OclParseException {
-		assertEquals(5L, eval("(-5).abs()", alice));
+		assertEquals(5, eval("(-5).abs()", alice));
 	}
 
 	// --- Section 11.6: Real Operations ---
 
 	@Test
 	void spec_realFloor() throws OclParseException {
-		assertEquals(3L, eval("(3.7).floor()", alice));
+		assertEquals(3, eval("(3.7).floor()", alice));
 	}
 
 	@Test
 	void spec_realCeiling() throws OclParseException {
-		assertEquals(4L, eval("(3.2).ceiling()", alice));
+		assertEquals(4, eval("(3.2).ceiling()", alice));
 	}
 
 	@Test
 	void spec_realRound() throws OclParseException {
-		assertEquals(4L, eval("(3.5).round()", alice));
+		assertEquals(4, eval("(3.5).round()", alice));
 	}
 
 	// --- Section 11.7: String Operations ---
 
 	@Test
 	void spec_stringSize() throws OclParseException {
-		assertEquals(5L, eval("'hello'.size()", alice));
+		assertEquals(5, eval("'hello'.size()", alice));
 	}
 
 	@Test
@@ -213,18 +213,18 @@ class OclSpecExamplesTest extends AbstractOclTest {
 
 	@Test
 	void spec_sequenceFirst() throws OclParseException {
-		assertEquals(1L, eval("Sequence{1, 2, 3}->first()", alice));
+		assertEquals(1, eval("Sequence{1, 2, 3}->first()", alice));
 	}
 
 	@Test
 	void spec_sequenceLast() throws OclParseException {
-		assertEquals(3L, eval("Sequence{1, 2, 3}->last()", alice));
+		assertEquals(3, eval("Sequence{1, 2, 3}->last()", alice));
 	}
 
 	@Test
 	void spec_sequenceAt() throws OclParseException {
 		// 1-based indexing
-		assertEquals(2L, eval("Sequence{1, 2, 3}->at(2)", alice));
+		assertEquals(2, eval("Sequence{1, 2, 3}->at(2)", alice));
 	}
 
 	@Test
@@ -241,17 +241,17 @@ class OclSpecExamplesTest extends AbstractOclTest {
 
 	@Test
 	void spec_setUnion() throws OclParseException {
-		assertEquals(4L, eval("Set{1, 2}->union(Set{3, 4})->size()", alice));
+		assertEquals(4, eval("Set{1, 2}->union(Set{3, 4})->size()", alice));
 	}
 
 	@Test
 	void spec_setIntersection() throws OclParseException {
-		assertEquals(2L, eval("Set{1, 2, 3}->intersection(Set{2, 3, 4})->size()", alice));
+		assertEquals(2, eval("Set{1, 2, 3}->intersection(Set{2, 3, 4})->size()", alice));
 	}
 
 	@Test
 	void spec_setMinus() throws OclParseException {
-		assertEquals(1L, eval("(Set{1, 2, 3} - Set{2, 3})->size()", alice));
+		assertEquals(1, eval("(Set{1, 2, 3} - Set{2, 3})->size()", alice));
 	}
 
 	// --- Section 11.2: OclAny Operations ---
@@ -268,14 +268,14 @@ class OclSpecExamplesTest extends AbstractOclTest {
 
 	@Test
 	void spec_oclAsSet() throws OclParseException {
-		assertEquals(1L, eval("42.oclAsSet()->size()", alice));
+		assertEquals(1, eval("42.oclAsSet()->size()", alice));
 	}
 
 	// --- Section 11.9: Iterate ---
 
 	@Test
 	void spec_iterate_sum() throws OclParseException {
-		assertEquals(6L, eval(
+		assertEquals(6, eval(
 				"Sequence{1, 2, 3}->iterate(i; acc : Integer = 0 | acc + i)", alice));
 	}
 

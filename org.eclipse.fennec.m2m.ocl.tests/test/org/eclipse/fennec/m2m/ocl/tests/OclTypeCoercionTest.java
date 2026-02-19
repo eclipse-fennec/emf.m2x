@@ -91,8 +91,8 @@ class OclTypeCoercionTest extends AbstractOclTest {
 	@Test
 	void intDivInt_integerDivision() throws OclParseException {
 		Object result = eval("7.div(2)", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(3L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(3, result);
 	}
 
 	// --- Integer operations stay Integer ---
@@ -100,22 +100,22 @@ class OclTypeCoercionTest extends AbstractOclTest {
 	@Test
 	void intPlusInt_staysInteger() throws OclParseException {
 		Object result = eval("3 + 4", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(7L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(7, result);
 	}
 
 	@Test
 	void intTimesInt_staysInteger() throws OclParseException {
 		Object result = eval("3 * 4", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(12L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(12, result);
 	}
 
 	@Test
 	void intMinusInt_staysInteger() throws OclParseException {
 		Object result = eval("10 - 4", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(6L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(6, result);
 	}
 
 	// --- Comparison across types ---
@@ -145,8 +145,8 @@ class OclTypeCoercionTest extends AbstractOclTest {
 	@Test
 	void unaryMinus_integer() throws OclParseException {
 		Object result = eval("-5", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(-5L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(-5, result);
 	}
 
 	@Test
@@ -168,15 +168,15 @@ class OclTypeCoercionTest extends AbstractOclTest {
 	@Test
 	void toInteger_truncates() throws OclParseException {
 		Object result = eval("(3.9).toInteger()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(3L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(3, result);
 	}
 
 	@Test
 	void toInteger_negative() throws OclParseException {
 		Object result = eval("(-3.9).toInteger()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(-3L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(-3, result);
 	}
 
 	// --- Mixed operations in collections ---
@@ -192,8 +192,8 @@ class OclTypeCoercionTest extends AbstractOclTest {
 	@Test
 	void integerSequence_sum() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->sum()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(6L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(6, result);
 	}
 
 	// --- max / min across types ---
@@ -213,8 +213,8 @@ class OclTypeCoercionTest extends AbstractOclTest {
 	@Test
 	void abs_integer() throws OclParseException {
 		Object result = eval("(-5).abs()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(5L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(5, result);
 	}
 
 	@Test

@@ -113,7 +113,7 @@ class OclImplicitSelfTest extends AbstractOclTest {
 
 	@Test
 	void implicitSelf_collectionSize() throws OclParseException {
-		assertEquals(1L, eval("employees->size()", company));
+		assertEquals(1, eval("employees->size()", company));
 	}
 
 	@Test

@@ -113,7 +113,7 @@ class OclNullHandlingTest extends AbstractOclTest {
 
 	@Test
 	void sequence_withNull_size() throws OclParseException {
-		assertEquals(3L, eval("Sequence{1, null, 3}->size()", self));
+		assertEquals(3, eval("Sequence{1, null, 3}->size()", self));
 	}
 
 	// --- null in boolean expressions ---
@@ -153,7 +153,7 @@ class OclNullHandlingTest extends AbstractOclTest {
 
 	@Test
 	void null_oclAsSet() throws OclParseException {
-		assertEquals(0L, eval("null.oclAsSet()->size()", self));
+		assertEquals(0, eval("null.oclAsSet()->size()", self));
 	}
 
 	// --- null toString ---

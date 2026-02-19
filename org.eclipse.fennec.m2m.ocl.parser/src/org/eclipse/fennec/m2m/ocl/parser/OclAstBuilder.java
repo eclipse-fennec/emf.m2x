@@ -24,6 +24,7 @@ import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2m.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
@@ -438,6 +439,34 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	}
 
 	@Override
+	public TypeExp visitPrimitiveTypeExp(OclParser.PrimitiveTypeExpContext ctx) {
+		TypeExp exp = FACTORY.createTypeExp();
+		exp.setReferredType(createPrimitiveType(ctx.primitiveType().getText()));
+		return exp;
+	}
+
+	@Override
+	public TypeExp visitCollectionTypeExp(OclParser.CollectionTypeExpContext ctx) {
+		TypeExp exp = FACTORY.createTypeExp();
+		exp.setReferredType(resolveCollectionType(ctx.collectionType()));
+		return exp;
+	}
+
+	@Override
+	public TypeExp visitMapTypeExp(OclParser.MapTypeExpContext ctx) {
+		TypeExp exp = FACTORY.createTypeExp();
+		exp.setReferredType(resolveMapType(ctx.mapType()));
+		return exp;
+	}
+
+	@Override
+	public TypeExp visitTupleTypeExp(OclParser.TupleTypeExpContext ctx) {
+		TypeExp exp = FACTORY.createTypeExp();
+		exp.setReferredType(resolveTupleType(ctx.tupleType()));
+		return exp;
+	}
+
+	@Override
 	public OperationCallExp visitOperationCallExp(OclParser.OperationCallExpContext ctx) {
 		List<String> segments = pathNameSegments(ctx.pathName());
 		String opName = segments.get(segments.size() - 1);
@@ -478,8 +507,13 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		return exp;
 	}
 
-	private PropertyCallExp createPropertyCall(OclExpression source,
+	private OclExpression createPropertyCall(OclExpression source,
 			OclParser.PropertySuffixContext ctx, boolean isSafe) {
+		// Check if source is a collection → implicit collect (OCL v2.4 §7.6.1)
+		if (source.getType() instanceof CollectionType sourceColType) {
+			return createImplicitCollect(source, ctx, isSafe, sourceColType);
+		}
+
 		PropertyCallExp exp = FACTORY.createPropertyCallExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
@@ -488,6 +522,64 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		String propName = ctx.IDENTIFIER().getText();
 		resolveProperty(exp, propName);
 		return exp;
+	}
+
+	private IteratorExp createImplicitCollect(OclExpression source,
+			OclParser.PropertySuffixContext ctx, boolean isSafe,
+			CollectionType sourceColType) {
+		// Create iterator variable typed to the element type
+		Variable iterVar = FACTORY.createVariable();
+		iterVar.setName("_implicit");
+		if (sourceColType.getElementType() != null) {
+			iterVar.setType(copyType(sourceColType.getElementType()));
+		}
+
+		// Create the body: iterVar.propName
+		VariableExp iterRef = FACTORY.createVariableExp();
+		iterRef.setReferredVariable(iterVar);
+		if (iterVar.getType() != null) {
+			iterRef.setType(copyType(iterVar.getType()));
+		}
+
+		PropertyCallExp bodyExp = FACTORY.createPropertyCallExp();
+		bodyExp.setOwnedSource(iterRef);
+		bodyExp.setIsSafe(isSafe);
+		bodyExp.setIsPre(ctx.isMarkedPre() != null);
+		String propName = ctx.IDENTIFIER().getText();
+		resolveProperty(bodyExp, propName);
+
+		// Build the IteratorExp("collect")
+		IteratorExp collectExp = FACTORY.createIteratorExp();
+		collectExp.setOwnedSource(source);
+		collectExp.setName("collect");
+		collectExp.getOwnedIterators().add(iterVar);
+		collectExp.setOwnedBody(bodyExp);
+
+		// Result type: the body type determines the element type of the result Sequence
+		OclType bodyType = bodyExp.getType();
+		if (bodyType != null) {
+			CollectionType resultType = FACTORY.createCollectionType();
+			resultType.setElementType(copyType(bodyType));
+			resultType.setKind(CollectionKind.SEQUENCE); // collect always produces Sequence
+			collectExp.setType(resultType);
+		}
+
+		return collectExp;
+	}
+
+	private OclType copyType(OclType type) {
+		if (type instanceof ClassifierType ct) {
+			return createClassifierType(ct.getReferredClassifier());
+		}
+		if (type instanceof CollectionType colType) {
+			CollectionType copy = FACTORY.createCollectionType();
+			if (colType.getElementType() != null) {
+				copy.setElementType(copyType(colType.getElementType()));
+			}
+			copy.setKind(colType.getKind());
+			return copy;
+		}
+		return null;
 	}
 
 	private OperationCallExp createDotOperationCall(OclExpression source,
@@ -654,6 +746,23 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		return type;
 	}
 
+	private CollectionType createCollectionTypeForFeature(EStructuralFeature feature) {
+		CollectionType colType = FACTORY.createCollectionType();
+		colType.setElementType(createClassifierType(feature.getEType()));
+		// EReferences are ordered → Sequence; unordered → Set
+		if (feature instanceof EReference ref) {
+			if (ref.isOrdered()) {
+				colType.setKind(ref.isUnique() ? CollectionKind.ORDERED_SET : CollectionKind.SEQUENCE);
+			} else {
+				colType.setKind(ref.isUnique() ? CollectionKind.SET : CollectionKind.BAG);
+			}
+		} else {
+			// EAttribute many-valued defaults to Sequence
+			colType.setKind(CollectionKind.SEQUENCE);
+		}
+		return colType;
+	}
+
 	private OclType resolveCollectionType(OclParser.CollectionTypeContext ctx) {
 		CollectionKind kind = resolveCollectionKind(ctx.collectionKind().getText());
 		OclType elementType = resolveTypeExpression(ctx.typeExpression());
@@ -699,9 +808,12 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 				// Set result type so chained navigations can resolve
 				EClassifier featureType = feature.getEType();
 				if (featureType != null) {
-					ClassifierType ct = FACTORY.createClassifierType();
-					ct.setReferredClassifier(featureType);
-					exp.setType(ct);
+					if (feature.isMany()) {
+						// Many-valued feature → CollectionType wrapping the element type
+						exp.setType(createCollectionTypeForFeature(feature));
+					} else {
+						exp.setType(createClassifierType(featureType));
+					}
 				}
 				return;
 			}
@@ -732,6 +844,10 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 			return contextType;
 		}
 		OclType type = source.getType();
+		if (type instanceof CollectionType colType && colType.getElementType() instanceof ClassifierType ct) {
+			// For collection-typed source, resolve against the element type
+			return ct.getReferredClassifier();
+		}
 		if (type instanceof ClassifierType ct) {
 			return ct.getReferredClassifier();
 		}
@@ -744,11 +860,16 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	 * type of the collection elements (e.g., Person).
 	 */
 	private OclType inferElementType(OclExpression source) {
-		// For property navigation, the type is set to the feature's EType
-		// which for collection references is the element type (e.g., Person)
-		if (source != null && source.getType() instanceof ClassifierType ct
-				&& ct.getReferredClassifier() != null) {
-			// Must create a copy — EMF containment would move the original
+		if (source == null) {
+			return null;
+		}
+		OclType type = source.getType();
+		// CollectionType → extract element type
+		if (type instanceof CollectionType colType && colType.getElementType() != null) {
+			return copyType(colType.getElementType());
+		}
+		// ClassifierType → used as element type directly (e.g. scalar source)
+		if (type instanceof ClassifierType ct && ct.getReferredClassifier() != null) {
 			return createClassifierType(ct.getReferredClassifier());
 		}
 		return null;
@@ -777,7 +898,11 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 				exp.setReferredProperty(feature);
 				EClassifier featureType = feature.getEType();
 				if (featureType != null) {
-					exp.setType(createClassifierType(featureType));
+					if (feature.isMany()) {
+						exp.setType(createCollectionTypeForFeature(feature));
+					} else {
+						exp.setType(createClassifierType(featureType));
+					}
 				}
 				return exp;
 			}

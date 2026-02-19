@@ -49,8 +49,8 @@ class OclMapOperationsTest extends AbstractOclTest {
 		assertInstanceOf(Map.class, result);
 		@SuppressWarnings("unchecked")
 		Map<Object, Object> map = (Map<Object, Object>) result;
-		assertEquals(1L, map.get("a"));
-		assertEquals(2L, map.get("b"));
+		assertEquals(1, map.get("a"));
+		assertEquals(2, map.get("b"));
 	}
 
 	@Test
@@ -59,8 +59,8 @@ class OclMapOperationsTest extends AbstractOclTest {
 		assertInstanceOf(Map.class, result);
 		@SuppressWarnings("unchecked")
 		Map<Object, Object> map = (Map<Object, Object>) result;
-		assertEquals(10L, map.get("x"));
-		assertEquals(20L, map.get("y"));
+		assertEquals(10, map.get("x"));
+		assertEquals(20, map.get("y"));
 	}
 
 	@Test
@@ -74,12 +74,12 @@ class OclMapOperationsTest extends AbstractOclTest {
 
 	@Test
 	void size_nonEmpty() throws OclParseException {
-		assertEquals(2L, eval("Map{'a' with 1, 'b' with 2}->size()", self));
+		assertEquals(2, eval("Map{'a' with 1, 'b' with 2}->size()", self));
 	}
 
 	@Test
 	void size_empty() throws OclParseException {
-		assertEquals(0L, eval("Map{}->size()", self));
+		assertEquals(0, eval("Map{}->size()", self));
 	}
 
 	// --- isEmpty / notEmpty ---
@@ -158,7 +158,7 @@ class OclMapOperationsTest extends AbstractOclTest {
 
 	@Test
 	void get_existingKey() throws OclParseException {
-		assertEquals(2L, eval("Map{'a' with 1, 'b' with 2}->get('b')", self));
+		assertEquals(2, eval("Map{'a' with 1, 'b' with 2}->get('b')", self));
 	}
 
 	@Test
@@ -187,8 +187,8 @@ class OclMapOperationsTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		List<Object> vals = (List<Object>) result;
 		assertEquals(2, vals.size());
-		assertTrue(vals.contains(1L));
-		assertTrue(vals.contains(2L));
+		assertTrue(vals.contains(1));
+		assertTrue(vals.contains(2));
 	}
 
 	// --- including / excluding ---
@@ -198,8 +198,8 @@ class OclMapOperationsTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Map<Object, Object> result = (Map<Object, Object>) eval("Map{'a' with 1}->including('b', 2)", self);
 		assertEquals(2, result.size());
-		assertEquals(1L, result.get("a"));
-		assertEquals(2L, result.get("b"));
+		assertEquals(1, result.get("a"));
+		assertEquals(2, result.get("b"));
 	}
 
 	@Test
@@ -207,7 +207,7 @@ class OclMapOperationsTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Map<Object, Object> result = (Map<Object, Object>) eval("Map{'a' with 1}->including('a', 99)", self);
 		assertEquals(1, result.size());
-		assertEquals(99L, result.get("a"));
+		assertEquals(99, result.get("a"));
 	}
 
 	@Test
@@ -215,7 +215,7 @@ class OclMapOperationsTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Map<Object, Object> result = (Map<Object, Object>) eval("Map{'a' with 1, 'b' with 2}->excluding('a')", self);
 		assertEquals(1, result.size());
-		assertEquals(2L, result.get("b"));
+		assertEquals(2, result.get("b"));
 	}
 
 	@Test

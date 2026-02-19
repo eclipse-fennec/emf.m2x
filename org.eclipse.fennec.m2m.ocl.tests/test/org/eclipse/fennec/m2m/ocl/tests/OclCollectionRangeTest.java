@@ -44,27 +44,27 @@ class OclCollectionRangeTest extends AbstractOclTest {
 	@Test
 	void sequence_range() throws OclParseException {
 		Object result = eval("Sequence{1..5}", self);
-		assertEquals(List.of(1L, 2L, 3L, 4L, 5L), result);
+		assertEquals(List.of(1, 2, 3, 4, 5), result);
 	}
 
 	@Test
 	void sequence_range_size() throws OclParseException {
-		assertEquals(5L, eval("Sequence{1..5}->size()", self));
+		assertEquals(5, eval("Sequence{1..5}->size()", self));
 	}
 
 	@Test
 	void sequence_range_sum() throws OclParseException {
-		assertEquals(15L, eval("Sequence{1..5}->sum()", self));
+		assertEquals(15, eval("Sequence{1..5}->sum()", self));
 	}
 
 	@Test
 	void sequence_range_first() throws OclParseException {
-		assertEquals(1L, eval("Sequence{1..5}->first()", self));
+		assertEquals(1, eval("Sequence{1..5}->first()", self));
 	}
 
 	@Test
 	void sequence_range_last() throws OclParseException {
-		assertEquals(5L, eval("Sequence{1..5}->last()", self));
+		assertEquals(5, eval("Sequence{1..5}->last()", self));
 	}
 
 	// --- Range with iterators ---
@@ -72,13 +72,13 @@ class OclCollectionRangeTest extends AbstractOclTest {
 	@Test
 	void range_select() throws OclParseException {
 		Object result = eval("Sequence{1..10}->select(i | i > 7)", self);
-		assertEquals(List.of(8L, 9L, 10L), result);
+		assertEquals(List.of(8, 9, 10), result);
 	}
 
 	@Test
 	void range_collect() throws OclParseException {
 		Object result = eval("Sequence{1..5}->collect(i | i * i)", self);
-		assertEquals(List.of(1L, 4L, 9L, 16L, 25L), result);
+		assertEquals(List.of(1, 4, 9, 16, 25), result);
 	}
 
 	@Test
@@ -96,7 +96,7 @@ class OclCollectionRangeTest extends AbstractOclTest {
 	@Test
 	void range_singleElement() throws OclParseException {
 		Object result = eval("Sequence{3..3}", self);
-		assertEquals(List.of(3L), result);
+		assertEquals(List.of(3), result);
 	}
 
 	// --- Empty range (lower > upper) ---
@@ -112,7 +112,7 @@ class OclCollectionRangeTest extends AbstractOclTest {
 
 	@Test
 	void set_range() throws OclParseException {
-		assertEquals(5L, eval("Set{1..5}->size()", self));
+		assertEquals(5, eval("Set{1..5}->size()", self));
 	}
 
 	// --- Range mixed with explicit elements ---
@@ -120,7 +120,7 @@ class OclCollectionRangeTest extends AbstractOclTest {
 	@Test
 	void sequence_rangeWithElements() throws OclParseException {
 		Object result = eval("Sequence{1..3, 10}", self);
-		assertEquals(List.of(1L, 2L, 3L, 10L), result);
+		assertEquals(List.of(1, 2, 3, 10), result);
 	}
 
 	// --- Range with computation ---
@@ -128,7 +128,7 @@ class OclCollectionRangeTest extends AbstractOclTest {
 	@Test
 	void range_iterate_factorial() throws OclParseException {
 		// 5! = 120
-		assertEquals(120L, eval(
+		assertEquals(120, eval(
 				"Sequence{1..5}->iterate(i; acc : Integer = 1 | acc * i)", self));
 	}
 

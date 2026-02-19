@@ -101,7 +101,7 @@ class OclIfThenElseAdvancedTest extends AbstractOclTest {
 	@Test
 	void if_inSelect_condition() throws OclParseException {
 		// Select based on conditional expression
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"Sequence{1, 2, 3, 4, 5}->select(i | " +
 				"  if i.mod(2) = 0 then i > 3 else false endif)->size()",
 				alice)); // only 4 matches
@@ -119,12 +119,12 @@ class OclIfThenElseAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void if_integerResult() throws OclParseException {
-		assertEquals(1L, eval("if true then 1 else 2 endif", alice));
+		assertEquals(1, eval("if true then 1 else 2 endif", alice));
 	}
 
 	@Test
 	void if_integerResultUsedInArithmetic() throws OclParseException {
-		assertEquals(11L, eval(
+		assertEquals(11, eval(
 				"(if self.isMarried then 1 else 0 endif) + 10", alice));
 	}
 
@@ -132,7 +132,7 @@ class OclIfThenElseAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void if_collectionResult() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"(if true then Sequence{1, 2, 3} else Sequence{4, 5} endif)->size()",
 				alice));
 	}
@@ -197,7 +197,7 @@ class OclIfThenElseAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void if_inIterate() throws OclParseException {
-		assertEquals(6L, eval(
+		assertEquals(6, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc: Integer = 0 | " +
 				"  acc + (if i.mod(2) = 0 then i else 0 endif))",
 				alice)); // 0+2+0+4+0 = 6

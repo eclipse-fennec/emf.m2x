@@ -81,36 +81,36 @@ class OclStringConversionTest extends AbstractOclTest {
 	@Test
 	void stringToInteger() throws OclParseException {
 		Object result = eval("'42'.toInteger()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(42L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(42, result);
 	}
 
 	@Test
 	void negativeStringToInteger() throws OclParseException {
 		Object result = eval("'-42'.toInteger()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(-42L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(-42, result);
 	}
 
 	@Test
 	void zeroStringToInteger() throws OclParseException {
 		Object result = eval("'0'.toInteger()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(0L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(0, result);
 	}
 
 	@Test
 	void realToInteger_truncates() throws OclParseException {
 		Object result = eval("(3.7).toInteger()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(3L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(3, result);
 	}
 
 	@Test
 	void negativeRealToInteger_truncates() throws OclParseException {
 		Object result = eval("(-3.7).toInteger()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(-3L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(-3, result);
 	}
 
 	// --- toReal ---
@@ -159,7 +159,7 @@ class OclStringConversionTest extends AbstractOclTest {
 
 	@Test
 	void intToString_thenSize() throws OclParseException {
-		assertEquals(3L, eval("123.toString().size()", self));
+		assertEquals(3, eval("123.toString().size()", self));
 	}
 
 	@Test
@@ -169,7 +169,7 @@ class OclStringConversionTest extends AbstractOclTest {
 
 	@Test
 	void stringToInt_thenArithmetic() throws OclParseException {
-		assertEquals(52L, eval("'42'.toInteger() + 10", self));
+		assertEquals(52, eval("'42'.toInteger() + 10", self));
 	}
 
 	@Test

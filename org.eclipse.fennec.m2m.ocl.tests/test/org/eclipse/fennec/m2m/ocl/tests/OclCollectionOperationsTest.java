@@ -47,22 +47,22 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 
 	@Test
 	void size_set() throws OclParseException {
-		assertEquals(3L, eval("Set{1, 2, 3}->size()", self));
+		assertEquals(3, eval("Set{1, 2, 3}->size()", self));
 	}
 
 	@Test
 	void size_sequence() throws OclParseException {
-		assertEquals(4L, eval("Sequence{1, 2, 2, 3}->size()", self));
+		assertEquals(4, eval("Sequence{1, 2, 2, 3}->size()", self));
 	}
 
 	@Test
 	void size_emptySet() throws OclParseException {
-		assertEquals(0L, eval("Set{}->size()", self));
+		assertEquals(0, eval("Set{}->size()", self));
 	}
 
 	@Test
 	void size_emptySequence() throws OclParseException {
-		assertEquals(0L, eval("Sequence{}->size()", self));
+		assertEquals(0, eval("Sequence{}->size()", self));
 	}
 
 	// --- isEmpty / notEmpty ---
@@ -135,17 +135,17 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 
 	@Test
 	void count_sequence() throws OclParseException {
-		assertEquals(2L, eval("Sequence{1, 2, 2, 3}->count(2)", self));
+		assertEquals(2, eval("Sequence{1, 2, 2, 3}->count(2)", self));
 	}
 
 	@Test
 	void count_set() throws OclParseException {
-		assertEquals(1L, eval("Set{1, 2, 3}->count(2)", self));
+		assertEquals(1, eval("Set{1, 2, 3}->count(2)", self));
 	}
 
 	@Test
 	void count_absent() throws OclParseException {
-		assertEquals(0L, eval("Set{1, 2, 3}->count(4)", self));
+		assertEquals(0, eval("Set{1, 2, 3}->count(4)", self));
 	}
 
 	// --- including / excluding ---
@@ -155,7 +155,7 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 		Object result = eval("Set{1, 2}->including(3)", self);
 		assertInstanceOf(Set.class, result);
 		assertEquals(3, ((Collection<?>) result).size());
-		assertTrue(((Collection<?>) result).contains(3L));
+		assertTrue(((Collection<?>) result).contains(3));
 	}
 
 	@Test
@@ -168,7 +168,7 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	void including_sequence() throws OclParseException {
 		Object result = eval("Sequence{1, 2}->including(3)", self);
 		assertInstanceOf(List.class, result);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
@@ -201,16 +201,16 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Set<Object> set = (Set<Object>) result;
 		assertEquals(3, set.size());
-		assertTrue(set.contains(1L));
-		assertTrue(set.contains(2L));
-		assertTrue(set.contains(3L));
+		assertTrue(set.contains(1));
+		assertTrue(set.contains(2));
+		assertTrue(set.contains(3));
 	}
 
 	@Test
 	void union_sequences() throws OclParseException {
 		Object result = eval("Sequence{1, 2}->union(Sequence{2, 3})", self);
 		assertInstanceOf(List.class, result);
-		assertEquals(List.of(1L, 2L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 2, 3), result);
 	}
 
 	// --- intersection ---
@@ -222,8 +222,8 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Set<Object> set = (Set<Object>) result;
 		assertEquals(2, set.size());
-		assertTrue(set.contains(2L));
-		assertTrue(set.contains(3L));
+		assertTrue(set.contains(2));
+		assertTrue(set.contains(3));
 	}
 
 	@Test
@@ -241,8 +241,8 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Set<Object> set = (Set<Object>) result;
 		assertEquals(2, set.size());
-		assertTrue(set.contains(1L));
-		assertTrue(set.contains(3L));
+		assertTrue(set.contains(1));
+		assertTrue(set.contains(3));
 	}
 
 	// --- symmetricDifference ---
@@ -254,8 +254,8 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Set<Object> set = (Set<Object>) result;
 		assertEquals(2, set.size());
-		assertTrue(set.contains(1L));
-		assertTrue(set.contains(4L));
+		assertTrue(set.contains(1));
+		assertTrue(set.contains(4));
 	}
 
 	// --- flatten ---
@@ -264,13 +264,13 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	void flatten_nestedSequence() throws OclParseException {
 		Object result = eval("Sequence{Sequence{1, 2}, Sequence{3}}->flatten()", self);
 		assertInstanceOf(List.class, result);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
 	void flatten_alreadyFlat() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->flatten()", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	// --- conversion: asSet, asBag, asSequence, asOrderedSet ---
@@ -292,8 +292,8 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	@Test
 	void asOrderedSet_fromSequence() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 2, 3}->asOrderedSet()", self);
-		assertInstanceOf(LinkedHashSet.class, result);
-		assertEquals(3, ((Collection<?>) result).size());
+		assertInstanceOf(List.class, result);
+		assertEquals(3, ((Collection<?>) result).size()); // duplicates removed
 	}
 
 	@Test
@@ -307,7 +307,7 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 
 	@Test
 	void sum_integers() throws OclParseException {
-		assertEquals(10L, eval("Sequence{1, 2, 3, 4}->sum()", self));
+		assertEquals(10, eval("Sequence{1, 2, 3, 4}->sum()", self));
 	}
 
 	@Test
@@ -317,19 +317,19 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 
 	@Test
 	void sum_empty() throws OclParseException {
-		assertEquals(0L, eval("Sequence{}->sum()", self));
+		assertEquals(0, eval("Sequence{}->sum()", self));
 	}
 
 	// --- max / min ---
 
 	@Test
 	void max_integers() throws OclParseException {
-		assertEquals(4L, eval("Set{1, 4, 2, 3}->max()", self));
+		assertEquals(4, eval("Set{1, 4, 2, 3}->max()", self));
 	}
 
 	@Test
 	void min_integers() throws OclParseException {
-		assertEquals(1L, eval("Set{4, 1, 2, 3}->min()", self));
+		assertEquals(1, eval("Set{4, 1, 2, 3}->min()", self));
 	}
 
 	@Test
@@ -357,12 +357,12 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 
 	@Test
 	void first_sequence() throws OclParseException {
-		assertEquals(1L, eval("Sequence{1, 2, 3}->first()", self));
+		assertEquals(1, eval("Sequence{1, 2, 3}->first()", self));
 	}
 
 	@Test
 	void last_sequence() throws OclParseException {
-		assertEquals(3L, eval("Sequence{1, 2, 3}->last()", self));
+		assertEquals(3, eval("Sequence{1, 2, 3}->last()", self));
 	}
 
 	@Test
@@ -379,12 +379,12 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 
 	@Test
 	void at_sequence() throws OclParseException {
-		assertEquals(2L, eval("Sequence{1, 2, 3}->at(2)", self));
+		assertEquals(2, eval("Sequence{1, 2, 3}->at(2)", self));
 	}
 
 	@Test
 	void at_first() throws OclParseException {
-		assertEquals(1L, eval("Sequence{1, 2, 3}->at(1)", self));
+		assertEquals(1, eval("Sequence{1, 2, 3}->at(1)", self));
 	}
 
 	@Test
@@ -401,12 +401,12 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 
 	@Test
 	void indexOf_found() throws OclParseException {
-		assertEquals(2L, eval("Sequence{1, 2, 3}->indexOf(2)", self));
+		assertEquals(2, eval("Sequence{1, 2, 3}->indexOf(2)", self));
 	}
 
 	@Test
 	void indexOf_notFound() throws OclParseException {
-		assertEquals(0L, eval("Sequence{1, 2, 3}->indexOf(4)", self));
+		assertEquals(0, eval("Sequence{1, 2, 3}->indexOf(4)", self));
 	}
 
 	// --- Ordered collection: reverse ---
@@ -414,7 +414,7 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	@Test
 	void reverse_sequence() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->reverse()", self);
-		assertEquals(List.of(3L, 2L, 1L), result);
+		assertEquals(List.of(3, 2, 1), result);
 	}
 
 	// --- Ordered collection: append / prepend ---
@@ -422,13 +422,13 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	@Test
 	void append_sequence() throws OclParseException {
 		Object result = eval("Sequence{1, 2}->append(3)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
 	void prepend_sequence() throws OclParseException {
 		Object result = eval("Sequence{2, 3}->prepend(1)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	// --- Ordered collection: insertAt ---
@@ -436,7 +436,7 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	@Test
 	void insertAt_sequence() throws OclParseException {
 		Object result = eval("Sequence{1, 3}->insertAt(2, 2)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
@@ -449,7 +449,7 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	@Test
 	void subSequence() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3, 4, 5}->subSequence(2, 4)", self);
-		assertEquals(List.of(2L, 3L, 4L), result);
+		assertEquals(List.of(2, 3, 4), result);
 	}
 
 	@Test
@@ -462,12 +462,12 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	@Test
 	void range_sequence() throws OclParseException {
 		Object result = eval("Sequence{1..5}", self);
-		assertEquals(List.of(1L, 2L, 3L, 4L, 5L), result);
+		assertEquals(List.of(1, 2, 3, 4, 5), result);
 	}
 
 	@Test
 	void range_singleElement() throws OclParseException {
 		Object result = eval("Sequence{3..3}", self);
-		assertEquals(List.of(3L), result);
+		assertEquals(List.of(3), result);
 	}
 }

@@ -71,7 +71,7 @@ class OclCollectionProductTest extends AbstractOclTest {
 	@Test
 	void combineResults_union() throws OclParseException {
 		// Select even + select odd = all
-		assertEquals(5L, eval(
+		assertEquals(5, eval(
 				"Sequence{1, 2, 3, 4, 5}->select(i | i.mod(2) = 0)" +
 				"->union(Sequence{1, 2, 3, 4, 5}->select(i | i.mod(2) = 1))->size()",
 				alice));
@@ -80,7 +80,7 @@ class OclCollectionProductTest extends AbstractOclTest {
 	@Test
 	void combineResults_intersection() throws OclParseException {
 		// Elements > 2 AND elements < 5
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Set{1, 2, 3, 4, 5}->select(i | i > 2)" +
 				"->intersection(Set{1, 2, 3, 4, 5}->select(i | i < 5))->size()",
 				alice));
@@ -91,7 +91,7 @@ class OclCollectionProductTest extends AbstractOclTest {
 	@Test
 	void nestedCollectionLiteral_inIterator() throws OclParseException {
 		// For each element, check against a literal collection
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Sequence{1, 2, 3, 4, 5}->select(i | Set{2, 4}->includes(i))->size()",
 				alice));
 	}
@@ -108,7 +108,7 @@ class OclCollectionProductTest extends AbstractOclTest {
 	@Test
 	void model_selectAndCount() throws OclParseException {
 		// Number of married employees
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"self.employees->select(e | e.isMarried)->size()", company));
 	}
 
@@ -172,7 +172,7 @@ class OclCollectionProductTest extends AbstractOclTest {
 	@Test
 	void chain_selectRejectSize() throws OclParseException {
 		// Start with 1..10, select even, reject > 6
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"Sequence{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}" +
 				"->select(i | i.mod(2) = 0)" +       // {2,4,6,8,10}
 				"->reject(i | i > 6)" +               // {2,4,6}
@@ -195,7 +195,7 @@ class OclCollectionProductTest extends AbstractOclTest {
 	@Test
 	void iterate_factorial() throws OclParseException {
 		// 5! = 120
-		assertEquals(120L, eval(
+		assertEquals(120, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc: Integer = 1 | acc * i)",
 				alice));
 	}
@@ -203,7 +203,7 @@ class OclCollectionProductTest extends AbstractOclTest {
 	@Test
 	void iterate_maxManual() throws OclParseException {
 		// Manual max via iterate
-		assertEquals(5L, eval(
+		assertEquals(5, eval(
 				"Sequence{3, 1, 5, 2, 4}->iterate(i; acc: Integer = 0 | if i > acc then i else acc endif)",
 				alice));
 	}

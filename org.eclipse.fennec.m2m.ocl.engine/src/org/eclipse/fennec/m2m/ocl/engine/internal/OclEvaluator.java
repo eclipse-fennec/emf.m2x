@@ -29,9 +29,11 @@ import org.eclipse.emf.common.util.BasicEList;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.ECollections;
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2m.model.ocl.BooleanLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2m.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2m.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2m.model.ocl.CollectionLiteralExp;
@@ -48,6 +50,7 @@ import org.eclipse.fennec.m2m.model.ocl.MapLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.MapLiteralPart;
 import org.eclipse.fennec.m2m.model.ocl.NullLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
+import org.eclipse.fennec.m2m.model.ocl.OclType;
 import org.eclipse.fennec.m2m.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2m.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2m.model.ocl.RealLiteralExp;
@@ -59,6 +62,7 @@ import org.eclipse.fennec.m2m.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.Variable;
 import org.eclipse.fennec.m2m.model.ocl.VariableExp;
 import org.eclipse.fennec.m2m.model.ocl.util.OclSwitch;
+import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions.NullHandling;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
@@ -266,13 +270,29 @@ public class OclEvaluator extends OclSwitch<Object> {
 			return value == null ? OCL_NULL : value;
 		}
 
+		// Implicit collect: source is a collection, apply property to each element
+		if (source instanceof Collection<?> col) {
+			List<Object> result = new ArrayList<>(col.size());
+			for (Object elem : col) {
+				if (elem instanceof EObject elemObj) {
+					EStructuralFeature actual = resolveFeature(elemObj, sf);
+					Object value = elemObj.eGet(actual);
+					result.add(value == null ? OCL_NULL : widenInteger(value));
+				} else {
+					result.add(OclInvalid.INSTANCE);
+				}
+			}
+			return result;
+		}
+
 		if (!(source instanceof EObject eo)) {
 			return addError("Property access requires an EObject or Tuple, got: "
 					+ source.getClass().getSimpleName());
 		}
 
+		sf = resolveFeature(eo, sf);
 		Object value = eo.eGet(sf);
-		return value == null ? OCL_NULL : value;
+		return value == null ? OCL_NULL : widenInteger(value);
 	}
 
 	// --- Operation Call ---
@@ -287,10 +307,23 @@ public class OclEvaluator extends OclSwitch<Object> {
 			return OCL_NULL;
 		}
 
+		// allInstances() — Type.allInstances() returns Set of all instances
+		if ("allInstances".equals(opName) && source instanceof OclType) {
+			return wrapNull(evaluateAllInstances(source));
+		}
+
 		// OclAny null/invalid-safe operations (must work on null/invalid source)
 		if (isNullSafeOperation(opName)) {
 			Object[] args = evaluateArguments(exp.getOwnedArguments());
 			return wrapNull(OclStdlib.dispatch(opName, source, args));
+		}
+
+		// Three-valued boolean logic (OCL v2.4 §11.3.1)
+		// Must be handled before generic null/invalid checks to support short-circuit
+		if (isBooleanThreeValuedOp(opName)
+				&& (source instanceof Boolean || source == OclInvalid.INSTANCE || source == null)) {
+			Object[] args = evaluateArguments(exp.getOwnedArguments());
+			return evaluateThreeValuedBoolean(opName, source, args);
 		}
 
 		// Null/Invalid handling for other operations
@@ -306,6 +339,15 @@ public class OclEvaluator extends OclSwitch<Object> {
 		for (Object arg : args) {
 			if (arg == OclInvalid.INSTANCE) {
 				return OclInvalid.INSTANCE;
+			}
+		}
+
+		// Check for null arguments in non-collection operations — null in arithmetic/string context is invalid
+		if (!(source instanceof Collection<?>) && !(source instanceof Map<?, ?>)) {
+			for (Object arg : args) {
+				if (arg == null) {
+					return OclInvalid.INSTANCE;
+				}
 			}
 		}
 
@@ -361,9 +403,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 		return switch (kind) {
 			case SET -> new LinkedHashSet<>(elements);
-			case ORDERED_SET -> new LinkedHashSet<>(elements);
+			case ORDERED_SET -> new OclOrderedSet<>(elements);
 			case SEQUENCE -> new ArrayList<>(elements);
-			case BAG -> new ArrayList<>(elements);
+			case BAG -> new OclBag<>(elements);
 			case COLLECTION -> new ArrayList<>(elements);
 		};
 	}
@@ -483,7 +525,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 					result.add(element);
 				}
 			}
-			return source instanceof Set<?> ? new LinkedHashSet<>(result) : result;
+			return preserveKind(source, result);
 		} finally {
 			env = previousEnv;
 		}
@@ -501,7 +543,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 					result.add(element);
 				}
 			}
-			return source instanceof Set<?> ? new LinkedHashSet<>(result) : result;
+			return preserveKind(source, result);
 		} finally {
 			env = previousEnv;
 		}
@@ -545,16 +587,49 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private Object iteratorForAll(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
+		if (iterVars.size() > 1) {
+			return iteratorForAllMulti(source, iterVars, body, 0);
+		}
+		boolean hasInvalid = false;
 		OclEvalEnvironment previousEnv = env;
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object bodyResult = eval(body);
+				if (Boolean.FALSE.equals(bodyResult)) {
+					return false; // short-circuit on false
+				}
 				if (!Boolean.TRUE.equals(bodyResult)) {
-					return false; // short-circuit
+					hasInvalid = true; // invalid/null body
 				}
 			}
-			return true;
+			return hasInvalid ? OclInvalid.INSTANCE : true;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorForAllMulti(Collection<?> source, List<Variable> iterVars,
+			OclExpression body, int depth) {
+		boolean hasInvalid = false;
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(depth).getName(), element);
+				Object result;
+				if (depth + 1 < iterVars.size()) {
+					result = iteratorForAllMulti(source, iterVars, body, depth + 1);
+				} else {
+					result = eval(body);
+				}
+				if (Boolean.FALSE.equals(result)) {
+					return false;
+				}
+				if (!Boolean.TRUE.equals(result)) {
+					hasInvalid = true;
+				}
+			}
+			return hasInvalid ? OclInvalid.INSTANCE : true;
 		} finally {
 			env = previousEnv;
 		}
@@ -562,16 +637,49 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private Object iteratorExists(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
+		if (iterVars.size() > 1) {
+			return iteratorExistsMulti(source, iterVars, body, 0);
+		}
+		boolean hasInvalid = false;
 		OclEvalEnvironment previousEnv = env;
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object bodyResult = eval(body);
 				if (Boolean.TRUE.equals(bodyResult)) {
-					return true; // short-circuit
+					return true; // short-circuit on true
+				}
+				if (!Boolean.FALSE.equals(bodyResult)) {
+					hasInvalid = true; // invalid/null body
 				}
 			}
-			return false;
+			return hasInvalid ? OclInvalid.INSTANCE : false;
+		} finally {
+			env = previousEnv;
+		}
+	}
+
+	private Object iteratorExistsMulti(Collection<?> source, List<Variable> iterVars,
+			OclExpression body, int depth) {
+		boolean hasInvalid = false;
+		OclEvalEnvironment previousEnv = env;
+		try {
+			for (Object element : source) {
+				env = previousEnv.nested(iterVars.get(depth).getName(), element);
+				Object result;
+				if (depth + 1 < iterVars.size()) {
+					result = iteratorExistsMulti(source, iterVars, body, depth + 1);
+				} else {
+					result = eval(body);
+				}
+				if (Boolean.TRUE.equals(result)) {
+					return true;
+				}
+				if (!Boolean.FALSE.equals(result)) {
+					hasInvalid = true;
+				}
+			}
+			return hasInvalid ? OclInvalid.INSTANCE : false;
 		} finally {
 			env = previousEnv;
 		}
@@ -597,6 +705,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private Object iteratorOne(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
 		boolean foundOne = false;
+		boolean hasInvalid = false;
 		OclEvalEnvironment previousEnv = env;
 		try {
 			for (Object element : source) {
@@ -607,7 +716,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 						return false; // more than one
 					}
 					foundOne = true;
+				} else if (!Boolean.FALSE.equals(bodyResult)) {
+					hasInvalid = true; // invalid/null body
 				}
+			}
+			if (hasInvalid) {
+				return OclInvalid.INSTANCE;
 			}
 			return foundOne;
 		} finally {
@@ -623,6 +737,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object bodyResult = eval(body);
+				if (bodyResult == OclInvalid.INSTANCE) {
+					return OclInvalid.INSTANCE;
+				}
 				if (!seen.add(bodyResult)) {
 					return false; // duplicate
 				}
@@ -633,26 +750,48 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 	}
 
-	@SuppressWarnings("unchecked")
 	private Object iteratorSortedBy(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
 		List<Object> elements = new ArrayList<>(source);
+		// Pre-compute sort keys and check for invalid
+		List<Object> keys = new ArrayList<>(elements.size());
 		OclEvalEnvironment previousEnv = env;
 		try {
-			elements.sort((a, b) -> {
-				env = previousEnv.nested(iterVars.get(0).getName(), a);
-				Object keyA = eval(body);
-				env = previousEnv.nested(iterVars.get(0).getName(), b);
-				Object keyB = eval(body);
-				if (keyA instanceof Comparable ca && keyB instanceof Comparable) {
-					return ca.compareTo(keyB);
+			for (Object element : elements) {
+				env = previousEnv.nested(iterVars.get(0).getName(), element);
+				Object key = eval(body);
+				if (key == OclInvalid.INSTANCE) {
+					return OclInvalid.INSTANCE;
 				}
-				return 0;
-			});
-			return elements; // sortedBy yields a Sequence
+				keys.add(key);
+			}
+			// Sort by pre-computed keys using cross-type numeric comparison
+			Integer[] indices = new Integer[elements.size()];
+			for (int i = 0; i < indices.length; i++) indices[i] = i;
+			java.util.Arrays.sort(indices, (i, j) -> compareOcl(keys.get(i), keys.get(j)));
+			List<Object> sorted = new ArrayList<>(elements.size());
+			for (int idx : indices) sorted.add(elements.get(idx));
+			return sorted;
 		} finally {
 			env = previousEnv;
 		}
+	}
+
+	private static int compareOcl(Object a, Object b) {
+		// Cross-type numeric comparison: Long vs Double
+		if (a instanceof Number na && b instanceof Number nb) {
+			return Double.compare(na.doubleValue(), nb.doubleValue());
+		}
+		if (a instanceof Comparable<?> ca) {
+			@SuppressWarnings("unchecked")
+			Comparable<Object> comp = (Comparable<Object>) ca;
+			try {
+				return comp.compareTo(b);
+			} catch (ClassCastException e) {
+				return 0;
+			}
+		}
+		return 0;
 	}
 
 	private Object iteratorClosure(Collection<?> source, List<Variable> iterVars,
@@ -705,6 +844,47 @@ public class OclEvaluator extends OclSwitch<Object> {
 		};
 	}
 
+	private boolean isBooleanThreeValuedOp(String opName) {
+		return switch (opName) {
+			case "and", "or", "implies", "xor", "not" -> true;
+			default -> false;
+		};
+	}
+
+	/**
+	 * Evaluates boolean operations with three-valued logic per OCL v2.4 §11.3.1.
+	 * Handles short-circuit: {@code false and invalid = false},
+	 * {@code true or invalid = true}, {@code false implies invalid = true}.
+	 */
+	private Object evaluateThreeValuedBoolean(String opName, Object source, Object[] args) {
+		Boolean src = source instanceof Boolean b ? b : null;
+		Boolean arg = args.length > 0 && args[0] instanceof Boolean b ? b : null;
+
+		return switch (opName) {
+			case "not" -> src != null ? !src : OclInvalid.INSTANCE;
+			case "and" -> {
+				if (Boolean.FALSE.equals(src) || Boolean.FALSE.equals(arg)) yield false;
+				if (Boolean.TRUE.equals(src) && Boolean.TRUE.equals(arg)) yield true;
+				yield OclInvalid.INSTANCE;
+			}
+			case "or" -> {
+				if (Boolean.TRUE.equals(src) || Boolean.TRUE.equals(arg)) yield true;
+				if (Boolean.FALSE.equals(src) && Boolean.FALSE.equals(arg)) yield false;
+				yield OclInvalid.INSTANCE;
+			}
+			case "implies" -> {
+				if (Boolean.FALSE.equals(src) || Boolean.TRUE.equals(arg)) yield true;
+				if (Boolean.TRUE.equals(src) && Boolean.FALSE.equals(arg)) yield false;
+				yield OclInvalid.INSTANCE;
+			}
+			case "xor" -> {
+				if (src != null && arg != null) yield src ^ arg;
+				yield OclInvalid.INSTANCE;
+			}
+			default -> OclInvalid.INSTANCE;
+		};
+	}
+
 	/**
 	 * Checks null/invalid source values and returns the appropriate result
 	 * based on {@link OclEvaluationOptions#nullHandling()}.
@@ -726,6 +906,22 @@ public class OclEvaluator extends OclSwitch<Object> {
 		return null;
 	}
 
+	private Object evaluateAllInstances(Object typeObj) {
+		OclContext ctx = env.getContext();
+		if (ctx == null || ctx.extent() == null) {
+			return addError("allInstances() requires a model extent in the evaluation context");
+		}
+		EClassifier classifier = null;
+		if (typeObj instanceof ClassifierType ct) {
+			classifier = ct.getReferredClassifier();
+		}
+		if (classifier instanceof org.eclipse.emf.ecore.EClass eClass) {
+			Collection<EObject> instances = ctx.extent().getAllInstances(eClass);
+			return new LinkedHashSet<>(instances);
+		}
+		return addError("allInstances() requires an EClass type argument, got: " + typeObj);
+	}
+
 	private Object dispatchCustomOperation(String opName, Object source, Object[] args) {
 		for (OclOperationProvider provider : customProviders) {
 			for (OclOperation op : provider.getOperations()) {
@@ -740,5 +936,40 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private Object addError(String message) {
 		diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0, message, null));
 		return OclInvalid.INSTANCE;
+	}
+
+	/**
+	 * Widens Integer to Long for internal consistency.
+	 * EMF eGet() returns Integer for EInt attributes, but OCL
+	 * operates on Long internally. This avoids Long/Integer
+	 * mismatch in collection operations (includes, count, etc.).
+	 */
+	/**
+	 * Resolves a structural feature dynamically against the actual EClass of the EObject.
+	 * Falls back to name-based lookup when the statically resolved feature (from parse time)
+	 * does not belong to the runtime EClass (e.g. after any(), first(), last()).
+	 */
+	private static EStructuralFeature resolveFeature(EObject eo, EStructuralFeature sf) {
+		if (!eo.eClass().getEAllStructuralFeatures().contains(sf)) {
+			EStructuralFeature resolved = eo.eClass().getEStructuralFeature(sf.getName());
+			if (resolved != null) {
+				return resolved;
+			}
+		}
+		return sf;
+	}
+
+	private static Collection<Object> preserveKind(Collection<?> source, List<Object> elements) {
+		if (source instanceof OclOrderedSet<?>) return new OclOrderedSet<>(elements);
+		if (source instanceof OclBag<?>) return new OclBag<>(elements);
+		if (source instanceof Set<?>) return new LinkedHashSet<>(elements);
+		return elements;
+	}
+
+	private static Object widenInteger(Object value) {
+		if (value instanceof Integer i) {
+			return (long) i;
+		}
+		return value;
 	}
 }

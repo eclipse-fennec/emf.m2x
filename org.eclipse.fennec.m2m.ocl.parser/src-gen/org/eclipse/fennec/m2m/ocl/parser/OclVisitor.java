@@ -263,6 +263,34 @@ public interface OclVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitOperationCallExp(OclParser.OperationCallExpContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code PrimitiveTypeExp}
+	 * labeled alternative in {@link OclParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPrimitiveTypeExp(OclParser.PrimitiveTypeExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code CollectionTypeExp}
+	 * labeled alternative in {@link OclParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCollectionTypeExp(OclParser.CollectionTypeExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code MapTypeExp}
+	 * labeled alternative in {@link OclParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMapTypeExp(OclParser.MapTypeExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code TupleTypeExp}
+	 * labeled alternative in {@link OclParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTupleTypeExp(OclParser.TupleTypeExpContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code PathNameExp}
 	 * labeled alternative in {@link OclParser#primaryExpression}.
 	 * @param ctx the parse tree

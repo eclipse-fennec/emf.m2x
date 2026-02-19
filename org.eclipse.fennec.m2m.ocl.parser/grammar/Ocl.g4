@@ -131,6 +131,10 @@ primaryExpression
     | 'let' letBinding (',' letBinding)* 'in' expression                                 # LetExp
     | literalExpression                                                                  # LiteralExp
     | pathName '(' argumentList? ')'                                                     # OperationCallExp
+    | primitiveType                                                                      # PrimitiveTypeExp
+    | collectionType                                                                     # CollectionTypeExp
+    | mapType                                                                            # MapTypeExp
+    | tupleType                                                                          # TupleTypeExp
     | pathName                                                                           # PathNameExp
     ;
 

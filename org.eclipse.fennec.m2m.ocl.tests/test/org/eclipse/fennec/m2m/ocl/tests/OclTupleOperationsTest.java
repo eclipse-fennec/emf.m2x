@@ -46,7 +46,7 @@ class OclTupleOperationsTest extends AbstractOclTest {
 		assertInstanceOf(Map.class, result);
 		@SuppressWarnings("unchecked")
 		Map<String, Object> tuple = (Map<String, Object>) result;
-		assertEquals(3L, tuple.get("a"));
+		assertEquals(3, tuple.get("a"));
 		assertEquals("4", tuple.get("b"));
 	}
 
@@ -54,14 +54,14 @@ class OclTupleOperationsTest extends AbstractOclTest {
 	void tupleLiteral_singlePart() throws OclParseException {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> tuple = (Map<String, Object>) eval("Tuple{x: Integer = 42}", self);
-		assertEquals(42L, tuple.get("x"));
+		assertEquals(42, tuple.get("x"));
 	}
 
 	// --- Part access ---
 
 	@Test
 	void partAccess_a() throws OclParseException {
-		assertEquals(3L, eval("Tuple{a: Integer = 3, b: String = '4'}.a", self));
+		assertEquals(3, eval("Tuple{a: Integer = 3, b: String = '4'}.a", self));
 	}
 
 	@Test
@@ -120,12 +120,12 @@ class OclTupleOperationsTest extends AbstractOclTest {
 	@Test
 	void tupleInSequence() throws OclParseException {
 		Object result = eval("Sequence{Tuple{x: Integer = 1}, Tuple{x: Integer = 2}}->size()", self);
-		assertEquals(2L, result);
+		assertEquals(2, result);
 	}
 
 	@Test
 	void tupleInSet() throws OclParseException {
 		Object result = eval("Set{Tuple{x: Integer = 1}, Tuple{x: Integer = 2}, Tuple{x: Integer = 1}}->size()", self);
-		assertEquals(2L, result);
+		assertEquals(2, result);
 	}
 }

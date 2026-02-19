@@ -49,12 +49,12 @@ class OclComplexExpressionsTest extends AbstractOclTest {
 
 	@Test
 	void nestedLet() throws OclParseException {
-		assertEquals(15L, eval("let a: Integer = 5 in let b: Integer = 10 in a + b", alice));
+		assertEquals(15, eval("let a: Integer = 5 in let b: Integer = 10 in a + b", alice));
 	}
 
 	@Test
 	void nestedLet_innerShadows() throws OclParseException {
-		assertEquals(10L, eval("let x: Integer = 5 in let x: Integer = 10 in x", alice));
+		assertEquals(10, eval("let x: Integer = 5 in let x: Integer = 10 in x", alice));
 	}
 
 	@Test
@@ -127,7 +127,7 @@ class OclComplexExpressionsTest extends AbstractOclTest {
 	@Test
 	void arithmeticInPredicate() throws OclParseException {
 		// Select employees with salary above average (average ≈ 61666)
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"self.employees->select(e | e.salary > 70000.0)->size()", company));
 	}
 
@@ -149,7 +149,7 @@ class OclComplexExpressionsTest extends AbstractOclTest {
 
 	@Test
 	void rejectThenSize() throws OclParseException {
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"self.employees->reject(e | e.age < 28)->size()", company));
 	}
 
@@ -172,19 +172,19 @@ class OclComplexExpressionsTest extends AbstractOclTest {
 
 	@Test
 	void union_thenSize() throws OclParseException {
-		assertEquals(4L, eval(
+		assertEquals(4, eval(
 				"Sequence{1, 2}->union(Sequence{3, 4})->size()", alice));
 	}
 
 	@Test
 	void flatten_nested() throws OclParseException {
-		assertEquals(List.of(1L, 2L, 3L, 4L), eval(
+		assertEquals(List.of(1, 2, 3, 4), eval(
 				"Sequence{Sequence{1, 2}, Sequence{3, 4}}->flatten()", alice));
 	}
 
 	@Test
 	void including_chain() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"Set{1, 2}->including(3)->size()", alice));
 	}
 
@@ -209,7 +209,7 @@ class OclComplexExpressionsTest extends AbstractOclTest {
 
 	@Test
 	void parenthesized_addition() throws OclParseException {
-		assertEquals(14L, eval("(2 + 5) * 2", alice));
+		assertEquals(14, eval("(2 + 5) * 2", alice));
 	}
 
 	@Test
@@ -221,12 +221,12 @@ class OclComplexExpressionsTest extends AbstractOclTest {
 
 	@Test
 	void precedence_multiplyBeforeAdd() throws OclParseException {
-		assertEquals(11L, eval("3 + 4 * 2", alice));
+		assertEquals(11, eval("3 + 4 * 2", alice));
 	}
 
 	@Test
 	void precedence_unaryMinus() throws OclParseException {
-		assertEquals(-5L, eval("-2 - 3", alice));
+		assertEquals(-5, eval("-2 - 3", alice));
 	}
 
 	// --- Collect with expression ---
@@ -246,19 +246,19 @@ class OclComplexExpressionsTest extends AbstractOclTest {
 
 	@Test
 	void count_inSequence() throws OclParseException {
-		assertEquals(2L, eval("Sequence{1, 2, 3, 2, 1}->count(2)", alice));
+		assertEquals(2, eval("Sequence{1, 2, 3, 2, 1}->count(2)", alice));
 	}
 
 	@Test
 	void count_notFound() throws OclParseException {
-		assertEquals(0L, eval("Sequence{1, 2, 3}->count(4)", alice));
+		assertEquals(0, eval("Sequence{1, 2, 3}->count(4)", alice));
 	}
 
 	// --- Product ---
 
 	@Test
 	void product_size() throws OclParseException {
-		assertEquals(4L, eval(
+		assertEquals(4, eval(
 				"Set{1, 2}->product(Set{3, 4})->size()", alice));
 	}
 }

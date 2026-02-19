@@ -48,22 +48,22 @@ class OclLiteralTest extends AbstractOclTest {
 
 	@Test
 	void integerLiteral_zero() throws OclParseException {
-		assertEquals(0L, eval("0", self));
+		assertEquals(0, eval("0", self));
 	}
 
 	@Test
 	void integerLiteral_positive() throws OclParseException {
-		assertEquals(42L, eval("42", self));
+		assertEquals(42, eval("42", self));
 	}
 
 	@Test
 	void integerLiteral_negative() throws OclParseException {
-		assertEquals(-1L, eval("-1", self));
+		assertEquals(-1, eval("-1", self));
 	}
 
 	@Test
 	void integerLiteral_large() throws OclParseException {
-		assertEquals(1000000L, eval("1000000", self));
+		assertEquals(1000000, eval("1000000", self));
 	}
 
 	// --- Real Literals ---
@@ -133,9 +133,9 @@ class OclLiteralTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		LinkedHashSet<Object> set = (LinkedHashSet<Object>) result;
 		assertEquals(3, set.size());
-		assertTrue(set.contains(1L));
-		assertTrue(set.contains(2L));
-		assertTrue(set.contains(3L));
+		assertTrue(set.contains(1));
+		assertTrue(set.contains(2));
+		assertTrue(set.contains(3));
 	}
 
 	@Test
@@ -149,19 +149,19 @@ class OclLiteralTest extends AbstractOclTest {
 	void sequenceLiteral_integers() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}", self);
 		assertInstanceOf(List.class, result);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
 	void sequenceLiteral_preservesDuplicates() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 2, 3}", self);
-		assertEquals(List.of(1L, 2L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 2, 3), result);
 	}
 
 	@Test
 	void sequenceLiteral_range() throws OclParseException {
 		Object result = eval("Sequence{1..5}", self);
-		assertEquals(List.of(1L, 2L, 3L, 4L, 5L), result);
+		assertEquals(List.of(1, 2, 3, 4, 5), result);
 	}
 
 	@Test
@@ -187,7 +187,7 @@ class OclLiteralTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> tuple = (Map<String, Object>) result;
 		assertEquals("Alice", tuple.get("name"));
-		assertEquals(30L, tuple.get("age"));
+		assertEquals(30, tuple.get("age"));
 	}
 
 	// --- Map Literals (v2.5) ---
@@ -198,8 +198,8 @@ class OclLiteralTest extends AbstractOclTest {
 		assertInstanceOf(Map.class, result);
 		@SuppressWarnings("unchecked")
 		Map<Object, Object> map = (Map<Object, Object>) result;
-		assertEquals(1L, map.get("a"));
-		assertEquals(2L, map.get("b"));
+		assertEquals(1, map.get("a"));
+		assertEquals(2, map.get("b"));
 	}
 
 	@Test

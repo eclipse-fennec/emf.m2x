@@ -103,37 +103,37 @@ class OclRealPrecisionTest extends AbstractOclTest {
 
 	@Test
 	void floor_positive() throws OclParseException {
-		assertEquals(3L, eval("(3.9).floor()", self));
+		assertEquals(3, eval("(3.9).floor()", self));
 	}
 
 	@Test
 	void floor_negative() throws OclParseException {
-		assertEquals(-4L, eval("(-3.1).floor()", self));
+		assertEquals(-4, eval("(-3.1).floor()", self));
 	}
 
 	@Test
 	void ceiling_positive() throws OclParseException {
-		assertEquals(4L, eval("(3.1).ceiling()", self));
+		assertEquals(4, eval("(3.1).ceiling()", self));
 	}
 
 	@Test
 	void ceiling_negative() throws OclParseException {
-		assertEquals(-3L, eval("(-3.9).ceiling()", self));
+		assertEquals(-3, eval("(-3.9).ceiling()", self));
 	}
 
 	@Test
 	void round_halfUp() throws OclParseException {
-		assertEquals(4L, eval("(3.5).round()", self));
+		assertEquals(4, eval("(3.5).round()", self));
 	}
 
 	@Test
 	void round_halfDown() throws OclParseException {
-		assertEquals(3L, eval("(3.4).round()", self));
+		assertEquals(3, eval("(3.4).round()", self));
 	}
 
 	@Test
 	void round_exact() throws OclParseException {
-		assertEquals(3L, eval("(3.0).round()", self));
+		assertEquals(3, eval("(3.0).round()", self));
 	}
 
 	// --- Abs ---
@@ -242,7 +242,7 @@ class OclRealPrecisionTest extends AbstractOclTest {
 	@Test
 	void realToInteger_truncates() throws OclParseException {
 		Object result = eval("(3.7).toInteger()", self);
-		assertInstanceOf(Long.class, result);
-		assertEquals(3L, result);
+		assertInstanceOf(Number.class, result);
+		assertEquals(3, result);
 	}
 }

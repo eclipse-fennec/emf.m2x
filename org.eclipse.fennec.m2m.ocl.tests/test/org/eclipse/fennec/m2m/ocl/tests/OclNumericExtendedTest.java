@@ -40,17 +40,17 @@ class OclNumericExtendedTest extends AbstractOclTest {
 
 	@Test
 	void abs_positiveInteger() throws OclParseException {
-		assertEquals(3L, eval("3.abs()", self));
+		assertEquals(3, eval("3.abs()", self));
 	}
 
 	@Test
 	void abs_negativeInteger() throws OclParseException {
-		assertEquals(3L, eval("(-3).abs()", self));
+		assertEquals(3, eval("(-3).abs()", self));
 	}
 
 	@Test
 	void abs_zero() throws OclParseException {
-		assertEquals(0L, eval("0.abs()", self));
+		assertEquals(0, eval("0.abs()", self));
 	}
 
 	@Test
@@ -67,74 +67,74 @@ class OclNumericExtendedTest extends AbstractOclTest {
 
 	@Test
 	void floor_positiveReal() throws OclParseException {
-		assertEquals(3L, eval("(3.7).floor()", self));
+		assertEquals(3, eval("(3.7).floor()", self));
 	}
 
 	@Test
 	void floor_negativeReal() throws OclParseException {
-		assertEquals(-2L, eval("(-1.5).floor()", self));
+		assertEquals(-2, eval("(-1.5).floor()", self));
 	}
 
 	@Test
 	void floor_integer() throws OclParseException {
 		// floor on integer is not a standard op, but let's see if it works as toInteger
-		assertEquals(3L, eval("(3.0).floor()", self));
+		assertEquals(3, eval("(3.0).floor()", self));
 	}
 
 	// --- ceiling ---
 
 	@Test
 	void ceiling_positiveReal() throws OclParseException {
-		assertEquals(4L, eval("(3.2).ceiling()", self));
+		assertEquals(4, eval("(3.2).ceiling()", self));
 	}
 
 	@Test
 	void ceiling_negativeReal() throws OclParseException {
-		assertEquals(-1L, eval("(-1.5).ceiling()", self));
+		assertEquals(-1, eval("(-1.5).ceiling()", self));
 	}
 
 	@Test
 	void ceiling_exact() throws OclParseException {
-		assertEquals(3L, eval("(3.0).ceiling()", self));
+		assertEquals(3, eval("(3.0).ceiling()", self));
 	}
 
 	// --- round ---
 
 	@Test
 	void round_up() throws OclParseException {
-		assertEquals(4L, eval("(3.5).round()", self));
+		assertEquals(4, eval("(3.5).round()", self));
 	}
 
 	@Test
 	void round_down() throws OclParseException {
-		assertEquals(3L, eval("(3.4).round()", self));
+		assertEquals(3, eval("(3.4).round()", self));
 	}
 
 	@Test
 	void round_negative() throws OclParseException {
-		assertEquals(-1L, eval("(-1.5).round()", self));
+		assertEquals(-1, eval("(-1.5).round()", self));
 	}
 
 	// --- min / max (Integer) ---
 
 	@Test
 	void max_integers() throws OclParseException {
-		assertEquals(5L, eval("3.max(5)", self));
+		assertEquals(5, eval("3.max(5)", self));
 	}
 
 	@Test
 	void max_integers_firstLarger() throws OclParseException {
-		assertEquals(5L, eval("5.max(3)", self));
+		assertEquals(5, eval("5.max(3)", self));
 	}
 
 	@Test
 	void min_integers() throws OclParseException {
-		assertEquals(3L, eval("3.min(5)", self));
+		assertEquals(3, eval("3.min(5)", self));
 	}
 
 	@Test
 	void min_integers_firstSmaller() throws OclParseException {
-		assertEquals(3L, eval("5.min(3)", self));
+		assertEquals(3, eval("5.min(3)", self));
 	}
 
 	// --- min / max (Real) ---
@@ -165,12 +165,12 @@ class OclNumericExtendedTest extends AbstractOclTest {
 
 	@Test
 	void div_positive() throws OclParseException {
-		assertEquals(1L, eval("3.div(2)", self));
+		assertEquals(1, eval("3.div(2)", self));
 	}
 
 	@Test
 	void div_negative() throws OclParseException {
-		assertEquals(-1L, eval("(-3).div(2)", self));
+		assertEquals(-1, eval("(-3).div(2)", self));
 	}
 
 	@Test
@@ -180,12 +180,12 @@ class OclNumericExtendedTest extends AbstractOclTest {
 
 	@Test
 	void mod_positive() throws OclParseException {
-		assertEquals(1L, eval("7.mod(3)", self));
+		assertEquals(1, eval("7.mod(3)", self));
 	}
 
 	@Test
 	void mod_zero() throws OclParseException {
-		assertEquals(0L, eval("6.mod(3)", self));
+		assertEquals(0, eval("6.mod(3)", self));
 	}
 
 	@Test
@@ -202,7 +202,7 @@ class OclNumericExtendedTest extends AbstractOclTest {
 
 	@Test
 	void toInteger_fromReal() throws OclParseException {
-		assertEquals(3L, eval("(3.7).toInteger()", self));
+		assertEquals(3, eval("(3.7).toInteger()", self));
 	}
 
 	// --- Division always returns Real ---

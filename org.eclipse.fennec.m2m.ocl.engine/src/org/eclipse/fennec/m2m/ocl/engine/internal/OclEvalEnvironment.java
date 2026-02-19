@@ -41,10 +41,12 @@ public class OclEvalEnvironment {
 
 	private final OclEvalEnvironment parent;
 	private final Map<String, Object> bindings;
+	private final OclContext context;
 
-	private OclEvalEnvironment(OclEvalEnvironment parent, Map<String, Object> bindings) {
+	private OclEvalEnvironment(OclEvalEnvironment parent, Map<String, Object> bindings, OclContext context) {
 		this.parent = parent;
 		this.bindings = bindings;
+		this.context = context;
 	}
 
 	/**
@@ -61,7 +63,7 @@ public class OclEvalEnvironment {
 		Map<String, Object> bindings = new HashMap<>();
 		bindings.put("self", context.self());
 		bindings.putAll(context.variables());
-		return new OclEvalEnvironment(null, bindings);
+		return new OclEvalEnvironment(null, bindings, context);
 	}
 
 	/**
@@ -74,7 +76,7 @@ public class OclEvalEnvironment {
 	OclEvalEnvironment nested(String name, Object value) {
 		Map<String, Object> childBindings = new HashMap<>(2);
 		childBindings.put(name, value);
-		return new OclEvalEnvironment(this, childBindings);
+		return new OclEvalEnvironment(this, childBindings, context);
 	}
 
 	/**
@@ -84,7 +86,14 @@ public class OclEvalEnvironment {
 	 * @return a new child environment
 	 */
 	OclEvalEnvironment nested(Map<String, Object> additionalBindings) {
-		return new OclEvalEnvironment(this, new HashMap<>(additionalBindings));
+		return new OclEvalEnvironment(this, new HashMap<>(additionalBindings), context);
+	}
+
+	/**
+	 * Returns the original evaluation context, providing access to the model extent.
+	 */
+	OclContext getContext() {
+		return context;
 	}
 
 	/**

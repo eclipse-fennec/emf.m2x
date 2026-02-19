@@ -39,12 +39,12 @@ class OclStringOperationsTest extends AbstractOclTest {
 
 	@Test
 	void size() throws OclParseException {
-		assertEquals(5L, eval("'hello'.size()", self));
+		assertEquals(5, eval("'hello'.size()", self));
 	}
 
 	@Test
 	void size_empty() throws OclParseException {
-		assertEquals(0L, eval("''.size()", self));
+		assertEquals(0, eval("''.size()", self));
 	}
 
 	@Test
@@ -91,12 +91,12 @@ class OclStringOperationsTest extends AbstractOclTest {
 	@Test
 	void indexOf() throws OclParseException {
 		// OCL indexOf returns 1-based position, 0 if not found
-		assertEquals(3L, eval("'hello'.indexOf('llo')", self));
+		assertEquals(3, eval("'hello'.indexOf('llo')", self));
 	}
 
 	@Test
 	void indexOf_notFound() throws OclParseException {
-		assertEquals(0L, eval("'hello'.indexOf('xyz')", self));
+		assertEquals(0, eval("'hello'.indexOf('xyz')", self));
 	}
 
 	@Test
@@ -124,7 +124,7 @@ class OclStringOperationsTest extends AbstractOclTest {
 
 	@Test
 	void toInteger() throws OclParseException {
-		assertEquals(42L, eval("'42'.toInteger()", self));
+		assertEquals(42, eval("'42'.toInteger()", self));
 	}
 
 	@Test

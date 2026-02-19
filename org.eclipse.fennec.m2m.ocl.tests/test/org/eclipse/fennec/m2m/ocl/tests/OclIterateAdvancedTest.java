@@ -46,25 +46,25 @@ class OclIterateAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void iterate_sum() throws OclParseException {
-		assertEquals(15L, eval(
+		assertEquals(15, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc : Integer = 0 | acc + i)", self));
 	}
 
 	@Test
 	void iterate_product() throws OclParseException {
-		assertEquals(120L, eval(
+		assertEquals(120, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc : Integer = 1 | acc * i)", self));
 	}
 
 	@Test
 	void iterate_max() throws OclParseException {
-		assertEquals(5L, eval(
+		assertEquals(5, eval(
 				"Sequence{3, 1, 5, 2, 4}->iterate(i; acc : Integer = 0 | if i > acc then i else acc endif)", self));
 	}
 
 	@Test
 	void iterate_min() throws OclParseException {
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"Sequence{3, 1, 5, 2, 4}->iterate(i; acc : Integer = 999 | if i < acc then i else acc endif)", self));
 	}
 
@@ -101,7 +101,7 @@ class OclIterateAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void iterate_countPositive() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"Sequence{-1, 2, 3, -4, 5}->iterate(i; acc : Integer = 0 | " +
 				"if i > 0 then acc + 1 else acc endif)", self));
 	}
@@ -125,7 +125,7 @@ class OclIterateAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void iterate_emptyReturnsInit() throws OclParseException {
-		assertEquals(42L, eval(
+		assertEquals(42, eval(
 				"Sequence{}->iterate(i; acc : Integer = 42 | acc + i)", self));
 	}
 
@@ -144,7 +144,7 @@ class OclIterateAdvancedTest extends AbstractOclTest {
 	@Test
 	void iterate_onSet() throws OclParseException {
 		// Sum elements of a set
-		assertEquals(6L, eval(
+		assertEquals(6, eval(
 				"Set{1, 2, 3}->iterate(i; acc : Integer = 0 | acc + i)", self));
 	}
 
@@ -152,7 +152,7 @@ class OclIterateAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void iterate_singleElement() throws OclParseException {
-		assertEquals(10L, eval(
+		assertEquals(10, eval(
 				"Sequence{10}->iterate(i; acc : Integer = 0 | acc + i)", self));
 	}
 }

@@ -60,34 +60,34 @@ class OclStringIndexTest extends AbstractOclTest {
 
 	@Test
 	void indexOf_found() throws OclParseException {
-		assertEquals(3L, eval("'abcdef'.indexOf('cd')", self));
+		assertEquals(3, eval("'abcdef'.indexOf('cd')", self));
 	}
 
 	@Test
 	void indexOf_first() throws OclParseException {
-		assertEquals(1L, eval("'abcdef'.indexOf('a')", self));
+		assertEquals(1, eval("'abcdef'.indexOf('a')", self));
 	}
 
 	@Test
 	void indexOf_last() throws OclParseException {
-		assertEquals(6L, eval("'abcdef'.indexOf('f')", self));
+		assertEquals(6, eval("'abcdef'.indexOf('f')", self));
 	}
 
 	@Test
 	void indexOf_notFound() throws OclParseException {
-		assertEquals(0L, eval("'abcdef'.indexOf('xyz')", self));
+		assertEquals(0, eval("'abcdef'.indexOf('xyz')", self));
 	}
 
 	@Test
 	void indexOf_multiChar() throws OclParseException {
-		assertEquals(2L, eval("'hello world'.indexOf('ello')", self));
+		assertEquals(2, eval("'hello world'.indexOf('ello')", self));
 	}
 
 	// --- characters ---
 
 	@Test
 	void characters_size() throws OclParseException {
-		assertEquals(3L, eval("'abc'.characters()->size()", self));
+		assertEquals(3, eval("'abc'.characters()->size()", self));
 	}
 
 	@Test
@@ -121,7 +121,7 @@ class OclStringIndexTest extends AbstractOclTest {
 
 	@Test
 	void chainedOps_substringThenSize() throws OclParseException {
-		assertEquals(3L, eval("'hello'.substring(1, 3).size()", self));
+		assertEquals(3, eval("'hello'.substring(1, 3).size()", self));
 	}
 
 	@Test
@@ -155,7 +155,7 @@ class OclStringIndexTest extends AbstractOclTest {
 
 	@Test
 	void stringFromProperty_size() throws OclParseException {
-		assertEquals(5L, eval("self.name.size()", self));
+		assertEquals(5, eval("self.name.size()", self));
 	}
 
 	@Test

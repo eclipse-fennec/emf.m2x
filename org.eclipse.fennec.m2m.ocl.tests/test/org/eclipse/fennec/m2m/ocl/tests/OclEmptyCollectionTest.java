@@ -43,22 +43,22 @@ class OclEmptyCollectionTest extends AbstractOclTest {
 
 	@Test
 	void emptySet_size() throws OclParseException {
-		assertEquals(0L, eval("Set{}->size()", self));
+		assertEquals(0, eval("Set{}->size()", self));
 	}
 
 	@Test
 	void emptySequence_size() throws OclParseException {
-		assertEquals(0L, eval("Sequence{}->size()", self));
+		assertEquals(0, eval("Sequence{}->size()", self));
 	}
 
 	@Test
 	void emptyBag_size() throws OclParseException {
-		assertEquals(0L, eval("Bag{}->size()", self));
+		assertEquals(0, eval("Bag{}->size()", self));
 	}
 
 	@Test
 	void emptyOrderedSet_size() throws OclParseException {
-		assertEquals(0L, eval("OrderedSet{}->size()", self));
+		assertEquals(0, eval("OrderedSet{}->size()", self));
 	}
 
 	@Test
@@ -166,24 +166,24 @@ class OclEmptyCollectionTest extends AbstractOclTest {
 
 	@Test
 	void emptySet_union() throws OclParseException {
-		assertEquals(3L, eval("Set{}->union(Set{1, 2, 3})->size()", self));
+		assertEquals(3, eval("Set{}->union(Set{1, 2, 3})->size()", self));
 	}
 
 	@Test
 	void set_union_empty() throws OclParseException {
-		assertEquals(3L, eval("Set{1, 2, 3}->union(Set{})->size()", self));
+		assertEquals(3, eval("Set{1, 2, 3}->union(Set{})->size()", self));
 	}
 
 	@Test
 	void emptySet_intersection() throws OclParseException {
-		assertEquals(0L, eval("Set{}->intersection(Set{1, 2, 3})->size()", self));
+		assertEquals(0, eval("Set{}->intersection(Set{1, 2, 3})->size()", self));
 	}
 
 	// --- flatten on empty ---
 
 	@Test
 	void emptySet_flatten() throws OclParseException {
-		assertEquals(0L, eval("Set{}->flatten()->size()", self));
+		assertEquals(0, eval("Set{}->flatten()->size()", self));
 	}
 
 	// --- one / isUnique on empty ---
@@ -203,26 +203,26 @@ class OclEmptyCollectionTest extends AbstractOclTest {
 
 	@Test
 	void emptySequence_sum() throws OclParseException {
-		assertEquals(0L, eval("Sequence{}->sum()", self));
+		assertEquals(0, eval("Sequence{}->sum()", self));
 	}
 
 	// --- count on empty ---
 
 	@Test
 	void emptySequence_count() throws OclParseException {
-		assertEquals(0L, eval("Sequence{}->count(1)", self));
+		assertEquals(0, eval("Sequence{}->count(1)", self));
 	}
 
 	// --- Chained operations on empty ---
 
 	@Test
 	void emptySet_chainedOps() throws OclParseException {
-		assertEquals(0L, eval(
+		assertEquals(0, eval(
 				"Set{}->including(1)->excluding(1)->size()", self));
 	}
 
 	@Test
 	void emptySequence_appendSize() throws OclParseException {
-		assertEquals(1L, eval("Sequence{}->append(42)->size()", self));
+		assertEquals(1, eval("Sequence{}->append(42)->size()", self));
 	}
 }

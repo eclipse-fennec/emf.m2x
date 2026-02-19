@@ -14,7 +14,12 @@
  */
 package org.eclipse.fennec.m2m.ocl.engine;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -97,7 +102,7 @@ public class OclEngineImpl implements OclEngine {
 	@Override
 	public Object evaluate(OclExpression expression, OclContext context, OclEvaluationOptions options) {
 		OclResult result = evaluateWithDiagnostics(expression, context, options);
-		return result.value();
+		return narrowResult(result.value());
 	}
 
 	@Override
@@ -105,6 +110,7 @@ public class OclEngineImpl implements OclEngine {
 		OclExpression parsed = parse(expression, context.self().eClass());
 		return evaluate(parsed, context);
 	}
+
 
 	@Override
 	public OclResult evaluateWithDiagnostics(OclExpression expression, OclContext context,
@@ -220,5 +226,53 @@ public class OclEngineImpl implements OclEngine {
 	 */
 	protected List<CompleteOclContribution> getOclContributions() {
 		return List.copyOf(oclContributions);
+	}
+
+	/**
+	 * Narrows the evaluation result for the caller: Long values that fit
+	 * in {@code int} are returned as {@link Integer}. Collection elements
+	 * are narrowed recursively.
+	 *
+	 * <p>Internally the engine uses {@code Long} for all integer arithmetic.
+	 * This method aligns the return type with what EMF users expect: EInt
+	 * features return {@code Integer}, and OCL integer literals that fit
+	 * in 32 bits are also returned as {@code Integer}.
+	 */
+	private static Object narrowResult(Object value) {
+		if (value instanceof Long l) {
+			if (l >= Integer.MIN_VALUE && l <= Integer.MAX_VALUE) {
+				return l.intValue();
+			}
+			return value;
+		}
+		if (value instanceof List<?> list) {
+			List<Object> narrowed = new ArrayList<>(list.size());
+			for (Object elem : list) {
+				narrowed.add(narrowResult(elem));
+			}
+			return narrowed;
+		}
+		if (value instanceof LinkedHashSet<?> set) {
+			LinkedHashSet<Object> narrowed = new LinkedHashSet<>(set.size());
+			for (Object elem : set) {
+				narrowed.add(narrowResult(elem));
+			}
+			return narrowed;
+		}
+		if (value instanceof Collection<?> coll) {
+			List<Object> narrowed = new ArrayList<>(coll.size());
+			for (Object elem : coll) {
+				narrowed.add(narrowResult(elem));
+			}
+			return narrowed;
+		}
+		if (value instanceof Map<?, ?> map) {
+			Map<Object, Object> narrowed = new LinkedHashMap<>(map.size());
+			for (Map.Entry<?, ?> entry : map.entrySet()) {
+				narrowed.put(narrowResult(entry.getKey()), narrowResult(entry.getValue()));
+			}
+			return narrowed;
+		}
+		return value;
 	}
 }

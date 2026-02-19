@@ -124,7 +124,7 @@ class OclTypeOperationsTest extends AbstractOclTest {
 	@Test
 	void oclIsTypeOf_inSelect() throws OclParseException {
 		// Select all employees that are Persons (should be all)
-		assertEquals(1L, eval("self.employees->select(e | e.oclIsTypeOf(Person))->size()", company));
+		assertEquals(1, eval("self.employees->select(e | e.oclIsTypeOf(Person))->size()", company));
 	}
 
 	// --- toString on various types ---

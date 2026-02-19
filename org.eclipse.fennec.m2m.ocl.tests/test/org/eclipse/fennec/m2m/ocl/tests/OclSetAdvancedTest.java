@@ -48,65 +48,65 @@ class OclSetAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void union_disjointSets() throws OclParseException {
-		assertEquals(4L, eval("Set{1, 2}->union(Set{3, 4})->size()", alice));
+		assertEquals(4, eval("Set{1, 2}->union(Set{3, 4})->size()", alice));
 	}
 
 	@Test
 	void union_overlappingSets() throws OclParseException {
-		assertEquals(4L, eval("Set{1, 2, 3}->union(Set{2, 3, 4})->size()", alice));
+		assertEquals(4, eval("Set{1, 2, 3}->union(Set{2, 3, 4})->size()", alice));
 	}
 
 	@Test
 	void union_identicalSets() throws OclParseException {
-		assertEquals(3L, eval("Set{1, 2, 3}->union(Set{1, 2, 3})->size()", alice));
+		assertEquals(3, eval("Set{1, 2, 3}->union(Set{1, 2, 3})->size()", alice));
 	}
 
 	@Test
 	void intersection_partial() throws OclParseException {
-		assertEquals(2L, eval("Set{1, 2, 3}->intersection(Set{2, 3, 4})->size()", alice));
+		assertEquals(2, eval("Set{1, 2, 3}->intersection(Set{2, 3, 4})->size()", alice));
 	}
 
 	@Test
 	void intersection_empty() throws OclParseException {
-		assertEquals(0L, eval("Set{1, 2}->intersection(Set{3, 4})->size()", alice));
+		assertEquals(0, eval("Set{1, 2}->intersection(Set{3, 4})->size()", alice));
 	}
 
 	@Test
 	void intersection_full() throws OclParseException {
-		assertEquals(3L, eval("Set{1, 2, 3}->intersection(Set{1, 2, 3})->size()", alice));
+		assertEquals(3, eval("Set{1, 2, 3}->intersection(Set{1, 2, 3})->size()", alice));
 	}
 
 	@Test
 	void difference() throws OclParseException {
-		assertEquals(1L, eval("(Set{1, 2, 3} - Set{2, 3})->size()", alice));
+		assertEquals(1, eval("(Set{1, 2, 3} - Set{2, 3})->size()", alice));
 	}
 
 	@Test
 	void difference_noOverlap() throws OclParseException {
-		assertEquals(3L, eval("(Set{1, 2, 3} - Set{4, 5})->size()", alice));
+		assertEquals(3, eval("(Set{1, 2, 3} - Set{4, 5})->size()", alice));
 	}
 
 	@Test
 	void difference_fullOverlap() throws OclParseException {
-		assertEquals(0L, eval("(Set{1, 2, 3} - Set{1, 2, 3})->size()", alice));
+		assertEquals(0, eval("(Set{1, 2, 3} - Set{1, 2, 3})->size()", alice));
 	}
 
 	@Test
 	void symmetricDifference_basic() throws OclParseException {
 		// {1,2,3} symDiff {2,3,4} = {1,4}
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Set{1, 2, 3}->symmetricDifference(Set{2, 3, 4})->size()", alice));
 	}
 
 	@Test
 	void symmetricDifference_disjoint() throws OclParseException {
-		assertEquals(4L, eval(
+		assertEquals(4, eval(
 				"Set{1, 2}->symmetricDifference(Set{3, 4})->size()", alice));
 	}
 
 	@Test
 	void symmetricDifference_identical() throws OclParseException {
-		assertEquals(0L, eval(
+		assertEquals(0, eval(
 				"Set{1, 2, 3}->symmetricDifference(Set{1, 2, 3})->size()", alice));
 	}
 
@@ -114,20 +114,20 @@ class OclSetAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void including_chain() throws OclParseException {
-		assertEquals(5L, eval(
+		assertEquals(5, eval(
 				"Set{1, 2, 3}->including(4)->including(5)->size()", alice));
 	}
 
 	@Test
 	void excluding_chain() throws OclParseException {
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"Set{1, 2, 3}->excluding(1)->excluding(2)->size()", alice));
 	}
 
 	@Test
 	void including_existing() throws OclParseException {
 		// Including existing element doesn't change set
-		assertEquals(3L, eval("Set{1, 2, 3}->including(2)->size()", alice));
+		assertEquals(3, eval("Set{1, 2, 3}->including(2)->size()", alice));
 	}
 
 	// --- count ---
@@ -135,36 +135,36 @@ class OclSetAdvancedTest extends AbstractOclTest {
 	@Test
 	void set_count_present() throws OclParseException {
 		// In a set, count is always 0 or 1
-		assertEquals(1L, eval("Set{1, 2, 3}->count(2)", alice));
+		assertEquals(1, eval("Set{1, 2, 3}->count(2)", alice));
 	}
 
 	@Test
 	void set_count_absent() throws OclParseException {
-		assertEquals(0L, eval("Set{1, 2, 3}->count(5)", alice));
+		assertEquals(0, eval("Set{1, 2, 3}->count(5)", alice));
 	}
 
 	// --- sum / min / max ---
 
 	@Test
 	void set_sum() throws OclParseException {
-		assertEquals(6L, eval("Set{1, 2, 3}->sum()", alice));
+		assertEquals(6, eval("Set{1, 2, 3}->sum()", alice));
 	}
 
 	@Test
 	void set_min() throws OclParseException {
-		assertEquals(1L, eval("Set{3, 1, 2}->min()", alice));
+		assertEquals(1, eval("Set{3, 1, 2}->min()", alice));
 	}
 
 	@Test
 	void set_max() throws OclParseException {
-		assertEquals(3L, eval("Set{3, 1, 2}->max()", alice));
+		assertEquals(3, eval("Set{3, 1, 2}->max()", alice));
 	}
 
 	// --- Set operations on model elements ---
 
 	@Test
 	void set_fromModel_size() throws OclParseException {
-		assertEquals(3L, eval("self.employees->asSet()->size()", company));
+		assertEquals(3, eval("self.employees->asSet()->size()", company));
 	}
 
 	@Test
@@ -188,7 +188,7 @@ class OclSetAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void set_strings_union() throws OclParseException {
-		assertEquals(4L, eval(
+		assertEquals(4, eval(
 				"Set{'a', 'b'}->union(Set{'c', 'd'})->size()", alice));
 	}
 
@@ -201,7 +201,7 @@ class OclSetAdvancedTest extends AbstractOclTest {
 
 	@Test
 	void set_booleans() throws OclParseException {
-		assertEquals(2L, eval("Set{true, false, true, false}->size()", alice));
+		assertEquals(2, eval("Set{true, false, true, false}->size()", alice));
 	}
 
 	// --- Chained set operations ---
@@ -209,7 +209,7 @@ class OclSetAdvancedTest extends AbstractOclTest {
 	@Test
 	void chain_unionIntersection() throws OclParseException {
 		// {1,2} union {2,3} → {1,2,3}, then intersection {2,3,4} → {2,3}
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Set{1, 2}->union(Set{2, 3})->intersection(Set{2, 3, 4})->size()",
 				alice));
 	}

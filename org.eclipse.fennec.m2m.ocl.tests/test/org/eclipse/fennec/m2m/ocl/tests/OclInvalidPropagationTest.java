@@ -121,7 +121,7 @@ class OclInvalidPropagationTest extends AbstractOclTest {
 	@Test
 	void invalidInSequence() throws OclParseException {
 		// Sequence containing invalid — size should still work
-		assertEquals(3L, eval("Sequence{1, 1 / 0, 3}->size()", self));
+		assertEquals(3, eval("Sequence{1, 1 / 0, 3}->size()", self));
 	}
 
 	// --- Invalid comparison ---

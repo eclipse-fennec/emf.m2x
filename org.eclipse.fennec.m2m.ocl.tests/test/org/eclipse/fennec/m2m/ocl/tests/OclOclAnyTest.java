@@ -85,7 +85,7 @@ class OclOclAnyTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		LinkedHashSet<Object> set = (LinkedHashSet<Object>) result;
 		assertEquals(1, set.size());
-		assertEquals(true, set.contains(42L));
+		assertEquals(true, set.contains(42));
 	}
 
 	@Test

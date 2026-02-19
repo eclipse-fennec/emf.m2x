@@ -56,7 +56,7 @@ class OclIteratorTest extends AbstractOclTest {
 	@Test
 	void select_integers() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3, 4, 5}->select(i | i > 3)", self);
-		assertEquals(List.of(4L, 5L), result);
+		assertEquals(List.of(4, 5), result);
 	}
 
 	@Test
@@ -69,7 +69,7 @@ class OclIteratorTest extends AbstractOclTest {
 	@Test
 	void select_all() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->select(i | i > 0)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
@@ -89,13 +89,13 @@ class OclIteratorTest extends AbstractOclTest {
 	@Test
 	void reject_integers() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3, 4, 5}->reject(i | i > 3)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
 	void reject_none() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->reject(i | i > 10)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
@@ -109,20 +109,20 @@ class OclIteratorTest extends AbstractOclTest {
 	@Test
 	void collect_integers() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->collect(i | i * 2)", self);
-		assertEquals(List.of(2L, 4L, 6L), result);
+		assertEquals(List.of(2, 4, 6), result);
 	}
 
 	@Test
 	void collect_strings() throws OclParseException {
 		Object result = eval("Sequence{'a', 'bb', 'ccc'}->collect(s | s.size())", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
 	void collect_flattensOneLevel() throws OclParseException {
 		// collect flattens one level: Sequence{Sequence{1,2}, Sequence{3}} -> Sequence{1,2,3}
 		Object result = eval("Sequence{Sequence{1, 2}, Sequence{3}}->collect(s | s)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
@@ -198,7 +198,7 @@ class OclIteratorTest extends AbstractOclTest {
 
 	@Test
 	void any_found() throws OclParseException {
-		assertEquals(2L, eval("Sequence{1, 2, 3}->any(i | i = 2)", self));
+		assertEquals(2, eval("Sequence{1, 2, 3}->any(i | i = 2)", self));
 	}
 
 	@Test
@@ -211,7 +211,7 @@ class OclIteratorTest extends AbstractOclTest {
 	void any_multiple() throws OclParseException {
 		// any returns the first match (for ordered collections)
 		Object result = eval("Sequence{1, 2, 3}->any(i | i > 1)", self);
-		assertEquals(2L, result);
+		assertEquals(2, result);
 	}
 
 	@Test
@@ -269,7 +269,7 @@ class OclIteratorTest extends AbstractOclTest {
 	@Test
 	void sortedBy_integers() throws OclParseException {
 		Object result = eval("Sequence{3, 1, 2}->sortedBy(i | i)", self);
-		assertEquals(List.of(1L, 2L, 3L), result);
+		assertEquals(List.of(1, 2, 3), result);
 	}
 
 	@Test
@@ -295,12 +295,12 @@ class OclIteratorTest extends AbstractOclTest {
 
 	@Test
 	void iterate_sum() throws OclParseException {
-		assertEquals(6L, eval("Sequence{1, 2, 3}->iterate(i; acc : Integer = 0 | acc + i)", self));
+		assertEquals(6, eval("Sequence{1, 2, 3}->iterate(i; acc : Integer = 0 | acc + i)", self));
 	}
 
 	@Test
 	void iterate_count() throws OclParseException {
-		assertEquals(3L, eval("Sequence{1, 2, 3}->iterate(i; acc : Integer = 0 | acc + 1)", self));
+		assertEquals(3, eval("Sequence{1, 2, 3}->iterate(i; acc : Integer = 0 | acc + 1)", self));
 	}
 
 	@Test
@@ -311,7 +311,7 @@ class OclIteratorTest extends AbstractOclTest {
 	@Test
 	void iterate_empty() throws OclParseException {
 		// iterate on empty returns initial accumulator value
-		assertEquals(0L, eval("Sequence{}->iterate(i; acc : Integer = 0 | acc + i)", self));
+		assertEquals(0, eval("Sequence{}->iterate(i; acc : Integer = 0 | acc + i)", self));
 	}
 
 	// ==================== Model-based iterators ====================
@@ -347,7 +347,7 @@ class OclIteratorTest extends AbstractOclTest {
 
 	@Test
 	void select_thenSize() throws OclParseException {
-		assertEquals(2L, eval("self.employees->select(e | e.isMarried)->size()", company));
+		assertEquals(2, eval("self.employees->select(e | e.isMarried)->size()", company));
 	}
 
 	@Test
@@ -368,17 +368,17 @@ class OclIteratorTest extends AbstractOclTest {
 	@Test
 	void select_thenCollect() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3, 4, 5}->select(i | i > 2)->collect(i | i * 10)", self);
-		assertEquals(List.of(30L, 40L, 50L), result);
+		assertEquals(List.of(30, 40, 50), result);
 	}
 
 	@Test
 	void collect_thenSelect() throws OclParseException {
 		Object result = eval("Sequence{'a', 'bb', 'ccc'}->collect(s | s.size())->select(n | n > 1)", self);
-		assertEquals(List.of(2L, 3L), result);
+		assertEquals(List.of(2, 3), result);
 	}
 
 	@Test
 	void sortedBy_thenFirst() throws OclParseException {
-		assertEquals(1L, eval("Sequence{3, 1, 2}->sortedBy(i | i)->first()", self));
+		assertEquals(1, eval("Sequence{3, 1, 2}->sortedBy(i | i)->first()", self));
 	}
 }

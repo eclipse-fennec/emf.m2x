@@ -76,7 +76,7 @@ class OclSelfReferenceTest extends AbstractOclTest {
 
 	@Test
 	void self_navigation_collection() throws OclParseException {
-		assertEquals(2L, eval("self.employees->size()", company));
+		assertEquals(2, eval("self.employees->size()", company));
 	}
 
 	// --- Self in conditions ---
@@ -146,7 +146,7 @@ class OclSelfReferenceTest extends AbstractOclTest {
 	@Test
 	void self_notEqualOther() throws OclParseException {
 		// self (company) is not equal to any employee
-		assertEquals(0L, eval(
+		assertEquals(0, eval(
 				"self.employees->select(e | e = self)->size()", company));
 	}
 
@@ -171,12 +171,12 @@ class OclSelfReferenceTest extends AbstractOclTest {
 
 	@Test
 	void self_propertyThenSize() throws OclParseException {
-		assertEquals(5L, eval("self.name.size()", alice));
+		assertEquals(5, eval("self.name.size()", alice));
 	}
 
 	@Test
 	void self_arithmeticOnProperty() throws OclParseException {
-		assertEquals(31L, eval("self.age + 1", alice));
+		assertEquals(31, eval("self.age + 1", alice));
 	}
 
 	// --- Different self types ---
@@ -193,6 +193,6 @@ class OclSelfReferenceTest extends AbstractOclTest {
 
 	@Test
 	void self_personEmployer() throws OclParseException {
-		assertEquals(2L, eval("self.employer.employees->size()", alice));
+		assertEquals(2, eval("self.employer.employees->size()", alice));
 	}
 }

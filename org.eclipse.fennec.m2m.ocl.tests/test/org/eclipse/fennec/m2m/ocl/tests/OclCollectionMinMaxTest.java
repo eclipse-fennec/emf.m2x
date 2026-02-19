@@ -38,54 +38,54 @@ class OclCollectionMinMaxTest extends AbstractOclTest {
 
 	@Test
 	void min_sequence_integers() throws OclParseException {
-		assertEquals(1L, eval("Sequence{3, 1, 4, 1, 5}->min()", self));
+		assertEquals(1, eval("Sequence{3, 1, 4, 1, 5}->min()", self));
 	}
 
 	@Test
 	void min_set_integers() throws OclParseException {
-		assertEquals(1L, eval("Set{3, 1, 4, 5}->min()", self));
+		assertEquals(1, eval("Set{3, 1, 4, 5}->min()", self));
 	}
 
 	@Test
 	void min_singleton() throws OclParseException {
-		assertEquals(42L, eval("Sequence{42}->min()", self));
+		assertEquals(42, eval("Sequence{42}->min()", self));
 	}
 
 	@Test
 	void min_negative() throws OclParseException {
-		assertEquals(-5L, eval("Sequence{3, -5, 1, -2}->min()", self));
+		assertEquals(-5, eval("Sequence{3, -5, 1, -2}->min()", self));
 	}
 
 	@Test
 	void min_allSame() throws OclParseException {
-		assertEquals(7L, eval("Sequence{7, 7, 7}->min()", self));
+		assertEquals(7, eval("Sequence{7, 7, 7}->min()", self));
 	}
 
 	// --- max on integers ---
 
 	@Test
 	void max_sequence_integers() throws OclParseException {
-		assertEquals(5L, eval("Sequence{3, 1, 4, 1, 5}->max()", self));
+		assertEquals(5, eval("Sequence{3, 1, 4, 1, 5}->max()", self));
 	}
 
 	@Test
 	void max_set_integers() throws OclParseException {
-		assertEquals(5L, eval("Set{3, 1, 4, 5}->max()", self));
+		assertEquals(5, eval("Set{3, 1, 4, 5}->max()", self));
 	}
 
 	@Test
 	void max_singleton() throws OclParseException {
-		assertEquals(42L, eval("Sequence{42}->max()", self));
+		assertEquals(42, eval("Sequence{42}->max()", self));
 	}
 
 	@Test
 	void max_negative() throws OclParseException {
-		assertEquals(3L, eval("Sequence{3, -5, 1, -2}->max()", self));
+		assertEquals(3, eval("Sequence{3, -5, 1, -2}->max()", self));
 	}
 
 	@Test
 	void max_allSame() throws OclParseException {
-		assertEquals(7L, eval("Sequence{7, 7, 7}->max()", self));
+		assertEquals(7, eval("Sequence{7, 7, 7}->max()", self));
 	}
 
 	// --- min/max on reals ---
@@ -116,7 +116,7 @@ class OclCollectionMinMaxTest extends AbstractOclTest {
 
 	@Test
 	void sum_integers() throws OclParseException {
-		assertEquals(15L, eval("Sequence{1, 2, 3, 4, 5}->sum()", self));
+		assertEquals(15, eval("Sequence{1, 2, 3, 4, 5}->sum()", self));
 	}
 
 	@Test
@@ -126,40 +126,40 @@ class OclCollectionMinMaxTest extends AbstractOclTest {
 
 	@Test
 	void sum_set() throws OclParseException {
-		assertEquals(6L, eval("Set{1, 2, 3}->sum()", self));
+		assertEquals(6, eval("Set{1, 2, 3}->sum()", self));
 	}
 
 	@Test
 	void sum_bag_withDuplicates() throws OclParseException {
-		assertEquals(9L, eval("Bag{1, 2, 3, 3}->sum()", self));
+		assertEquals(9, eval("Bag{1, 2, 3, 3}->sum()", self));
 	}
 
 	@Test
 	void sum_singleton() throws OclParseException {
-		assertEquals(42L, eval("Sequence{42}->sum()", self));
+		assertEquals(42, eval("Sequence{42}->sum()", self));
 	}
 
 	@Test
 	void sum_empty() throws OclParseException {
-		assertEquals(0L, eval("Sequence{}->sum()", self));
+		assertEquals(0, eval("Sequence{}->sum()", self));
 	}
 
 	@Test
 	void sum_negative() throws OclParseException {
-		assertEquals(-3L, eval("Sequence{1, -2, -3, 1}->sum()", self));
+		assertEquals(-3, eval("Sequence{1, -2, -3, 1}->sum()", self));
 	}
 
 	// --- min/max after select ---
 
 	@Test
 	void min_afterSelect() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"Sequence{1, 2, 3, 4, 5}->select(i | i > 2)->min()", self));
 	}
 
 	@Test
 	void max_afterSelect() throws OclParseException {
-		assertEquals(5L, eval(
+		assertEquals(5, eval(
 				"Sequence{1, 2, 3, 4, 5}->select(i | i > 2)->max()", self));
 	}
 
@@ -167,7 +167,7 @@ class OclCollectionMinMaxTest extends AbstractOclTest {
 
 	@Test
 	void sum_afterCollect() throws OclParseException {
-		assertEquals(60L, eval(
+		assertEquals(60, eval(
 				"Sequence{1, 2, 3}->collect(i | i * 10)->sum()", self));
 	}
 
@@ -180,6 +180,6 @@ class OclCollectionMinMaxTest extends AbstractOclTest {
 
 	@Test
 	void max_thenArithmetic() throws OclParseException {
-		assertEquals(10L, eval("Sequence{3, 1, 5, 2}->max() * 2", self));
+		assertEquals(10, eval("Sequence{3, 1, 5, 2}->max() * 2", self));
 	}
 }

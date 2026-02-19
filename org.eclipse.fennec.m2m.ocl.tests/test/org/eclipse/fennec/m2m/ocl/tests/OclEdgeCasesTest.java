@@ -44,19 +44,19 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void largeInteger() throws OclParseException {
-		assertEquals(1000000000L, eval("1000000000", self));
+		assertEquals(1000000000, eval("1000000000", self));
 	}
 
 	@Test
 	void largeIntegerArithmetic() throws OclParseException {
-		assertEquals(2000000000L, eval("1000000000 + 1000000000", self));
+		assertEquals(2000000000, eval("1000000000 + 1000000000", self));
 	}
 
 	// --- Zero ---
 
 	@Test
 	void zeroInteger() throws OclParseException {
-		assertEquals(0L, eval("0", self));
+		assertEquals(0, eval("0", self));
 	}
 
 	@Test
@@ -66,14 +66,14 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void zeroMultiplication() throws OclParseException {
-		assertEquals(0L, eval("0 * 99999", self));
+		assertEquals(0, eval("0 * 99999", self));
 	}
 
 	// --- Negative numbers ---
 
 	@Test
 	void negativeInteger() throws OclParseException {
-		assertEquals(-42L, eval("-42", self));
+		assertEquals(-42, eval("-42", self));
 	}
 
 	@Test
@@ -83,7 +83,7 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void doubleNegation() throws OclParseException {
-		assertEquals(42L, eval("-(-42)", self));
+		assertEquals(42, eval("-(-42)", self));
 	}
 
 	// --- Empty string ---
@@ -95,7 +95,7 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void emptyStringSize() throws OclParseException {
-		assertEquals(0L, eval("''.size()", self));
+		assertEquals(0, eval("''.size()", self));
 	}
 
 	@Test
@@ -107,7 +107,7 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void deeplyNestedParens() throws OclParseException {
-		assertEquals(1L, eval("((((1))))", self));
+		assertEquals(1, eval("((((1))))", self));
 	}
 
 	@Test
@@ -119,7 +119,7 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void deeplyNestedLet() throws OclParseException {
-		assertEquals(6L, eval(
+		assertEquals(6, eval(
 				"let a: Integer = 1 in let b: Integer = 2 in let c: Integer = 3 in a + b + c",
 				self));
 	}
@@ -128,12 +128,12 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void emptySet_size() throws OclParseException {
-		assertEquals(0L, eval("Set{}->size()", self));
+		assertEquals(0, eval("Set{}->size()", self));
 	}
 
 	@Test
 	void emptySequence_size() throws OclParseException {
-		assertEquals(0L, eval("Sequence{}->size()", self));
+		assertEquals(0, eval("Sequence{}->size()", self));
 	}
 
 	@Test
@@ -157,17 +157,17 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void singleton_set() throws OclParseException {
-		assertEquals(1L, eval("Set{42}->size()", self));
+		assertEquals(1, eval("Set{42}->size()", self));
 	}
 
 	@Test
 	void singleton_sequence_first() throws OclParseException {
-		assertEquals(42L, eval("Sequence{42}->first()", self));
+		assertEquals(42, eval("Sequence{42}->first()", self));
 	}
 
 	@Test
 	void singleton_sequence_last() throws OclParseException {
-		assertEquals(42L, eval("Sequence{42}->last()", self));
+		assertEquals(42, eval("Sequence{42}->last()", self));
 	}
 
 	// --- Boolean edge cases ---
@@ -208,7 +208,7 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void chainedCollectionOps() throws OclParseException {
-		assertEquals(3L, eval("Sequence{3, 1, 2}->sortedBy(i | i)->reverse()->first()", self));
+		assertEquals(3, eval("Sequence{3, 1, 2}->sortedBy(i | i)->reverse()->first()", self));
 	}
 
 	// --- Any with false condition on all ---
@@ -222,19 +222,19 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void sequenceWithNull() throws OclParseException {
-		assertEquals(3L, eval("Sequence{1, null, 3}->size()", self));
+		assertEquals(3, eval("Sequence{1, null, 3}->size()", self));
 	}
 
 	// --- Multiple equal elements ---
 
 	@Test
 	void sequenceDuplicates() throws OclParseException {
-		assertEquals(5L, eval("Sequence{1, 1, 1, 1, 1}->size()", self));
+		assertEquals(5, eval("Sequence{1, 1, 1, 1, 1}->size()", self));
 	}
 
 	@Test
 	void setDuplicates() throws OclParseException {
-		assertEquals(1L, eval("Set{1, 1, 1, 1, 1}->size()", self));
+		assertEquals(1, eval("Set{1, 1, 1, 1, 1}->size()", self));
 	}
 
 	// --- Collection of booleans ---
@@ -253,12 +253,12 @@ class OclEdgeCasesTest extends AbstractOclTest {
 
 	@Test
 	void sortedBy_first() throws OclParseException {
-		assertEquals(1L, eval("Set{5, 3, 1, 4, 2}->sortedBy(i | i)->first()", self));
+		assertEquals(1, eval("Set{5, 3, 1, 4, 2}->sortedBy(i | i)->first()", self));
 	}
 
 	@Test
 	void sortedBy_last() throws OclParseException {
-		assertEquals(5L, eval("Set{5, 3, 1, 4, 2}->sortedBy(i | i)->last()", self));
+		assertEquals(5, eval("Set{5, 3, 1, 4, 2}->sortedBy(i | i)->last()", self));
 	}
 
 	// --- Nested sorted + chain with reverse ---
@@ -266,6 +266,6 @@ class OclEdgeCasesTest extends AbstractOclTest {
 	@Test
 	void chainedSortReverse() throws OclParseException {
 		Object result = eval("Sequence{3, 1, 2}->sortedBy(i | i)->reverse()", self);
-		assertEquals(List.of(3L, 2L, 1L), result);
+		assertEquals(List.of(3, 2, 1), result);
 	}
 }

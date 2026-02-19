@@ -85,13 +85,13 @@ class OclEnumTest extends AbstractOclTest {
 
 	@Test
 	void select_byStatus() throws OclParseException {
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"self.employees->select(e | e.status = Status::MANAGER)->size()", company));
 	}
 
 	@Test
 	void reject_juniors() throws OclParseException {
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"self.employees->reject(e | e.status = Status::JUNIOR)->size()", company));
 	}
 

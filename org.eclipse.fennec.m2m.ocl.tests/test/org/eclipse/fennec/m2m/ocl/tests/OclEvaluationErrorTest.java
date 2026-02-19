@@ -158,7 +158,7 @@ class OclEvaluationErrorTest extends AbstractOclTest {
 	void if_invalidElse_notSelected() throws OclParseException {
 		// Invalid in else branch should not propagate when condition is true
 		Object result = eval("if true then 1 else invalid endif", self);
-		assertSame(1L, result);
+		assertSame(1, result);
 	}
 
 	// --- Invalid equality ---

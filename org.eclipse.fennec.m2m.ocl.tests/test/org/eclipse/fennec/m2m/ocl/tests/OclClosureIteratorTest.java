@@ -49,9 +49,9 @@ class OclClosureIteratorTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Set<Object> set = (Set<Object>) result;
 		assertEquals(3, set.size());
-		assertTrue(set.contains(1L));
-		assertTrue(set.contains(2L));
-		assertTrue(set.contains(3L));
+		assertTrue(set.contains(1));
+		assertTrue(set.contains(2));
+		assertTrue(set.contains(3));
 	}
 
 	// --- Closure on nested sets ---
@@ -64,10 +64,10 @@ class OclClosureIteratorTest extends AbstractOclTest {
 		@SuppressWarnings("unchecked")
 		Set<Object> set = (Set<Object>) result;
 		// Should contain: Set{1,2}, Set{3,4}, 1, 2, 3, 4
-		assertTrue(set.contains(1L));
-		assertTrue(set.contains(2L));
-		assertTrue(set.contains(3L));
-		assertTrue(set.contains(4L));
+		assertTrue(set.contains(1));
+		assertTrue(set.contains(2));
+		assertTrue(set.contains(3));
+		assertTrue(set.contains(4));
 	}
 
 	// --- Closure on empty collection ---
@@ -98,9 +98,9 @@ class OclClosureIteratorTest extends AbstractOclTest {
 		assertInstanceOf(Set.class, result);
 		@SuppressWarnings("unchecked")
 		Set<Object> set = (Set<Object>) result;
-		assertTrue(set.contains(1L));
-		assertTrue(set.contains(2L));
-		assertTrue(set.contains(3L));
-		assertTrue(set.contains(4L));
+		assertTrue(set.contains(1));
+		assertTrue(set.contains(2));
+		assertTrue(set.contains(3));
+		assertTrue(set.contains(4));
 	}
 }

@@ -50,7 +50,7 @@ class OclNestedIteratorTest extends AbstractOclTest {
 	@Test
 	void nestedSelect_innerOuter() throws OclParseException {
 		// Select elements from outer that satisfy an inner condition
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Sequence{1, 2, 3, 4, 5}->select(i | Sequence{2, 4}->includes(i))->size()",
 				alice));
 	}
@@ -85,7 +85,7 @@ class OclNestedIteratorTest extends AbstractOclTest {
 
 	@Test
 	void chainedSelect_twoFilters() throws OclParseException {
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"Sequence{1, 2, 3, 4, 5}->select(i | i > 2)->select(i | i < 4)->size()",
 				alice));
 	}
@@ -102,7 +102,7 @@ class OclNestedIteratorTest extends AbstractOclTest {
 
 	@Test
 	void chainedSelect_collect_size() throws OclParseException {
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"self.employees->select(e | e.isMarried)->collect(e | e.name)->size()",
 				company));
 	}
@@ -110,7 +110,7 @@ class OclNestedIteratorTest extends AbstractOclTest {
 	@Test
 	void chainedReject_select() throws OclParseException {
 		// reject <3 → {3,4,5}, select <5 → {3,4} = 2
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Sequence{1, 2, 3, 4, 5}->reject(i | i < 3)->select(i | i < 5)->size()",
 				alice));
 	}
@@ -128,7 +128,7 @@ class OclNestedIteratorTest extends AbstractOclTest {
 
 	@Test
 	void collect_then_sum() throws OclParseException {
-		assertEquals(6L, eval(
+		assertEquals(6, eval(
 				"Sequence{1, 2, 3}->collect(i | i)->sum()",
 				alice));
 	}
@@ -203,7 +203,7 @@ class OclNestedIteratorTest extends AbstractOclTest {
 
 	@Test
 	void pipeline_collectSelectSize() throws OclParseException {
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Sequence{1, 2, 3, 4, 5}" +
 				"->collect(i | i * i)" +        // {1, 4, 9, 16, 25}
 				"->select(i | i > 10)" +         // {16, 25}

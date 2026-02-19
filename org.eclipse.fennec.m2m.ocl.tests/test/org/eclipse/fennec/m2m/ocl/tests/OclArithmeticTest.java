@@ -37,17 +37,17 @@ class OclArithmeticTest extends AbstractOclTest {
 
 	@Test
 	void integerAddition() throws OclParseException {
-		assertEquals(3L, eval("1 + 2", self));
+		assertEquals(3, eval("1 + 2", self));
 	}
 
 	@Test
 	void integerSubtraction() throws OclParseException {
-		assertEquals(5L, eval("10 - 5", self));
+		assertEquals(5, eval("10 - 5", self));
 	}
 
 	@Test
 	void integerMultiplication() throws OclParseException {
-		assertEquals(12L, eval("3 * 4", self));
+		assertEquals(12, eval("3 * 4", self));
 	}
 
 	@Test
@@ -57,32 +57,32 @@ class OclArithmeticTest extends AbstractOclTest {
 
 	@Test
 	void integerDiv_integerDivision() throws OclParseException {
-		assertEquals(2L, eval("5.div(2)", self));
+		assertEquals(2, eval("5.div(2)", self));
 	}
 
 	@Test
 	void integerMod() throws OclParseException {
-		assertEquals(1L, eval("5.mod(2)", self));
+		assertEquals(1, eval("5.mod(2)", self));
 	}
 
 	@Test
 	void integerAbs_positive() throws OclParseException {
-		assertEquals(5L, eval("5.abs()", self));
+		assertEquals(5, eval("5.abs()", self));
 	}
 
 	@Test
 	void integerAbs_negative() throws OclParseException {
-		assertEquals(5L, eval("(-5).abs()", self));
+		assertEquals(5, eval("(-5).abs()", self));
 	}
 
 	@Test
 	void integerMax() throws OclParseException {
-		assertEquals(5L, eval("3.max(5)", self));
+		assertEquals(5, eval("3.max(5)", self));
 	}
 
 	@Test
 	void integerMin() throws OclParseException {
-		assertEquals(3L, eval("3.min(5)", self));
+		assertEquals(3, eval("3.min(5)", self));
 	}
 
 	@Test
@@ -134,22 +134,22 @@ class OclArithmeticTest extends AbstractOclTest {
 
 	@Test
 	void realFloor() throws OclParseException {
-		assertEquals(3L, eval("3.7.floor()", self));
+		assertEquals(3, eval("3.7.floor()", self));
 	}
 
 	@Test
 	void realCeiling() throws OclParseException {
-		assertEquals(4L, eval("3.2.ceiling()", self));
+		assertEquals(4, eval("3.2.ceiling()", self));
 	}
 
 	@Test
 	void realRound() throws OclParseException {
-		assertEquals(4L, eval("3.5.round()", self));
+		assertEquals(4, eval("3.5.round()", self));
 	}
 
 	@Test
 	void realRound_down() throws OclParseException {
-		assertEquals(3L, eval("3.4.round()", self));
+		assertEquals(3, eval("3.4.round()", self));
 	}
 
 	@Test
@@ -178,16 +178,16 @@ class OclArithmeticTest extends AbstractOclTest {
 
 	@Test
 	void precedence_multiplicationBeforeAddition() throws OclParseException {
-		assertEquals(7L, eval("1 + 2 * 3", self));
+		assertEquals(7, eval("1 + 2 * 3", self));
 	}
 
 	@Test
 	void precedence_parentheses() throws OclParseException {
-		assertEquals(9L, eval("(1 + 2) * 3", self));
+		assertEquals(9, eval("(1 + 2) * 3", self));
 	}
 
 	@Test
 	void precedence_unaryMinus() throws OclParseException {
-		assertEquals(-6L, eval("-(2 * 3)", self));
+		assertEquals(-6, eval("-(2 * 3)", self));
 	}
 }

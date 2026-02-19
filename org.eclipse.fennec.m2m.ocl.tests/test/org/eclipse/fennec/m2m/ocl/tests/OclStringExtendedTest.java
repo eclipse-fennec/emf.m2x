@@ -130,24 +130,24 @@ class OclStringExtendedTest extends AbstractOclTest {
 	@Test
 	void indexOf_empty() throws OclParseException {
 		// indexOf('') returns 1 (first position where empty string can be found)
-		assertEquals(1L, eval("'hello'.indexOf('')", self));
+		assertEquals(1, eval("'hello'.indexOf('')", self));
 	}
 
 	@Test
 	void indexOf_self() throws OclParseException {
-		assertEquals(1L, eval("'hello'.indexOf('hello')", self));
+		assertEquals(1, eval("'hello'.indexOf('hello')", self));
 	}
 
 	// --- size edge cases ---
 
 	@Test
 	void size_withSpaces() throws OclParseException {
-		assertEquals(4L, eval("' hi '.size()", self));
+		assertEquals(4, eval("' hi '.size()", self));
 	}
 
 	@Test
 	void size_unicode() throws OclParseException {
-		assertEquals(3L, eval("'abc'.size()", self));
+		assertEquals(3, eval("'abc'.size()", self));
 	}
 
 	// --- toUpperCase / toLowerCase edge cases ---
@@ -188,7 +188,7 @@ class OclStringExtendedTest extends AbstractOclTest {
 
 	@Test
 	void toInteger_negative() throws OclParseException {
-		assertEquals(-42L, eval("'-42'.toInteger()", self));
+		assertEquals(-42, eval("'-42'.toInteger()", self));
 	}
 
 	@Test

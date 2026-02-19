@@ -201,7 +201,7 @@ class OclModelConstraintValidationTest extends AbstractOclTest {
 	@Test
 	void navigation_colleagueCount() throws OclParseException {
 		// Alice has 2 colleagues (excluding herself)
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"self.employer.employees->select(e | e <> self)->size()", alice));
 	}
 }

@@ -105,7 +105,7 @@ class OclConstraintPatternsTest extends AbstractOclTest {
 	@Test
 	void derive_seniorCount() throws OclParseException {
 		// Count employees over 40
-		assertEquals(1L, eval(
+		assertEquals(1, eval(
 				"self.employees->select(e | e.age > 40)->size()", company));
 	}
 
@@ -220,7 +220,7 @@ class OclConstraintPatternsTest extends AbstractOclTest {
 				"let avg: Real = self.employees->collect(e | e.salary)->sum() / self.employees->size() " +
 				"in self.employees->select(e | e.salary > avg)->size()",
 				company);
-		assertInstanceOf(Long.class, result);
+		assertInstanceOf(Number.class, result);
 	}
 
 	// --- Collection equality ---
@@ -267,7 +267,7 @@ class OclConstraintPatternsTest extends AbstractOclTest {
 	@Test
 	void symmetricDifference() throws OclParseException {
 		// {1,2,3} symmetricDifference {2,3,4} = {1,4}
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"Set{1, 2, 3}->symmetricDifference(Set{2, 3, 4})->size()", alice));
 	}
 }

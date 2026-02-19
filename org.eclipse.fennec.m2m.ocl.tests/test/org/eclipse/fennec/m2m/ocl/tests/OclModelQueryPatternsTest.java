@@ -60,18 +60,18 @@ class OclModelQueryPatternsTest extends AbstractOclTest {
 
 	@Test
 	void query_employeeCount() throws OclParseException {
-		assertEquals(5L, eval("self.employees->size()", company));
+		assertEquals(5, eval("self.employees->size()", company));
 	}
 
 	@Test
 	void query_marriedCount() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"self.employees->select(e | e.isMarried)->size()", company));
 	}
 
 	@Test
 	void query_unmarriedCount() throws OclParseException {
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"self.employees->reject(e | e.isMarried)->size()", company));
 	}
 
@@ -93,7 +93,7 @@ class OclModelQueryPatternsTest extends AbstractOclTest {
 	@Test
 	void query_juniorEmployees() throws OclParseException {
 		// Employees under 30
-		assertEquals(2L, eval(
+		assertEquals(2, eval(
 				"self.employees->select(e | e.age < 30)->size()", company));
 	}
 
@@ -227,13 +227,13 @@ class OclModelQueryPatternsTest extends AbstractOclTest {
 	@Test
 	void navigate_colleagueCount() throws OclParseException {
 		// All employees of my employer (including myself)
-		assertEquals(5L, eval("self.employer.employees->size()", alice));
+		assertEquals(5, eval("self.employer.employees->size()", alice));
 	}
 
 	@Test
 	void navigate_otherColleagues() throws OclParseException {
 		// Colleagues excluding self
-		assertEquals(4L, eval(
+		assertEquals(4, eval(
 				"self.employer.employees->select(e | e <> self)->size()", alice));
 	}
 

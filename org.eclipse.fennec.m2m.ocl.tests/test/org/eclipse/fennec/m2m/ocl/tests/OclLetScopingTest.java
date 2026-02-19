@@ -41,7 +41,7 @@ class OclLetScopingTest extends AbstractOclTest {
 
 	@Test
 	void let_simpleBinding() throws OclParseException {
-		assertEquals(42L, eval("let x: Integer = 42 in x", self));
+		assertEquals(42, eval("let x: Integer = 42 in x", self));
 	}
 
 	@Test
@@ -63,12 +63,12 @@ class OclLetScopingTest extends AbstractOclTest {
 
 	@Test
 	void let_computedValue() throws OclParseException {
-		assertEquals(15L, eval("let x: Integer = 5 * 3 in x", self));
+		assertEquals(15, eval("let x: Integer = 5 * 3 in x", self));
 	}
 
 	@Test
 	void let_usedInExpression() throws OclParseException {
-		assertEquals(10L, eval("let x: Integer = 5 in x + x", self));
+		assertEquals(10, eval("let x: Integer = 5 in x + x", self));
 	}
 
 	@Test
@@ -80,27 +80,27 @@ class OclLetScopingTest extends AbstractOclTest {
 
 	@Test
 	void nestedLet_twoLevels() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"let x: Integer = 1 in let y: Integer = 2 in x + y", self));
 	}
 
 	@Test
 	void nestedLet_threeLevels() throws OclParseException {
-		assertEquals(6L, eval(
+		assertEquals(6, eval(
 				"let a: Integer = 1 in let b: Integer = 2 in let c: Integer = 3 in a + b + c",
 				self));
 	}
 
 	@Test
 	void nestedLet_innerUsesOuter() throws OclParseException {
-		assertEquals(10L, eval(
+		assertEquals(10, eval(
 				"let x: Integer = 5 in let y: Integer = x * 2 in y", self));
 	}
 
 	@Test
 	void nestedLet_outerNotAffectedByInner() throws OclParseException {
 		// This tests that the outer 'x' is still accessible after inner let
-		assertEquals(7L, eval(
+		assertEquals(7, eval(
 				"let x: Integer = 3 in let y: Integer = 4 in x + y", self));
 	}
 
@@ -109,7 +109,7 @@ class OclLetScopingTest extends AbstractOclTest {
 	@Test
 	void let_shadowsOuterVariable() throws OclParseException {
 		// Inner 'x' should shadow outer 'x'
-		assertEquals(10L, eval(
+		assertEquals(10, eval(
 				"let x: Integer = 5 in let x: Integer = 10 in x", self));
 	}
 
@@ -118,7 +118,7 @@ class OclLetScopingTest extends AbstractOclTest {
 		// After inner scope, outer x should still be accessible
 		// But in OCL, let defines a single in-body, so we can't test "after"
 		// Instead test that outer is still used correctly before shadowing
-		assertEquals(15L, eval(
+		assertEquals(15, eval(
 				"let x: Integer = 5 in x + (let x: Integer = 10 in x)", self));
 	}
 
@@ -126,20 +126,20 @@ class OclLetScopingTest extends AbstractOclTest {
 
 	@Test
 	void let_multiVariable() throws OclParseException {
-		assertEquals(30L, eval(
+		assertEquals(30, eval(
 				"let x: Integer = 10, y: Integer = 20 in x + y", self));
 	}
 
 	@Test
 	void let_multiVariable_dependsOnPrevious() throws OclParseException {
 		// Second variable depends on first
-		assertEquals(25L, eval(
+		assertEquals(25, eval(
 				"let x: Integer = 5, y: Integer = x * 5 in y", self));
 	}
 
 	@Test
 	void let_multiVariable_threeVars() throws OclParseException {
-		assertEquals(60L, eval(
+		assertEquals(60, eval(
 				"let a: Integer = 10, b: Integer = 20, c: Integer = 30 in a + b + c",
 				self));
 	}
@@ -194,14 +194,14 @@ class OclLetScopingTest extends AbstractOclTest {
 
 	@Test
 	void let_collectionInLet() throws OclParseException {
-		assertEquals(3L, eval(
+		assertEquals(3, eval(
 				"let nums: Sequence(Integer) = Sequence{1, 2, 3} in nums->size()",
 				self));
 	}
 
 	@Test
 	void let_collectionSumInLet() throws OclParseException {
-		assertEquals(6L, eval(
+		assertEquals(6, eval(
 				"let nums: Sequence(Integer) = Sequence{1, 2, 3} in nums->sum()",
 				self));
 	}
