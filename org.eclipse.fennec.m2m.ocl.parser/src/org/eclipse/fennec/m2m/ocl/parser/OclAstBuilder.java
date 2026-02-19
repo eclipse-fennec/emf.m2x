@@ -774,6 +774,16 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 				return exp;
 			}
 		}
+		// Try as type name (e.g. Person, Company) in context package
+		if (contextType instanceof EClass contextClass) {
+			for (EClassifier classifier : contextClass.getEPackage().getEClassifiers()) {
+				if (classifier.getName().equals(name)) {
+					TypeExp typeExp = FACTORY.createTypeExp();
+					typeExp.setReferredType(createClassifierType(classifier));
+					return typeExp;
+				}
+			}
+		}
 		// Unknown name — create a variable expression (may be external variable)
 		Variable extVar = FACTORY.createVariable();
 		extVar.setName(name);

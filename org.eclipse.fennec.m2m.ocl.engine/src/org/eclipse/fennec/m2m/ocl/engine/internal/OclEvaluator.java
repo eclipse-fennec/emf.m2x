@@ -692,7 +692,8 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private boolean isNullSafeOperation(String opName) {
 		return switch (opName) {
-			case "oclIsUndefined", "oclIsInvalid", "=", "<>" -> true;
+			case "oclIsUndefined", "oclIsInvalid", "=", "<>",
+				 "oclIsKindOf", "oclIsTypeOf", "oclAsType", "oclAsSet", "toString" -> true;
 			default -> false;
 		};
 	}
