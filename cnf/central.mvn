@@ -149,5 +149,9 @@ org.eclipse.fennec.bnd:org.eclipse.fennec.jacoco.bnd.library:0.0.8
 org.eclipse.fennec.bnd:org.eclipse.fennec.osgitest.bnd.library:0.0.8
 org.eclipse.fennec.emf:org.eclipse.fennec.emf.osgi.bnd.library.workspace:0.0.1-SNAPSHOT
 
+org.antlr:antlr4:4.13.2
 org.antlr:antlr4-runtime:4.13.2
+org.antlr:antlr-runtime:3.5.3
 org.antlr:ST4:4.3.4
+org.abego.treelayout:org.abego.treelayout.core:1.0.3
+com.ibm.icu:icu4j:72.1

@@ -18,7 +18,6 @@ import java.util.List;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
-import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.model.ocl.Constraint;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.osgi.annotation.versioning.ProviderType;
@@ -30,7 +29,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * (OSGi-optional, see architecture section 10). The typical standalone usage is:
  * <pre>
  * OclEngine engine = new OclEngineImpl(parser, stdlib);
- * Object result = engine.evaluate("self.name", myEObject);
+ * Object result = engine.evaluate("self.name", OclContext.of(myEObject));
  * </pre>
  *
  * @author Data In Motion Consulting
@@ -46,7 +45,7 @@ public interface OclEngine {
 	 *
 	 * @param expression the OCL expression text
 	 * @param contextType the {@code EClassifier} that defines the type of {@code self}
-	 * @return the parsed expression AST
+	 * @return the parsed expression AST with types resolved
 	 * @throws OclParseException if the expression contains syntax or type errors
 	 */
 	OclExpression parse(String expression, EClassifier contextType) throws OclParseException;
@@ -69,63 +68,68 @@ public interface OclEngine {
 	 */
 	List<Constraint> parseDocument(String oclDocument) throws OclParseException;
 
-	// --- Evaluation without extent ---
+	// --- Evaluation ---
 
 	/**
-	 * Evaluates a pre-parsed expression against a context object using default options.
+	 * Evaluates a pre-parsed expression against an evaluation context using default options.
 	 *
 	 * <p>Returns {@link OclInvalid#INSTANCE} if evaluation produces the OCL {@code invalid}
 	 * value, and {@code null} for the OCL {@code void}/{@code null} value.
 	 *
 	 * @param expression the parsed OCL expression
-	 * @param context the {@code EObject} that serves as {@code self}
+	 * @param context the evaluation context providing {@code self}, optional extent, and variables
 	 * @return the evaluation result
 	 */
-	Object evaluate(OclExpression expression, EObject context);
+	Object evaluate(OclExpression expression, OclContext context);
 
 	/**
-	 * Evaluates a pre-parsed expression against a context object with explicit options.
+	 * Evaluates a pre-parsed expression against an evaluation context with explicit options.
 	 *
 	 * @param expression the parsed OCL expression
-	 * @param context the {@code EObject} that serves as {@code self}
+	 * @param context the evaluation context providing {@code self}, optional extent, and variables
 	 * @param options evaluation options controlling null handling, error recovery, depth, and timeout
 	 * @return the evaluation result
 	 */
-	Object evaluate(OclExpression expression, EObject context, OclEvaluationOptions options);
+	Object evaluate(OclExpression expression, OclContext context, OclEvaluationOptions options);
 
 	/**
 	 * Convenience method that parses and evaluates an expression in one step.
 	 *
+	 * <p>The context type for parsing is derived from {@code context.self().eClass()}.
+	 *
 	 * @param expression the OCL expression text
-	 * @param context the {@code EObject} that serves as {@code self}; its
-	 *        {@code eClass()} is used as the context type for parsing
+	 * @param context the evaluation context providing {@code self}, optional extent, and variables
 	 * @return the evaluation result
 	 * @throws OclParseException if the expression contains syntax or type errors
 	 */
-	Object evaluate(String expression, EObject context) throws OclParseException;
+	Object evaluate(String expression, OclContext context) throws OclParseException;
 
-	// --- Evaluation with extent (for allInstances()) ---
-
-	/**
-	 * Evaluates a pre-parsed expression with a model extent for {@code allInstances()} support.
-	 *
-	 * @param expression the parsed OCL expression
-	 * @param context the {@code EObject} that serves as {@code self}
-	 * @param extent the model extent providing access to all instances
-	 * @return the evaluation result
-	 */
-	Object evaluate(OclExpression expression, EObject context, OclModelExtent extent);
+	// --- Evaluation with Diagnostics ---
 
 	/**
-	 * Evaluates a pre-parsed expression with a model extent and explicit options.
+	 * Evaluates a pre-parsed expression and returns both the result value and
+	 * any diagnostics (errors, warnings) collected during evaluation.
+	 *
+	 * <p>Unlike {@link #evaluate(OclExpression, OclContext, OclEvaluationOptions)},
+	 * this method never throws on evaluation errors — instead, errors are captured
+	 * in the returned {@link OclResult#diagnostics()}.
+	 *
+	 * <p>The behavior depends on the {@link OclEvaluationOptions}:
+	 * <ul>
+	 *   <li>{@code STRICT + FAIL_FAST}: First error stops evaluation,
+	 *       value is {@link OclInvalid#INSTANCE}, diagnostics contains the error.</li>
+	 *   <li>{@code STRICT + COLLECT_ERRORS}: {@code OclInvalid} propagates through
+	 *       the expression, all errors are collected.</li>
+	 *   <li>{@code LENIENT + COLLECT_ERRORS}: Best-effort result with fallback values,
+	 *       all warnings and errors are collected.</li>
+	 * </ul>
 	 *
 	 * @param expression the parsed OCL expression
-	 * @param context the {@code EObject} that serves as {@code self}
-	 * @param extent the model extent providing access to all instances
-	 * @param options evaluation options
-	 * @return the evaluation result
+	 * @param context the evaluation context providing {@code self}, optional extent, and variables
+	 * @param options evaluation options controlling null handling, error recovery, depth, and timeout
+	 * @return the evaluation result with diagnostics
 	 */
-	Object evaluate(OclExpression expression, EObject context, OclModelExtent extent,
+	OclResult evaluateWithDiagnostics(OclExpression expression, OclContext context,
 			OclEvaluationOptions options);
 
 	// --- Validation ---

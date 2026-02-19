@@ -1,0 +1,784 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+package org.eclipse.fennec.m2m.ocl.parser;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EEnum;
+import org.eclipse.emf.ecore.EEnumLiteral;
+import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.fennec.m2m.model.ocl.BooleanLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
+import org.eclipse.fennec.m2m.model.ocl.CollectionItem;
+import org.eclipse.fennec.m2m.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2m.model.ocl.CollectionLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.CollectionLiteralPart;
+import org.eclipse.fennec.m2m.model.ocl.CollectionRange;
+import org.eclipse.fennec.m2m.model.ocl.CollectionType;
+import org.eclipse.fennec.m2m.model.ocl.EnumLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.IfExp;
+import org.eclipse.fennec.m2m.model.ocl.IntegerLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.InvalidLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.IterateExp;
+import org.eclipse.fennec.m2m.model.ocl.IteratorExp;
+import org.eclipse.fennec.m2m.model.ocl.LetExp;
+import org.eclipse.fennec.m2m.model.ocl.MapLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.MapLiteralPart;
+import org.eclipse.fennec.m2m.model.ocl.NullLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.OclExpression;
+import org.eclipse.fennec.m2m.model.ocl.OclFactory;
+import org.eclipse.fennec.m2m.model.ocl.OclType;
+import org.eclipse.fennec.m2m.model.ocl.OperationCallExp;
+import org.eclipse.fennec.m2m.model.ocl.PropertyCallExp;
+import org.eclipse.fennec.m2m.model.ocl.RealLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.StringLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.TupleLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.TupleLiteralPart;
+import org.eclipse.fennec.m2m.model.ocl.TypeExp;
+import org.eclipse.fennec.m2m.model.ocl.UnlimitedNaturalLiteralExp;
+import org.eclipse.fennec.m2m.model.ocl.Variable;
+import org.eclipse.fennec.m2m.model.ocl.VariableExp;
+
+/**
+ * Visitor that transforms an ANTLR4 parse tree into an EMF OCL AST.
+ *
+ * <p>Implements the two-phase parsing strategy (D8): ANTLR4 produces the parse tree,
+ * this visitor constructs {@link OclExpression} instances from {@code ocl.model}.
+ *
+ * <p>Type resolution is performed during AST construction (Option B) so that
+ * the returned expression tree is fully typed for efficient repeated evaluation.
+ *
+ * @author Data In Motion Consulting
+ * @since 1.0
+ */
+class OclAstBuilder extends OclBaseVisitor<Object> {
+
+	private static final OclFactory FACTORY = OclFactory.eINSTANCE;
+
+	private final EClassifier contextType;
+	private OclEnvironment environment;
+
+	OclAstBuilder(EClassifier contextType) {
+		this.contextType = contextType;
+		Variable selfVar = FACTORY.createVariable();
+		selfVar.setName("self");
+		selfVar.setType(createClassifierType(contextType));
+		this.environment = OclEnvironment.root(selfVar);
+	}
+
+	// ==================== Entry Points ====================
+
+	@Override
+	public OclExpression visitExpressionEntry(OclParser.ExpressionEntryContext ctx) {
+		return (OclExpression) visit(ctx.expression());
+	}
+
+	// ==================== Literals ====================
+
+	@Override
+	public IntegerLiteralExp visitIntegerLiteral(OclParser.IntegerLiteralContext ctx) {
+		IntegerLiteralExp exp = FACTORY.createIntegerLiteralExp();
+		exp.setIntegerSymbol(Long.parseLong(ctx.INTEGER_LITERAL().getText()));
+		return exp;
+	}
+
+	@Override
+	public RealLiteralExp visitRealLiteral(OclParser.RealLiteralContext ctx) {
+		RealLiteralExp exp = FACTORY.createRealLiteralExp();
+		exp.setRealSymbol(Double.parseDouble(ctx.REAL_LITERAL().getText()));
+		return exp;
+	}
+
+	@Override
+	public StringLiteralExp visitStringLiteral(OclParser.StringLiteralContext ctx) {
+		StringLiteralExp exp = FACTORY.createStringLiteralExp();
+		String text = ctx.STRING_LITERAL().getText();
+		// Remove surrounding quotes and unescape
+		exp.setStringSymbol(unescapeString(text.substring(1, text.length() - 1)));
+		return exp;
+	}
+
+	@Override
+	public BooleanLiteralExp visitTrueLiteral(OclParser.TrueLiteralContext ctx) {
+		BooleanLiteralExp exp = FACTORY.createBooleanLiteralExp();
+		exp.setBooleanSymbol(true);
+		return exp;
+	}
+
+	@Override
+	public BooleanLiteralExp visitFalseLiteral(OclParser.FalseLiteralContext ctx) {
+		BooleanLiteralExp exp = FACTORY.createBooleanLiteralExp();
+		exp.setBooleanSymbol(false);
+		return exp;
+	}
+
+	@Override
+	public NullLiteralExp visitNullLiteral(OclParser.NullLiteralContext ctx) {
+		return FACTORY.createNullLiteralExp();
+	}
+
+	@Override
+	public InvalidLiteralExp visitInvalidLiteral(OclParser.InvalidLiteralContext ctx) {
+		return FACTORY.createInvalidLiteralExp();
+	}
+
+	@Override
+	public UnlimitedNaturalLiteralExp visitUnlimitedNaturalLiteral(
+			OclParser.UnlimitedNaturalLiteralContext ctx) {
+		UnlimitedNaturalLiteralExp exp = FACTORY.createUnlimitedNaturalLiteralExp();
+		exp.setUnlimitedNaturalSymbol(-1L); // * = unlimited
+		return exp;
+	}
+
+	@Override
+	public OclExpression visitPathNameExp(OclParser.PathNameExpContext ctx) {
+		List<String> segments = pathNameSegments(ctx.pathName());
+
+		// Check if it's a variable reference (single name)
+		if (segments.size() == 1) {
+			String name = segments.get(0);
+			return environment.lookup(name)
+					.<OclExpression>map(this::createVariableExp)
+					.orElseGet(() -> resolveImplicitProperty(name));
+		}
+
+		// Check if it's an enum literal (Package::Literal)
+		if (segments.size() == 2) {
+			// Could be enum literal or qualified type — try enum first
+			EnumLiteralExp enumExp = tryResolveEnumLiteral(segments);
+			if (enumExp != null) {
+				return enumExp;
+			}
+		}
+
+		// Qualified name — resolve as type expression or navigation
+		return resolveQualifiedName(segments);
+	}
+
+	// ==================== Collection Literals ====================
+
+	@Override
+	public CollectionLiteralExp visitCollectionLit(OclParser.CollectionLitContext ctx) {
+		return (CollectionLiteralExp) visit(ctx.collectionLiteral());
+	}
+
+	@Override
+	public CollectionLiteralExp visitCollectionLiteral(OclParser.CollectionLiteralContext ctx) {
+		CollectionLiteralExp exp = FACTORY.createCollectionLiteralExp();
+		exp.setKind(resolveCollectionKind(ctx.collectionKind().getText()));
+		if (ctx.collectionLiteralPart() != null) {
+			for (OclParser.CollectionLiteralPartContext partCtx : ctx.collectionLiteralPart()) {
+				exp.getOwnedParts().add(visitCollectionLiteralPart(partCtx));
+			}
+		}
+		return exp;
+	}
+
+	@Override
+	public CollectionLiteralPart visitCollectionLiteralPart(
+			OclParser.CollectionLiteralPartContext ctx) {
+		if (ctx.expression().size() == 2) {
+			// Range: first..last
+			CollectionRange range = FACTORY.createCollectionRange();
+			range.setOwnedFirst((OclExpression) visit(ctx.expression(0)));
+			range.setOwnedLast((OclExpression) visit(ctx.expression(1)));
+			return range;
+		}
+		// Single item
+		CollectionItem item = FACTORY.createCollectionItem();
+		item.setOwnedItem((OclExpression) visit(ctx.expression(0)));
+		return item;
+	}
+
+	// ==================== Tuple Literals ====================
+
+	@Override
+	public TupleLiteralExp visitTupleLit(OclParser.TupleLitContext ctx) {
+		return (TupleLiteralExp) visit(ctx.tupleLiteral());
+	}
+
+	@Override
+	public TupleLiteralExp visitTupleLiteral(OclParser.TupleLiteralContext ctx) {
+		TupleLiteralExp exp = FACTORY.createTupleLiteralExp();
+		for (OclParser.TupleLiteralPartContext partCtx : ctx.tupleLiteralPart()) {
+			TupleLiteralPart part = FACTORY.createTupleLiteralPart();
+			part.setName(partCtx.IDENTIFIER().getText());
+			if (partCtx.typeExpression() != null) {
+				part.setType(resolveTypeExpression(partCtx.typeExpression()));
+			}
+			part.setOwnedInit((OclExpression) visit(partCtx.expression()));
+			exp.getOwnedParts().add(part);
+		}
+		return exp;
+	}
+
+	// ==================== Map Literals (v2.5) ====================
+
+	@Override
+	public MapLiteralExp visitMapLit(OclParser.MapLitContext ctx) {
+		return (MapLiteralExp) visit(ctx.mapLiteral());
+	}
+
+	@Override
+	public MapLiteralExp visitMapLiteral(OclParser.MapLiteralContext ctx) {
+		MapLiteralExp exp = FACTORY.createMapLiteralExp();
+		if (ctx.mapLiteralPart() != null) {
+			for (OclParser.MapLiteralPartContext partCtx : ctx.mapLiteralPart()) {
+				MapLiteralPart part = FACTORY.createMapLiteralPart();
+				part.setOwnedKey((OclExpression) visit(partCtx.expression(0)));
+				part.setOwnedValue((OclExpression) visit(partCtx.expression(1)));
+				exp.getOwnedParts().add(part);
+			}
+		}
+		return exp;
+	}
+
+	// ==================== Unary Expressions ====================
+
+	@Override
+	public OperationCallExp visitNotExp(OclParser.NotExpContext ctx) {
+		return createUnaryOperation("not", (OclExpression) visit(ctx.expression()));
+	}
+
+	@Override
+	public OperationCallExp visitUnaryMinusExp(OclParser.UnaryMinusExpContext ctx) {
+		return createUnaryOperation("-", (OclExpression) visit(ctx.expression()));
+	}
+
+	// ==================== Binary Expressions ====================
+
+	@Override
+	public OperationCallExp visitMultExp(OclParser.MultExpContext ctx) {
+		return createBinaryOperation(ctx.op.getText(),
+				(OclExpression) visit(ctx.expression(0)),
+				(OclExpression) visit(ctx.expression(1)));
+	}
+
+	@Override
+	public OperationCallExp visitAddExp(OclParser.AddExpContext ctx) {
+		return createBinaryOperation(ctx.op.getText(),
+				(OclExpression) visit(ctx.expression(0)),
+				(OclExpression) visit(ctx.expression(1)));
+	}
+
+	@Override
+	public OperationCallExp visitCompareExp(OclParser.CompareExpContext ctx) {
+		return createBinaryOperation(ctx.op.getText(),
+				(OclExpression) visit(ctx.expression(0)),
+				(OclExpression) visit(ctx.expression(1)));
+	}
+
+	@Override
+	public OperationCallExp visitEqualityExp(OclParser.EqualityExpContext ctx) {
+		return createBinaryOperation(ctx.op.getText(),
+				(OclExpression) visit(ctx.expression(0)),
+				(OclExpression) visit(ctx.expression(1)));
+	}
+
+	@Override
+	public OperationCallExp visitAndExp(OclParser.AndExpContext ctx) {
+		return createBinaryOperation("and",
+				(OclExpression) visit(ctx.expression(0)),
+				(OclExpression) visit(ctx.expression(1)));
+	}
+
+	@Override
+	public OperationCallExp visitOrExp(OclParser.OrExpContext ctx) {
+		return createBinaryOperation("or",
+				(OclExpression) visit(ctx.expression(0)),
+				(OclExpression) visit(ctx.expression(1)));
+	}
+
+	@Override
+	public OperationCallExp visitXorExp(OclParser.XorExpContext ctx) {
+		return createBinaryOperation("xor",
+				(OclExpression) visit(ctx.expression(0)),
+				(OclExpression) visit(ctx.expression(1)));
+	}
+
+	@Override
+	public OperationCallExp visitImpliesExp(OclParser.ImpliesExpContext ctx) {
+		return createBinaryOperation("implies",
+				(OclExpression) visit(ctx.expression(0)),
+				(OclExpression) visit(ctx.expression(1)));
+	}
+
+	// ==================== Navigation (. and ->) ====================
+
+	@Override
+	public OclExpression visitNavigationExp(OclParser.NavigationExpContext ctx) {
+		OclExpression source = (OclExpression) visit(ctx.expression());
+		boolean isSafe = ctx.getChild(1).getText().equals("?.");
+
+		OclParser.PropertyOrCallSuffixContext suffix = ctx.propertyOrCallSuffix();
+		if (suffix instanceof OclParser.PropertySuffixContext propCtx) {
+			return createPropertyCall(source, propCtx, isSafe);
+		} else if (suffix instanceof OclParser.DotCallSuffixContext callCtx) {
+			return createDotOperationCall(source, callCtx, isSafe);
+		}
+		return source;
+	}
+
+	@Override
+	public OclExpression visitArrowExp(OclParser.ArrowExpContext ctx) {
+		OclExpression source = (OclExpression) visit(ctx.expression());
+		boolean isSafe = ctx.getChild(1).getText().equals("?->");
+
+		OclParser.IteratorOrOperationCallContext call = ctx.iteratorOrOperationCall();
+		if (call instanceof OclParser.IteratorCallContext iterCtx) {
+			return createIteratorExp(source, iterCtx, isSafe);
+		} else if (call instanceof OclParser.IterateCallContext iterateCtx) {
+			return createIterateExp(source, iterateCtx, isSafe);
+		} else if (call instanceof OclParser.CollectionOperationCallContext opCtx) {
+			return createCollectionOperation(source, opCtx, isSafe);
+		}
+		return source;
+	}
+
+	// ==================== If / Let ====================
+
+	@Override
+	public IfExp visitIfExp(OclParser.IfExpContext ctx) {
+		IfExp ifExp = FACTORY.createIfExp();
+		ifExp.setOwnedCondition((OclExpression) visit(ctx.condition));
+		ifExp.setOwnedThen((OclExpression) visit(ctx.thenExp));
+
+		// Handle elseif chain by nesting IfExps
+		if (ctx.elseIfCondition != null && !ctx.elseIfCondition.isEmpty()) {
+			IfExp current = ifExp;
+			for (int i = 0; i < ctx.elseIfCondition.size(); i++) {
+				IfExp nested = FACTORY.createIfExp();
+				nested.setOwnedCondition((OclExpression) visit(ctx.elseIfCondition.get(i)));
+				nested.setOwnedThen((OclExpression) visit(ctx.elseIfExp.get(i)));
+				current.setOwnedElse(nested);
+				current = nested;
+			}
+			current.setOwnedElse((OclExpression) visit(ctx.elseExp));
+		} else {
+			ifExp.setOwnedElse((OclExpression) visit(ctx.elseExp));
+		}
+		return ifExp;
+	}
+
+	@Override
+	public LetExp visitLetExp(OclParser.LetExpContext ctx) {
+		// Chain multiple let bindings: let a=1, b=2 in body → LetExp(a, LetExp(b, body))
+		List<OclParser.LetBindingContext> bindings = ctx.letBinding();
+		OclEnvironment savedEnv = this.environment;
+
+		LetExp outermost = null;
+		LetExp current = null;
+
+		for (OclParser.LetBindingContext bindCtx : bindings) {
+			Variable var = FACTORY.createVariable();
+			var.setName(bindCtx.IDENTIFIER().getText());
+			if (bindCtx.typeExpression() != null) {
+				var.setType(resolveTypeExpression(bindCtx.typeExpression()));
+			}
+			var.setOwnedInit((OclExpression) visit(bindCtx.expression()));
+
+			this.environment = this.environment.nested(var);
+
+			LetExp letExp = FACTORY.createLetExp();
+			letExp.setOwnedVariable(var);
+
+			if (outermost == null) {
+				outermost = letExp;
+			} else {
+				current.setOwnedIn(letExp);
+			}
+			current = letExp;
+		}
+
+		// The innermost let's body is the 'in' expression
+		current.setOwnedIn((OclExpression) visit(ctx.expression()));
+
+		this.environment = savedEnv;
+		return outermost;
+	}
+
+	// ==================== Primary Expressions ====================
+
+	@Override
+	public OclExpression visitSelfExp(OclParser.SelfExpContext ctx) {
+		return createVariableExp(environment.lookup("self").orElseThrow());
+	}
+
+	@Override
+	public OclExpression visitParenExp(OclParser.ParenExpContext ctx) {
+		return (OclExpression) visit(ctx.expression());
+	}
+
+	@Override
+	public OclExpression visitPrimaryExp(OclParser.PrimaryExpContext ctx) {
+		return (OclExpression) visit(ctx.primaryExpression());
+	}
+
+	@Override
+	public OclExpression visitLiteralExp(OclParser.LiteralExpContext ctx) {
+		return (OclExpression) visit(ctx.literalExpression());
+	}
+
+	@Override
+	public OperationCallExp visitOperationCallExp(OclParser.OperationCallExpContext ctx) {
+		List<String> segments = pathNameSegments(ctx.pathName());
+		String opName = segments.get(segments.size() - 1);
+
+		OperationCallExp exp = FACTORY.createOperationCallExp();
+		exp.setIsImplicit(true);
+
+		// Implicit source: self
+		VariableExp selfRef = createVariableExp(environment.lookup("self").orElseThrow());
+		exp.setOwnedSource(selfRef);
+
+		if (ctx.argumentList() != null) {
+			for (OclParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+				exp.getOwnedArguments().add((OclExpression) visit(argCtx));
+			}
+		}
+
+		// Resolve operation on the context type
+		resolveOperation(exp, opName);
+		return exp;
+	}
+
+	// ==================== Helper Methods ====================
+
+	private OperationCallExp createUnaryOperation(String opName, OclExpression operand) {
+		OperationCallExp exp = FACTORY.createOperationCallExp();
+		exp.setOwnedSource(operand);
+		resolveOperation(exp, opName);
+		return exp;
+	}
+
+	private OperationCallExp createBinaryOperation(String opName, OclExpression left,
+			OclExpression right) {
+		OperationCallExp exp = FACTORY.createOperationCallExp();
+		exp.setOwnedSource(left);
+		exp.getOwnedArguments().add(right);
+		resolveOperation(exp, opName);
+		return exp;
+	}
+
+	private PropertyCallExp createPropertyCall(OclExpression source,
+			OclParser.PropertySuffixContext ctx, boolean isSafe) {
+		PropertyCallExp exp = FACTORY.createPropertyCallExp();
+		exp.setOwnedSource(source);
+		exp.setIsSafe(isSafe);
+		exp.setIsPre(ctx.isMarkedPre() != null);
+
+		String propName = ctx.IDENTIFIER().getText();
+		resolveProperty(exp, propName);
+		return exp;
+	}
+
+	private OperationCallExp createDotOperationCall(OclExpression source,
+			OclParser.DotCallSuffixContext ctx, boolean isSafe) {
+		OperationCallExp exp = FACTORY.createOperationCallExp();
+		exp.setOwnedSource(source);
+		exp.setIsSafe(isSafe);
+		exp.setIsPre(ctx.isMarkedPre() != null);
+
+		if (ctx.argumentList() != null) {
+			for (OclParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+				exp.getOwnedArguments().add((OclExpression) visit(argCtx));
+			}
+		}
+
+		String opName = ctx.IDENTIFIER().getText();
+		resolveOperation(exp, opName);
+		return exp;
+	}
+
+	private IteratorExp createIteratorExp(OclExpression source,
+			OclParser.IteratorCallContext ctx, boolean isSafe) {
+		IteratorExp exp = FACTORY.createIteratorExp();
+		exp.setOwnedSource(source);
+		exp.setIsSafe(isSafe);
+		exp.setName(ctx.IDENTIFIER().getText());
+
+		OclEnvironment savedEnv = this.environment;
+
+		// Iterator variables
+		OclParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
+		List<Variable> iterVars = new ArrayList<>();
+		for (int i = 0; i < varsCtx.IDENTIFIER().size(); i++) {
+			Variable iterVar = FACTORY.createVariable();
+			iterVar.setName(varsCtx.IDENTIFIER(i).getText());
+			if (i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null) {
+				iterVar.setType(resolveTypeExpression(varsCtx.typeExpression(i)));
+			}
+			iterVars.add(iterVar);
+			exp.getOwnedIterators().add(iterVar);
+		}
+		this.environment = this.environment.nested(iterVars);
+
+		// Body
+		exp.setOwnedBody((OclExpression) visit(ctx.expression()));
+
+		this.environment = savedEnv;
+		return exp;
+	}
+
+	private IterateExp createIterateExp(OclExpression source,
+			OclParser.IterateCallContext ctx, boolean isSafe) {
+		IterateExp exp = FACTORY.createIterateExp();
+		exp.setOwnedSource(source);
+		exp.setIsSafe(isSafe);
+
+		OclEnvironment savedEnv = this.environment;
+
+		// Iterator variable (IDENTIFIER(0) = "iterate", IDENTIFIER(1) = iter var)
+		Variable iterVar = FACTORY.createVariable();
+		iterVar.setName(ctx.IDENTIFIER(1).getText());
+		if (ctx.typeExpression(0) != null) {
+			iterVar.setType(resolveTypeExpression(ctx.typeExpression(0)));
+		}
+		exp.getOwnedIterators().add(iterVar);
+
+		// Accumulator variable (second IDENTIFIER after ';')
+		Variable accVar = FACTORY.createVariable();
+		accVar.setName(ctx.IDENTIFIER(2).getText());
+		if (ctx.typeExpression().size() > 1 && ctx.typeExpression(1) != null) {
+			accVar.setType(resolveTypeExpression(ctx.typeExpression(1)));
+		}
+		accVar.setOwnedInit((OclExpression) visit(ctx.expression(0)));
+		exp.setOwnedResult(accVar);
+
+		this.environment = this.environment.nested(iterVar);
+		this.environment = this.environment.nested(accVar);
+
+		// Body
+		exp.setOwnedBody((OclExpression) visit(ctx.expression(1)));
+
+		this.environment = savedEnv;
+		return exp;
+	}
+
+	private OperationCallExp createCollectionOperation(OclExpression source,
+			OclParser.CollectionOperationCallContext ctx, boolean isSafe) {
+		OperationCallExp exp = FACTORY.createOperationCallExp();
+		exp.setOwnedSource(source);
+		exp.setIsSafe(isSafe);
+
+		if (ctx.argumentList() != null) {
+			for (OclParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+				exp.getOwnedArguments().add((OclExpression) visit(argCtx));
+			}
+		}
+
+		String opName = ctx.IDENTIFIER().getText();
+		resolveOperation(exp, opName);
+		return exp;
+	}
+
+	private VariableExp createVariableExp(Variable variable) {
+		VariableExp exp = FACTORY.createVariableExp();
+		exp.setReferredVariable(variable);
+		exp.setType(variable.getType());
+		return exp;
+	}
+
+	// ==================== Type Resolution ====================
+
+	OclType resolveTypeExpression(OclParser.TypeExpressionContext ctx) {
+		if (ctx.primitiveType() != null) {
+			return createPrimitiveType(ctx.primitiveType().getText());
+		}
+		if (ctx.collectionType() != null) {
+			return resolveCollectionType(ctx.collectionType());
+		}
+		if (ctx.mapType() != null) {
+			return resolveMapType(ctx.mapType());
+		}
+		if (ctx.tupleType() != null) {
+			return resolveTupleType(ctx.tupleType());
+		}
+		if (ctx.pathName() != null) {
+			return createClassifierType(resolveClassifier(pathNameSegments(ctx.pathName())));
+		}
+		return null;
+	}
+
+	private OclType createPrimitiveType(String name) {
+		var type = FACTORY.createPrimitiveType();
+		type.setName(name);
+		return type;
+	}
+
+	private ClassifierType createClassifierType(EClassifier classifier) {
+		ClassifierType type = FACTORY.createClassifierType();
+		type.setReferredClassifier(classifier);
+		type.setName(classifier.getName());
+		return type;
+	}
+
+	private OclType resolveCollectionType(OclParser.CollectionTypeContext ctx) {
+		CollectionKind kind = resolveCollectionKind(ctx.collectionKind().getText());
+		OclType elementType = resolveTypeExpression(ctx.typeExpression());
+		CollectionType type = switch (kind) {
+			case SET -> FACTORY.createSetType();
+			case ORDERED_SET -> FACTORY.createOrderedSetType();
+			case BAG -> FACTORY.createBagType();
+			case SEQUENCE -> FACTORY.createSequenceType();
+			default -> FACTORY.createCollectionType();
+		};
+		type.setKind(kind);
+		type.setElementType(elementType);
+		return type;
+	}
+
+	private OclType resolveMapType(OclParser.MapTypeContext ctx) {
+		var type = FACTORY.createMapType();
+		type.setKeyType(resolveTypeExpression(ctx.typeExpression(0)));
+		type.setValueType(resolveTypeExpression(ctx.typeExpression(1)));
+		return type;
+	}
+
+	private OclType resolveTupleType(OclParser.TupleTypeContext ctx) {
+		var type = FACTORY.createTupleType();
+		for (OclParser.TupleTypePartContext partCtx : ctx.tupleTypePart()) {
+			var part = FACTORY.createTuplePart();
+			part.setName(partCtx.IDENTIFIER().getText());
+			part.setType(resolveTypeExpression(partCtx.typeExpression()));
+			type.getOwnedParts().add(part);
+		}
+		return type;
+	}
+
+	// ==================== Name Resolution Stubs ====================
+	// These will be fully implemented when the type resolver is connected.
+
+	private void resolveProperty(PropertyCallExp exp, String propName) {
+		// TODO: resolve EStructuralFeature from source type
+		// For now, store the name for later resolution
+		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());
+		if (sourceType instanceof EClass eClass) {
+			EStructuralFeature feature = eClass.getEStructuralFeature(propName);
+			if (feature != null) {
+				exp.setReferredProperty(feature);
+			}
+		}
+	}
+
+	private void resolveOperation(OperationCallExp exp, String opName) {
+		// TODO: full operation resolution including stdlib
+		// For now, store via a placeholder EOperation
+		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());
+		if (sourceType instanceof EClass eClass) {
+			for (EOperation op : eClass.getEAllOperations()) {
+				if (opName.equals(op.getName())) {
+					exp.setReferredOperation(op);
+					break;
+				}
+			}
+		}
+	}
+
+	private EClassifier getSourceClassifier(OclExpression source) {
+		if (source == null) {
+			return contextType;
+		}
+		OclType type = source.getType();
+		if (type instanceof ClassifierType ct) {
+			return ct.getReferredClassifier();
+		}
+		return null;
+	}
+
+	private EClassifier resolveClassifier(List<String> segments) {
+		// TODO: qualified name resolution against available packages
+		// For now, check against context type's package
+		if (segments.size() == 1 && contextType instanceof EClass contextClass) {
+			EClassifier found = contextClass.getEPackage().getEClassifier(segments.get(0));
+			if (found != null) {
+				return found;
+			}
+		}
+		return contextType;
+	}
+
+	private OclExpression resolveImplicitProperty(String name) {
+		// Try as property on self
+		if (contextType instanceof EClass eClass) {
+			EStructuralFeature feature = eClass.getEStructuralFeature(name);
+			if (feature != null) {
+				PropertyCallExp exp = FACTORY.createPropertyCallExp();
+				exp.setIsImplicit(true);
+				exp.setOwnedSource(createVariableExp(environment.lookup("self").orElseThrow()));
+				exp.setReferredProperty(feature);
+				return exp;
+			}
+		}
+		// Unknown name — create a variable expression (may be external variable)
+		Variable extVar = FACTORY.createVariable();
+		extVar.setName(name);
+		return createVariableExp(extVar);
+	}
+
+	private EnumLiteralExp tryResolveEnumLiteral(List<String> segments) {
+		String enumName = segments.get(0);
+		String literalName = segments.get(1);
+		if (contextType instanceof EClass contextClass) {
+			for (EClassifier classifier : contextClass.getEPackage().getEClassifiers()) {
+				if (classifier instanceof EEnum eEnum && eEnum.getName().equals(enumName)) {
+					EEnumLiteral literal = eEnum.getEEnumLiteral(literalName);
+					if (literal != null) {
+						EnumLiteralExp exp = FACTORY.createEnumLiteralExp();
+						exp.setReferredLiteral(literal);
+						return exp;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	private OclExpression resolveQualifiedName(List<String> segments) {
+		// Qualified name: try as type expression
+		EClassifier resolved = resolveClassifier(segments);
+		TypeExp exp = FACTORY.createTypeExp();
+		exp.setReferredType(createClassifierType(resolved));
+		return exp;
+	}
+
+	// ==================== Utility Methods ====================
+
+	private List<String> pathNameSegments(OclParser.PathNameContext ctx) {
+		List<String> segments = new ArrayList<>();
+		for (var id : ctx.IDENTIFIER()) {
+			segments.add(id.getText());
+		}
+		return segments;
+	}
+
+	private CollectionKind resolveCollectionKind(String kindText) {
+		return switch (kindText) {
+			case "Set" -> CollectionKind.SET;
+			case "OrderedSet" -> CollectionKind.ORDERED_SET;
+			case "Bag" -> CollectionKind.BAG;
+			case "Sequence" -> CollectionKind.SEQUENCE;
+			default -> CollectionKind.COLLECTION;
+		};
+	}
+
+	private String unescapeString(String s) {
+		return s.replace("\\\\'", "'").replace("\\\\\\\\", "\\\\");
+	}
+}

@@ -1,0 +1,9 @@
+-library: enableEMF
+
+Bundle-Version: 1.0.0.SNAPSHOT
+
+-buildpath: \
+	org.eclipse.fennec.m2m.ocl.api;version=latest,\
+	org.eclipse.fennec.m2m.ocl.model;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.condition;version=latest
