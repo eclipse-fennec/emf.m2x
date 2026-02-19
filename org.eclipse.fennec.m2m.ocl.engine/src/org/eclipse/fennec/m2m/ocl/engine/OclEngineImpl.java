@@ -28,6 +28,7 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2m.model.ocl.Constraint;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.ocl.api.CompleteOclContribution;
@@ -39,9 +40,11 @@ import org.eclipse.fennec.m2m.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclDelegateUtil;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclBag;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvaluator;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclInvocationDelegateFactory;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclOrderedSet;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclSettingDelegateFactory;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclValidationDelegateFactory;
 
@@ -90,6 +93,12 @@ public class OclEngineImpl implements OclEngine {
 	@Override
 	public List<Constraint> parseDocument(String oclDocument) throws OclParseException {
 		return parser.parseDocument(oclDocument);
+	}
+
+	@Override
+	public List<Constraint> parseDocument(String oclDocument, ResourceSet resourceSet)
+			throws OclParseException {
+		return parser.parseDocument(oclDocument, resourceSet);
 	}
 
 	// --- Evaluation ---
@@ -244,6 +253,20 @@ public class OclEngineImpl implements OclEngine {
 				return l.intValue();
 			}
 			return value;
+		}
+		if (value instanceof OclBag<?> bag) {
+			OclBag<Object> narrowed = new OclBag<>();
+			for (Object elem : bag) {
+				narrowed.add(narrowResult(elem));
+			}
+			return narrowed;
+		}
+		if (value instanceof OclOrderedSet<?> oset) {
+			OclOrderedSet<Object> narrowed = new OclOrderedSet<>();
+			for (Object elem : oset) {
+				narrowed.add(narrowResult(elem));
+			}
+			return narrowed;
 		}
 		if (value instanceof List<?> list) {
 			List<Object> narrowed = new ArrayList<>(list.size());

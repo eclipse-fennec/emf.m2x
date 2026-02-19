@@ -14,13 +14,14 @@
  */
 package org.eclipse.fennec.m2m.ocl.parser;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2m.model.ocl.Constraint;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.ocl.api.OclExpressionParser;
@@ -67,12 +68,33 @@ public class OclParserSupport implements OclExpressionParser {
 
 	/**
 	 * Parses a Complete OCL document, producing a list of constraints.
+	 * Uses the global {@link EPackage.Registry#INSTANCE} for classifier resolution.
 	 *
 	 * @param oclDocument the Complete OCL document text
 	 * @return the list of parsed constraints
 	 * @throws OclParseException if the document contains syntax or type errors
 	 */
+	@Override
 	public List<Constraint> parseDocument(String oclDocument) throws OclParseException {
+		return parseDocument(oclDocument, EPackage.Registry.INSTANCE);
+	}
+
+	/**
+	 * Parses a Complete OCL document using the given resource set for package resolution.
+	 *
+	 * @param oclDocument the Complete OCL document text
+	 * @param resourceSet the resource set whose package registry is used
+	 * @return the list of parsed constraints
+	 * @throws OclParseException if the document contains syntax or type errors
+	 */
+	@Override
+	public List<Constraint> parseDocument(String oclDocument, ResourceSet resourceSet)
+			throws OclParseException {
+		return parseDocument(oclDocument, resourceSet.getPackageRegistry());
+	}
+
+	private List<Constraint> parseDocument(String oclDocument, EPackage.Registry registry)
+			throws OclParseException {
 		OclParser parser = createParser(oclDocument);
 		OclErrorListener errorListener = configureErrorHandling(parser);
 
@@ -80,9 +102,7 @@ public class OclParserSupport implements OclExpressionParser {
 
 		checkErrors(errorListener, oclDocument);
 
-		// TODO: implement Complete OCL document AST building
-		// For now, return an empty list — the document grammar is validated
-		return new ArrayList<>();
+		return new OclDocumentBuilder(registry).buildDocument(tree);
 	}
 
 	private OclParser createParser(String input) {

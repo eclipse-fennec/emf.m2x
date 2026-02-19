@@ -28,11 +28,11 @@ import java.util.LinkedHashSet;
  * @param <E> element type
  * @since 1.0
  */
-class OclOrderedSet<E> extends ArrayList<E> {
+public class OclOrderedSet<E> extends ArrayList<E> {
 
 	private static final long serialVersionUID = 1L;
 
-	OclOrderedSet() {
+	public OclOrderedSet() {
 		super();
 	}
 
@@ -40,11 +40,11 @@ class OclOrderedSet<E> extends ArrayList<E> {
 	 * Creates an OrderedSet from the given collection, removing duplicates
 	 * while preserving insertion order.
 	 */
-	OclOrderedSet(Collection<? extends E> c) {
+	public OclOrderedSet(Collection<? extends E> c) {
 		super(new LinkedHashSet<>(c));
 	}
 
-	OclOrderedSet(int initialCapacity) {
+	public OclOrderedSet(int initialCapacity) {
 		super(initialCapacity);
 	}
 

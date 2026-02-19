@@ -28,19 +28,19 @@ import java.util.Collection;
  * @param <E> element type
  * @since 1.0
  */
-class OclBag<E> extends ArrayList<E> {
+public class OclBag<E> extends ArrayList<E> {
 
 	private static final long serialVersionUID = 1L;
 
-	OclBag() {
+	public OclBag() {
 		super();
 	}
 
-	OclBag(Collection<? extends E> c) {
+	public OclBag(Collection<? extends E> c) {
 		super(c);
 	}
 
-	OclBag(int initialCapacity) {
+	public OclBag(int initialCapacity) {
 		super(initialCapacity);
 	}
 }

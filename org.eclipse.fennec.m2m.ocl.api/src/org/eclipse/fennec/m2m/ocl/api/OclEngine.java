@@ -18,6 +18,7 @@ import java.util.List;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2m.model.ocl.Constraint;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.osgi.annotation.versioning.ProviderType;
@@ -67,6 +68,16 @@ public interface OclEngine {
 	 * @throws OclParseException if the document contains syntax or type errors
 	 */
 	List<Constraint> parseDocument(String oclDocument) throws OclParseException;
+
+	/**
+	 * Parses a Complete OCL document using the given resource set for package resolution.
+	 *
+	 * @param oclDocument the Complete OCL document text
+	 * @param resourceSet the resource set whose package registry is used for classifier resolution
+	 * @return the list of parsed constraints with context references populated
+	 * @throws OclParseException if the document contains syntax or type errors
+	 */
+	List<Constraint> parseDocument(String oclDocument, ResourceSet resourceSet) throws OclParseException;
 
 	// --- Evaluation ---
 
