@@ -105,8 +105,11 @@ class OclCollectionAppendPrependTest extends AbstractOclTest {
 
 	@Test
 	void orderedSet_append_existing() throws OclParseException {
-		// append on OrderedSet adds at end (implementation may allow duplicates)
-		assertEquals(4, eval("OrderedSet{1, 2, 3}->append(2)->size()", self));
+		// OCL §11.7.3: append on OrderedSet moves existing element to end (no duplicates)
+		assertEquals(3, eval("OrderedSet{1, 2, 3}->append(2)->size()", self));
+		// element 2 moved to end: last element is now 2
+		assertEquals(2, eval("OrderedSet{1, 2, 3}->append(2)->last()", self));
+		assertEquals(1, eval("OrderedSet{1, 2, 3}->append(2)->first()", self));
 	}
 
 	// --- OrderedSet prepend ---
@@ -118,8 +121,11 @@ class OclCollectionAppendPrependTest extends AbstractOclTest {
 
 	@Test
 	void orderedSet_prepend_existing() throws OclParseException {
-		// prepend on OrderedSet adds at front (implementation may allow duplicates)
-		assertEquals(4, eval("OrderedSet{1, 2, 3}->prepend(2)->size()", self));
+		// OCL §11.7.3: prepend on OrderedSet moves existing element to front (no duplicates)
+		assertEquals(3, eval("OrderedSet{1, 2, 3}->prepend(2)->size()", self));
+		// element 2 moved to front: first element is now 2
+		assertEquals(2, eval("OrderedSet{1, 2, 3}->prepend(2)->first()", self));
+		assertEquals(3, eval("OrderedSet{1, 2, 3}->prepend(2)->last()", self));
 	}
 
 	// --- Append/prepend with operations ---

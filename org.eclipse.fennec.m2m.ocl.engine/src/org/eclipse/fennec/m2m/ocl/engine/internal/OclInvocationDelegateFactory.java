@@ -15,9 +15,12 @@
 package org.eclipse.fennec.m2m.ocl.engine.internal;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.InternalEObject;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.ocl.api.OclContext;
@@ -68,12 +71,24 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 				throws InvocationTargetException {
 			try {
 				OclExpression expression = getParsedExpression();
-				OclContext context = OclContext.of(target);
+				Map<String, Object> variables = bindArguments(arguments);
+				OclContext context = OclContext.of(target, variables);
 				return engine.evaluate(expression, context);
 			} catch (Exception e) {
 				throw new InvocationTargetException(e,
 						"OCL invocation failed for " + operation.getName() + ": " + e.getMessage());
 			}
+		}
+
+		private Map<String, Object> bindArguments(EList<?> arguments) {
+			Map<String, Object> variables = new LinkedHashMap<>();
+			EList<EParameter> params = operation.getEParameters();
+			if (arguments != null) {
+				for (int i = 0; i < Math.min(params.size(), arguments.size()); i++) {
+					variables.put(params.get(i).getName(), arguments.get(i));
+				}
+			}
+			return variables;
 		}
 
 		private OclExpression getParsedExpression() throws OclParseException {

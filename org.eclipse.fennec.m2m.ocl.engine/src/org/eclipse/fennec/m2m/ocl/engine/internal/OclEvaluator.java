@@ -551,7 +551,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private Object iteratorCollect(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
-		List<Object> result = new ArrayList<>();
+		// Set/Bag source → Bag result; Sequence/OrderedSet source → Sequence result
+		boolean isBagResult = source instanceof Set<?> || source instanceof OclBag<?>;
+		List<Object> result = isBagResult ? new OclBag<>() : new ArrayList<>();
 		OclEvalEnvironment previousEnv = env;
 		try {
 			for (Object element : source) {
@@ -564,7 +566,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 					result.add(bodyResult);
 				}
 			}
-			return result; // collect always yields a Bag (List)
+			return result;
 		} finally {
 			env = previousEnv;
 		}
@@ -839,7 +841,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private boolean isNullSafeOperation(String opName) {
 		return switch (opName) {
 			case "oclIsUndefined", "oclIsInvalid", "=", "<>",
-				 "oclIsKindOf", "oclIsTypeOf", "oclAsType", "oclAsSet", "toString" -> true;
+				 "oclIsKindOf", "oclIsTypeOf", "oclAsType", "oclAsSet", "oclType", "toString" -> true;
 			default -> false;
 		};
 	}

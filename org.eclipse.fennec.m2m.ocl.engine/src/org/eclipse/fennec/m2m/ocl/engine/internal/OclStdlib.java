@@ -29,6 +29,7 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2m.model.ocl.CollectionType;
+import org.eclipse.fennec.m2m.model.ocl.OclFactory;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
 import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
@@ -128,9 +129,29 @@ class OclStdlib {
 				}
 				yield set;
 			}
+			case "oclType" -> oclType(source);
 			case "toString" -> String.valueOf(source);
 			default -> NOT_FOUND;
 		};
+	}
+
+	private static Object oclType(Object source) {
+		if (source == null) return OclInvalid.INSTANCE;
+		if (source == OclInvalid.INSTANCE) return OclInvalid.INSTANCE;
+		if (source instanceof EObject eo) return eo.eClass();
+		if (source instanceof Long || source instanceof Integer) return createPrimitiveType("Integer");
+		if (source instanceof Double || source instanceof Float) return createPrimitiveType("Real");
+		if (source instanceof String) return createPrimitiveType("String");
+		if (source instanceof Boolean) return createPrimitiveType("Boolean");
+		if (source instanceof Collection<?>) return createPrimitiveType("Collection");
+		if (source instanceof Map<?, ?>) return createPrimitiveType("Map");
+		return OclInvalid.INSTANCE;
+	}
+
+	private static PrimitiveType createPrimitiveType(String name) {
+		PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
+		pt.setName(name);
+		return pt;
 	}
 
 	private static Boolean oclEquals(Object left, Object right) {
@@ -406,6 +427,7 @@ class OclStdlib {
 			case ">" -> source > asNumber(args[0]).doubleValue();
 			case ">=" -> source >= asNumber(args[0]).doubleValue();
 			case "toInteger" -> (long) source.doubleValue();
+			case "toReal" -> source;
 			case "toString" -> source.toString();
 			default -> NOT_FOUND;
 		};
@@ -474,6 +496,23 @@ class OclStdlib {
 					yield OclInvalid.INSTANCE;
 				}
 			}
+			case "replaceAll" -> {
+				try {
+					yield source.replaceAll(asString(args[0]), asString(args[1]));
+				} catch (PatternSyntaxException e) {
+					yield OclInvalid.INSTANCE;
+				}
+			}
+			case "replaceFirst" -> {
+				try {
+					yield source.replaceFirst(asString(args[0]), asString(args[1]));
+				} catch (PatternSyntaxException e) {
+					yield OclInvalid.INSTANCE;
+				}
+			}
+			case "equalsIgnoreCase" -> source.equalsIgnoreCase(asString(args[0]));
+			case "startsWith" -> source.startsWith(asString(args[0]));
+			case "endsWith" -> source.endsWith(asString(args[0]));
 			case "<" -> source.compareTo(asString(args[0])) < 0;
 			case "<=" -> source.compareTo(asString(args[0])) <= 0;
 			case ">" -> source.compareTo(asString(args[0])) > 0;
@@ -571,15 +610,21 @@ class OclStdlib {
 					result.retainAll(other);
 					yield result;
 				}
+				// Bag/Sequence: frequency-based intersection (min frequency)
+				List<Object> remaining = new ArrayList<>(other);
 				List<Object> result;
 				if (source instanceof OclBag<?>) {
-					result = new OclBag<>(source);
+					result = new OclBag<>();
 				} else if (source instanceof OclOrderedSet<?>) {
-					result = new OclOrderedSet<>(source);
+					result = new OclOrderedSet<>();
 				} else {
-					result = new ArrayList<>(source);
+					result = new ArrayList<>();
 				}
-				result.retainAll(other);
+				for (Object e : source) {
+					if (remaining.remove(e)) {
+						result.add(e);
+					}
+				}
 				yield result;
 			}
 			case "-" -> {
@@ -589,6 +634,8 @@ class OclStdlib {
 					result.removeAll(other);
 					yield result;
 				}
+				// Bag/Sequence: frequency-based subtraction (subtract per occurrence)
+				List<Object> toRemove = new ArrayList<>(other);
 				List<Object> result;
 				if (source instanceof OclBag<?>) {
 					result = new OclBag<>(source);
@@ -597,7 +644,9 @@ class OclStdlib {
 				} else {
 					result = new ArrayList<>(source);
 				}
-				result.removeAll(other);
+				for (Object e : toRemove) {
+					result.remove(e);
+				}
 				yield result;
 			}
 			case "symmetricDifference" -> {
@@ -633,22 +682,24 @@ class OclStdlib {
 				yield preserveCollectionKind(source, filtered);
 			}
 			case "sum" -> {
-				double sum = 0;
+				long longSum = 0;
+				double doubleSum = 0;
 				boolean allLong = true;
 				for (Object e : source) {
 					if (e instanceof Long l) {
-						sum += l;
+						longSum += l;
+						doubleSum += l;
 					} else if (e instanceof Number n) {
-						sum += n.doubleValue();
+						doubleSum += n.doubleValue();
 						allLong = false;
 					} else {
 						yield OclInvalid.INSTANCE;
 					}
 				}
 				if (allLong) {
-					yield (long) sum;
+					yield longSum;
 				}
-				yield sum;
+				yield doubleSum;
 			}
 			case "max" -> {
 				Object max = null;
@@ -706,14 +757,32 @@ class OclStdlib {
 			case "reverse" -> {
 				List<Object> result = new ArrayList<>(source);
 				Collections.reverse(result);
-				yield result;
+				yield source instanceof OclOrderedSet<?> ? new OclOrderedSet<>(result) : result;
 			}
 			case "append" -> {
+				if (source instanceof OclOrderedSet<?>) {
+					// OCL §11.7.3: if already present, move to end
+					OclOrderedSet<Object> result = new OclOrderedSet<>();
+					for (Object e : source) {
+						if (!oclEquals(e, args[0])) result.add(e);
+					}
+					result.add(args[0]);
+					yield result;
+				}
 				List<Object> result = new ArrayList<>(source);
 				result.add(args[0]);
 				yield result;
 			}
 			case "prepend" -> {
+				if (source instanceof OclOrderedSet<?>) {
+					// OCL §11.7.3: if already present, move to front
+					OclOrderedSet<Object> result = new OclOrderedSet<>();
+					result.add(args[0]);
+					for (Object e : source) {
+						if (!oclEquals(e, args[0])) result.add(e);
+					}
+					yield result;
+				}
 				List<Object> result = new ArrayList<>(source.size() + 1);
 				result.add(args[0]);
 				result.addAll(source);
@@ -722,8 +791,15 @@ class OclStdlib {
 			case "insertAt" -> {
 				int idx = (int) asLong(args[0]);
 				if (idx < 1 || idx > source.size() + 1) yield OclInvalid.INSTANCE;
+				if (source instanceof OclOrderedSet<?>) {
+					OclOrderedSet<Object> result = new OclOrderedSet<>(source);
+					if (!result.contains(args[1])) {
+						result.add(idx - 1, args[1]);
+					}
+					yield result;
+				}
 				List<Object> result = new ArrayList<>(source);
-				result.add(idx - 1, args[1]); // 1-based
+				result.add(idx - 1, args[1]);
 				yield result;
 			}
 			case "subSequence", "subOrderedSet" -> {
@@ -732,7 +808,8 @@ class OclStdlib {
 				if (lower < 1 || upper > source.size() || lower > upper + 1) {
 					yield OclInvalid.INSTANCE;
 				}
-				yield new ArrayList<>(source.subList(lower - 1, upper)); // 1-based, inclusive
+				List<Object> sub = new ArrayList<>(source.subList(lower - 1, upper));
+				yield source instanceof OclOrderedSet<?> ? new OclOrderedSet<>(sub) : sub;
 			}
 			default -> NOT_FOUND;
 		};
