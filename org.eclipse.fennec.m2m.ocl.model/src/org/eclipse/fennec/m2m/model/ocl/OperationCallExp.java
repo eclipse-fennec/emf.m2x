@@ -33,6 +33,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * The following features are supported:
  * </p>
  * <ul>
+ *   <li>{@link org.eclipse.fennec.m2m.model.ocl.OperationCallExp#getName <em>Name</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2m.model.ocl.OperationCallExp#getOwnedArguments <em>Owned Arguments</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2m.model.ocl.OperationCallExp#getReferredOperation <em>Referred Operation</em>}</li>
  * </ul>
@@ -43,6 +44,31 @@ import org.osgi.annotation.versioning.ProviderType;
  */
 @ProviderType
 public interface OperationCallExp extends FeatureCallExp {
+	/**
+	 * Returns the value of the '<em><b>Name</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * The name of the called operation (e.g. 'size', '+', 'oclIsKindOf'). Always set by the parser, regardless of whether referredOperation is null. Used for stdlib dispatch in the evaluator.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Name</em>' attribute.
+	 * @see #setName(String)
+	 * @see org.eclipse.fennec.m2m.model.ocl.OclPackage#getOperationCallExp_Name()
+	 * @model
+	 * @generated
+	 */
+	String getName();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2m.model.ocl.OperationCallExp#getName <em>Name</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Name</em>' attribute.
+	 * @see #getName()
+	 * @generated
+	 */
+	void setName(String value);
+
 	/**
 	 * Returns the value of the '<em><b>Owned Arguments</b></em>' containment reference list.
 	 * The list contents are of type {@link org.eclipse.fennec.m2m.model.ocl.OclExpression}.

@@ -30,6 +30,7 @@ import org.eclipse.fennec.m2m.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2m.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvaluator;
 
 /**
@@ -105,7 +106,9 @@ public class OclEngineImpl implements OclEngine {
 		Objects.requireNonNull(context, "context must not be null");
 		Objects.requireNonNull(options, "options must not be null");
 
-		return OclEvaluator.evaluate(expression, context, options);
+		OclEvalEnvironment env = OclEvalEnvironment.root(context);
+		OclEvaluator evaluator = new OclEvaluator(env, options, getOperationProviders());
+		return evaluator.evaluate(expression);
 	}
 
 	// --- Validation ---

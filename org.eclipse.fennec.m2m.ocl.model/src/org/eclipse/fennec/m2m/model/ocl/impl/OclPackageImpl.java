@@ -838,8 +838,18 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
+	public EAttribute getOperationCallExp_Name() {
+		return (EAttribute)operationCallExpEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EReference getOperationCallExp_OwnedArguments() {
-		return (EReference)operationCallExpEClass.getEStructuralFeatures().get(0);
+		return (EReference)operationCallExpEClass.getEStructuralFeatures().get(1);
 	}
 
 	/**
@@ -849,7 +859,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 */
 	@Override
 	public EReference getOperationCallExp_ReferredOperation() {
-		return (EReference)operationCallExpEClass.getEStructuralFeatures().get(1);
+		return (EReference)operationCallExpEClass.getEStructuralFeatures().get(2);
 	}
 
 	/**
@@ -1683,6 +1693,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		createEReference(propertyCallExpEClass, PROPERTY_CALL_EXP__REFERRED_PROPERTY);
 
 		operationCallExpEClass = createEClass(OPERATION_CALL_EXP);
+		createEAttribute(operationCallExpEClass, OPERATION_CALL_EXP__NAME);
 		createEReference(operationCallExpEClass, OPERATION_CALL_EXP__OWNED_ARGUMENTS);
 		createEReference(operationCallExpEClass, OPERATION_CALL_EXP__REFERRED_OPERATION);
 
@@ -1915,6 +1926,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		initEReference(getPropertyCallExp_ReferredProperty(), ecorePackage.getEStructuralFeature(), null, "referredProperty", null, 0, 1, PropertyCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(operationCallExpEClass, OperationCallExp.class, "OperationCallExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEAttribute(getOperationCallExp_Name(), ecorePackage.getEString(), "name", null, 0, 1, OperationCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getOperationCallExp_OwnedArguments(), this.getOclExpression(), null, "ownedArguments", null, 0, -1, OperationCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getOperationCallExp_ReferredOperation(), ecorePackage.getEOperation(), null, "referredOperation", null, 0, 1, OperationCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 

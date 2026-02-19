@@ -678,6 +678,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	}
 
 	private void resolveOperation(OperationCallExp exp, String opName) {
+		exp.setName(opName);
 		// TODO: full operation resolution including stdlib
 		// For now, store via a placeholder EOperation
 		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());

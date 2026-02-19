@@ -37,7 +37,7 @@ import org.eclipse.fennec.m2m.ocl.api.OclContext;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-class OclEvalEnvironment {
+public class OclEvalEnvironment {
 
 	private final OclEvalEnvironment parent;
 	private final Map<String, Object> bindings;
@@ -56,7 +56,7 @@ class OclEvalEnvironment {
 	 * @param context the evaluation context
 	 * @return a new root environment
 	 */
-	static OclEvalEnvironment root(OclContext context) {
+	public static OclEvalEnvironment root(OclContext context) {
 		Objects.requireNonNull(context, "context must not be null");
 		Map<String, Object> bindings = new HashMap<>();
 		bindings.put("self", context.self());
