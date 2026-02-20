@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<genmodel:GenModel xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+    xmlns:genmodel="http://www.eclipse.org/emf/2002/GenModel" copyrightText="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"
+    modelDirectory="/org.eclipse.fennec.m2m.qvto.model/src" modelPluginID="org.eclipse.fennec.m2m.qvto.model"
+    modelName="Qvto" rootExtendsClass="org.eclipse.emf.ecore.impl.MinimalEObjectImpl$Container"
+    importerID="org.eclipse.emf.importer.ecore" complianceLevel="21.0" copyrightFields="false"
+    usedGenPackages="../../org.eclipse.fennec.m2m.ocl.model/model/ocl.genmodel#//ocl"
+    operationReflection="true" importOrganizing="true" oSGiCompatible="true">
+  <foreignModel>imperativeocl.ecore</foreignModel>
+  <foreignModel>qvtoperational.ecore</foreignModel>
+  <foreignModel>trace.ecore</foreignModel>
+  <genPackages prefix="ImperativeOcl" basePackage="org.eclipse.fennec.m2m.model" resource="XMI"
+      disposableProviderFactory="true" ecorePackage="imperativeocl.ecore#/">
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="imperativeocl.ecore#//SeverityKind">
+      <genEnumLiterals ecoreEnumLiteral="imperativeocl.ecore#//SeverityKind/error"/>
+      <genEnumLiterals ecoreEnumLiteral="imperativeocl.ecore#//SeverityKind/warning"/>
+      <genEnumLiterals ecoreEnumLiteral="imperativeocl.ecore#//SeverityKind/fatal"/>
+    </genEnums>
+    <genClasses image="false" ecoreClass="imperativeocl.ecore#//ImperativeExpression"/>
+    <genClasses ecoreClass="imperativeocl.ecore#//AssignExp">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute imperativeocl.ecore#//AssignExp/isReset"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//AssignExp/left"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//AssignExp/value"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//AssignExp/defaultValue"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//BlockExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//BlockExp/body"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//BreakExp"/>
+    <genClasses ecoreClass="imperativeocl.ecore#//ContinueExp"/>
+    <genClasses ecoreClass="imperativeocl.ecore#//ReturnExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//ReturnExp/value"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//WhileExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//WhileExp/condition"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//WhileExp/body"/>
+    </genClasses>
+    <genClasses image="false" ecoreClass="imperativeocl.ecore#//ImperativeLoopExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//ImperativeLoopExp/condition"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//ForExp"/>
+    <genClasses ecoreClass="imperativeocl.ecore#//ImperativeIterateExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//ImperativeIterateExp/target"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//SwitchExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//SwitchExp/alternativePart"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//SwitchExp/elsePart"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//AltExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//AltExp/condition"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//AltExp/body"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//ComputeExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//ComputeExp/returnedElement"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//ComputeExp/body"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//AssertExp">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute imperativeocl.ecore#//AssertExp/severity"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//AssertExp/assertion"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//AssertExp/log"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//LogExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//LogExp/condition"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//RaiseExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//RaiseExp/argument"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//RaiseExp/exception"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//TryExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//TryExp/tryBody"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//TryExp/exceptClause"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//CatchExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//CatchExp/body"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//CatchExp/exception"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//InstantiationExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//InstantiationExp/argument"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//InstantiationExp/instantiatedClass"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//InstantiationExp/extent"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//VariableInitExp">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute imperativeocl.ecore#//VariableInitExp/withResult"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//VariableInitExp/referredVariable"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//UnlinkExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//UnlinkExp/item"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//UnlinkExp/target"/>
+    </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//Typedef">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//Typedef/condition"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//Typedef/base"/>
+    </genClasses>
+  </genPackages>
+  <genPackages prefix="QvtOperational" basePackage="org.eclipse.fennec.m2m.model"
+      resource="XMI" disposableProviderFactory="true" ecorePackage="qvtoperational.ecore#/">
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="qvtoperational.ecore#//DirectionKind">
+      <genEnumLiterals ecoreEnumLiteral="qvtoperational.ecore#//DirectionKind/in"/>
+      <genEnumLiterals ecoreEnumLiteral="qvtoperational.ecore#//DirectionKind/inout"/>
+      <genEnumLiterals ecoreEnumLiteral="qvtoperational.ecore#//DirectionKind/out"/>
+    </genEnums>
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="qvtoperational.ecore#//ImportKind">
+      <genEnumLiterals ecoreEnumLiteral="qvtoperational.ecore#//ImportKind/extension"/>
+      <genEnumLiterals ecoreEnumLiteral="qvtoperational.ecore#//ImportKind/access"/>
+    </genEnums>
+    <genClasses ecoreClass="qvtoperational.ecore#//OperationBody">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationBody/content"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationBody/variable"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationBody/operation"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//MappingBody">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingBody/initSection"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingBody/endSection"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//ConstructorBody"/>
+    <genClasses ecoreClass="qvtoperational.ecore#//VarParameter">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//VarParameter/kind"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//VarParameter/representedParameter"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//VarParameter/ownedInit"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//VarParameter/ctxOwner"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//VarParameter/resOwner"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//MappingParameter">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingParameter/extent"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//ModelParameter"/>
+    <genClasses ecoreClass="qvtoperational.ecore#//ImperativeOperation">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ImperativeOperation/isBlackbox"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ImperativeOperation/body"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ImperativeOperation/context"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ImperativeOperation/result"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ImperativeOperation/overridden"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//Helper">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//Helper/isQuery"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//MappingOperation">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/when"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/where"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/disjunct"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/inherited"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/merged"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//Constructor"/>
+    <genClasses ecoreClass="qvtoperational.ecore#//EntryOperation"/>
+    <genClasses ecoreClass="qvtoperational.ecore#//Module">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//Module/isBlackbox"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//Module/moduleImport"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//Module/ownedVariable"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//Module/ownedTag"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//Module/entry"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//Module/configProperty"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//Module/usedModelType"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//OperationalTransformation">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationalTransformation/modelParameter"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationalTransformation/intermediateClass"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationalTransformation/intermediateProperty"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//Library"/>
+    <genClasses ecoreClass="qvtoperational.ecore#//ModelType">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ModelType/conformanceKind"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ModelType/additionalCondition"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ModelType/metamodel"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//ModuleImport">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ModuleImport/kind"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ModuleImport/importedModule"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ModuleImport/module"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ModuleImport/binding"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//ContextualProperty">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ContextualProperty/initExpression"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ContextualProperty/context"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ContextualProperty/overridden"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//ImperativeCallExp">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ImperativeCallExp/isVirtual"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//MappingCallExp">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//MappingCallExp/isStrict"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//ObjectExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ObjectExp/body"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ObjectExp/referredObject"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//ResolveExp">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ResolveExp/isDeferred"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ResolveExp/isInverse"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ResolveExp/one"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ResolveExp/condition"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ResolveExp/target"/>
+    </genClasses>
+    <genClasses ecoreClass="qvtoperational.ecore#//ResolveInExp">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ResolveInExp/inMapping"/>
+    </genClasses>
+  </genPackages>
+  <genPackages prefix="Trace" basePackage="org.eclipse.fennec.m2m.model" resource="XMI"
+      disposableProviderFactory="true" ecorePackage="trace.ecore#/">
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="trace.ecore#//EDirectionKind">
+      <genEnumLiterals ecoreEnumLiteral="trace.ecore#//EDirectionKind/IN"/>
+      <genEnumLiterals ecoreEnumLiteral="trace.ecore#//EDirectionKind/INOUT"/>
+      <genEnumLiterals ecoreEnumLiteral="trace.ecore#//EDirectionKind/OUT"/>
+    </genEnums>
+    <genClasses ecoreClass="trace.ecore#//Trace">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//Trace/traceRecords"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//Trace/traceRecordMap"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//Trace/sourceToTraceRecordMap"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//Trace/targetToTraceRecordMap"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//TraceRecord">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//TraceRecord/mappingOperation"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//TraceRecord/context"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//TraceRecord/parameters"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//TraceRecord/result"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//EMappingOperation">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//EMappingOperation/name"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//EMappingOperation/package"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//EMappingOperation/module"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference trace.ecore#//EMappingOperation/runtimeMappingOperation"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//EMappingContext">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//EMappingContext/context"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//EMappingParameters">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//EMappingParameters/parameters"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//EMappingResults">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//EMappingResults/result"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//VarParameterValue">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//VarParameterValue/kind"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//VarParameterValue/name"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//VarParameterValue/type"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//VarParameterValue/value"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//EValue">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//EValue/primitiveValue"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//EValue/oclObject"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//EValue/collectionType"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//EValue/intermediateElement"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//EValue/collection"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference trace.ecore#//EValue/modelElement"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//ETuplePartValue">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//ETuplePartValue/name"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference trace.ecore#//ETuplePartValue/value"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//MappingOperationToTraceRecordMapEntry">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference trace.ecore#//MappingOperationToTraceRecordMapEntry/key"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference trace.ecore#//MappingOperationToTraceRecordMapEntry/value"/>
+    </genClasses>
+    <genClasses ecoreClass="trace.ecore#//ObjectToTraceRecordMapEntry">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute trace.ecore#//ObjectToTraceRecordMapEntry/key"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference trace.ecore#//ObjectToTraceRecordMapEntry/value"/>
+    </genClasses>
+  </genPackages>
+</genmodel:GenModel>

@@ -1,0 +1,16 @@
+Bundle-Name: Fennec QVT-O Model
+Bundle-Description: QVT-Operational v1.3 EMF metamodel (3 EPackages, 59 classifiers)
+
+-library: enableEMF
+
+-generate:\
+	model/qvto.genmodel;\
+		generate=fennecEMF;\
+		genmodel=model/qvto.genmodel;\
+		output=src
+
+-includeresource.model: model=model
+
+-buildpath: \
+	org.eclipse.fennec.m2m.ocl.model;version=latest,\
+	org.osgi.service.condition;version=latest
