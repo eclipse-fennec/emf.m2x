@@ -305,10 +305,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		QvtoEnvironment savedEnv = this.environment;
 		setupOperationEnvironment(mapping);
 
-		// Mapping extensions (inherits, merges, disjuncts)
-		// Stored as unresolved references for later linking
+		// TODO: resolve mapping extensions (inherits, merges, disjuncts) during linking phase
 		for (QvtOParser.MappingExtensionContext extCtx : ctx.mappingExtension()) {
-			// Just parse; actual linking happens later
+			// extCtx → populate mapping.getInherited()/getMerged()/getDisjunct()
 		}
 
 		// When clause
@@ -579,10 +578,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		EClass intermediateClass = EcoreFactory.eINSTANCE.createEClass();
 		intermediateClass.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 
-		// Supertype
+		// TODO: resolve intermediate class supertypes during linking phase
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
-				// Supertype resolution deferred to link time
+				// typeCtx → intermediateClass.getESuperTypes().add(...)
 			}
 		}
 
@@ -730,6 +729,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			String fullName) {
 		int colonIdx = fullName.lastIndexOf("::");
 		if (colonIdx >= 0) {
+			// TODO: resolve contextName to EClassifier and set context parameter type
 			String contextName = fullName.substring(0, colonIdx);
 			String opName = fullName.substring(colonIdx + 2);
 			operation.setName(opName);
@@ -769,7 +769,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private void processModuleUsage(Module module, QvtOParser.ModuleUsageContext ctx) {
 		String kind = ctx.moduleUsageKind().getText();
+		// TODO: resolve module references and set imp.setImportedModule() during linking phase
 		for (QvtOParser.QualifiedNameContext nameCtx : ctx.moduleRefList().qualifiedName()) {
+			// nameCtx → resolve to Module and set as importedModule
 			ModuleImport imp = QVTO.createModuleImport();
 			imp.setKind("extends".equals(kind) ? ImportKind.EXTENSION : ImportKind.ACCESS);
 			module.getModuleImport().add(imp);
