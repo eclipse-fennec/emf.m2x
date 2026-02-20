@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2m.ocl.engine.internal;
 
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EDataType;
@@ -23,9 +25,9 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.ocl.api.OclContext;
-import org.eclipse.fennec.m2m.ocl.api.OclEngine;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
 
 /**
  * EMF {@link EValidator.ValidationDelegate} that evaluates OCL constraint
@@ -41,10 +43,11 @@ import org.eclipse.fennec.m2m.ocl.api.OclParseException;
  */
 public class OclValidationDelegateFactory implements EValidator.ValidationDelegate {
 
-	private final OclEngine engine;
+	private final OclEngineImpl engine;
+	private final ConcurrentHashMap<String, OclExpression> expressionCache = new ConcurrentHashMap<>();
 
-	public OclValidationDelegateFactory(OclEngine engine) {
-		this.engine = engine;
+	public OclValidationDelegateFactory(OclEngineImpl engine) {
+		this.engine = Objects.requireNonNull(engine, "engine must not be null");
 	}
 
 	@Override
@@ -89,18 +92,25 @@ public class OclValidationDelegateFactory implements EValidator.ValidationDelega
 
 	private boolean evaluateConstraint(String expression, EObject eObject, EClass contextType) {
 		try {
-			OclExpression parsed = engine.parse(expression, contextType);
+			String cacheKey = contextType.getName() + "#" + expression;
+			OclExpression parsed = expressionCache.computeIfAbsent(cacheKey, k -> {
+				try {
+					return engine.parse(expression, contextType);
+				} catch (OclParseException e) {
+					throw new IllegalStateException(
+							"Failed to parse OCL constraint on " + contextType.getName()
+									+ ": " + e.getMessage(), e);
+				}
+			});
 			OclContext oclContext = OclContext.of(eObject);
-			Object result = engine.evaluate(parsed, oclContext);
+			Object result = engine.evaluate(parsed, oclContext, engine.getDelegateOptions());
 			if (result instanceof Boolean b) {
 				return b;
 			}
 			// Non-boolean result or OclInvalid → constraint violated
 			return result != null && result != OclInvalid.INSTANCE;
-		} catch (OclParseException e) {
-			throw new IllegalStateException(
-					"Failed to parse OCL constraint on " + contextType.getName()
-							+ ": " + e.getMessage(), e);
+		} catch (IllegalStateException e) {
+			throw e;
 		}
 	}
 }

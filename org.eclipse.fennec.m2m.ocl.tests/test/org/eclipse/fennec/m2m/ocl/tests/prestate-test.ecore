@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="prestatetest" nsURI="http://test/prestatetest" nsPrefix="prestatetest">
+  <eAnnotations source="http://www.eclipse.org/emf/2002/Ecore">
+    <details key="invocationDelegates" value="http://www.eclipse.org/fennec/m2m/ocl/1.0"/>
+  </eAnnotations>
+  <eClassifiers xsi:type="ecore:EClass" name="Account">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="balance" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDouble"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="owner" eType="#//Customer"/>
+    <!-- body + post: postcondition passes -->
+    <eOperations name="computeBonus" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="body" value="self.balance * 0.1"/>
+        <details key="post" value="result >= 0.0"/>
+      </eAnnotations>
+    </eOperations>
+    <!-- body + post: postcondition fails (returns negative) -->
+    <eOperations name="computeLoss" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="body" value="0.0 - 1.0"/>
+        <details key="post" value="result >= 0.0"/>
+      </eAnnotations>
+    </eOperations>
+    <!-- pre: fails when amount > balance -->
+    <eOperations name="withdraw" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="body" value="self.balance - amount"/>
+        <details key="pre" value="amount > 0.0 and amount &lt;= self.balance"/>
+      </eAnnotations>
+      <eParameters name="amount" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject"/>
+    </eOperations>
+    <!-- pre + post both pass: result = balance * rate, post checks result = balance * rate -->
+    <eOperations name="getInterest" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="body" value="self.balance * rate"/>
+        <details key="pre" value="rate >= 0.0 and rate &lt;= 1.0"/>
+        <details key="post" value="result = self.balance * rate"/>
+      </eAnnotations>
+      <eParameters name="rate" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject"/>
+    </eOperations>
+    <!-- post-only (no body): returns null, post checks result.oclIsUndefined() -->
+    <eOperations name="postOnlyOp" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBooleanObject">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="post" value="self.balance >= 0.0"/>
+      </eAnnotations>
+    </eOperations>
+    <!-- post with result and name: body returns name.size(), post checks result > 0 -->
+    <eOperations name="nameLength" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EIntegerObject">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="body" value="self.name.size()"/>
+        <details key="post" value="result > 0"/>
+      </eAnnotations>
+    </eOperations>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Customer">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="age" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
+  </eClassifiers>
+</ecore:EPackage>

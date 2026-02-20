@@ -27,6 +27,7 @@ import java.util.regex.PatternSyntaxException;
 
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2m.model.ocl.AnyType;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2m.model.ocl.CollectionKind;
@@ -35,19 +36,21 @@ import org.eclipse.fennec.m2m.model.ocl.MapType;
 import org.eclipse.fennec.m2m.model.ocl.OclFactory;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
 import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 
 /**
  * OCL Standard Library operation dispatch.
  *
  * <p>Implements all built-in operations for OclAny, Boolean, Integer, Real,
- * and String as defined in the OCL v2.4 specification (Sections 11.2–11.7).
+ * String, Collection, OrderedCollection, and Map as defined in the OCL v2.4
+ * specification (Sections 11.2–11.7, 11.9).
  *
  * <p>Dispatch is performed by runtime type of the source value, then by
  * operation name using switch expressions. This is deliberately simple
  * and avoids reflection or map-based lookup for performance.
  *
- * <p>All methods return {@code null} to signal "operation not found",
+ * <p>All methods return {@link #NOT_FOUND} to signal "operation not found",
  * which the caller ({@link OclEvaluator}) distinguishes from a valid
  * {@code null} return (OclVoid).
  *
@@ -68,9 +71,10 @@ class OclStdlib {
 	 * @param name the operation name
 	 * @param source the evaluated source (may be null for OclVoid)
 	 * @param args the evaluated arguments
+	 * @param options evaluation options with security limits
 	 * @return the result, or {@link #NOT_FOUND} if the operation is not a stdlib operation
 	 */
-	static Object dispatch(String name, Object source, Object[] args) {
+	static Object dispatch(String name, Object source, Object[] args, OclEvaluationOptions options) {
 		// OclAny operations apply to all types (including null/invalid)
 		Object result = dispatchOclAny(name, source, args);
 		if (result != NOT_FOUND) {
@@ -97,7 +101,7 @@ class OclStdlib {
 			return dispatchReal(name, (double) f, args);
 		}
 		if (source instanceof String s) {
-			return dispatchString(name, s, args);
+			return dispatchString(name, s, args, options);
 		}
 		if (source instanceof Map<?, ?> m) {
 			return dispatchMap(name, m, args);
@@ -111,7 +115,7 @@ class OclStdlib {
 				Object ordered = dispatchOrderedCollection(name, l, args);
 				if (ordered != NOT_FOUND) return ordered;
 			}
-			return dispatchCollection(name, c, args);
+			return dispatchCollection(name, c, args, options);
 		}
 
 		return NOT_FOUND;
@@ -203,7 +207,7 @@ class OclStdlib {
 			return Objects.equals(lt.getName(), rt.getName());
 		}
 		if (left instanceof EObject le && right instanceof EObject re) {
-			return org.eclipse.emf.ecore.util.EcoreUtil.equals(le, re);
+			return EcoreUtil.equals(le, re);
 		}
 		// Numeric cross-type equality: 5.0 = 5 → true (OCL v2.4 §11.5.1)
 		if (left instanceof Number ln && right instanceof Number rn) {
@@ -532,7 +536,8 @@ class OclStdlib {
 
 	// --- String (OCL v2.4 Section 11.7) ---
 
-	private static Object dispatchString(String name, String source, Object[] args) {
+	private static Object dispatchString(String name, String source, Object[] args,
+			OclEvaluationOptions options) {
 		return switch (name) {
 			case "size" -> (long) source.length();
 			case "+" , "concat" -> source + asString(args[0]);
@@ -587,22 +592,34 @@ class OclStdlib {
 				yield OclInvalid.INSTANCE;
 			}
 			case "matches" -> {
+				String pattern = asString(args[0]);
+				if (pattern.length() > options.maxRegexLength()) {
+					yield OclInvalid.INSTANCE;
+				}
 				try {
-					yield source.matches(asString(args[0]));
+					yield source.matches(pattern);
 				} catch (PatternSyntaxException e) {
 					yield OclInvalid.INSTANCE;
 				}
 			}
 			case "replaceAll" -> {
+				String pattern = asString(args[0]);
+				if (pattern.length() > options.maxRegexLength()) {
+					yield OclInvalid.INSTANCE;
+				}
 				try {
-					yield source.replaceAll(asString(args[0]), asString(args[1]));
+					yield source.replaceAll(pattern, asString(args[1]));
 				} catch (PatternSyntaxException e) {
 					yield OclInvalid.INSTANCE;
 				}
 			}
 			case "replaceFirst" -> {
+				String pattern = asString(args[0]);
+				if (pattern.length() > options.maxRegexLength()) {
+					yield OclInvalid.INSTANCE;
+				}
 				try {
-					yield source.replaceFirst(asString(args[0]), asString(args[1]));
+					yield source.replaceFirst(pattern, asString(args[1]));
 				} catch (PatternSyntaxException e) {
 					yield OclInvalid.INSTANCE;
 				}
@@ -621,7 +638,8 @@ class OclStdlib {
 
 	// --- Collection (OCL v2.4 Section 11.7) ---
 
-	private static Object dispatchCollection(String name, Collection<?> source, Object[] args) {
+	private static Object dispatchCollection(String name, Collection<?> source, Object[] args,
+			OclEvaluationOptions options) {
 		return switch (name) {
 			case "size" -> (long) source.size();
 			case "isEmpty" -> source.isEmpty();
@@ -820,6 +838,10 @@ class OclStdlib {
 			}
 			case "product" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				long productSize = (long) source.size() * other.size();
+				if (productSize > options.maxCollectionSize()) {
+					yield OclInvalid.INSTANCE;
+				}
 				Set<Map<String, Object>> result = new LinkedHashSet<>();
 				for (Object a : source) {
 					for (Object b : other) {
@@ -951,30 +973,14 @@ class OclStdlib {
 		};
 	}
 
-	/** Cross-type numeric comparison for OCL: Long vs Double etc. */
-	@SuppressWarnings("unchecked")
 	private static int compareOcl(Object a, Object b) {
-		if (a instanceof Number na && b instanceof Number nb) {
-			return Double.compare(na.doubleValue(), nb.doubleValue());
-		}
-		if (a instanceof Comparable<?> ca) {
-			try {
-				return ((Comparable<Object>) ca).compareTo(b);
-			} catch (ClassCastException e) {
-				return 0;
-			}
-		}
-		return 0;
+		return OclCollectionUtil.compareOcl(a, b);
 	}
 
 	// --- Collection helpers ---
 
-	/** Returns a collection of the same kind as the source. */
 	private static Collection<Object> preserveCollectionKind(Collection<?> source, List<Object> elements) {
-		if (source instanceof OclOrderedSet<?>) return new OclOrderedSet<>(elements);
-		if (source instanceof OclBag<?>) return new OclBag<>(elements);
-		if (source instanceof Set<?>) return new LinkedHashSet<>(elements);
-		return elements; // Sequence
+		return OclCollectionUtil.preserveCollectionKind(source, elements);
 	}
 
 	private static void flatten(Collection<?> source, List<Object> result) {
@@ -987,23 +993,24 @@ class OclStdlib {
 		}
 	}
 
-	// --- Type coercion helpers ---
+	// --- Type coercion helpers (safe — no ClassCastException) ---
 
 	private static boolean asBoolean(Object value) {
-		return (Boolean) value;
+		return value instanceof Boolean b ? b : false;
 	}
 
 	private static long asLong(Object value) {
 		if (value instanceof Long l) return l;
 		if (value instanceof Integer i) return i;
-		return ((Number) value).longValue();
+		if (value instanceof Number n) return n.longValue();
+		return 0L;
 	}
 
 	private static Number asNumber(Object value) {
-		return (Number) value;
+		return value instanceof Number n ? n : 0L;
 	}
 
 	private static String asString(Object value) {
-		return (String) value;
+		return value instanceof String s ? s : String.valueOf(value);
 	}
 }

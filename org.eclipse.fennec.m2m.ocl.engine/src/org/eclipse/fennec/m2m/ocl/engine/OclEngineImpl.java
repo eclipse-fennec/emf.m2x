@@ -44,6 +44,7 @@ import org.eclipse.fennec.m2m.ocl.engine.internal.OclDelegateUtil;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvaluator;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclInvocationDelegateFactory;
+import org.eclipse.fennec.m2m.ocl.engine.internal.PreStateSnapshot;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclOrderedSet;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclSettingDelegateFactory;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclUnlimitedNatural;
@@ -74,6 +75,7 @@ public class OclEngineImpl implements OclEngine {
 	private final OclExpressionParser parser;
 	private final List<OclOperationProvider> operationProviders = new CopyOnWriteArrayList<>();
 	private final List<CompleteOclContribution> oclContributions = new CopyOnWriteArrayList<>();
+	private volatile OclEvaluationOptions delegateOptions = OclEvaluationOptions.strict();
 
 	/**
 	 * Creates a new engine with the given parser.
@@ -173,6 +175,22 @@ public class OclEngineImpl implements OclEngine {
 		oclContributions.remove(contribution);
 	}
 
+	// --- Postcondition Evaluation ---
+
+	/**
+	 * Evaluates a postcondition expression with the given pre-state snapshot.
+	 * Used by the invocation delegate for postcondition evaluation with
+	 * {@code @pre} support.
+	 */
+	public Object evaluatePostcondition(OclExpression expression, OclContext context,
+			PreStateSnapshot snapshot) {
+		OclEvalEnvironment env = OclEvalEnvironment.root(context);
+		OclEvaluator evaluator = new OclEvaluator(env, delegateOptions, getOperationProviders());
+		evaluator.setPreStateSnapshot(snapshot);
+		OclResult result = evaluator.evaluate(expression);
+		return narrowResult(result.value());
+	}
+
 	// --- EMF Delegate Registration ---
 
 	/**
@@ -225,7 +243,7 @@ public class OclEngineImpl implements OclEngine {
 	 *
 	 * @return unmodifiable snapshot of operation providers
 	 */
-	protected List<OclOperationProvider> getOperationProviders() {
+	public List<OclOperationProvider> getOperationProviders() {
 		return List.copyOf(operationProviders);
 	}
 
@@ -236,6 +254,24 @@ public class OclEngineImpl implements OclEngine {
 	 */
 	protected List<CompleteOclContribution> getOclContributions() {
 		return List.copyOf(oclContributions);
+	}
+
+	/**
+	 * Returns the evaluation options used by EMF delegates.
+	 *
+	 * @return the current delegate options
+	 */
+	public OclEvaluationOptions getDelegateOptions() {
+		return delegateOptions;
+	}
+
+	/**
+	 * Sets the evaluation options used by EMF delegates.
+	 *
+	 * @param options the delegate options, must not be {@code null}
+	 */
+	public void setDelegateOptions(OclEvaluationOptions options) {
+		this.delegateOptions = Objects.requireNonNull(options, "options must not be null");
 	}
 
 	/**

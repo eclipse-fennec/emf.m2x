@@ -14,13 +14,15 @@
  */
 package org.eclipse.fennec.m2m.ocl.engine.internal;
 
+import java.util.Objects;
+
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.InternalEObject;
 import org.eclipse.emf.ecore.util.BasicSettingDelegate;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.ocl.api.OclContext;
-import org.eclipse.fennec.m2m.ocl.api.OclEngine;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
 
 /**
  * EMF {@link EStructuralFeature.Internal.SettingDelegate.Factory} that evaluates
@@ -37,10 +39,10 @@ import org.eclipse.fennec.m2m.ocl.api.OclParseException;
  */
 public class OclSettingDelegateFactory implements EStructuralFeature.Internal.SettingDelegate.Factory {
 
-	private final OclEngine engine;
+	private final OclEngineImpl engine;
 
-	public OclSettingDelegateFactory(OclEngine engine) {
-		this.engine = engine;
+	public OclSettingDelegateFactory(OclEngineImpl engine) {
+		this.engine = Objects.requireNonNull(engine, "engine must not be null");
 	}
 
 	@Override
@@ -74,7 +76,7 @@ public class OclSettingDelegateFactory implements EStructuralFeature.Internal.Se
 			try {
 				OclExpression expression = getParsedExpression();
 				OclContext context = OclContext.of(owner);
-				return engine.evaluate(expression, context);
+				return engine.evaluate(expression, context, engine.getDelegateOptions());
 			} catch (Exception e) {
 				throw new IllegalStateException(
 						"OCL derivation failed for " + eStructuralFeature.getName()

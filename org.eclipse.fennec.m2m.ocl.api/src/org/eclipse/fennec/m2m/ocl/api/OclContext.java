@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2m.ocl.api;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -62,7 +64,7 @@ public record OclContext(
 	public OclContext {
 		Objects.requireNonNull(self, "self must not be null");
 		Objects.requireNonNull(variables, "variables must not be null");
-		variables = Map.copyOf(variables);
+		variables = Collections.unmodifiableMap(new LinkedHashMap<>(variables));
 		// resourceSet is nullable — not every evaluation needs it
 	}
 

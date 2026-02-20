@@ -180,15 +180,13 @@ class OclEvaluationOptionsTest extends AbstractOclTest {
 
 	@Test
 	void customOptions_maxDepth() {
-		OclEvaluationOptions opts = new OclEvaluationOptions(
-				NullHandling.STRICT, ErrorRecovery.FAIL_FAST, 50, null);
+		OclEvaluationOptions opts = OclEvaluationOptions.strict().withMaxDepth(50);
 		assertEquals(50, opts.maxDepth());
 	}
 
 	@Test
 	void customOptions_withLenientAndCollectErrors() throws OclParseException {
-		OclEvaluationOptions opts = new OclEvaluationOptions(
-				NullHandling.LENIENT, ErrorRecovery.COLLECT_ERRORS, 500, null);
+		OclEvaluationOptions opts = OclEvaluationOptions.lenient().withMaxDepth(500);
 		OclExpression expr = engine.parse("self.age + 1", personClass);
 		OclResult result = engine.evaluateWithDiagnostics(expr, OclContext.of(self), opts);
 		assertTrue(result.isSuccess());

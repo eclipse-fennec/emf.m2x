@@ -16,7 +16,9 @@ package org.eclipse.fennec.m2m.ocl.engine.internal;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Objects;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -29,6 +31,7 @@ import org.eclipse.emf.common.util.BasicEList;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.ECollections;
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -50,6 +53,7 @@ import org.eclipse.fennec.m2m.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2m.model.ocl.LetExp;
 import org.eclipse.fennec.m2m.model.ocl.MapLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.MapLiteralPart;
+import org.eclipse.fennec.m2m.model.ocl.MessageExp;
 import org.eclipse.fennec.m2m.model.ocl.NullLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
@@ -107,6 +111,8 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private final List<OclOperationProvider> customProviders;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
 	private OclEvalEnvironment env;
+	private PreStateSnapshot preStateSnapshot = PreStateSnapshot.EMPTY;
+	private int depth;
 
 	/**
 	 * Creates a new evaluator.
@@ -117,9 +123,17 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 */
 	public OclEvaluator(OclEvalEnvironment env, OclEvaluationOptions options,
 			List<OclOperationProvider> customProviders) {
-		this.env = env;
-		this.options = options;
-		this.customProviders = customProviders;
+		this.env = Objects.requireNonNull(env, "env must not be null");
+		this.options = Objects.requireNonNull(options, "options must not be null");
+		this.customProviders = Objects.requireNonNull(customProviders, "customProviders must not be null");
+	}
+
+	/**
+	 * Sets the pre-state snapshot for postcondition evaluation.
+	 * Must be called before {@link #evaluate(OclExpression)}.
+	 */
+	public void setPreStateSnapshot(PreStateSnapshot snapshot) {
+		this.preStateSnapshot = Objects.requireNonNull(snapshot, "snapshot must not be null");
 	}
 
 	/**
@@ -142,8 +156,16 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * values are correctly propagated through the expression tree.
 	 */
 	private Object eval(OclExpression expression) {
-		Object result = doSwitch(expression);
-		return result == OCL_NULL ? null : result;
+		if (++depth > options.maxDepth()) {
+			--depth;
+			return addError("Maximum evaluation depth exceeded: " + options.maxDepth());
+		}
+		try {
+			Object result = doSwitch(expression);
+			return result == OCL_NULL ? null : result;
+		} finally {
+			--depth;
+		}
 	}
 
 	/**
@@ -297,6 +319,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 					+ source.getClass().getSimpleName());
 		}
 
+		// @pre support: return captured pre-state value
+		if (exp.isIsPre() && preStateSnapshot.hasPreValue(exp)) {
+			return wrapNull(widenInteger(preStateSnapshot.getPreValue(exp)));
+		}
+
 		sf = resolveFeature(eo, sf);
 		Object value = eo.eGet(sf);
 		return value == null ? OCL_NULL : widenInteger(value);
@@ -308,6 +335,16 @@ public class OclEvaluator extends OclSwitch<Object> {
 	public Object caseOperationCallExp(OperationCallExp exp) {
 		Object source = eval(exp.getOwnedSource());
 		String opName = exp.getName();
+
+		// @pre support: return captured pre-state value
+		if (exp.isIsPre() && preStateSnapshot.hasPreValue(exp)) {
+			return wrapNull(preStateSnapshot.getPreValue(exp));
+		}
+
+		// oclIsNew(): check if object existed before the operation
+		if ("oclIsNew".equals(opName)) {
+			return source instanceof EObject eo ? !preStateSnapshot.existedBefore(eo) : OclInvalid.INSTANCE;
+		}
 
 		// Safe navigation
 		if (source == null && exp.isIsSafe()) {
@@ -322,7 +359,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// OclAny null/invalid-safe operations (must work on null/invalid source)
 		if (isNullSafeOperation(opName)) {
 			Object[] args = evaluateArguments(exp.getOwnedArguments());
-			return wrapNull(OclStdlib.dispatch(opName, source, args));
+			return wrapNull(OclStdlib.dispatch(opName, source, args, options));
 		}
 
 		// Three-valued boolean logic (OCL v2.4 §11.3.1)
@@ -366,12 +403,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 						: ECollections.emptyEList();
 				return wrapNull(eo.eInvoke(exp.getReferredOperation(), eArgs));
 			} catch (InvocationTargetException e) {
-				return addError("Operation invocation failed: " + opName + " - " + e.getCause().getMessage());
+				Throwable cause = e.getCause();
+				return addError("Operation invocation failed: " + opName + " - " + (cause != null ? cause.getMessage() : e.getMessage()));
 			}
 		}
 
 		// 2. Try standard library
-		Object result = OclStdlib.dispatch(opName, source, args);
+		Object result = OclStdlib.dispatch(opName, source, args, options);
 		if (result != OclStdlib.NOT_FOUND) {
 			return wrapNull(result);
 		}
@@ -402,9 +440,18 @@ public class OclEvaluator extends OclSwitch<Object> {
 				if (!(first instanceof Long f) || !(last instanceof Long l)) {
 					return addError("Collection range requires Integer bounds");
 				}
+				long rangeSize = l - f + 1;
+				if (rangeSize > options.maxCollectionSize()) {
+					return addError("Collection range size " + rangeSize
+							+ " exceeds maximum allowed size: " + options.maxCollectionSize());
+				}
 				for (long i = f; i <= l; i++) {
 					elements.add(i);
 				}
+			}
+			if (elements.size() > options.maxCollectionSize()) {
+				return addError("Collection size " + elements.size()
+						+ " exceeds maximum allowed size: " + options.maxCollectionSize());
 			}
 		}
 
@@ -783,7 +830,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 			// Sort by pre-computed keys using cross-type numeric comparison
 			Integer[] indices = new Integer[elements.size()];
 			for (int i = 0; i < indices.length; i++) indices[i] = i;
-			java.util.Arrays.sort(indices, (i, j) -> compareOcl(keys.get(i), keys.get(j)));
+			Arrays.sort(indices, (i, j) -> compareOcl(keys.get(i), keys.get(j)));
 			// sortedBy on Set/OrderedSet → OclOrderedSet; on Sequence → Sequence
 			List<Object> sorted;
 			if (source instanceof Set<?> || source instanceof OclOrderedSet<?>) {
@@ -799,20 +846,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	private static int compareOcl(Object a, Object b) {
-		// Cross-type numeric comparison: Long vs Double
-		if (a instanceof Number na && b instanceof Number nb) {
-			return Double.compare(na.doubleValue(), nb.doubleValue());
-		}
-		if (a instanceof Comparable<?> ca) {
-			@SuppressWarnings("unchecked")
-			Comparable<Object> comp = (Comparable<Object>) ca;
-			try {
-				return comp.compareTo(b);
-			} catch (ClassCastException e) {
-				return 0;
-			}
-		}
-		return 0;
+		return OclCollectionUtil.compareOcl(a, b);
 	}
 
 	private Object iteratorClosure(Collection<?> source, List<Variable> iterVars,
@@ -820,9 +854,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// OCL §11.9.1: closure always produces OrderedSet
 		OclOrderedSet<Object> result = new OclOrderedSet<>();
 		List<Object> workList = new ArrayList<>(source);
+		int iterations = 0;
 		OclEvalEnvironment previousEnv = env;
 		try {
 			while (!workList.isEmpty()) {
+				if (++iterations > options.maxClosureIterations()) {
+					addError("Closure iteration limit exceeded: " + options.maxClosureIterations());
+					return OclInvalid.INSTANCE;
+				}
 				Object element = workList.remove(0);
 				if (!result.add(element)) {
 					continue; // already visited
@@ -839,6 +878,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 		} finally {
 			env = previousEnv;
 		}
+	}
+
+	// --- Message Expression (GAP-6) ---
+
+	@Override
+	public Object caseMessageExp(MessageExp exp) {
+		return addError("MessageExp (^^ operator) is not yet supported — "
+				+ "requires an OclMessageProvider extension point (see design decisions)");
 	}
 
 	// --- Fallback ---
@@ -937,8 +984,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 		if (typeObj instanceof ClassifierType ct) {
 			classifier = ct.getReferredClassifier();
 		}
-		if (classifier instanceof org.eclipse.emf.ecore.EClass eClass) {
+		if (classifier instanceof EClass eClass) {
 			Collection<EObject> instances = ctx.extent().getAllInstances(eClass);
+			if (instances.size() > options.maxCollectionSize()) {
+				return addError("allInstances() result size " + instances.size()
+						+ " exceeds maximum allowed size: " + options.maxCollectionSize());
+			}
 			return new LinkedHashSet<>(instances);
 		}
 		return addError("allInstances() requires an EClass type argument, got: " + typeObj);
@@ -978,12 +1029,6 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	/**
-	 * Widens Integer to Long for internal consistency.
-	 * EMF eGet() returns Integer for EInt attributes, but OCL
-	 * operates on Long internally. This avoids Long/Integer
-	 * mismatch in collection operations (includes, count, etc.).
-	 */
-	/**
 	 * Resolves a structural feature dynamically against the actual EClass of the EObject.
 	 * Falls back to name-based lookup when the statically resolved feature (from parse time)
 	 * does not belong to the runtime EClass (e.g. after any(), first(), last()).
@@ -999,12 +1044,15 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	private static Collection<Object> preserveKind(Collection<?> source, List<Object> elements) {
-		if (source instanceof OclOrderedSet<?>) return new OclOrderedSet<>(elements);
-		if (source instanceof OclBag<?>) return new OclBag<>(elements);
-		if (source instanceof Set<?>) return new LinkedHashSet<>(elements);
-		return elements;
+		return OclCollectionUtil.preserveCollectionKind(source, elements);
 	}
 
+	/**
+	 * Widens Integer to Long for internal consistency.
+	 * EMF eGet() returns Integer for EInt attributes, but OCL
+	 * operates on Long internally. This avoids Long/Integer
+	 * mismatch in collection operations (includes, count, etc.).
+	 */
 	private static Object widenInteger(Object value) {
 		if (value instanceof Integer i) {
 			return (long) i;
