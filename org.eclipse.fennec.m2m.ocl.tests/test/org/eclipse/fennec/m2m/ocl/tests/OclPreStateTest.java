@@ -47,6 +47,7 @@ import org.eclipse.fennec.m2m.ocl.api.OclResult;
 import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvaluator;
+import org.eclipse.fennec.m2m.ocl.engine.internal.PropertyAccessorCache;
 import org.eclipse.fennec.m2m.ocl.engine.internal.PreStateSnapshot;
 import org.eclipse.fennec.m2m.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2m.utils.EcoreHelper;
@@ -516,7 +517,7 @@ class OclPreStateTest {
 			EObject person = createPerson("Test", 10000.0);
 
 			OclEvalEnvironment env = OclEvalEnvironment.root(OclContext.of(person));
-			OclEvaluator evaluator = new OclEvaluator(env, OclEvaluationOptions.strict(), List.of());
+			OclEvaluator evaluator = new OclEvaluator(env, OclEvaluationOptions.strict(), List.of(), PropertyAccessorCache.getDefault());
 
 			OclResult result = evaluator.evaluate(msgExp);
 			assertEquals(OclInvalid.INSTANCE, result.value());
@@ -784,7 +785,7 @@ class OclPreStateTest {
 	private static OclResult evaluateWithSnapshot(OclExpression expression, EObject self,
 			PreStateSnapshot snapshot) {
 		OclEvalEnvironment env = OclEvalEnvironment.root(OclContext.of(self));
-		OclEvaluator evaluator = new OclEvaluator(env, OclEvaluationOptions.strict(), List.of());
+		OclEvaluator evaluator = new OclEvaluator(env, OclEvaluationOptions.strict(), List.of(), PropertyAccessorCache.getDefault());
 		evaluator.setPreStateSnapshot(snapshot);
 		return evaluator.evaluate(expression);
 	}

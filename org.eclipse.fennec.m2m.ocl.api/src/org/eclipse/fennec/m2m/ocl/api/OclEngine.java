@@ -29,7 +29,8 @@ import org.osgi.annotation.versioning.ProviderType;
  * <p>Implementations must be usable as plain Java objects with constructor injection
  * (OSGi-optional, see architecture section 10). The typical standalone usage is:
  * <pre>
- * OclEngine engine = new OclEngineImpl(parser, stdlib);
+ * OclConfiguration config = OclConfiguration.builder(parser).build();
+ * OclEngine engine = new OclEngineImpl(config);
  * Object result = engine.evaluate("self.name", OclContext.of(myEObject));
  * </pre>
  *

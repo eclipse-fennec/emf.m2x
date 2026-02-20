@@ -89,7 +89,8 @@ final class PreStateScanCollector {
 
 		// Capture pre-values using a temporary evaluator in the current state
 		OclEvalEnvironment env = OclEvalEnvironment.root(context);
-		OclEvaluator evaluator = new OclEvaluator(env, options, providers);
+		OclEvaluator evaluator = new OclEvaluator(env, options, providers,
+				PropertyAccessorCache.getDefault());
 
 		for (FeatureCallExp node : preNodes) {
 			Object value;

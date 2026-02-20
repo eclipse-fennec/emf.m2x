@@ -23,6 +23,9 @@ import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
 
 /**
  * EMF {@link EStructuralFeature.Internal.SettingDelegate.Factory} that evaluates
@@ -34,14 +37,28 @@ import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
  * <p>Derived features are read-only by default. Attempts to set, unset, or
  * modify the inverse of a derived feature throw {@link UnsupportedOperationException}.
  *
+ * <p>In an OSGi environment, this factory is registered as a service with
+ * properties matching the emf.osgi delegate registry whiteboard pattern.
+ *
  * @author Data In Motion Consulting
  * @since 1.0
  */
+@Component(
+		service = EStructuralFeature.Internal.SettingDelegate.Factory.class,
+		property = {
+				"emf.configuratorName=" + OclDelegateUtil.DELEGATE_URI,
+				"emf.name=fennec-ocl",
+				"configuratorType=SETTING_DELEGATE_FACTORY"
+		})
 public class OclSettingDelegateFactory implements EStructuralFeature.Internal.SettingDelegate.Factory {
 
 	private final OclEngineImpl engine;
 
-	public OclSettingDelegateFactory(OclEngineImpl engine) {
+	/**
+	 * DS constructor — engine is injected as a service.
+	 */
+	@Activate
+	public OclSettingDelegateFactory(@Reference OclEngineImpl engine) {
 		this.engine = Objects.requireNonNull(engine, "engine must not be null");
 	}
 

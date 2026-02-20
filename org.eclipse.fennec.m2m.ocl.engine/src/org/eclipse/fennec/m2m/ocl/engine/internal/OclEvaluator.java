@@ -109,10 +109,28 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private final OclEvaluationOptions options;
 	private final List<OclOperationProvider> customProviders;
+	private final PropertyAccessorCache accessorCache;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
 	private OclEvalEnvironment env;
 	private PreStateSnapshot preStateSnapshot = PreStateSnapshot.EMPTY;
 	private int depth;
+
+	/*
+	 * 1-entry feature resolution cache ("last resolved").
+	 *
+	 * resolveFeature() maps (EClass, EStructuralFeature) → resolved feature.
+	 * In iterator bodies (select, collect, forAll, ...) the same feature is
+	 * accessed on many objects of the same EClass — hundreds or thousands of
+	 * times. The 1-entry cache turns all but the first resolveFeature() call
+	 * into a simple reference comparison (two == checks, ~1 ns), eliminating
+	 * the getFeatureID() call (~5–10 ns) on every subsequent iteration.
+	 *
+	 * Thread-safety: OclEvaluator is per-evaluation (not shared), so plain
+	 * fields are safe — no synchronization needed.
+	 */
+	private EClass lastResolvedClass;
+	private EStructuralFeature lastResolvedInput;
+	private EStructuralFeature lastResolvedOutput;
 
 	/**
 	 * Creates a new evaluator.
@@ -120,12 +138,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * @param env the root evaluation environment
 	 * @param options evaluation options
 	 * @param customProviders registered custom operation providers
+	 * @param accessorCache the property accessor cache to use
 	 */
 	public OclEvaluator(OclEvalEnvironment env, OclEvaluationOptions options,
-			List<OclOperationProvider> customProviders) {
+			List<OclOperationProvider> customProviders, PropertyAccessorCache accessorCache) {
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.options = Objects.requireNonNull(options, "options must not be null");
 		this.customProviders = Objects.requireNonNull(customProviders, "customProviders must not be null");
+		this.accessorCache = Objects.requireNonNull(accessorCache, "accessorCache must not be null");
 	}
 
 	/**
@@ -305,7 +325,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 			for (Object elem : col) {
 				if (elem instanceof EObject elemObj) {
 					EStructuralFeature actual = resolveFeature(elemObj, sf);
-					Object value = elemObj.eGet(actual);
+					Object value = getProperty(elemObj, actual);
 					result.add(value == null ? OCL_NULL : widenInteger(value));
 				} else {
 					result.add(OclInvalid.INSTANCE);
@@ -325,7 +345,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 
 		sf = resolveFeature(eo, sf);
-		Object value = eo.eGet(sf);
+		Object value = getProperty(eo, sf);
 		return value == null ? OCL_NULL : widenInteger(value);
 	}
 
@@ -1029,18 +1049,68 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	/**
-	 * Resolves a structural feature dynamically against the actual EClass of the EObject.
-	 * Falls back to name-based lookup when the statically resolved feature (from parse time)
-	 * does not belong to the runtime EClass (e.g. after any(), first(), last()).
+	 * Resolves a structural feature against the runtime EClass with 1-entry caching.
+	 *
+	 * <p>At parse time, feature references are resolved against the <em>static</em> type.
+	 * At runtime, the object may be a different concrete type (e.g. after {@code any()},
+	 * {@code first()}, or in iterator bodies). When the static feature doesn't belong
+	 * to the runtime EClass, we fall back to name-based lookup.
+	 *
+	 * <p><b>1-entry cache optimization:</b> In iterator bodies ({@code select}, {@code collect},
+	 * {@code forAll}, ...), the same feature is accessed on many objects of the <em>same</em>
+	 * EClass — often hundreds or thousands of times. The cache stores the last
+	 * (EClass, input feature) → output feature mapping, turning repeated lookups into
+	 * two reference comparisons (~1 ns) instead of {@code getFeatureID()} (~5–10 ns each).
+	 *
+	 * <p>Example: {@code self.employees->collect(e | e.name)} with 1000 employees:
+	 * <ul>
+	 *   <li>Iteration 1: cache miss → {@code getFeatureID()} + resolve → cache filled</li>
+	 *   <li>Iterations 2–1000: cache hit → two {@code ==} checks → return cached feature</li>
+	 * </ul>
+	 *
+	 * <p>Uses {@code getFeatureID(sf)} which is O(1) for generated models (compiled
+	 * feature ID constants) and O(n) only for dynamic models where n is the number
+	 * of features.
+	 *
+	 * @param eo the runtime EObject
+	 * @param sf the statically resolved feature from the AST
+	 * @return the feature valid for {@code eo.eGet()}, possibly name-resolved
 	 */
-	private static EStructuralFeature resolveFeature(EObject eo, EStructuralFeature sf) {
-		if (!eo.eClass().getEAllStructuralFeatures().contains(sf)) {
-			EStructuralFeature resolved = eo.eClass().getEStructuralFeature(sf.getName());
-			if (resolved != null) {
-				return resolved;
+	private EStructuralFeature resolveFeature(EObject eo, EStructuralFeature sf) {
+		EClass eClass = eo.eClass();
+
+		// 1-entry cache: hit when same (EClass, feature) as last call
+		if (eClass == lastResolvedClass && sf == lastResolvedInput) {
+			return lastResolvedOutput;
+		}
+
+		// Cache miss — perform actual resolution
+		EStructuralFeature resolved = sf;
+		if (eClass.getFeatureID(sf) == -1) {
+			EStructuralFeature byName = eClass.getEStructuralFeature(sf.getName());
+			if (byName != null) {
+				resolved = byName;
 			}
 		}
-		return sf;
+
+		// Update cache
+		lastResolvedClass = eClass;
+		lastResolvedInput = sf;
+		lastResolvedOutput = resolved;
+
+		return resolved;
+	}
+
+	/**
+	 * Reads a property value using the accessor cache for generated models,
+	 * falling back to eGet for dynamic models.
+	 */
+	private Object getProperty(EObject eo, EStructuralFeature sf) {
+		PropertyAccessor accessor = accessorCache.getAccessor(eo, sf);
+		if (accessor != null) {
+			return accessor.get(eo);
+		}
+		return eo.eGet(sf);
 	}
 
 	private static Collection<Object> preserveKind(Collection<?> source, List<Object> elements) {

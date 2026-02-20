@@ -14,35 +14,46 @@
  */
 package org.eclipse.fennec.m2m.ocl.engine;
 
+import org.eclipse.fennec.m2m.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2m.ocl.api.OclEngine;
+import org.eclipse.fennec.m2m.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2m.ocl.api.OclExpressionParser;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
-import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ServiceScope;
 
 /**
  * OSGi Declarative Services component that publishes the {@link OclEngine}
- * as a service and registers EMF delegates on activation.
+ * as a prototype-scoped service.
  *
- * <p>The parser is injected via {@code @Reference}. When the component
- * activates, it installs EMF delegates so that Ecore models annotated
- * with the Fennec OCL delegate URI are automatically evaluated.
+ * <p>Each consumer that injects {@code OclEngine} via {@code @Reference}
+ * receives its own engine instance with an isolated property accessor cache.
+ * All instances share the same expression cache (injected as a service).
+ *
+ * <p>EMF delegate registration is <b>not</b> handled by this component.
+ * In an OSGi environment, the delegate factories ({@code OclInvocationDelegateFactory},
+ * {@code OclSettingDelegateFactory}, {@code OclValidationDelegateFactory}) are
+ * registered as separate services and wired into the emf.osgi delegate registries.
+ * For standalone (non-OSGi) usage, call {@link OclEngineImpl#installDelegates()}.
+ *
+ * <p>The expression cache can be targeted via OSGi Configurator:
+ * <pre>
+ * "org.eclipse.fennec.m2m.ocl.engine.OclEngineComponent": {
+ *     "expressionCache.target": "(cache.name=myCustomCache)"
+ * }
+ * </pre>
  *
  * @author Data In Motion Consulting
  * @since 1.0
  */
-@Component(service = OclEngine.class)
+@Component(service = OclEngine.class, scope = ServiceScope.PROTOTYPE)
 public class OclEngineComponent extends OclEngineImpl {
 
 	@Activate
-	public OclEngineComponent(@Reference OclExpressionParser parser) {
-		super(parser);
-		installDelegates();
-	}
-
-	@Deactivate
-	void deactivate() {
-		uninstallDelegates();
+	public OclEngineComponent(
+			@Reference OclExpressionParser parser,
+			@Reference(name = "expressionCache") OclExpressionCache cache) {
+		super(OclConfiguration.builder(parser).expressionCache(cache).build());
 	}
 }

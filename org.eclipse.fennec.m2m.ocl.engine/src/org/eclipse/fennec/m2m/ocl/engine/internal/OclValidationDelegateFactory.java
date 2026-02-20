@@ -28,6 +28,9 @@ import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
 
 /**
  * EMF {@link EValidator.ValidationDelegate} that evaluates OCL constraint
@@ -38,15 +41,29 @@ import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
  * is the constraint name. For EOperation-based invariants, the detail key
  * is {@code "body"}.
  *
+ * <p>In an OSGi environment, this factory is registered as a service with
+ * properties matching the emf.osgi delegate registry whiteboard pattern.
+ *
  * @author Data In Motion Consulting
  * @since 1.0
  */
+@Component(
+		service = EValidator.ValidationDelegate.class,
+		property = {
+				"emf.configuratorName=" + OclDelegateUtil.DELEGATE_URI,
+				"emf.name=fennec-ocl",
+				"configuratorType=VALIDATION_DELEGATE"
+		})
 public class OclValidationDelegateFactory implements EValidator.ValidationDelegate {
 
 	private final OclEngineImpl engine;
 	private final ConcurrentHashMap<String, OclExpression> expressionCache = new ConcurrentHashMap<>();
 
-	public OclValidationDelegateFactory(OclEngineImpl engine) {
+	/**
+	 * DS constructor — engine is injected as a service.
+	 */
+	@Activate
+	public OclValidationDelegateFactory(@Reference OclEngineImpl engine) {
 		this.engine = Objects.requireNonNull(engine, "engine must not be null");
 	}
 
