@@ -15,7 +15,6 @@
 package org.eclipse.fennec.m2m.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EObject;
@@ -57,14 +56,12 @@ class OclEnumLiteralTest extends AbstractOclTest {
 
 	@Test
 	void status_junior() throws OclParseException {
-		Object result = eval("self.status", junior);
-		assertNotNull(result);
+		assertEquals(true, eval("self.status = Status::JUNIOR", junior));
 	}
 
 	@Test
 	void status_senior() throws OclParseException {
-		Object result = eval("self.status", senior);
-		assertNotNull(result);
+		assertEquals(true, eval("self.status = Status::SENIOR", senior));
 	}
 
 	// --- Enum literal comparison ---

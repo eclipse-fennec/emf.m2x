@@ -43,17 +43,46 @@ class QvtoResolveExpTest extends AbstractQvtoEngineTest {
 				    }
 				    main() {
 				        s.objectsOfType(SourceElement)->collect(e | e.map toTarget());
-				        log('mapped');
 				    }
 				}
 				""", inExtent, outExtent);
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
-		assertEquals(1, outExtent.getContents().size(), "Should have 1 target element");
+		assertEquals(1, outExtent.getContents().size());
+		// Verify the mapped target has the correct name
+		EObject target = outExtent.getContents().get(0);
+		assertEquals("src1", target.eGet(target.eClass().getEStructuralFeature("name")));
 	}
 
 	@Test
-	void resolve_mappingCreatesTarget() throws Exception {
+	void resolve_noMatch_returnsNull() throws Exception {
+		EObject srcElem = createSourceElement("x", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(srcElem);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : r : TargetElement {
+				        r.name := self.name;
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->collect(e | e.map toTarget());
+				        var found := resolveone(t : TargetElement | t.name = 'nonexistent');
+				        log(if found = null then 'null' else 'found' endif);
+				    }
+				}
+				""", inExtent, outExtent);
+		assertNotNull(result);
+		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		// Verify resolveone with no-match condition returns null
+		boolean loggedNull = result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains("null"));
+		assertTrue(loggedNull, "resolveone with non-matching condition should return null");
+	}
+
+	@Test
+	void mapping_createsMultipleTargets() throws Exception {
 		QvtoModelExtent outExtent = emptyExtent();
 		QvtoExecutionResult result = executeWithExtents("""
 				modeltype SRC uses 'http://test/source/1.0';
@@ -73,22 +102,11 @@ class QvtoResolveExpTest extends AbstractQvtoEngineTest {
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
 		assertEquals(2, outExtent.getContents().size(), "Two mappings should produce 2 elements");
-	}
-
-	@Test
-	void resolve_noMatch() throws Exception {
-		QvtoModelExtent outExtent = emptyExtent();
-		QvtoExecutionResult result = executeWithExtents("""
-				modeltype SRC uses 'http://test/source/1.0';
-				transformation test(out t : SRC) {
-				    main() {
-				        log('no-match test');
-				    }
-				}
-				""", outExtent);
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
-		assertTrue(outExtent.getContents().isEmpty());
+		// Verify actual element names
+		assertEquals("a", outExtent.getContents().get(0).eGet(
+				outExtent.getContents().get(0).eClass().getEStructuralFeature("name")));
+		assertEquals("b", outExtent.getContents().get(1).eGet(
+				outExtent.getContents().get(1).eClass().getEStructuralFeature("name")));
 	}
 
 	@Test
@@ -108,9 +126,11 @@ class QvtoResolveExpTest extends AbstractQvtoEngineTest {
 				""", outExtent);
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		// Verify the mapping actually produced the element and log captured its name
+		assertEquals(1, outExtent.getContents().size());
 		boolean hasLog = result.diagnostics().stream()
 				.anyMatch(d -> d.getMessage().contains("traced"));
-		assertTrue(hasLog, "Trace should record mapping result");
+		assertTrue(hasLog, "Mapping result should have name 'traced'");
 	}
 
 	@Test

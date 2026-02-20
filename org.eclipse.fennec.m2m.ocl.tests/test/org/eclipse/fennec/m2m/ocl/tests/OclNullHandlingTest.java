@@ -160,9 +160,6 @@ class OclNullHandlingTest extends AbstractOclTest {
 
 	@Test
 	void null_toString() throws OclParseException {
-		// toString on null — implementation-defined, but should not crash
-		Object result = eval("null.toString()", self);
-		// Result could be "null" or "" depending on implementation
-		assertEquals(true, result != null);
+		assertEquals("null", eval("null.toString()", self));
 	}
 }

@@ -152,7 +152,8 @@ class OclStdlib {
 	private static final Map<String, PrimitiveType> PRIMITIVE_TYPE_CACHE;
 	static {
 		PRIMITIVE_TYPE_CACHE = new LinkedHashMap<>();
-		for (String name : List.of("Integer", "Real", "String", "Boolean", "UnlimitedNatural")) {
+		for (String name : List.of("Integer", "Real", "String", "Boolean", "UnlimitedNatural",
+				"OclVoid", "OclInvalid")) {
 			PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
 			pt.setName(name);
 			PRIMITIVE_TYPE_CACHE.put(name, pt);
@@ -160,8 +161,9 @@ class OclStdlib {
 	}
 
 	private static Object oclType(Object source) {
-		if (source == null) return OclInvalid.INSTANCE;
-		if (source == OclInvalid.INSTANCE) return OclInvalid.INSTANCE;
+		// OCL v2.5 §11.2.1: null.oclType() = OclVoid, invalid.oclType() = OclInvalid
+		if (source == null) return PRIMITIVE_TYPE_CACHE.get("OclVoid");
+		if (source == OclInvalid.INSTANCE) return PRIMITIVE_TYPE_CACHE.get("OclInvalid");
 		if (source instanceof OclUnlimitedNatural) return PRIMITIVE_TYPE_CACHE.get("UnlimitedNatural");
 		if (source instanceof EObject eo) return eo.eClass();
 		if (source instanceof Long || source instanceof Integer) return PRIMITIVE_TYPE_CACHE.get("Integer");
@@ -544,8 +546,8 @@ class OclStdlib {
 			case "substring" -> {
 				int lower = (int) asLong(args[0]);
 				int upper = (int) asLong(args[1]);
-				// OCL is 1-based, inclusive on both ends
-				if (lower < 1 || upper > source.length() || lower > upper + 1) {
+				// OCL v2.5 §11.5.1: 1 <= lower AND lower <= upper AND upper <= size
+				if (lower < 1 || upper > source.length() || lower > upper) {
 					yield OclInvalid.INSTANCE;
 				}
 				yield source.substring(lower - 1, upper);
@@ -681,23 +683,26 @@ class OclStdlib {
 				yield result;
 			}
 			case "excluding" -> {
+				// OCL v2.5 §11.7.2: excluding removes ALL occurrences
+				Object toRemove = args[0];
 				if (source instanceof OclOrderedSet<?>) {
 					OclOrderedSet<Object> result = new OclOrderedSet<>(source);
-					result.remove(args[0]);
-					yield result;
-				}
-				if (source instanceof OclBag<?>) {
-					OclBag<Object> result = new OclBag<>(source);
-					result.remove(args[0]);
+					result.remove(toRemove);
 					yield result;
 				}
 				if (source instanceof Set<?>) {
 					Set<Object> result = new LinkedHashSet<>(source);
-					result.remove(args[0]);
+					result.remove(toRemove);
+					yield result;
+				}
+				// Bag and Sequence: remove ALL occurrences
+				if (source instanceof OclBag<?>) {
+					OclBag<Object> result = new OclBag<>(source);
+					result.removeAll(Collections.singleton(toRemove));
 					yield result;
 				}
 				List<Object> result = new ArrayList<>(source);
-				result.remove(args[0]);
+				result.removeAll(Collections.singleton(toRemove));
 				yield result;
 			}
 			case "union" -> {

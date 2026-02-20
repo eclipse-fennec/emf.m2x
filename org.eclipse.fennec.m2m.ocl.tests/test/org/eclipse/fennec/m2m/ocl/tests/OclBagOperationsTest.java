@@ -43,7 +43,11 @@ class OclBagOperationsTest extends AbstractOclTest {
 	void bag_literal() throws OclParseException {
 		Object result = eval("Bag{1, 2, 3}", self);
 		assertInstanceOf(Collection.class, result);
-		assertEquals(3, ((Collection<?>) result).size());
+		Collection<?> bag = (Collection<?>) result;
+		assertEquals(3, bag.size());
+		assertEquals(true, bag.contains(1));
+		assertEquals(true, bag.contains(2));
+		assertEquals(true, bag.contains(3));
 	}
 
 	@Test
@@ -164,6 +168,12 @@ class OclBagOperationsTest extends AbstractOclTest {
 
 	@Test
 	void bag_flatten() throws OclParseException {
-		assertEquals(true, eval("Bag{1, 2, 3}->flatten()->includes(1)", self));
+		assertEquals(3, eval("Bag{1, 2, 3}->flatten()->size()", self));
+	}
+
+	@Test
+	void bag_excludingAllOccurrences() throws OclParseException {
+		// OCL v2.5 §11.7.2: excluding removes ALL occurrences
+		assertEquals(2, eval("Bag{1, 1, 2, 3}->excluding(1)->size()", self));
 	}
 }

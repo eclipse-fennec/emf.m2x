@@ -186,9 +186,9 @@ class OclCollectionAppendPrependTest extends AbstractOclTest {
 	}
 
 	@Test
-	void sequence_excluding_firstOccurrence() throws OclParseException {
-		// excluding removes first occurrence only
-		assertEquals(List.of(1, 3, 2), eval("Sequence{1, 2, 3, 2}->excluding(2)", self));
+	void sequence_excluding_allOccurrences() throws OclParseException {
+		// OCL v2.5 §11.7.2: excluding removes ALL occurrences
+		assertEquals(List.of(1, 3), eval("Sequence{1, 2, 3, 2}->excluding(2)", self));
 	}
 
 	@Test

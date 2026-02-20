@@ -38,8 +38,8 @@ class QvtoControlFlowTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "5");
 	}
 
 	@Test
@@ -49,17 +49,15 @@ class QvtoControlFlowTest extends AbstractQvtoEngineTest {
 				    main() {
 				        var i : Integer := 0;
 				        while (i < 100) {
-				            switch {
-				                case (i = 3) break;
-				            };
+				            switch { case (i = 3) break; };
 				            i := i + 1;
 				        };
 				        log(i.toString());
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "3");
 	}
 
 	@Test
@@ -71,17 +69,16 @@ class QvtoControlFlowTest extends AbstractQvtoEngineTest {
 				        var sum : Integer := 0;
 				        while (i < 5) {
 				            i := i + 1;
-				            switch {
-				                case (i = 3) continue;
-				            };
+				            switch { case (i = 3) continue; };
 				            sum := sum + i;
 				        };
 				        log(sum.toString());
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		// sum = 1 + 2 + 4 + 5 = 12 (skip i=3)
+		assertLogged(result, "12");
 	}
 
 	@Test
@@ -91,11 +88,15 @@ class QvtoControlFlowTest extends AbstractQvtoEngineTest {
 				    helper earlyReturn(n : Integer) : Integer {
 				        return if n < 0 then 0 else n * 2 endif;
 				    }
-				    main() { earlyReturn(-1); earlyReturn(5); }
+				    main() {
+				        log(earlyReturn(-1).toString());
+				        log(earlyReturn(5).toString());
+				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "0");
+		assertLogged(result, "10");
 	}
 
 	@Test
@@ -110,14 +111,16 @@ class QvtoControlFlowTest extends AbstractQvtoEngineTest {
 				        };
 				    }
 				    main() {
-				        classify(-1);
-				        classify(0);
-				        classify(5);
+				        log(classify(-1));
+				        log(classify(0));
+				        log(classify(5));
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "negative");
+		assertLogged(result, "zero");
+		assertLogged(result, "positive");
 	}
 
 	@Test
@@ -130,10 +133,24 @@ class QvtoControlFlowTest extends AbstractQvtoEngineTest {
 				            case (x = 1) log('one');
 				            case (x = 2) log('two');
 				        };
+				        log('done');
 				    }
 				}
 				""");
+		assertSuccess(result);
+		// No case matched, so 'one' and 'two' should NOT appear, but 'done' should
+		assertLogged(result, "done");
+	}
+
+	private static void assertSuccess(QvtoExecutionResult result) {
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+	}
+
+	private static void assertLogged(QvtoExecutionResult result, String expected) {
+		boolean found = result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains(expected));
+		assertTrue(found, "Expected log containing '" + expected
+				+ "' but diagnostics were: " + result.diagnostics());
 	}
 }

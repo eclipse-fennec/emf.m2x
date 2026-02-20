@@ -120,9 +120,9 @@ class OclStringExtendedTest extends AbstractOclTest {
 	}
 
 	@Test
-	void substring_empty_range() throws OclParseException {
-		// substring(2,1) — lower > upper but within valid empty range
-		assertEquals("", eval("'hello'.substring(2, 1)", self));
+	void substring_lowerGreaterUpper_invalid() throws OclParseException {
+		// OCL v2.5 §11.5.1: substring requires lower <= upper
+		assertInvalid("'hello'.substring(2, 1)", self);
 	}
 
 	// --- indexOf edge cases ---

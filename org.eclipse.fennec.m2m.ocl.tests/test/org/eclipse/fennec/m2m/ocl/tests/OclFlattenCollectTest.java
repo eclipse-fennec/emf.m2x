@@ -95,10 +95,8 @@ class OclFlattenCollectTest extends AbstractOclTest {
 
 	@Test
 	void collect_nested_produces_flat() throws OclParseException {
-		// collect on a collection that produces collections => nested result (not auto-flattened)
-		// In OCL, collect DOES auto-flatten one level
-		Object result = eval("Sequence{1, 2}->collect(i | Sequence{i, i})", alice);
-		assertInstanceOf(Collection.class, result);
+		// In OCL, collect auto-flattens one level: {Seq{1,1}, Seq{2,2}} → {1,1,2,2}
+		assertEquals(4, eval("Sequence{1, 2}->collect(i | Sequence{i, i})->size()", alice));
 	}
 
 	// --- flatten ---

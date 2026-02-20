@@ -23,7 +23,6 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2m.model.ocl.CollectionType;
 import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
-import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -99,13 +98,19 @@ class OclOclTypeTest extends AbstractOclTest {
 	// --- null and invalid ---
 
 	@Test
-	void oclType_null_returnsInvalid() throws OclParseException {
-		assertSame(OclInvalid.INSTANCE, eval("null.oclType()", person));
+	void oclType_null_returnsOclVoid() throws OclParseException {
+		// OCL v2.5 §11.2.1: null.oclType() = OclVoid
+		Object result = eval("null.oclType()", person);
+		assertInstanceOf(PrimitiveType.class, result);
+		assertEquals("OclVoid", ((PrimitiveType) result).getName());
 	}
 
 	@Test
-	void oclType_invalid_returnsInvalid() throws OclParseException {
-		assertSame(OclInvalid.INSTANCE, eval("invalid.oclType()", person));
+	void oclType_invalid_returnsOclInvalid() throws OclParseException {
+		// OCL v2.5 §11.2.1: invalid.oclType() = OclInvalid
+		Object result = eval("invalid.oclType()", person);
+		assertInstanceOf(PrimitiveType.class, result);
+		assertEquals("OclInvalid", ((PrimitiveType) result).getName());
 	}
 
 	// --- oclType on property results ---

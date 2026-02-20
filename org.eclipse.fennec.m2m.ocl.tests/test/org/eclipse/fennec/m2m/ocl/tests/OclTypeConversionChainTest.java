@@ -79,8 +79,10 @@ class OclTypeConversionChainTest extends AbstractOclTest {
 
 	@Test
 	void realToInteger_negative() throws OclParseException {
+		// OCL: toInteger() truncates toward zero
 		Object result = eval("(-3.7).toInteger()", self);
 		assertInstanceOf(Number.class, result);
+		assertEquals(-3, ((Number) result).intValue());
 	}
 
 	@Test

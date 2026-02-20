@@ -142,8 +142,8 @@ class OclOrderedSetTest extends AbstractOclTest {
 
 	@Test
 	void orderedSet_collect() throws OclParseException {
-		Object result = eval("OrderedSet{1, 2, 3}->collect(i | i * 2)", self);
-		assertInstanceOf(Collection.class, result);
+		assertEquals(3, eval("OrderedSet{1, 2, 3}->collect(i | i * 2)->size()", self));
+		assertEquals(2, eval("OrderedSet{1, 2, 3}->collect(i | i * 2)->first()", self));
 	}
 
 	@Test
@@ -167,7 +167,6 @@ class OclOrderedSetTest extends AbstractOclTest {
 
 	@Test
 	void orderedSet_flatten() throws OclParseException {
-		// Nested collection should be flattened
-		assertEquals(true, eval("OrderedSet{1, 2, 3}->flatten()->includes(1)", self));
+		assertEquals(3, eval("OrderedSet{1, 2, 3}->flatten()->size()", self));
 	}
 }

@@ -149,9 +149,9 @@ class OclSequenceAdvancedTest extends AbstractOclTest {
 	}
 
 	@Test
-	void excluding_removesOne() throws OclParseException {
-		// excluding removes one occurrence
-		assertEquals(3, eval("Sequence{1, 2, 1, 3}->excluding(1)->size()", self));
+	void excluding_removesAllOccurrences() throws OclParseException {
+		// OCL v2.5 §11.7.2: excluding removes ALL occurrences
+		assertEquals(2, eval("Sequence{1, 2, 1, 3}->excluding(1)->size()", self));
 	}
 
 	// --- reverse ---

@@ -202,7 +202,8 @@ class QvtoMappingParseTest extends AbstractQvtoParserTest {
 	}
 
 	@Test
-	void abstractMapping() throws QvtoParseException {
+	void abstractMapping_parsesWithoutError() throws QvtoParseException {
+		// abstract modifier is accepted by the grammar but not yet stored in the model
 		OperationalTransformation t = parse("""
 				transformation T() {
 				    abstract mapping doIt() {}
@@ -233,7 +234,8 @@ class QvtoMappingParseTest extends AbstractQvtoParserTest {
 				    mapping derived() inherits base {}
 				}
 				""");
-		EOperation op = getOperation(t, "derived");
-		assertInstanceOf(MappingOperation.class, op);
+		MappingOperation derived = (MappingOperation) getOperation(t, "derived");
+		assertFalse(derived.getInherited().isEmpty(), "Derived mapping should reference base via inherits");
+		assertEquals("base", derived.getInherited().get(0).getName());
 	}
 }

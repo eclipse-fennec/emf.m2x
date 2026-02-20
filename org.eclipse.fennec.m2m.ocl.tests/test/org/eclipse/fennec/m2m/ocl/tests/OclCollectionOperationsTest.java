@@ -182,8 +182,8 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	void excluding_sequence() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3, 2}->excluding(2)", self);
 		assertInstanceOf(List.class, result);
-		// excluding removes the first occurrence
-		assertEquals(3, ((Collection<?>) result).size());
+		// OCL v2.5 §11.7.2: excluding removes ALL occurrences
+		assertEquals(2, ((Collection<?>) result).size());
 	}
 
 	@Test

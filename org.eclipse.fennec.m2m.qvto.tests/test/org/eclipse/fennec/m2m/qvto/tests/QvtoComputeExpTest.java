@@ -35,8 +35,8 @@ class QvtoComputeExpTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "42");
 	}
 
 	@Test
@@ -54,8 +54,8 @@ class QvtoComputeExpTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "15");
 	}
 
 	@Test
@@ -75,7 +75,19 @@ class QvtoComputeExpTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
+		assertSuccess(result);
+		assertLogged(result, "15");
+	}
+
+	private static void assertSuccess(QvtoExecutionResult result) {
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+	}
+
+	private static void assertLogged(QvtoExecutionResult result, String expected) {
+		boolean found = result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains(expected));
+		assertTrue(found, "Expected log containing '" + expected
+				+ "' but diagnostics were: " + result.diagnostics());
 	}
 }

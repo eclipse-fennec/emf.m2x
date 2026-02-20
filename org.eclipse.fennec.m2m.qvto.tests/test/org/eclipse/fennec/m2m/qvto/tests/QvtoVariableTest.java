@@ -35,8 +35,8 @@ class QvtoVariableTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "42");
 	}
 
 	@Test
@@ -50,8 +50,8 @@ class QvtoVariableTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "20");
 	}
 
 	@Test
@@ -60,15 +60,16 @@ class QvtoVariableTest extends AbstractQvtoEngineTest {
 				transformation test() {
 				    main() {
 				        var x : Integer := 10;
-				        compute (r) {
+				        var y : Integer := compute (r) {
 				            var x : Integer := 20;
 				            r := x;
 				        };
+				        log(y.toString());
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "20");
 	}
 
 	@Test
@@ -81,8 +82,8 @@ class QvtoVariableTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "hello");
 	}
 
 	@Test
@@ -95,8 +96,8 @@ class QvtoVariableTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
-		assertNotNull(result);
-		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+		assertSuccess(result);
+		assertLogged(result, "true");
 	}
 
 	@Test
@@ -109,7 +110,19 @@ class QvtoVariableTest extends AbstractQvtoEngineTest {
 				    }
 				}
 				""");
+		assertSuccess(result);
+		assertLogged(result, "42");
+	}
+
+	private static void assertSuccess(QvtoExecutionResult result) {
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
+	}
+
+	private static void assertLogged(QvtoExecutionResult result, String expected) {
+		boolean found = result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains(expected));
+		assertTrue(found, "Expected log containing '" + expected
+				+ "' but diagnostics were: " + result.diagnostics());
 	}
 }

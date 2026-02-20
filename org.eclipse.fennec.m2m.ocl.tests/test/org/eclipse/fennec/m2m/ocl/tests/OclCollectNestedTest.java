@@ -15,9 +15,6 @@
 package org.eclipse.fennec.m2m.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-
-import java.util.Collection;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
@@ -70,10 +67,9 @@ class OclCollectNestedTest extends AbstractOclTest {
 
 	@Test
 	void collectNested_producesNestedResult() throws OclParseException {
-		// collectNested with a collection-valued body should preserve nesting
-		Object result = eval(
-				"Sequence{1, 2, 3}->collectNested(i | Sequence{i, i * 2})", self);
-		assertInstanceOf(Collection.class, result);
+		// collectNested preserves nesting: 3 elements → outer size = 3
+		assertEquals(3, eval(
+				"Sequence{1, 2, 3}->collectNested(i | Sequence{i, i * 2})->size()", self));
 	}
 
 	@Test

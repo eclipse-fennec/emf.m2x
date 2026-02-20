@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2m.qvto.tests;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -65,9 +66,18 @@ class QvtoMappingCallResolveParseTest extends AbstractQvtoParserTest {
 
 	@Test
 	void mapCallWithArgs() throws QvtoParseException {
-		OclExpression expr = parseBodyExpr("map target();");
-		MappingCallExp call = assertInstanceOf(MappingCallExp.class, expr);
-		assertNotNull(call);
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    mapping target(x : Integer) {}
+				    mapping doIt() {
+				        map target(42);
+				    }
+				}
+				""");
+		MappingOperation mapping = (MappingOperation) getOperation(t, "doIt");
+		MappingBody body = (MappingBody) mapping.getBody();
+		MappingCallExp call = assertInstanceOf(MappingCallExp.class, body.getContent().get(0));
+		assertEquals(1, call.getOwnedArguments().size(), "Should have 1 argument");
 	}
 
 	@Test

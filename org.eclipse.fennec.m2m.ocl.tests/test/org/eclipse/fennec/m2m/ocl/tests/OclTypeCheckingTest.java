@@ -15,8 +15,9 @@
 package org.eclipse.fennec.m2m.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
+import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
 import org.junit.jupiter.api.BeforeAll;
@@ -118,9 +119,10 @@ class OclTypeCheckingTest extends AbstractOclTest {
 	// --- oclType ---
 
 	@Test
-	void oclType_notNull() throws OclParseException {
+	void oclType_returnsEClass() throws OclParseException {
 		Object result = eval("self.oclType()", person);
-		assertNotNull(result);
+		assertInstanceOf(EClass.class, result);
+		assertEquals("Person", ((EClass) result).getName());
 	}
 
 	// --- oclIsUndefined ---
@@ -191,10 +193,9 @@ class OclTypeCheckingTest extends AbstractOclTest {
 	}
 
 	@Test
-	void invalid_is_not_undefined() throws OclParseException {
-		// In strict OCL: invalid.oclIsUndefined() = true (invalid conforms to all)
-		// Our impl may differ — just test it doesn't throw
-		eval("invalid.oclIsUndefined()", person);
+	void invalid_isUndefined() throws OclParseException {
+		// OCL v2.5: invalid.oclIsUndefined() = true
+		assertEquals(true, eval("invalid.oclIsUndefined()", person));
 	}
 
 	@Test

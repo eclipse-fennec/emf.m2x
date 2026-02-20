@@ -15,9 +15,6 @@
 package org.eclipse.fennec.m2m.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-
-import java.util.Collection;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
@@ -103,8 +100,7 @@ class OclCrossCollectionOpsTest extends AbstractOclTest {
 
 	@Test
 	void set_union_bag() throws OclParseException {
-		Object result = eval("Set{1, 2}->union(Bag{3, 4})", self);
-		assertInstanceOf(Collection.class, result);
+		assertEquals(4, eval("Set{1, 2}->union(Bag{3, 4})->size()", self));
 	}
 
 	@Test

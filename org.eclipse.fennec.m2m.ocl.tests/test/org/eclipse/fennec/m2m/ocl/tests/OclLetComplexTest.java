@@ -70,8 +70,7 @@ class OclLetComplexTest extends AbstractOclTest {
 		Object result = eval(
 				"let ages : Sequence(Integer) = self.employees.age in " +
 				"ages->sum() / ages->size()", company);
-		assertEquals(true, ((Number) result).doubleValue() > 33.0);
-		assertEquals(true, ((Number) result).doubleValue() < 34.0);
+		assertEquals(33.333, ((Number) result).doubleValue(), 0.01);
 	}
 
 	// --- Let with conditional ---

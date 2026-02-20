@@ -132,12 +132,8 @@ class OclTypeCoercionTest extends AbstractOclTest {
 
 	@Test
 	void intEqualReal() throws OclParseException {
-		// 1 = 1.0 — different types but same value
-		// OCL semantics: Integer 1 and Real 1.0 are not equal (different types)
-		// But our implementation may treat them as equal via Objects.equals
-		// Just test what we produce
-		Object result = eval("1 = 1.0", self);
-		assertInstanceOf(Boolean.class, result);
+		// OCL v2.5: Integer conforms to Real, value equality applies
+		assertEquals(true, eval("1 = 1.0", self));
 	}
 
 	// --- Unary minus ---

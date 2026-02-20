@@ -203,9 +203,8 @@ class OclIteratePatternTest extends AbstractOclTest {
 	}
 
 	@Test
-	void iterate_alternatingSum() throws OclParseException {
-		// 1 - 2 + 3 - 4 + 5 = 3 ... but iterate doesn't have index
-		// Instead: sum of elements > 2
+	void iterate_conditionalSum() throws OclParseException {
+		// Sum only elements greater than 2: 3 + 4 + 5 = 12
 		assertEquals(12, eval(
 				"Sequence{1, 2, 3, 4, 5}->iterate(i; acc: Integer = 0 | " +
 				"  if i > 2 then acc + i else acc endif)",
