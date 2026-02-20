@@ -235,7 +235,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		TupleLiteralExp exp = OCL.createTupleLiteralExp();
 		for (QvtOParser.TupleLiteralPartContext partCtx : ctx.tupleLiteralPart()) {
 			TupleLiteralPart part = OCL.createTupleLiteralPart();
-			part.setName(partCtx.IDENTIFIER().getText());
+			part.setName(qvtoIdentifierText(partCtx.qvtoIdentifier()));
 			if (partCtx.typeExpression() != null) {
 				part.setType(resolveTypeExpression(partCtx.typeExpression()));
 			}
@@ -344,7 +344,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		boolean isSafe = ctx.getChild(1).getText().equals("?.");
 
 		QvtOParser.PropertyOrCallSuffixContext suffix = ctx.propertyOrCallSuffix();
-		if (suffix instanceof QvtOParser.PropertySuffixContext propCtx) {
+		if (suffix instanceof QvtOParser.MappingCallSuffixContext mapCtx) {
+			return createDotMappingCall(source, mapCtx, isSafe);
+		} else if (suffix instanceof QvtOParser.PropertySuffixContext propCtx) {
 			return createPropertyCall(source, propCtx, isSafe);
 		} else if (suffix instanceof QvtOParser.DotCallSuffixContext callCtx) {
 			return createDotOperationCall(source, callCtx, isSafe);
@@ -402,7 +404,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		for (QvtOParser.LetBindingContext bindCtx : bindings) {
 			Variable var = OCL.createVariable();
-			var.setName(bindCtx.IDENTIFIER().getText());
+			var.setName(qvtoIdentifierText(bindCtx.qvtoIdentifier()));
 			if (bindCtx.typeExpression() != null) {
 				var.setType(resolveTypeExpression(bindCtx.typeExpression()));
 			}
@@ -629,9 +631,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		QvtOParser.ForVarListContext varList = ctx.forVarList();
 		QvtOParser.IteratorVariablesContext iterVars = varList.iteratorVariables();
 
-		for (int i = 0; i < iterVars.IDENTIFIER().size(); i++) {
+		for (int i = 0; i < iterVars.qvtoIdentifier().size(); i++) {
 			Variable iterVar = OCL.createVariable();
-			iterVar.setName(iterVars.IDENTIFIER(i).getText());
+			iterVar.setName(qvtoIdentifierText(iterVars.qvtoIdentifier(i)));
 			if (i < iterVars.typeExpression().size() && iterVars.typeExpression(i) != null) {
 				iterVar.setType(resolveTypeExpression(iterVars.typeExpression(i)));
 			}
@@ -916,28 +918,35 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	/**
 	 * Builds an expression from a statement context (assignment or expression statement).
+	 * <p>
+	 * When the grammar parses {@code var x := expr;} as an AssignStatement
+	 * (because {@code :=} and {@code ::=} are assignOp tokens), this method
+	 * detects the VariableInitExp on the left side and combines it into a
+	 * variable declaration with init rather than producing an AssignExp.
 	 */
 	OclExpression buildStatement(QvtOParser.StatementContext ctx) {
 		if (ctx instanceof QvtOParser.AssignStatementContext assignCtx) {
-			return buildAssignment(assignCtx);
+			OclExpression left = (OclExpression) visit(assignCtx.expression(0));
+			OclExpression right = (OclExpression) visit(assignCtx.expression(1));
+
+			// var x := expr → combine into VariableInitExp with init
+			if (left instanceof VariableInitExp varInit) {
+				varInit.getReferredVariable().setOwnedInit(right);
+				return varInit;
+			}
+
+			return buildAssignment(left, right, assignCtx.assignOp().getText());
 		} else if (ctx instanceof QvtOParser.ExpressionStatementContext exprCtx) {
 			return (OclExpression) visit(exprCtx.expression());
 		}
 		return null;
 	}
 
-	private AssignExp buildAssignment(QvtOParser.AssignStatementContext ctx) {
+	private AssignExp buildAssignment(OclExpression left, OclExpression right, String op) {
 		AssignExp assign = IMP.createAssignExp();
-		assign.setLeft((OclExpression) visit(ctx.expression(0)));
-		assign.getValue().add((OclExpression) visit(ctx.expression(1)));
-
-		String op = ctx.assignOp().getText();
-		assign.setIsReset(":=".equals(op));
-		// '+=' → isReset=false (append), '::=' → ordered copy (isReset=true)
-		if ("::=".equals(op)) {
-			assign.setIsReset(true);
-		}
-
+		assign.setLeft(left);
+		assign.getValue().add(right);
+		assign.setIsReset(":=".equals(op) || "::=".equals(op));
 		return assign;
 	}
 
@@ -1009,7 +1018,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		var type = OCL.createTupleType();
 		for (QvtOParser.TupleTypePartContext partCtx : ctx.tupleTypePart()) {
 			var part = OCL.createTuplePart();
-			part.setName(partCtx.IDENTIFIER().getText());
+			part.setName(qvtoIdentifierText(partCtx.qvtoIdentifier()));
 			part.setType(resolveTypeExpression(partCtx.typeExpression()));
 			type.getOwnedParts().add(part);
 		}
@@ -1183,7 +1192,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		exp.setIsSafe(isSafe);
 		exp.setIsPre(ctx.isMarkedPre() != null);
 
-		String propName = ctx.IDENTIFIER().getText();
+		String propName = qvtoIdentifierText(ctx.qvtoIdentifier());
 		resolveProperty(exp, propName);
 		return exp;
 	}
@@ -1201,8 +1210,27 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		String opName = ctx.IDENTIFIER().getText();
+		String opName = qvtoIdentifierText(ctx.qvtoIdentifier());
 		resolveOperation(exp, opName);
+		return exp;
+	}
+
+	private MappingCallExp createDotMappingCall(OclExpression source,
+			QvtOParser.MappingCallSuffixContext ctx, boolean isSafe) {
+		MappingCallExp exp = QVTO.createMappingCallExp();
+		exp.setOwnedSource(source);
+		exp.setIsSafe(isSafe);
+		exp.setIsStrict("xmap".equals(ctx.mappingCallKind().getText()));
+
+		String name = scopedNameText(ctx.scopedName());
+		exp.setName(name);
+
+		if (ctx.argumentList() != null) {
+			for (QvtOParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+				exp.getOwnedArguments().add((OclExpression) visit(argCtx));
+			}
+		}
+
 		return exp;
 	}
 
@@ -1211,16 +1239,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		IteratorExp exp = OCL.createIteratorExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
-		exp.setName(ctx.IDENTIFIER().getText());
+		exp.setName(qvtoIdentifierText(ctx.qvtoIdentifier()));
 
 		QvtoEnvironment savedEnv = this.environment;
 		OclType elementType = inferElementType(source);
 
 		QvtOParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
 		List<Variable> iterVars = new ArrayList<>();
-		for (int i = 0; i < varsCtx.IDENTIFIER().size(); i++) {
+		for (int i = 0; i < varsCtx.qvtoIdentifier().size(); i++) {
 			Variable iterVar = OCL.createVariable();
-			iterVar.setName(varsCtx.IDENTIFIER(i).getText());
+			iterVar.setName(qvtoIdentifierText(varsCtx.qvtoIdentifier(i)));
 			if (i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null) {
 				iterVar.setType(resolveTypeExpression(varsCtx.typeExpression(i)));
 			} else if (elementType != null) {
@@ -1246,7 +1274,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		QvtoEnvironment savedEnv = this.environment;
 
 		Variable iterVar = OCL.createVariable();
-		iterVar.setName(ctx.IDENTIFIER(1).getText());
+		iterVar.setName(qvtoIdentifierText(ctx.qvtoIdentifier(1)));
 		if (ctx.iterType != null) {
 			iterVar.setType(resolveTypeExpression(ctx.iterType));
 		} else {
@@ -1258,7 +1286,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		exp.getOwnedIterators().add(iterVar);
 
 		Variable accVar = OCL.createVariable();
-		accVar.setName(ctx.IDENTIFIER(2).getText());
+		accVar.setName(qvtoIdentifierText(ctx.qvtoIdentifier(2)));
 		if (ctx.accType != null) {
 			accVar.setType(resolveTypeExpression(ctx.accType));
 		}
@@ -1286,7 +1314,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		String opName = ctx.IDENTIFIER().getText();
+		String opName = qvtoIdentifierText(ctx.qvtoIdentifier());
 		resolveOperation(exp, opName);
 		return exp;
 	}
@@ -1299,8 +1327,14 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private OclExpression resolveImplicitProperty(String name) {
-		// In QVT-O context, we can't always resolve against contextType,
-		// so create an unresolved variable reference
+		// Try to resolve as a classifier (type reference) first
+		EClassifier classifier = findInRegistry(name);
+		if (classifier != null) {
+			TypeExp typeExp = OCL.createTypeExp();
+			typeExp.setReferredType(createClassifierType(classifier));
+			return typeExp;
+		}
+		// Fall back to unresolved variable reference
 		Variable extVar = OCL.createVariable();
 		extVar.setName(name);
 		return createVariableExp(extVar);
@@ -1443,8 +1477,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	private List<String> pathNameSegments(QvtOParser.PathNameContext ctx) {
 		List<String> segments = new ArrayList<>();
-		for (var id : ctx.IDENTIFIER()) {
-			segments.add(id.getText());
+		for (var id : ctx.qvtoIdentifier()) {
+			segments.add(qvtoIdentifierText(id));
 		}
 		return segments;
 	}

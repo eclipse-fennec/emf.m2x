@@ -1,0 +1,162 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+package org.eclipse.fennec.m2m.qvto.engine;
+
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.eclipse.emf.common.util.Diagnostic;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2m.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2m.qvto.api.QvtoBlackboxLibrary;
+import org.eclipse.fennec.m2m.qvto.api.QvtoConfiguration;
+import org.eclipse.fennec.m2m.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2m.qvto.api.QvtoEvaluationOptions;
+import org.eclipse.fennec.m2m.qvto.api.QvtoExecutionContext;
+import org.eclipse.fennec.m2m.qvto.api.QvtoExecutionResult;
+import org.eclipse.fennec.m2m.qvto.api.QvtoParseException;
+import org.eclipse.fennec.m2m.qvto.api.QvtoUnitResolver;
+import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoEvalEnvironment;
+import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoEvaluator;
+import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoExtentManager;
+import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoOperationProvider;
+import org.eclipse.fennec.m2m.qvto.parser.QvtoParserSupport;
+
+/**
+ * Plain Java implementation of the {@link QvtoEngine} facade.
+ *
+ * <p>This class has no OSGi dependencies and can be instantiated directly:
+ * <pre>
+ * OclConfiguration oclConfig = OclConfiguration.builder(parser).build();
+ * QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
+ * QvtoEngine engine = new QvtoEngineImpl(config);
+ * </pre>
+ *
+ * @author Data In Motion Consulting
+ * @since 1.0
+ */
+public class QvtoEngineImpl implements QvtoEngine {
+
+	private final QvtoParserSupport parserSupport;
+	private final OclEngineImpl oclEngine;
+	private final List<QvtoBlackboxLibrary> blackboxLibraries = new CopyOnWriteArrayList<>();
+	private final List<QvtoUnitResolver> unitResolvers = new CopyOnWriteArrayList<>();
+
+	/**
+	 * Creates a new engine from the given configuration.
+	 *
+	 * @param config the engine configuration
+	 */
+	public QvtoEngineImpl(QvtoConfiguration config) {
+		Objects.requireNonNull(config, "config must not be null");
+		this.parserSupport = new QvtoParserSupport();
+		OclConfiguration oclConfig = config.oclConfiguration();
+		this.oclEngine = new OclEngineImpl(oclConfig);
+		this.blackboxLibraries.addAll(config.blackboxLibraries());
+		this.unitResolvers.addAll(config.unitResolvers());
+	}
+
+	// --- Parsing ---
+
+	@Override
+	public OperationalTransformation parse(URI transformationUri) throws QvtoParseException {
+		Objects.requireNonNull(transformationUri, "transformationUri must not be null");
+		try {
+			String source = Files.readString(Path.of(transformationUri));
+			return parse(source, transformationUri.toString());
+		} catch (IOException e) {
+			throw new QvtoParseException("Failed to read transformation: " + transformationUri, e);
+		}
+	}
+
+	@Override
+	public OperationalTransformation parse(String source, String unitName) throws QvtoParseException {
+		Objects.requireNonNull(source, "source must not be null");
+		Objects.requireNonNull(unitName, "unitName must not be null");
+		return parserSupport.parse(source, unitName, EPackage.Registry.INSTANCE);
+	}
+
+	// --- Execution ---
+
+	@Override
+	public QvtoExecutionResult execute(OperationalTransformation transformation,
+			QvtoExecutionContext context) {
+		return execute(transformation, context, QvtoEvaluationOptions.defaults());
+	}
+
+	@Override
+	public QvtoExecutionResult execute(OperationalTransformation transformation,
+			QvtoExecutionContext context, QvtoEvaluationOptions options) {
+		Objects.requireNonNull(transformation, "transformation must not be null");
+		Objects.requireNonNull(context, "context must not be null");
+		Objects.requireNonNull(options, "options must not be null");
+
+		QvtoEvalEnvironment env = QvtoEvalEnvironment.forTransformation(context.configProperties());
+		QvtoExtentManager extentManager = new QvtoExtentManager(transformation, context);
+
+		QvtoEvaluator evaluator = new QvtoEvaluator(
+				oclEngine, env, options, transformation, extentManager);
+
+		// Register QVT-O operations as OCL custom provider for mutual recursion
+		QvtoOperationProvider qvtoProvider = new QvtoOperationProvider(transformation, evaluator);
+		oclEngine.registerOperations(qvtoProvider);
+		try {
+			List<Diagnostic> diagnostics = evaluator.execute();
+			return new QvtoExecutionResult(diagnostics, null);
+		} finally {
+			oclEngine.unregisterOperations(qvtoProvider);
+		}
+	}
+
+	// --- Extension Registration ---
+
+	@Override
+	public void registerBlackbox(QvtoBlackboxLibrary library) {
+		Objects.requireNonNull(library, "library must not be null");
+		blackboxLibraries.add(library);
+	}
+
+	@Override
+	public void unregisterBlackbox(QvtoBlackboxLibrary library) {
+		Objects.requireNonNull(library, "library must not be null");
+		blackboxLibraries.remove(library);
+	}
+
+	@Override
+	public void registerUnitResolver(QvtoUnitResolver resolver) {
+		Objects.requireNonNull(resolver, "resolver must not be null");
+		unitResolvers.add(resolver);
+	}
+
+	@Override
+	public void unregisterUnitResolver(QvtoUnitResolver resolver) {
+		Objects.requireNonNull(resolver, "resolver must not be null");
+		unitResolvers.remove(resolver);
+	}
+
+	/**
+	 * Returns the underlying OCL engine (for testing and advanced use).
+	 */
+	public OclEngineImpl getOclEngine() {
+		return oclEngine;
+	}
+}

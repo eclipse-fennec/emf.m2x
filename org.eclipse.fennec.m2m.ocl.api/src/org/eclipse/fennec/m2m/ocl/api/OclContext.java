@@ -43,9 +43,13 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
  *
  * // With model extent for allInstances()
  * OclContext ctx = new OclContext(employee, extent, Map.of());
+ *
+ * // Without self (e.g. QVT-O module-level operations)
+ * OclContext ctx = OclContext.of(Map.of("x", 42));
  * </pre>
  *
- * @param self the {@code EObject} that serves as {@code self} in the expression
+ * @param self the {@code EObject} that serves as {@code self} in the expression,
+ *     or {@code null} for module-level contexts without a context object
  * @param extent the model extent for {@code allInstances()}, or {@code null} if not needed
  * @param variables external variables accessible by name, never {@code null}
  * @param resourceSet optional {@code ResourceSet} for package resolution, or {@code null}
@@ -62,9 +66,10 @@ public record OclContext(
 	 * Canonical constructor with validation.
 	 */
 	public OclContext {
-		Objects.requireNonNull(self, "self must not be null");
+		// self is nullable — QVT-O module-level operations have no context object
 		Objects.requireNonNull(variables, "variables must not be null");
 		variables = Collections.unmodifiableMap(new LinkedHashMap<>(variables));
+		// extent is nullable — not every evaluation needs allInstances()
 		// resourceSet is nullable — not every evaluation needs it
 	}
 
@@ -132,5 +137,18 @@ public record OclContext(
 	 */
 	public static OclContext of(EObject self, OclModelExtent extent, ResourceSet resourceSet) {
 		return new OclContext(self, extent, Map.of(), resourceSet);
+	}
+
+	/**
+	 * Creates a context with only external variables, no {@code self} object.
+	 *
+	 * <p>Used for QVT-O module-level operations ({@code main()}, helpers without
+	 * a context parameter) where there is no natural context object.
+	 *
+	 * @param variables external variables accessible by name
+	 * @return the evaluation context with {@code null} self
+	 */
+	public static OclContext of(Map<String, Object> variables) {
+		return new OclContext(null, null, variables);
 	}
 }

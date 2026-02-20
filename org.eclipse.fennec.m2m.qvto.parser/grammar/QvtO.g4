@@ -133,7 +133,7 @@ mappingDef
     ;
 
 mappingSignature
-    : '(' paramList? ')' (':' paramList)?
+    : '(' inputParams=paramList? ')' (':' resultParams=paramList)?
     ;
 
 paramList
@@ -250,7 +250,10 @@ block
 // ==================== Expression Override ====================
 
 // Override primaryExpression to add imperative constructs.
-// All OCL alternatives are preserved, plus new QVT-O alternatives.
+// QVT-O alternatives MUST come BEFORE pathName/OperationCallExp because
+// soft keywords (break, continue, return, resolve, log, assert, etc.)
+// are also valid qvtoIdentifiers and would match pathName first.
+// ANTLR4 resolves ambiguity by picking the first matching alternative.
 primaryExpression
     : '(' expression ')'                                                                 # ParenExp
     | 'self'                                                                             # SelfExp
@@ -259,13 +262,7 @@ primaryExpression
       'else' elseExp=expression 'endif'                                                  # IfExp
     | 'let' letBinding (',' letBinding)* 'in' expression                                 # LetExp
     | literalExpression                                                                  # LiteralExp
-    | pathName '(' argumentList? ')'                                                     # OperationCallExp
-    | primitiveType                                                                      # PrimitiveTypeExp
-    | collectionType                                                                     # CollectionTypeExp
-    | mapType                                                                            # MapTypeExp
-    | tupleType                                                                          # TupleTypeExp
-    | pathName                                                                           # PathNameExp
-    // === QVT-O Imperative Expressions ===
+    // === QVT-O Imperative Expressions (before pathName to win ambiguity) ===
     | blockExp                                                                           # BlockPrimary
     | whileExp                                                                           # WhilePrimary
     | forExp                                                                             # ForPrimary
@@ -284,6 +281,13 @@ primaryExpression
     | 'break'                                                                            # BreakPrimary
     | 'continue'                                                                         # ContinuePrimary
     | varDeclExp                                                                         # VarDeclPrimary
+    // === OCL fallback alternatives (after QVT-O to avoid soft keyword ambiguity) ===
+    | pathName '(' argumentList? ')'                                                     # OperationCallExp
+    | primitiveType                                                                      # PrimitiveTypeExp
+    | collectionType                                                                     # CollectionTypeExp
+    | mapType                                                                            # MapTypeExp
+    | tupleType                                                                          # TupleTypeExp
+    | pathName                                                                           # PathNameExp
     ;
 
 // ==================== Type Expression Override ====================
@@ -434,6 +438,48 @@ varInitOp
     : ':='
     | '='
     | '::='
+    ;
+
+// ==================== OCL Rule Overrides for Soft Keywords ====================
+
+// Override pathName to accept QVT-O soft keywords as identifiers in expression contexts.
+pathName
+    : qvtoIdentifier ('::' qvtoIdentifier)*
+    ;
+
+// Override navigation suffixes: obj.result, obj.object(), obj.map target(), etc.
+propertyOrCallSuffix
+    : mappingCallKind scopedName '(' argumentList? ')'                                     # MappingCallSuffix
+    | qvtoIdentifier '(' argumentList? ')' isMarkedPre?                                    # DotCallSuffix
+    | qvtoIdentifier isMarkedPre?                                                          # PropertySuffix
+    ;
+
+// Override iterator/operation calls: coll->collect(result | ...), coll->iterate(...)
+iteratorOrOperationCall
+    : qvtoIdentifier '(' iteratorVariables '|' expression ')'                              # IteratorCall
+    | qvtoIdentifier '(' qvtoIdentifier (':' iterType=typeExpression)?
+      ';' qvtoIdentifier (':' accType=typeExpression)? '=' expression '|' expression ')'   # IterateCall
+    | qvtoIdentifier '(' argumentList? ')'                                                 # CollectionOperationCall
+    ;
+
+// Override iterator variables to accept soft keywords as names
+iteratorVariables
+    : qvtoIdentifier (':' typeExpression)? (',' qvtoIdentifier (':' typeExpression)?)*
+    ;
+
+// Override let bindings to accept soft keywords as names
+letBinding
+    : qvtoIdentifier (':' typeExpression)? '=' expression
+    ;
+
+// Override tuple type parts to accept soft keywords as names
+tupleTypePart
+    : qvtoIdentifier ':' typeExpression
+    ;
+
+// Override tuple literal parts to accept soft keywords as names
+tupleLiteralPart
+    : qvtoIdentifier (':' typeExpression)? '=' expression
     ;
 
 // ==================== Scoped + Qualified Names ====================

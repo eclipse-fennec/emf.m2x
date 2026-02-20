@@ -1,8 +1,10 @@
 jacocoTestReport {
     additionalClassDirs(files(
-        "${rootProject.projectDir}/org.eclipse.fennec.m2m.qvto.parser/bin"
+        "${rootProject.projectDir}/org.eclipse.fennec.m2m.qvto.parser/bin",
+        "${rootProject.projectDir}/org.eclipse.fennec.m2m.qvto.engine/bin"
     ))
     additionalSourceDirs(files(
-        "${rootProject.projectDir}/org.eclipse.fennec.m2m.qvto.parser/src"
+        "${rootProject.projectDir}/org.eclipse.fennec.m2m.qvto.parser/src",
+        "${rootProject.projectDir}/org.eclipse.fennec.m2m.qvto.engine/src"
     ))
 }

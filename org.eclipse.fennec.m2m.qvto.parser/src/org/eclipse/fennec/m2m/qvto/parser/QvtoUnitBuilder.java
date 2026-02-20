@@ -21,6 +21,7 @@ import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -67,9 +68,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private static final ImperativeOclFactory IMP = ImperativeOclFactory.eINSTANCE;
 	private static final QvtOperationalFactory QVTO = QvtOperationalFactory.eINSTANCE;
 
+	private record PendingExtension(MappingOperation mapping, String kind, String name) {}
+
 	private final EPackage.Registry packageRegistry;
 	private QvtoEnvironment environment;
 	private QvtoExpressionBuilder expressionBuilder;
+	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
 
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
@@ -87,8 +91,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public OperationalTransformation visitCompilationUnit(QvtOParser.CompilationUnitContext ctx) {
-		// Find the transformation or library definition
+		// First pass: find transformation/library and collect modeltypes
 		OperationalTransformation transformation = null;
+		List<ModelType> modelTypes = new ArrayList<>();
 
 		for (QvtOParser.UnitElementContext elemCtx : ctx.unitElement()) {
 			if (elemCtx.transformationDef() != null) {
@@ -101,12 +106,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					transformation.setName(lib.getName());
 				}
 			} else if (elemCtx.modeltypeDecl() != null) {
-				ModelType modelType = visitModeltypeDecl(elemCtx.modeltypeDecl());
-				if (transformation != null) {
-					transformation.getUsedModelType().add(modelType);
-				}
-			} else if (elemCtx.qvtoImportDecl() != null) {
-				// Import declarations are processed after transformation is created
+				modelTypes.add(visitModeltypeDecl(elemCtx.modeltypeDecl()));
 			}
 		}
 
@@ -114,6 +114,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			transformation = QVTO.createOperationalTransformation();
 			transformation.setName("_unnamed");
 		}
+
+		// Add all collected modeltypes to transformation
+		transformation.getUsedModelType().addAll(modelTypes);
 
 		// Second pass: imports and top-level module elements
 		for (QvtOParser.UnitElementContext elemCtx : ctx.unitElement()) {
@@ -170,6 +173,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			processModuleElement(elemCtx, transformation);
 		}
 
+		// Resolve deferred mapping extensions (disjuncts, inherits, merges)
+		resolvePendingExtensions(transformation);
+
 		this.environment = savedEnv;
 		updateExpressionBuilder();
 		return transformation;
@@ -189,6 +195,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
 			processModuleElement(elemCtx, library);
 		}
+
+		// Resolve deferred mapping extensions (disjuncts, inherits, merges)
+		resolvePendingExtensions(library);
 
 		return library;
 	}
@@ -305,9 +314,13 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		QvtoEnvironment savedEnv = this.environment;
 		setupOperationEnvironment(mapping);
 
-		// TODO: resolve mapping extensions (inherits, merges, disjuncts) during linking phase
+		// Collect mapping extensions for deferred resolution (after all operations are parsed)
 		for (QvtOParser.MappingExtensionContext extCtx : ctx.mappingExtension()) {
-			// extCtx → populate mapping.getInherited()/getMerged()/getDisjunct()
+			String kind = extCtx.mappingExtensionKind().getText();
+			for (QvtOParser.ScopedNameContext nameCtx : extCtx.scopedNameList().scopedName()) {
+				String refName = expressionBuilder.scopedNameText(nameCtx);
+				pendingExtensions.add(new PendingExtension(mapping, kind, refName));
+			}
 		}
 
 		// When clause
@@ -646,10 +659,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private void buildSignature(
 			org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation operation,
 			QvtOParser.MappingSignatureContext sigCtx) {
-		// Input parameters
-		if (sigCtx.paramList() != null && sigCtx.paramList().size() > 0) {
-			QvtOParser.ParamListContext inputParams = sigCtx.paramList(0);
-			for (QvtOParser.ParamContext paramCtx : inputParams.param()) {
+		// Input parameters (labeled 'inputParams' in grammar)
+		if (sigCtx.inputParams != null) {
+			for (QvtOParser.ParamContext paramCtx : sigCtx.inputParams.param()) {
 				MappingParameter param = QVTO.createMappingParameter();
 				param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
 				OclType type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
@@ -660,10 +672,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		// Result parameters (after ':')
-		if (sigCtx.paramList() != null && sigCtx.paramList().size() > 1) {
-			QvtOParser.ParamListContext resultParams = sigCtx.paramList(1);
-			for (QvtOParser.ParamContext paramCtx : resultParams.param()) {
+		// Result parameters (labeled 'resultParams' in grammar, after ':')
+		if (sigCtx.resultParams != null) {
+			for (QvtOParser.ParamContext paramCtx : sigCtx.resultParams.param()) {
 				VarParameter resultParam = QVTO.createVarParameter();
 				resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
 						paramCtx.qvtoIdentifier()));
@@ -795,8 +806,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private EPackage resolvePackageRef(QvtOParser.PackageRefContext ctx) {
 		if (ctx.pathName() != null) {
 			List<String> segments = new ArrayList<>();
-			for (var id : ctx.pathName().IDENTIFIER()) {
-				segments.add(id.getText());
+			for (var id : ctx.pathName().qvtoIdentifier()) {
+				segments.add(QvtoExpressionBuilder.qvtoIdentifierText(id));
 			}
 			String name = String.join("::", segments);
 
@@ -836,6 +847,27 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 * Since Module extends EPackage (not EClass), operations are stored
 	 * on an EClass named after the module within the package.
 	 */
+	private void resolvePendingExtensions(Module module) {
+		if (pendingExtensions.isEmpty()) {
+			return;
+		}
+		EClass moduleClass = getOrCreateModuleClass(module);
+		for (PendingExtension pe : pendingExtensions) {
+			for (EOperation op : moduleClass.getEOperations()) {
+				if (op instanceof MappingOperation mo && pe.name.equals(mo.getName())) {
+					switch (pe.kind) {
+					case "inherits" -> pe.mapping.getInherited().add(mo);
+					case "merges" -> pe.mapping.getMerged().add(mo);
+					case "disjuncts" -> pe.mapping.getDisjunct().add(mo);
+					default -> { /* ignore unknown kinds */ }
+					}
+					break;
+				}
+			}
+		}
+		pendingExtensions.clear();
+	}
+
 	private EClass getOrCreateModuleClass(Module module) {
 		String className = module.getName() != null ? module.getName() : "_Module";
 		for (EClassifier classifier : module.getEClassifiers()) {

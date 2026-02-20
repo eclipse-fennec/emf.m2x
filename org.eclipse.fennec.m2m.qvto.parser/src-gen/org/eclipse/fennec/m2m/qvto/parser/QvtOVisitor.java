@@ -324,48 +324,6 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitLiteralExp(QvtOParser.LiteralExpContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code OperationCallExp}
-	 * labeled alternative in {@link QvtOParser#primaryExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitOperationCallExp(QvtOParser.OperationCallExpContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code PrimitiveTypeExp}
-	 * labeled alternative in {@link QvtOParser#primaryExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitPrimitiveTypeExp(QvtOParser.PrimitiveTypeExpContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code CollectionTypeExp}
-	 * labeled alternative in {@link QvtOParser#primaryExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitCollectionTypeExp(QvtOParser.CollectionTypeExpContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code MapTypeExp}
-	 * labeled alternative in {@link QvtOParser#primaryExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitMapTypeExp(QvtOParser.MapTypeExpContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code TupleTypeExp}
-	 * labeled alternative in {@link QvtOParser#primaryExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitTupleTypeExp(QvtOParser.TupleTypeExpContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code PathNameExp}
-	 * labeled alternative in {@link QvtOParser#primaryExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitPathNameExp(QvtOParser.PathNameExpContext ctx);
-	/**
 	 * Visit a parse tree produced by the {@code BlockPrimary}
 	 * labeled alternative in {@link QvtOParser#primaryExpression}.
 	 * @param ctx the parse tree
@@ -491,6 +449,48 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitVarDeclPrimary(QvtOParser.VarDeclPrimaryContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code OperationCallExp}
+	 * labeled alternative in {@link QvtOParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitOperationCallExp(QvtOParser.OperationCallExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code PrimitiveTypeExp}
+	 * labeled alternative in {@link QvtOParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPrimitiveTypeExp(QvtOParser.PrimitiveTypeExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code CollectionTypeExp}
+	 * labeled alternative in {@link QvtOParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCollectionTypeExp(QvtOParser.CollectionTypeExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code MapTypeExp}
+	 * labeled alternative in {@link QvtOParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMapTypeExp(QvtOParser.MapTypeExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code TupleTypeExp}
+	 * labeled alternative in {@link QvtOParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTupleTypeExp(QvtOParser.TupleTypeExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code PathNameExp}
+	 * labeled alternative in {@link QvtOParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPathNameExp(QvtOParser.PathNameExpContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#typeExpression}.
 	 * @param ctx the parse tree
@@ -683,6 +683,78 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitVarInitOp(QvtOParser.VarInitOpContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#pathName}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPathName(QvtOParser.PathNameContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code MappingCallSuffix}
+	 * labeled alternative in {@link QvtOParser#propertyOrCallSuffix}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMappingCallSuffix(QvtOParser.MappingCallSuffixContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code DotCallSuffix}
+	 * labeled alternative in {@link QvtOParser#propertyOrCallSuffix}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDotCallSuffix(QvtOParser.DotCallSuffixContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code PropertySuffix}
+	 * labeled alternative in {@link QvtOParser#propertyOrCallSuffix}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPropertySuffix(QvtOParser.PropertySuffixContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code IteratorCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitIteratorCall(QvtOParser.IteratorCallContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code IterateCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitIterateCall(QvtOParser.IterateCallContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code CollectionOperationCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCollectionOperationCall(QvtOParser.CollectionOperationCallContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#iteratorVariables}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitIteratorVariables(QvtOParser.IteratorVariablesContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#letBinding}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitLetBinding(QvtOParser.LetBindingContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#tupleTypePart}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTupleTypePart(QvtOParser.TupleTypePartContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#tupleLiteralPart}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTupleLiteralPart(QvtOParser.TupleLiteralPartContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#scopedName}.
 	 * @param ctx the parse tree
@@ -918,58 +990,11 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitArrowExp(QvtOParser.ArrowExpContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code DotCallSuffix}
-	 * labeled alternative in {@link QvtOParser#propertyOrCallSuffix}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitDotCallSuffix(QvtOParser.DotCallSuffixContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code PropertySuffix}
-	 * labeled alternative in {@link QvtOParser#propertyOrCallSuffix}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitPropertySuffix(QvtOParser.PropertySuffixContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code IteratorCall}
-	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitIteratorCall(QvtOParser.IteratorCallContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code IterateCall}
-	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitIterateCall(QvtOParser.IterateCallContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code CollectionOperationCall}
-	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitCollectionOperationCall(QvtOParser.CollectionOperationCallContext ctx);
-	/**
-	 * Visit a parse tree produced by {@link QvtOParser#iteratorVariables}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitIteratorVariables(QvtOParser.IteratorVariablesContext ctx);
-	/**
 	 * Visit a parse tree produced by {@link QvtOParser#argumentList}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitArgumentList(QvtOParser.ArgumentListContext ctx);
-	/**
-	 * Visit a parse tree produced by {@link QvtOParser#letBinding}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitLetBinding(QvtOParser.LetBindingContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#isMarkedPre}.
 	 * @param ctx the parse tree
@@ -1078,12 +1103,6 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitTupleLiteral(QvtOParser.TupleLiteralContext ctx);
 	/**
-	 * Visit a parse tree produced by {@link QvtOParser#tupleLiteralPart}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitTupleLiteralPart(QvtOParser.TupleLiteralPartContext ctx);
-	/**
 	 * Visit a parse tree produced by {@link QvtOParser#mapLiteral}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -1119,16 +1138,4 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitTupleType(QvtOParser.TupleTypeContext ctx);
-	/**
-	 * Visit a parse tree produced by {@link QvtOParser#tupleTypePart}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitTupleTypePart(QvtOParser.TupleTypePartContext ctx);
-	/**
-	 * Visit a parse tree produced by {@link QvtOParser#pathName}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitPathName(QvtOParser.PathNameContext ctx);
 }

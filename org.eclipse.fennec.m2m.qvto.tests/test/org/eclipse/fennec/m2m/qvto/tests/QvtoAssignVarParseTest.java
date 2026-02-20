@@ -104,7 +104,7 @@ class QvtoAssignVarParseTest extends AbstractQvtoParserTest {
 
 	@Test
 	void varDeclWithTypeAndInit() throws QvtoParseException {
-		OclExpression expr = parseBodyExpr("var x : Integer = 42;");
+		OclExpression expr = parseBodyExpr("var x : Integer := 42;");
 		VariableInitExp varInit = assertInstanceOf(VariableInitExp.class, expr);
 		Variable v = varInit.getReferredVariable();
 		assertNotNull(v);
@@ -113,7 +113,16 @@ class QvtoAssignVarParseTest extends AbstractQvtoParserTest {
 	}
 
 	@Test
-	void varDeclWithInit() throws QvtoParseException {
+	void varDeclWithResetAssignInit() throws QvtoParseException {
+		OclExpression expr = parseBodyExpr("var x := 42;");
+		VariableInitExp varInit = assertInstanceOf(VariableInitExp.class, expr);
+		Variable v = varInit.getReferredVariable();
+		assertNotNull(v);
+		assertNotNull(v.getOwnedInit());
+	}
+
+	@Test
+	void varDeclWithEqualsInit() throws QvtoParseException {
 		OclExpression expr = parseBodyExpr("var x = 42;");
 		VariableInitExp varInit = assertInstanceOf(VariableInitExp.class, expr);
 		Variable v = varInit.getReferredVariable();
@@ -158,24 +167,9 @@ class QvtoAssignVarParseTest extends AbstractQvtoParserTest {
 	}
 
 	@Test
-	void varWithEqualsInit() throws QvtoParseException {
-		OclExpression expr = parseBodyExpr("var x = 42;");
+	void varWithOrderedCopyInit() throws QvtoParseException {
+		OclExpression expr = parseBodyExpr("var x ::= 42;");
 		VariableInitExp varInit = assertInstanceOf(VariableInitExp.class, expr);
 		assertNotNull(varInit.getReferredVariable().getOwnedInit());
-	}
-
-	@Test
-	void varWithOrderedCopyInitParsesAsAssignment() throws QvtoParseException {
-		// var x ::= 42 is parsed as AssignStatement because ::= is an assignOp
-		OperationalTransformation t = parse("""
-				transformation T() {
-				    mapping doIt() {
-				        var x ::= 42;
-				    }
-				}
-				""");
-		MappingOperation mapping = (MappingOperation) getOperation(t, "doIt");
-		MappingBody body = (MappingBody) mapping.getBody();
-		assertFalse(body.getContent().isEmpty());
 	}
 }

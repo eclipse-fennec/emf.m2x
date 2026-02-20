@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2m.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -58,8 +59,9 @@ class OclExternalVariablesTest extends AbstractOclTest {
 	}
 
 	@Test
-	void context_nullSelf_throws() {
-		assertThrows(NullPointerException.class, () -> OclContext.of(null));
+	void context_nullSelf_allowed() {
+		OclContext ctx = OclContext.of((EObject) null);
+		assertNull(ctx.self());
 	}
 
 	@Test

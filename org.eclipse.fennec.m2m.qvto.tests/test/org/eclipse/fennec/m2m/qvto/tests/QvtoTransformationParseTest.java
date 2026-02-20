@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.eclipse.fennec.m2m.model.qvtoperational.DirectionKind;
 import org.eclipse.fennec.m2m.model.qvtoperational.ImportKind;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
+import org.eclipse.fennec.m2m.model.qvtoperational.ModelType;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.qvto.api.QvtoParseException;
@@ -96,33 +97,21 @@ class QvtoTransformationParseTest extends AbstractQvtoParserTest {
 
 	@Test
 	void modeltypeDeclaration() throws QvtoParseException {
-		// Note: modeltype before transformation is not added to usedModelType
-		// (parser first-pass limitation). Verify parameters resolve correctly instead.
 		OperationalTransformation t = parse("""
 				modeltype SRC uses 'http://test/source/1.0';
 				transformation T(in s : SRC) {}
 				""");
-		assertEquals(1, t.getModelParameter().size());
-		assertNotNull(t.getModelParameter().get(0).getName());
-	}
-
-	@Test
-	void modeltypeAfterTransformation() throws QvtoParseException {
-		// When modeltype appears after transformation, it IS added to usedModelType
-		OperationalTransformation t = parse("""
-				transformation T() {}
-				modeltype SRC uses 'http://test/source/1.0';
-				""");
 		assertFalse(t.getUsedModelType().isEmpty());
-		assertEquals("SRC", t.getUsedModelType().get(0).getName());
-		assertFalse(t.getUsedModelType().get(0).getMetamodel().isEmpty());
+		ModelType mt = t.getUsedModelType().get(0);
+		assertEquals("SRC", mt.getName());
+		assertFalse(mt.getMetamodel().isEmpty());
 	}
 
 	@Test
 	void modeltypeResolvesPackage() throws QvtoParseException {
 		OperationalTransformation t = parse("""
-				transformation T() {}
 				modeltype SRC uses 'http://test/source/1.0';
+				transformation T(in s : SRC) {}
 				""");
 		assertEquals(sourcePackage, t.getUsedModelType().get(0).getMetamodel().get(0));
 	}
@@ -158,8 +147,8 @@ class QvtoTransformationParseTest extends AbstractQvtoParserTest {
 	@Test
 	void modeltypeWithConformanceKind() throws QvtoParseException {
 		OperationalTransformation t = parse("""
-				transformation T() {}
 				modeltype SRC 'strict' uses 'http://test/source/1.0';
+				transformation T(in s : SRC) {}
 				""");
 		assertFalse(t.getUsedModelType().isEmpty());
 		assertEquals("strict", t.getUsedModelType().get(0).getConformanceKind());
@@ -168,8 +157,8 @@ class QvtoTransformationParseTest extends AbstractQvtoParserTest {
 	@Test
 	void modeltypeWithPackageName() throws QvtoParseException {
 		OperationalTransformation t = parse("""
-				transformation T() {}
 				modeltype SRC uses source('http://test/source/1.0');
+				transformation T(in s : SRC) {}
 				""");
 		assertFalse(t.getUsedModelType().isEmpty());
 		assertFalse(t.getUsedModelType().get(0).getMetamodel().isEmpty());

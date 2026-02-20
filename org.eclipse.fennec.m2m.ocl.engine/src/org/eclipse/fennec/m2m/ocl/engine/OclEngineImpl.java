@@ -169,7 +169,8 @@ public class OclEngineImpl implements OclEngine {
 
 	@Override
 	public Object evaluate(String expression, OclContext context) throws OclParseException {
-		OclExpression parsed = parse(expression, context.self().eClass());
+		EClassifier contextType = context.self() != null ? context.self().eClass() : null;
+		OclExpression parsed = parse(expression, contextType);
 		return evaluate(parsed, context);
 	}
 

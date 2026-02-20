@@ -176,6 +176,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * values are correctly propagated through the expression tree.
 	 */
 	private Object eval(OclExpression expression) {
+		if (expression == null) {
+			return null; // null source (e.g. module-level QVT-O calls)
+		}
 		if (++depth > options.maxDepth()) {
 			--depth;
 			return addError("Maximum evaluation depth exceeded: " + options.maxDepth());
