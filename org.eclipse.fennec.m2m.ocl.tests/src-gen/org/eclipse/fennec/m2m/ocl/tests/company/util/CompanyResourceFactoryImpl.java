@@ -18,13 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.eclipse.emf.common.util.URI;
-
 import org.eclipse.emf.ecore.resource.Resource;
-
 import org.eclipse.emf.ecore.resource.impl.ResourceFactoryImpl;
-
 import org.eclipse.fennec.emf.osgi.constants.EMFNamespaces;
-
 import org.eclipse.fennec.m2m.ocl.tests.company.CompanyPackage;
 
 /**

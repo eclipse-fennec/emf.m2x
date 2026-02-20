@@ -19,9 +19,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
-
 import org.eclipse.emf.ecore.impl.EPackageImpl;
-
 import org.eclipse.fennec.m2m.ocl.tests.company.Company;
 import org.eclipse.fennec.m2m.ocl.tests.company.CompanyFactory;
 import org.eclipse.fennec.m2m.ocl.tests.company.CompanyPackage;

@@ -691,6 +691,50 @@ class OclPreStateTest {
 			// body: self.name.size() = 11, post: result > 0 → ✓
 			assertEquals(11, result);
 		}
+
+		// --- @pre in postconditions (exercises PreStateScanCollector.capturePreState) ---
+
+		@Test
+		void postWithAtPre_deposit_capturesPreBalance() throws Exception {
+			engine.installDelegates();
+
+			EObject account = createAccount("Test", 1000.0);
+			EOperation deposit = getOperation(accountClass, "deposit");
+
+			EList<Object> args = new BasicEList<>();
+			args.add(500.0);
+
+			Object result = ((InternalEObject) account).eInvoke(deposit, args);
+			// body: self.balance + amount = 1000.0 + 500.0 = 1500.0
+			// post: result = self.balance@pre + amount → 1500.0 = 1000.0 + 500.0 ✓
+			assertEquals(1500.0, result);
+		}
+
+		@Test
+		void postWithAtPre_getNameSnapshot_capturesPreName() throws Exception {
+			engine.installDelegates();
+
+			EObject account = createAccount("OriginalName", 1000.0);
+			EOperation getNameSnapshot = getOperation(accountClass, "getNameSnapshot");
+
+			Object result = ((InternalEObject) account).eInvoke(getNameSnapshot, null);
+			// body: self.name = "OriginalName"
+			// post: result = self.name@pre → "OriginalName" = "OriginalName" ✓
+			assertEquals("OriginalName", result);
+		}
+
+		@Test
+		void postWithAtPre_doubleBalance_capturesPreBalance() throws Exception {
+			engine.installDelegates();
+
+			EObject account = createAccount("Test", 750.0);
+			EOperation doubleBalance = getOperation(accountClass, "doubleBalance");
+
+			Object result = ((InternalEObject) account).eInvoke(doubleBalance, null);
+			// body: self.balance * 2.0 = 750.0 * 2.0 = 1500.0
+			// post: result = self.balance@pre * 2.0 → 1500.0 = 750.0 * 2.0 ✓
+			assertEquals(1500.0, result);
+		}
 	}
 
 	// ---------------------------------------------------------------

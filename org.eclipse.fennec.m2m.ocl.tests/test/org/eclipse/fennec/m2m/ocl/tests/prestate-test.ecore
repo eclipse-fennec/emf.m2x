@@ -52,6 +52,28 @@
         <details key="post" value="result > 0"/>
       </eAnnotations>
     </eOperations>
+    <!-- post with @pre: exercises PreStateScanCollector.capturePreState with non-empty preNodes -->
+    <eOperations name="deposit" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="body" value="self.balance + amount"/>
+        <details key="post" value="result = self.balance@pre + amount"/>
+      </eAnnotations>
+      <eParameters name="amount" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject"/>
+    </eOperations>
+    <!-- post with @pre on name: exercises PropertyCallExp @pre for String property -->
+    <eOperations name="getNameSnapshot" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="body" value="self.name"/>
+        <details key="post" value="result = self.name@pre"/>
+      </eAnnotations>
+    </eOperations>
+    <!-- post with @pre on balance (no param): exercises simpler @pre capture -->
+    <eOperations name="doubleBalance" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDoubleObject">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2m/ocl/1.0">
+        <details key="body" value="self.balance * 2.0"/>
+        <details key="post" value="result = self.balance@pre * 2.0"/>
+      </eAnnotations>
+    </eOperations>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Customer">
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>

@@ -316,7 +316,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 		if (!(source instanceof EObject eo)) {
 			return addError("Property access requires an EObject or Tuple, got: "
-					+ source.getClass().getSimpleName());
+					+ (source == null ? "null" : source.getClass().getSimpleName()));
 		}
 
 		// @pre support: return captured pre-state value
@@ -507,7 +507,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 		if (!(source instanceof Collection<?> coll)) {
 			return addError("Iterator source must be a Collection, got: "
-					+ source.getClass().getSimpleName());
+					+ (source == null ? "null" : source.getClass().getSimpleName()));
 		}
 
 		List<Variable> iterVars = exp.getOwnedIterators();
@@ -542,7 +542,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 		if (!(source instanceof Collection<?> coll)) {
 			return addError("Iterate source must be a Collection, got: "
-					+ source.getClass().getSimpleName());
+					+ (source == null ? "null" : source.getClass().getSimpleName()));
 		}
 
 		Variable accVar = exp.getOwnedResult();

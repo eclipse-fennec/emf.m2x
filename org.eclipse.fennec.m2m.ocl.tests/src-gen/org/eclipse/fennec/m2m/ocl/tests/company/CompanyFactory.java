@@ -15,7 +15,6 @@
 package org.eclipse.fennec.m2m.ocl.tests.company;
 
 import org.eclipse.emf.ecore.EFactory;
-
 import org.osgi.annotation.versioning.ProviderType;
 
 /**

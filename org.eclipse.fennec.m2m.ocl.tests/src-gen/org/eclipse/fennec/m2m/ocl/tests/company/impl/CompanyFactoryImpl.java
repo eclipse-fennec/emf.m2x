@@ -18,12 +18,13 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
-
 import org.eclipse.emf.ecore.impl.EFactoryImpl;
-
 import org.eclipse.emf.ecore.plugin.EcorePlugin;
-
-import org.eclipse.fennec.m2m.ocl.tests.company.*;
+import org.eclipse.fennec.m2m.ocl.tests.company.Company;
+import org.eclipse.fennec.m2m.ocl.tests.company.CompanyFactory;
+import org.eclipse.fennec.m2m.ocl.tests.company.CompanyPackage;
+import org.eclipse.fennec.m2m.ocl.tests.company.Person;
+import org.eclipse.fennec.m2m.ocl.tests.company.Status;
 
 /**
  * <!-- begin-user-doc -->

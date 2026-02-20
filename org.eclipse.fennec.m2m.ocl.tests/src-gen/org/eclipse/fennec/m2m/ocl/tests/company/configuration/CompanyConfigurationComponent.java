@@ -18,29 +18,20 @@ import java.util.Hashtable;
 
 import org.eclipse.emf.ecore.EFactory;
 import org.eclipse.emf.ecore.EPackage;
-
 import org.eclipse.emf.ecore.resource.Resource.Factory;
-
 import org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator;
-
 import org.eclipse.fennec.m2m.ocl.tests.company.CompanyFactory;
 import org.eclipse.fennec.m2m.ocl.tests.company.CompanyPackage;
-
 import org.eclipse.fennec.m2m.ocl.tests.company.impl.CompanyPackageImpl;
-
 import org.eclipse.fennec.m2m.ocl.tests.company.util.CompanyResourceFactoryImpl;
-
 import org.osgi.annotation.bundle.Capability;
-
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.ServiceRegistration;
-
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
-
 import org.osgi.service.condition.Condition;
 /**
  * The <b>PackageConfiguration</b> for the model.
