@@ -5,17 +5,12 @@
     <details key="value" value="1.0"/>
   </eAnnotations>
   <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-    <details key="complianceLevel" value="17.0"/>
+    <details key="complianceLevel" value="21.0"/>
     <details key="oSGiCompatible" value="true"/>
     <details key="basePackage" value="org.eclipse.fennec.m2m.model"/>
     <details key="resource" value="XMI"/>
     <details key="copyrightText" value="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"/>
   </eAnnotations>
-
-  <!-- ════════════════════════════════════════════════════════════════════
-       Enums
-       ════════════════════════════════════════════════════════════════════ -->
-
   <eClassifiers xsi:type="ecore:EEnum" name="CollectionKind">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The kind of a collection type or collection literal (OCL v2.4 Section 8.2)."/>
@@ -26,7 +21,6 @@
     <eLiterals name="Bag" value="3"/>
     <eLiterals name="Sequence" value="4"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EEnum" name="ConstraintKind">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The kind of an OCL constraint: invariant, pre/postcondition, body, initial/derived value, or definition."/>
@@ -39,42 +33,32 @@
     <eLiterals name="derive" value="5"/>
     <eLiterals name="def" value="6"/>
   </eClassifiers>
-
-  <!-- ════════════════════════════════════════════════════════════════════
-       Type Hierarchy
-       ════════════════════════════════════════════════════════════════════ -->
-
   <eClassifiers xsi:type="ecore:EClass" name="OclType" abstract="true">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base class for all OCL types. Each type carries a name used in diagnostics and pretty-printing."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="PrimitiveType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="An OCL primitive type: Boolean, Integer, Real, String, or UnlimitedNatural (OCL v2.4 Section 8.2.1)."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="AnyType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The OclAny type, supertype of all other types except OclVoid and OclInvalid (OCL v2.4 Section 8.2.2)."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="VoidType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The OclVoid type, which has a single instance 'null'. Conforms to all other types (OCL v2.4 Section 8.2.3)."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="InvalidType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The OclInvalid type, which has a single instance 'invalid'. Represents evaluation errors (OCL v2.4 Section 8.2.4)."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="CollectionType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Base class for OCL collection types. Carries the element type and collection kind (OCL v2.4 Section 8.2.5)."/>
@@ -82,31 +66,26 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="elementType" eType="#//OclType"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="kind" eType="#//CollectionKind"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="SetType" eSuperTypes="#//CollectionType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The Set(T) collection type: unordered, no duplicates."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="OrderedSetType" eSuperTypes="#//CollectionType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The OrderedSet(T) collection type: ordered, no duplicates."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="BagType" eSuperTypes="#//CollectionType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The Bag(T) collection type: unordered, allows duplicates."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="SequenceType" eSuperTypes="#//CollectionType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The Sequence(T) collection type: ordered, allows duplicates."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="MapType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The Map(K, V) type. OCL v2.5 extension for key-value mappings."/>
@@ -114,7 +93,6 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="keyType" eType="#//OclType"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="valueType" eType="#//OclType"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="TupleType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="An OCL tuple type defined by a set of named, typed parts. E.g. Tuple(name: String, age: Integer) (OCL v2.4 Section 8.2.6)."/>
@@ -122,7 +100,6 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedParts" upperBound="-1"
         eType="#//TuplePart" containment="true"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="MessageType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The type of an OclMessage, parameterized by the operation or signal that was sent (OCL v2.4 Section 8.2.7)."/>
@@ -138,7 +115,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="ClassifierType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Wraps an Ecore EClassifier as an OCL type, used when the OCL type system refers to a user-model classifier."/>
@@ -149,11 +125,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
-  <!-- ════════════════════════════════════════════════════════════════════
-       Expression Hierarchy
-       ════════════════════════════════════════════════════════════════════ -->
-
   <eClassifiers xsi:type="ecore:EClass" name="OclExpression" abstract="true">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base class for all OCL expression AST nodes. Every expression has a resolved type (OCL v2.4 Section 8.3)."/>
@@ -164,9 +135,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
-  <!-- CallExp hierarchy -->
-
   <eClassifiers xsi:type="ecore:EClass" name="CallExp" abstract="true" eSuperTypes="#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base for all call expressions. A call has a source expression, and may be implicit or use safe navigation (OCL v2.4 Section 8.3.1)."/>
@@ -188,7 +156,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="FeatureCallExp" abstract="true" eSuperTypes="#//CallExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base for property and operation calls on a model element (OCL v2.4 Section 8.3.2)."/>
@@ -199,7 +166,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="PropertyCallExp" eSuperTypes="#//FeatureCallExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Access to a structural feature (attribute or reference) of the source object. E.g. 'self.name' (OCL v2.4 Section 8.3.3)."/>
@@ -210,7 +176,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="OperationCallExp" eSuperTypes="#//FeatureCallExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Invocation of an operation, including infix operators (+, =, etc.) and built-in OCL operations (OCL v2.4 Section 8.3.4)."/>
@@ -228,7 +193,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="LoopExp" abstract="true" eSuperTypes="#//CallExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base for iterator and iterate expressions that loop over a collection source (OCL v2.4 Section 8.3.5)."/>
@@ -246,7 +210,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="IteratorExp" eSuperTypes="#//LoopExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A named iterator expression such as select, reject, collect, forAll, exists, any, one, isUnique, sortedBy, closure (OCL v2.4 Section 8.3.6)."/>
@@ -257,7 +220,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="IterateExp" eSuperTypes="#//LoopExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The iterate expression: the most general collection loop with an explicit accumulator variable (OCL v2.4 Section 8.3.7)."/>
@@ -269,36 +231,29 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
-  <!-- LiteralExp hierarchy -->
-
   <eClassifiers xsi:type="ecore:EClass" name="LiteralExp" abstract="true" eSuperTypes="#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base for all literal (constant value) expressions (OCL v2.4 Section 8.3.8)."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="PrimitiveLiteralExp" abstract="true"
       eSuperTypes="#//LiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base for literals of primitive types: Integer, Real, Boolean, String, UnlimitedNatural, and null."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="IntegerLiteralExp" eSuperTypes="#//PrimitiveLiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="An integer literal, e.g. 42."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="integerSymbol" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//ELong"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="RealLiteralExp" eSuperTypes="#//PrimitiveLiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A real (floating-point) literal, e.g. 3.14."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="realSymbol" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDouble"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="UnlimitedNaturalLiteralExp" eSuperTypes="#//PrimitiveLiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="An unlimited natural literal: a non-negative integer or the special value * (unlimited). The value -1 represents *."/>
@@ -306,33 +261,28 @@
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="unlimitedNaturalSymbol"
         eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//ELong"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="StringLiteralExp" eSuperTypes="#//PrimitiveLiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A string literal, e.g. 'hello'."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="stringSymbol" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="BooleanLiteralExp" eSuperTypes="#//PrimitiveLiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A boolean literal: true or false."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="booleanSymbol" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="NullLiteralExp" eSuperTypes="#//PrimitiveLiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The null literal, representing the single instance of OclVoid."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="InvalidLiteralExp" eSuperTypes="#//LiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The invalid literal, representing the single instance of OclInvalid. Signals an evaluation error."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="EnumLiteralExp" eSuperTypes="#//LiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A reference to an enumeration literal, e.g. Color::red (OCL v2.4 Section 8.3.10)."/>
@@ -343,7 +293,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="CollectionLiteralExp" eSuperTypes="#//LiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A collection literal, e.g. Set{1, 2, 3} or Sequence{1..10} (OCL v2.4 Section 8.3.11)."/>
@@ -352,7 +301,6 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedParts" upperBound="-1"
         eType="#//CollectionLiteralPart" containment="true"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="TupleLiteralExp" eSuperTypes="#//LiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A tuple literal, e.g. Tuple{name = 'John', age = 30} (OCL v2.4 Section 8.3.12)."/>
@@ -360,7 +308,6 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedParts" upperBound="-1"
         eType="#//TupleLiteralPart" containment="true"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="MapLiteralExp" eSuperTypes="#//LiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A map literal, e.g. Map{'a' = 1, 'b' = 2}. OCL v2.5 extension."/>
@@ -368,9 +315,6 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedParts" upperBound="-1"
         eType="#//MapLiteralPart" containment="true"/>
   </eClassifiers>
-
-  <!-- Standalone expressions -->
-
   <eClassifiers xsi:type="ecore:EClass" name="IfExp" eSuperTypes="#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A conditional expression: if condition then thenExp else elseExp endif (OCL v2.4 Section 8.3.13)."/>
@@ -382,7 +326,6 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedElse" eType="#//OclExpression"
         containment="true"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="LetExp" eSuperTypes="#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A let expression that introduces a local variable: let x : T = initExp in bodyExp (OCL v2.4 Section 8.3.14)."/>
@@ -400,7 +343,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="VariableExp" eSuperTypes="#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A reference to a previously declared variable (self, iterator, let, result, parameter) (OCL v2.4 Section 8.3.15)."/>
@@ -411,7 +353,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="TypeExp" eSuperTypes="#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A type literal used in oclIsKindOf(), oclAsType(), etc. (OCL v2.4 Section 8.3.16)."/>
@@ -422,7 +363,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="MessageExp" eSuperTypes="#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="An OclMessage expression representing an asynchronous operation call or signal send in a postcondition (OCL v2.4 Section 8.3.17)."/>
@@ -446,11 +386,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
-  <!-- ════════════════════════════════════════════════════════════════════
-       Supporting Elements
-       ════════════════════════════════════════════════════════════════════ -->
-
   <eClassifiers xsi:type="ecore:EClass" name="Variable">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A variable declaration used as self, iterator variable, let variable, iterate accumulator, or operation parameter (OCL v2.4 Section 8.3)."/>
@@ -464,7 +399,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="Constraint">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A named OCL constraint (invariant, pre/postcondition, body, init, derive, or def) attached to a model element."/>
@@ -493,13 +427,11 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="CollectionLiteralPart" abstract="true">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base for parts of a collection literal: either a single item or a range (OCL v2.4 Section 8.3.11)."/>
     </eAnnotations>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="CollectionItem" eSuperTypes="#//CollectionLiteralPart">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A single element in a collection literal, e.g. the '1' in Set{1, 2}."/>
@@ -507,7 +439,6 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedItem" eType="#//OclExpression"
         containment="true"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="CollectionRange" eSuperTypes="#//CollectionLiteralPart">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A range in a collection literal, e.g. the '1..10' in Sequence{1..10}."/>
@@ -517,10 +448,9 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedLast" eType="#//OclExpression"
         containment="true"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="TupleLiteralPart">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A name-value pair in a tuple literal, e.g. 'name = &apos;John&apos;' in Tuple{name = &apos;John&apos;, age = 30}."/>
+      <details key="documentation" value="A name-value pair in a tuple literal, e.g. 'name = 'John'' in Tuple{name = 'John', age = 30}."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"/>
@@ -531,7 +461,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="MapLiteralPart">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A key-value pair in a map literal. OCL v2.5 extension."/>
@@ -541,7 +470,6 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedValue" eType="#//OclExpression"
         containment="true"/>
   </eClassifiers>
-
   <eClassifiers xsi:type="ecore:EClass" name="TuplePart">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A named, typed part in a TupleType definition. Defines the structure of a tuple type."/>
@@ -549,5 +477,4 @@
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"/>
   </eClassifiers>
-
 </ecore:EPackage>
