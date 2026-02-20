@@ -105,6 +105,15 @@ abstract class AbstractQvtoEngineTest {
 	}
 
 	/**
+	 * Parse and execute with model extents and custom options.
+	 */
+	static QvtoExecutionResult executeWithExtents(String source, QvtoEvaluationOptions options,
+			QvtoModelExtent... extents) throws QvtoParseException {
+		OperationalTransformation t = parse(source);
+		return engine.execute(t, QvtoExecutionContext.of(extents), options);
+	}
+
+	/**
 	 * Creates a SourceElement EObject with the given name and value.
 	 */
 	static EObject createSourceElement(String name, int value) {

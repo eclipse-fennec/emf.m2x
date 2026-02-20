@@ -14,18 +14,21 @@
  */
 package org.eclipse.fennec.m2m.qvto.engine.internal;
 
+import org.eclipse.fennec.m2m.model.qvtoperational.MappingOperation;
+
 /**
  * Lightweight trace record linking a mapping invocation's source to its result.
  *
- * <p>This is an interim structure for Phase B. Phase C will replace it with
- * the full EMF-based trace model.
+ * <p>Used for fast resolve lookups at runtime. The EMF-based {@code Trace} model
+ * is built in parallel by {@link QvtoTraceManager} for export purposes.
  *
  * @param mappingName the name of the mapping that produced this record
+ * @param mappingOp the mapping operation AST node
  * @param source the source object passed to the mapping
  * @param result the result object created by the mapping
  *
  * @author Data In Motion Consulting
  * @since 1.0
  */
-record QvtoTraceRecord(String mappingName, Object source, Object result) {
+record QvtoTraceRecord(String mappingName, MappingOperation mappingOp, Object source, Object result) {
 }

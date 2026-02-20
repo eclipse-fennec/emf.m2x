@@ -60,6 +60,7 @@ import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingCallExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2m.model.qvtoperational.ObjectExp;
+import org.eclipse.fennec.m2m.model.trace.Trace;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationBody;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveExp;
@@ -109,6 +110,14 @@ public class QvtoEvaluator {
 	private final QvtOpDispatch qvtOpSwitch = new QvtOpDispatch();
 	private int stackDepth;
 
+	// Late resolve support
+	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
+	private boolean isDeferredExecution;
+	// L-value capture: set by caseAssignExp before RHS evaluation
+	private EObject pendingLvalueOwner;
+	private EStructuralFeature pendingLvalueFeature;
+	private boolean pendingLvalueIsReset;
+
 	/**
 	 * Creates a new evaluator for a single transformation execution.
 	 */
@@ -149,6 +158,7 @@ public class QvtoEvaluator {
 		} catch (ReturnException e) {
 			// main() returned — normal
 		}
+		processDeferredTasks();
 		return diagnostics;
 	}
 
@@ -385,7 +395,7 @@ public class QvtoEvaluator {
 			}
 
 			// Record trace
-			traceManager.addRecord(mappingOp.getName(), self, result);
+			traceManager.addRecord(mappingOp, self, result);
 
 			return result;
 		} catch (ReturnException e) {
@@ -393,7 +403,7 @@ public class QvtoEvaluator {
 			if (result == null && !mappingOp.getResult().isEmpty()) {
 				result = env.lookup(mappingOp.getResult().get(0).getName());
 			}
-			traceManager.addRecord(mappingOp.getName(), self, result);
+			traceManager.addRecord(mappingOp, self, result);
 			return result;
 		} finally {
 			env.popScope();
@@ -475,6 +485,13 @@ public class QvtoEvaluator {
 		return diagnostics;
 	}
 
+	/**
+	 * Returns the EMF trace model built during execution.
+	 */
+	public Trace getTrace() {
+		return traceManager.getTrace();
+	}
+
 	// --- Internal helpers ---
 
 	private ImperativeOperation findMainOperation() {
@@ -527,6 +544,60 @@ public class QvtoEvaluator {
 
 	private void addInfo(String message) {
 		diagnostics.add(new BasicDiagnostic(Diagnostic.INFO, SOURCE_ID, 0, message, null));
+	}
+
+	/**
+	 * Processes all deferred (late) resolve tasks after all mappings have completed.
+	 * Each task re-evaluates its resolve expression (which now has access to the full
+	 * trace) and assigns the result to the captured l-value property.
+	 */
+	@SuppressWarnings("unchecked")
+	private void processDeferredTasks() {
+		if (deferredTasks.isEmpty()) {
+			return;
+		}
+		isDeferredExecution = true;
+		try {
+			for (DeferredResolveTask task : deferredTasks) {
+				// Re-evaluate the resolve expression — isDeferredExecution causes
+				// caseResolveExp to fall through to normal resolve logic
+				pendingLvalueOwner = null; // Clear to avoid re-capture
+				Object sourceObj = task.capturedSource();
+				env.pushScope();
+				try {
+					if (sourceObj != null) {
+						env.define("self", sourceObj);
+					}
+					Object resolved = qvtOpSwitch.doSwitch(task.resolveExp());
+					resolved = unwrapNull(resolved);
+
+					if (resolved != null && task.targetObject() != null
+							&& task.targetFeature() != null) {
+						EStructuralFeature sf = task.targetObject().eClass()
+								.getEStructuralFeature(task.targetFeature().getName());
+						if (sf == null) {
+							sf = task.targetFeature();
+						}
+						if (task.isReset()) {
+							task.targetObject().eSet(sf, coerceForFeature(sf, resolved));
+						} else {
+							Object current = task.targetObject().eGet(sf);
+							if (current instanceof Collection<?>) {
+								((Collection<Object>) current).add(
+										coerceForFeature(sf, resolved));
+							} else {
+								task.targetObject().eSet(sf, coerceForFeature(sf, resolved));
+							}
+						}
+					}
+				} finally {
+					env.popScope();
+				}
+			}
+		} finally {
+			isDeferredExecution = false;
+			deferredTasks.clear();
+		}
 	}
 
 	private static Object wrapNull(Object value) {
@@ -585,6 +656,20 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseAssignExp(AssignExp exp) {
+			OclExpression left = exp.getLeft();
+
+			// Capture l-value before evaluating RHS (needed for late resolve)
+			if (left instanceof PropertyCallExp propLeft) {
+				Object lvalSource = eval(propLeft.getOwnedSource());
+				if (lvalSource instanceof EObject eo) {
+					EStructuralFeature sf = propLeft.getReferredProperty();
+					EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
+					pendingLvalueOwner = eo;
+					pendingLvalueFeature = actualSf != null ? actualSf : sf;
+					pendingLvalueIsReset = exp.isIsReset();
+				}
+			}
+
 			// Evaluate value(s)
 			List<OclExpression> values = exp.getValue();
 			Object value = null;
@@ -592,7 +677,9 @@ public class QvtoEvaluator {
 				value = eval(values.get(0));
 			}
 
-			OclExpression left = exp.getLeft();
+			// Clear pending l-value after RHS evaluation
+			pendingLvalueOwner = null;
+			pendingLvalueFeature = null;
 			if (left instanceof VariableExp varExp) {
 				// Variable assignment
 				String varName = varExp.getReferredVariable().getName();
@@ -942,15 +1029,26 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseResolveExp(ResolveExp exp) {
-			if (exp.isIsDeferred()) {
-				addWarning("Late resolve not yet supported (Phase C)");
+			if (exp.isIsDeferred() && !isDeferredExecution) {
+				// Deferred (late) resolve: capture source eagerly, defer actual resolve
+				Object sourceObj = exp.getOwnedSource() != null
+						? eval(exp.getOwnedSource()) : env.lookup("self");
+				if (pendingLvalueOwner != null) {
+					deferredTasks.add(new DeferredResolveTask(
+							exp, pendingLvalueOwner, pendingLvalueFeature,
+							pendingLvalueIsReset, sourceObj));
+				} else {
+					addWarning("Late resolve only supported in property assignments");
+				}
 				return WRAPPED_NULL;
 			}
 
-			// Source object
+			// Source object (implicit self when no explicit source)
 			Object sourceObj = null;
 			if (exp.getOwnedSource() != null) {
 				sourceObj = eval(exp.getOwnedSource());
+			} else {
+				sourceObj = env.lookup("self");
 			}
 
 			// Target type

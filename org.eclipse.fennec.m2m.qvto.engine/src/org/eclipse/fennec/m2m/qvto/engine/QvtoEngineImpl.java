@@ -24,6 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.fennec.m2m.model.trace.Trace;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
@@ -121,7 +122,8 @@ public class QvtoEngineImpl implements QvtoEngine {
 		oclEngine.registerOperations(qvtoProvider);
 		try {
 			List<Diagnostic> diagnostics = evaluator.execute();
-			return new QvtoExecutionResult(diagnostics, null);
+			Trace trace = options.tracingEnabled() ? evaluator.getTrace() : null;
+			return new QvtoExecutionResult(diagnostics, trace);
 		} finally {
 			oclEngine.unregisterOperations(qvtoProvider);
 		}
