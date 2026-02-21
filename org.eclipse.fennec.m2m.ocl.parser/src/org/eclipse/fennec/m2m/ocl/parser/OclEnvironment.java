@@ -36,10 +36,14 @@ class OclEnvironment {
 
 	private final OclEnvironment parent;
 	private final Map<String, Variable> variables;
+	/** Implicit iterator variable for shorthand syntax (e.g. ->select(name <> 'bob')). */
+	private final Variable implicitIterator;
 
-	private OclEnvironment(OclEnvironment parent, Map<String, Variable> variables) {
+	private OclEnvironment(OclEnvironment parent, Map<String, Variable> variables,
+			Variable implicitIterator) {
 		this.parent = parent;
 		this.variables = Map.copyOf(variables);
+		this.implicitIterator = implicitIterator;
 	}
 
 	/**
@@ -51,7 +55,7 @@ class OclEnvironment {
 	static OclEnvironment root(Variable selfVariable) {
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		vars.put("self", selfVariable);
-		return new OclEnvironment(null, vars);
+		return new OclEnvironment(null, vars, null);
 	}
 
 	/**
@@ -63,7 +67,7 @@ class OclEnvironment {
 	OclEnvironment nested(Variable variable) {
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		vars.put(variable.getName(), variable);
-		return new OclEnvironment(this, vars);
+		return new OclEnvironment(this, vars, null);
 	}
 
 	/**
@@ -77,7 +81,20 @@ class OclEnvironment {
 		for (Variable v : additionalVariables) {
 			vars.put(v.getName(), v);
 		}
-		return new OclEnvironment(this, vars);
+		return new OclEnvironment(this, vars, null);
+	}
+
+	/**
+	 * Creates a child environment with an implicit iterator variable.
+	 * Property names in the body will be resolved against this variable's type first.
+	 *
+	 * @param iterVar the implicit iterator variable
+	 * @return a new child environment with implicit source
+	 */
+	OclEnvironment nestedImplicit(Variable iterVar) {
+		Map<String, Variable> vars = new LinkedHashMap<>();
+		vars.put(iterVar.getName(), iterVar);
+		return new OclEnvironment(this, vars, iterVar);
 	}
 
 	/**
@@ -93,6 +110,21 @@ class OclEnvironment {
 		}
 		if (parent != null) {
 			return parent.lookup(name);
+		}
+		return Optional.empty();
+	}
+
+	/**
+	 * Returns the innermost implicit iterator variable, if any.
+	 * Used by {@code resolveImplicitProperty} to resolve unqualified names
+	 * against the iterator element type before falling back to {@code self}.
+	 */
+	Optional<Variable> lookupImplicitIterator() {
+		if (implicitIterator != null) {
+			return Optional.of(implicitIterator);
+		}
+		if (parent != null) {
+			return parent.lookupImplicitIterator();
 		}
 		return Optional.empty();
 	}

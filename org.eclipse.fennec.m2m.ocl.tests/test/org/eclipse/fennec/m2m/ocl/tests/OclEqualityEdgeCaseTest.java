@@ -127,17 +127,20 @@ class OclEqualityEdgeCaseTest extends AbstractOclTest {
 
 	@Test
 	void invalidEqualInvalid() throws OclParseException {
-		assertEquals(true, eval("invalid = invalid", alice));
+		// OCL v2.5: any operation on invalid (except oclIsInvalid/oclIsUndefined) yields invalid
+		assertInvalid("invalid = invalid", alice);
 	}
 
 	@Test
 	void invalidNotEqualNull() throws OclParseException {
-		assertEquals(true, eval("invalid <> null", alice));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("invalid <> null", alice);
 	}
 
 	@Test
 	void invalidNotEqualValue() throws OclParseException {
-		assertEquals(true, eval("invalid <> 42", alice));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("invalid <> 42", alice);
 	}
 
 	// --- EObject equality (identity) ---

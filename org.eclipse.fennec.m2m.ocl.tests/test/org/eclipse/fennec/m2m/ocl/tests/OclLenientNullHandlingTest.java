@@ -245,20 +245,19 @@ class OclLenientNullHandlingTest extends AbstractOclTest {
 	}
 
 	@Test
-	void strict_collectionOnNull_returnsInvalid() throws OclParseException {
-		// Null used as iterator source in STRICT mode
+	void strict_collectionOnNull_arrowImpliesOclAsSet() throws OclParseException {
+		// Spec §11.2.3: null as source of arrow call → implicit oclAsSet() → Set{}
+		// null->size() → Set{}->size() → 0
 		OclResult result = evalResult(
 				"let x : Sequence(Integer) = null in x->size()", self, STRICT);
-		assertSame(OclInvalid.INSTANCE, result.value());
-		assertFalse(result.diagnostics().isEmpty());
+		assertEquals(0L, result.value());
 	}
 
 	@Test
-	void lenient_collectionOnNull_returnsInvalid() throws OclParseException {
-		// Null as iterator source — LENIENT propagates null through checkNullInvalid
-		// but then the code detects null is not a Collection
+	void lenient_collectionOnNull_arrowImpliesOclAsSet() throws OclParseException {
+		// Spec §11.2.3: null as source of arrow call → implicit oclAsSet() → Set{}
 		OclResult result = evalResult(
 				"let x : Sequence(Integer) = null in x->size()", self, LENIENT);
-		assertSame(OclInvalid.INSTANCE, result.value());
+		assertEquals(0L, result.value());
 	}
 }

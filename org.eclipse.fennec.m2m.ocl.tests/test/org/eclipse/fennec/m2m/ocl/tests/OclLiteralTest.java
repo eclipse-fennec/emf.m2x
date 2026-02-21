@@ -21,13 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSet;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -129,9 +129,9 @@ class OclLiteralTest extends AbstractOclTest {
 	@Test
 	void setLiteral_integers() throws OclParseException {
 		Object result = eval("Set{1, 2, 3}", self);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 		@SuppressWarnings("unchecked")
-		LinkedHashSet<Object> set = (LinkedHashSet<Object>) result;
+		OclSet<Object> set = (OclSet<Object>) result;
 		assertEquals(3, set.size());
 		assertTrue(set.contains(1));
 		assertTrue(set.contains(2));
@@ -141,7 +141,7 @@ class OclLiteralTest extends AbstractOclTest {
 	@Test
 	void setLiteral_duplicatesRemoved() throws OclParseException {
 		Object result = eval("Set{1, 2, 2, 3}", self);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 		assertEquals(3, ((Collection<?>) result).size());
 	}
 
@@ -167,7 +167,7 @@ class OclLiteralTest extends AbstractOclTest {
 	@Test
 	void setLiteral_empty() throws OclParseException {
 		Object result = eval("Set{}", self);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 		assertTrue(((Collection<?>) result).isEmpty());
 	}
 

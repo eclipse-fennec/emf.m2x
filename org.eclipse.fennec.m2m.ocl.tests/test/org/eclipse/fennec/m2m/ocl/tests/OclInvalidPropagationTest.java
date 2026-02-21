@@ -128,13 +128,14 @@ class OclInvalidPropagationTest extends AbstractOclTest {
 
 	@Test
 	void invalidEqualsInvalid() throws OclParseException {
-		// Two invalids are equal per OCL spec (both are the singleton OclInvalid)
-		assertEquals(true, eval("(1 / 0) = (2 / 0)", self));
+		// OCL v2.5: any operation on invalid (except oclIsInvalid/oclIsUndefined) yields invalid
+		assertInvalid("(1 / 0) = (2 / 0)", self);
 	}
 
 	@Test
 	void invalidNotEqualsValue() throws OclParseException {
-		assertEquals(true, eval("(1 / 0) <> 42", self));
+		// OCL v2.5: any operation on invalid (except oclIsInvalid/oclIsUndefined) yields invalid
+		assertInvalid("(1 / 0) <> 42", self);
 	}
 
 	// --- String operations producing invalid ---
@@ -161,7 +162,8 @@ class OclInvalidPropagationTest extends AbstractOclTest {
 
 	@Test
 	void toBoolean_badFormat() throws OclParseException {
-		assertInvalid("'maybe'.toBoolean()", self);
+		// Eclipse: toBoolean() returns false for anything that is not exactly "true"
+		assertEquals(false, eval("'maybe'.toBoolean()", self));
 	}
 
 	// --- Collection operations producing invalid ---

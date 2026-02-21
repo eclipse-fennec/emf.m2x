@@ -75,12 +75,66 @@ class OclStringIndexTest extends AbstractOclTest {
 
 	@Test
 	void indexOf_notFound() throws OclParseException {
+		// OCL v2.4 §11.5.3: "or zero if s is not a substring of self"
 		assertEquals(0, eval("'abcdef'.indexOf('xyz')", self));
 	}
 
 	@Test
 	void indexOf_multiChar() throws OclParseException {
 		assertEquals(2, eval("'hello world'.indexOf('ello')", self));
+	}
+
+	// --- lastIndexOf (Eclipse extension, not in OCL v2.4 spec) ---
+
+	@Test
+	void lastIndexOf_lastOccurrence() throws OclParseException {
+		assertEquals(4, eval("'test'.lastIndexOf('t')", self));
+	}
+
+	@Test
+	void lastIndexOf_firstOccurrence() throws OclParseException {
+		assertEquals(1, eval("'test'.lastIndexOf('te')", self));
+	}
+
+	@Test
+	void lastIndexOf_middle() throws OclParseException {
+		assertEquals(2, eval("'test'.lastIndexOf('es')", self));
+	}
+
+	@Test
+	void lastIndexOf_suffix() throws OclParseException {
+		assertEquals(3, eval("'test'.lastIndexOf('st')", self));
+	}
+
+	@Test
+	void lastIndexOf_singleChar() throws OclParseException {
+		assertEquals(5, eval("'tesla'.lastIndexOf('a')", self));
+	}
+
+	@Test
+	void lastIndexOf_notFound() throws OclParseException {
+		assertEquals(0, eval("'test'.lastIndexOf('xyzzy')", self));
+	}
+
+	@Test
+	void lastIndexOf_notFound_partial() throws OclParseException {
+		assertEquals(0, eval("'test'.lastIndexOf('est2')", self));
+	}
+
+	@Test
+	void lastIndexOf_emptySubstring() throws OclParseException {
+		// Empty string is found at end: size + 1 in 1-based
+		assertEquals(5, eval("'test'.lastIndexOf('')", self));
+	}
+
+	@Test
+	void lastIndexOf_emptyInEmpty() throws OclParseException {
+		assertEquals(1, eval("''.lastIndexOf('')", self));
+	}
+
+	@Test
+	void lastIndexOf_notFoundInEmpty() throws OclParseException {
+		assertEquals(0, eval("''.lastIndexOf('t')", self));
 	}
 
 	// --- characters ---

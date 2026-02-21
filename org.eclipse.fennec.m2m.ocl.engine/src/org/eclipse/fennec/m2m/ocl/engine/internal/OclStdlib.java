@@ -18,11 +18,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.StringTokenizer;
 import java.util.regex.PatternSyntaxException;
 
 import org.eclipse.emf.ecore.EClassifier;
@@ -126,24 +126,31 @@ class OclStdlib {
 	private static Object dispatchOclAny(String name, Object source, Object[] args) {
 		return switch (name) {
 			case "=" -> oclEquals(source, args[0]);
-			case "<>" -> !((Boolean) oclEquals(source, args[0]));
+			case "<>" -> {
+				Object eq = oclEquals(source, args[0]);
+				yield eq == OclInvalid.INSTANCE ? OclInvalid.INSTANCE : !((Boolean) eq);
+			}
 			case "oclIsUndefined" -> source == null || source == OclInvalid.INSTANCE;
 			case "oclIsInvalid" -> source == OclInvalid.INSTANCE;
 			case "oclIsKindOf" -> oclIsKindOf(source, args[0]);
 			case "oclIsTypeOf" -> oclIsTypeOf(source, args[0]);
 			case "oclAsType" -> oclAsType(source, args[0]);
 			case "oclAsSet" -> {
-				if (source instanceof Collection<?> col) {
-					yield new LinkedHashSet<>(col);
+				// §11.3.3: invalid.oclAsSet() → invalid
+				if (source == OclInvalid.INSTANCE) {
+					yield OclInvalid.INSTANCE;
 				}
-				Set<Object> set = new LinkedHashSet<>();
+				// §11.3.1: value.oclAsSet() → Set{value} (value is the sole element)
+				// §11.3.2: null.oclAsSet() → Set{}
+				// Collections are NOT flattened — Set{1,2}.oclAsSet() → Set{Set{1,2}}
+				Set<Object> set = new OclSet<>();
 				if (source != null) {
 					set.add(source);
 				}
 				yield set;
 			}
 			case "oclType" -> oclType(source);
-			case "toString" -> String.valueOf(source);
+			case "toString" -> source == null ? OclInvalid.INSTANCE : String.valueOf(source);
 			default -> NOT_FOUND;
 		};
 	}
@@ -187,7 +194,11 @@ class OclStdlib {
 		return ct;
 	}
 
-	private static Boolean oclEquals(Object left, Object right) {
+	private static Object oclEquals(Object left, Object right) {
+		// OCL v2.5: any operation on invalid (except oclIsInvalid/oclIsUndefined) yields invalid
+		if (left == OclInvalid.INSTANCE || right == OclInvalid.INSTANCE) {
+			return OclInvalid.INSTANCE;
+		}
 		// UnlimitedNatural equality: * = * is true, * = anything else is false
 		if (left instanceof OclUnlimitedNatural || right instanceof OclUnlimitedNatural) {
 			return left instanceof OclUnlimitedNatural && right instanceof OclUnlimitedNatural;
@@ -255,7 +266,7 @@ class OclStdlib {
 		for (Object e : left) {
 			boolean found = false;
 			for (Object r : right) {
-				if (oclEquals(e, r)) { found = true; break; }
+				if (Boolean.TRUE.equals(oclEquals(e, r))) { found = true; break; }
 			}
 			if (!found) return false;
 		}
@@ -268,7 +279,7 @@ class OclStdlib {
 		var li = left.iterator();
 		var ri = right.iterator();
 		while (li.hasNext()) {
-			if (!oclEquals(li.next(), ri.next())) return false;
+			if (!Boolean.TRUE.equals(oclEquals(li.next(), ri.next()))) return false;
 		}
 		return true;
 	}
@@ -281,7 +292,7 @@ class OclStdlib {
 		for (Object e : left) {
 			boolean found = false;
 			for (int i = 0; i < remaining.size(); i++) {
-				if (oclEquals(e, remaining.get(i))) {
+				if (Boolean.TRUE.equals(oclEquals(e, remaining.get(i)))) {
 					remaining.remove(i);
 					found = true;
 					break;
@@ -293,16 +304,27 @@ class OclStdlib {
 	}
 
 	private static boolean oclContains(Collection<?> col, Object element) {
-		return col.stream().anyMatch(e -> oclEquals(e, element));
+		return col.stream().anyMatch(e -> Boolean.TRUE.equals(oclEquals(e, element)));
 	}
 
 	private static Object oclIsKindOf(Object source, Object typeArg) {
-		if (source == OclInvalid.INSTANCE) {
+		// Spec §11.3.2/§11.3.3: null.oclIsKindOf(type) → invalid, invalid.oclIsKindOf(type) → invalid
+		if (source == OclInvalid.INSTANCE || source == null) {
 			return OclInvalid.INSTANCE;
 		}
 		// Check primitive type match first
 		if (typeArg instanceof PrimitiveType pt) {
-			return matchesPrimitiveType(source, pt.getName());
+			if (matchesPrimitiveType(source, pt.getName())) {
+				return true;
+			}
+			// Spec §11.5.1: UnlimitedNatural conforms to Integer conforms to Real
+			if (source instanceof OclUnlimitedNatural) {
+				return "Integer".equals(pt.getName()) || "Real".equals(pt.getName());
+			}
+			if (source instanceof Long || source instanceof Integer) {
+				return "Real".equals(pt.getName());
+			}
+			return false;
 		}
 		if (typeArg instanceof CollectionType) {
 			return source instanceof Collection<?>;
@@ -319,7 +341,8 @@ class OclStdlib {
 	}
 
 	private static Object oclIsTypeOf(Object source, Object typeArg) {
-		if (source == OclInvalid.INSTANCE) {
+		// Spec §11.3.2/§11.3.3: null.oclIsTypeOf(type) → invalid, invalid.oclIsTypeOf(type) → invalid
+		if (source == OclInvalid.INSTANCE || source == null) {
 			return OclInvalid.INSTANCE;
 		}
 		// Check primitive type match first
@@ -327,7 +350,7 @@ class OclStdlib {
 			return matchesPrimitiveType(source, pt.getName());
 		}
 		EClassifier classifier = extractClassifier(typeArg);
-		if (classifier == null || source == null) {
+		if (classifier == null) {
 			return false;
 		}
 		if (source instanceof EObject eo) {
@@ -351,6 +374,10 @@ class OclStdlib {
 	}
 
 	private static Object oclAsType(Object source, Object typeArg) {
+		// Spec §11.3.2: null.oclAsType(type) → self (null conforms to all types)
+		if (source == null) {
+			return null;
+		}
 		// Handle primitive types (PrimitiveType has no EClassifier)
 		if (typeArg instanceof PrimitiveType pt) {
 			return matchesPrimitiveType(source, pt.getName()) ? source : OclInvalid.INSTANCE;
@@ -504,6 +531,17 @@ class OclStdlib {
 	// --- Real (OCL v2.4 Section 11.5) ---
 
 	private static Object dispatchReal(String name, Double source, Object[] args) {
+		// Guard: if arg is OclUnlimitedNatural, arithmetic is invalid
+		if (args.length > 0 && args[0] instanceof OclUnlimitedNatural) {
+			return switch (name) {
+				case "<", "<=" -> true; // any finite < *
+				case ">", ">=" -> false;
+				case "max" -> OclUnlimitedNatural.INSTANCE;
+				case "min" -> source;
+				case "+", "-", "*", "/", "div", "mod" -> OclInvalid.INSTANCE;
+				default -> NOT_FOUND;
+			};
+		}
 		return switch (name) {
 			case "+" -> {
 				if (args.length == 0) yield source;
@@ -552,12 +590,47 @@ class OclStdlib {
 				}
 				yield source.substring(lower - 1, upper);
 			}
-			case "toUpperCase" -> source.toUpperCase();
-			case "toLowerCase" -> source.toLowerCase();
+			case "toUpperCase", "toUpper" -> source.toUpperCase();
+			case "toLowerCase", "toLower" -> source.toLowerCase();
 			case "trim" -> source.trim();
 			case "indexOf" -> {
+				// OCL v2.4 §11.5.3: "or zero if s is not a substring of self"
 				int idx = source.indexOf(asString(args[0]));
-				yield (long) (idx + 1); // 0 means not found (1-based)
+				yield (long) (idx + 1); // 1-based, 0 if not found
+			}
+			case "lastIndexOf" -> {
+				// Eclipse extension (not in OCL v2.4 spec), consistent with indexOf
+				int idx = source.lastIndexOf(asString(args[0]));
+				yield (long) (idx + 1); // 1-based, 0 if not found
+			}
+			case "substituteAll" -> {
+				// Eclipse extension: literal (non-regex) replacement of all occurrences
+				yield source.replace(asString(args[0]), asString(args[1]));
+			}
+			case "substituteFirst" -> {
+				// Eclipse extension: literal (non-regex) replacement of first occurrence
+				String target = asString(args[0]);
+				int idx = source.indexOf(target);
+				if (idx < 0) yield OclInvalid.INSTANCE; // target not found
+				yield source.substring(0, idx) + asString(args[1]) + source.substring(idx + target.length());
+			}
+			case "tokenize" -> {
+				// Eclipse extension: StringTokenizer-like operation
+				String delimiters = args.length > 0 ? asString(args[0]) : " \t\n\r\f";
+				boolean returnDelims = args.length > 1 && Boolean.TRUE.equals(args[1]);
+				List<String> tokens = new ArrayList<>();
+				if (delimiters.isEmpty()) {
+					// Empty delimiter: entire string is one token (if non-empty)
+					if (!source.isEmpty()) {
+						tokens.add(source);
+					}
+				} else {
+					StringTokenizer st = new StringTokenizer(source, delimiters, returnDelims);
+					while (st.hasMoreTokens()) {
+						tokens.add(st.nextToken());
+					}
+				}
+				yield tokens;
 			}
 			case "at" -> {
 				int idx = (int) asLong(args[0]);
@@ -588,10 +661,8 @@ class OclStdlib {
 				}
 			}
 			case "toBoolean" -> {
-				String trimmed = source.trim().toLowerCase();
-				if ("true".equals(trimmed)) yield true;
-				if ("false".equals(trimmed)) yield false;
-				yield OclInvalid.INSTANCE;
+				// Eclipse: exact match only, no trim/lowercase, non-"true" → false
+				yield "true".equals(source);
 			}
 			case "matches" -> {
 				String pattern = asString(args[0]);
@@ -656,7 +727,7 @@ class OclStdlib {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
 				yield other.stream().noneMatch(e -> oclContains(source, e));
 			}
-			case "count" -> source.stream().filter(e -> oclEquals(e, args[0])).count();
+			case "count" -> source.stream().filter(e -> Boolean.TRUE.equals(oclEquals(e, args[0]))).count();
 			case "flatten" -> {
 				List<Object> flat = new ArrayList<>();
 				flatten(source, flat);
@@ -674,7 +745,7 @@ class OclStdlib {
 					yield result;
 				}
 				if (source instanceof Set<?>) {
-					Set<Object> result = new LinkedHashSet<>(source);
+					Set<Object> result = new OclSet<>(source);
 					result.add(args[0]);
 					yield result;
 				}
@@ -684,31 +755,40 @@ class OclStdlib {
 			}
 			case "excluding" -> {
 				// OCL v2.5 §11.7.2: excluding removes ALL occurrences
+				// Uses OCL equality (§11.5.1: 4 = 4.0) for element matching
 				Object toRemove = args[0];
 				if (source instanceof OclOrderedSet<?>) {
 					OclOrderedSet<Object> result = new OclOrderedSet<>(source);
-					result.remove(toRemove);
+					result.removeIf(e -> OclEqualityUtil.oclEquals(e, toRemove));
 					yield result;
 				}
 				if (source instanceof Set<?>) {
-					Set<Object> result = new LinkedHashSet<>(source);
-					result.remove(toRemove);
+					Set<Object> result = new OclSet<>(source);
+					result.remove(toRemove); // OclSet uses OCL equality
 					yield result;
 				}
-				// Bag and Sequence: remove ALL occurrences
+				// Bag and Sequence: remove ALL occurrences using OCL equality
 				if (source instanceof OclBag<?>) {
 					OclBag<Object> result = new OclBag<>(source);
-					result.removeAll(Collections.singleton(toRemove));
+					result.removeIf(e -> OclEqualityUtil.oclEquals(e, toRemove));
 					yield result;
 				}
 				List<Object> result = new ArrayList<>(source);
-				result.removeAll(Collections.singleton(toRemove));
+				result.removeIf(e -> OclEqualityUtil.oclEquals(e, toRemove));
 				yield result;
 			}
 			case "union" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				// §11.7.2: Set->union(Set)→Set, Set->union(Bag)→Bag
+				// §11.7.4: Bag->union(Bag)→Bag, Bag->union(Set)→Bag
 				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
-					Set<Object> result = new LinkedHashSet<>(source);
+					if (other instanceof OclBag<?>) {
+						// Set->union(Bag) → Bag
+						OclBag<Object> bag = new OclBag<>(source);
+						bag.addAll(other);
+						yield bag;
+					}
+					Set<Object> result = new OclSet<>(source);
 					result.addAll(other);
 					yield result;
 				}
@@ -725,12 +805,25 @@ class OclStdlib {
 			}
 			case "intersection" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				// §11.7.2: Set->intersection(Set)→Set, Set->intersection(Bag)→Set
+				// §11.7.4: Bag->intersection(Bag)→Bag, Bag->intersection(Set)→Set
 				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
-					Set<Object> result = new LinkedHashSet<>(source);
+					Set<Object> result = new OclSet<>(source);
 					result.retainAll(other);
 					yield result;
 				}
-				// Bag/Sequence: frequency-based intersection (min frequency)
+				if (source instanceof OclBag<?> && other instanceof Set<?>) {
+					// Bag->intersection(Set) → Set
+					OclSet<Object> result = new OclSet<>();
+					for (Object e : source) {
+						if (oclContains(other, e)) {
+							result.add(e); // OclSet deduplicates
+						}
+					}
+					yield result;
+				}
+				// Bag->intersection(Bag): frequency-based (min frequency)
+				// Other: frequency-based intersection
 				List<Object> remaining = new ArrayList<>(other);
 				List<Object> result;
 				if (source instanceof OclBag<?>) {
@@ -750,7 +843,7 @@ class OclStdlib {
 			case "-" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
 				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
-					Set<Object> result = new LinkedHashSet<>(source);
+					Set<Object> result = new OclSet<>(source);
 					result.removeAll(other);
 					yield result;
 				}
@@ -771,7 +864,7 @@ class OclStdlib {
 			}
 			case "symmetricDifference" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
-				Set<Object> result = new LinkedHashSet<>(source);
+				Set<Object> result = new OclSet<>(source);
 				for (Object o : other) {
 					if (!result.remove(o)) {
 						result.add(o);
@@ -779,7 +872,7 @@ class OclStdlib {
 				}
 				yield result;
 			}
-			case "asSet" -> new LinkedHashSet<>(source);
+			case "asSet" -> new OclSet<>(source);
 			case "asBag" -> new OclBag<>(source);
 			case "asSequence" -> new ArrayList<>(source);
 			case "asOrderedSet" -> new OclOrderedSet<>(source);
@@ -843,11 +936,18 @@ class OclStdlib {
 			}
 			case "product" -> {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				// Well-formedness (§11.7.1): collection cannot contain invalid values
+				for (Object a : source) {
+					if (a == OclInvalid.INSTANCE) yield OclInvalid.INSTANCE;
+				}
+				for (Object b : other) {
+					if (b == OclInvalid.INSTANCE) yield OclInvalid.INSTANCE;
+				}
 				long productSize = (long) source.size() * other.size();
 				if (productSize > options.maxCollectionSize()) {
 					yield OclInvalid.INSTANCE;
 				}
-				Set<Map<String, Object>> result = new LinkedHashSet<>();
+				Set<Map<String, Object>> result = new OclSet<>();
 				for (Object a : source) {
 					for (Object b : other) {
 						Map<String, Object> tuple = new LinkedHashMap<>();
@@ -880,7 +980,7 @@ class OclStdlib {
 						yield (long) (i + 1);
 					}
 				}
-				yield 0L;
+				yield OclInvalid.INSTANCE; // not found → invalid
 			}
 			case "reverse" -> {
 				List<Object> result = new ArrayList<>(source);
@@ -892,7 +992,7 @@ class OclStdlib {
 					// OCL §11.7.3: if already present, move to end
 					OclOrderedSet<Object> result = new OclOrderedSet<>();
 					for (Object e : source) {
-						if (!oclEquals(e, args[0])) result.add(e);
+						if (!Boolean.TRUE.equals(oclEquals(e, args[0]))) result.add(e);
 					}
 					result.add(args[0]);
 					yield result;
@@ -907,7 +1007,7 @@ class OclStdlib {
 					OclOrderedSet<Object> result = new OclOrderedSet<>();
 					result.add(args[0]);
 					for (Object e : source) {
-						if (!oclEquals(e, args[0])) result.add(e);
+						if (!Boolean.TRUE.equals(oclEquals(e, args[0]))) result.add(e);
 					}
 					yield result;
 				}
@@ -933,7 +1033,7 @@ class OclStdlib {
 			case "subSequence", "subOrderedSet" -> {
 				int lower = (int) asLong(args[0]);
 				int upper = (int) asLong(args[1]);
-				if (lower < 1 || upper > source.size() || lower > upper + 1) {
+				if (lower < 1 || upper > source.size() || lower > upper) {
 					yield OclInvalid.INSTANCE;
 				}
 				List<Object> sub = new ArrayList<>(source.subList(lower - 1, upper));
@@ -955,7 +1055,7 @@ class OclStdlib {
 			case "includesValue" -> source.containsValue(args[0]);
 			case "excludesValue" -> !source.containsValue(args[0]);
 			case "get", "at" -> source.get(args[0]);
-			case "keys" -> new LinkedHashSet<>(source.keySet());
+			case "keys" -> new OclSet<>(source.keySet());
 			case "values" -> new ArrayList<>(source.values());
 			case "including" -> {
 				Map<Object, Object> result = new LinkedHashMap<>(source);

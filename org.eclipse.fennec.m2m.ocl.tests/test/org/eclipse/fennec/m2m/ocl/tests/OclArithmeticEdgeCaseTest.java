@@ -43,24 +43,14 @@ class OclArithmeticEdgeCaseTest extends AbstractOclTest {
 
 	@Test
 	void realDivisionByZero() throws OclParseException {
-		Object result = eval("1.0 / 0.0", self);
-		// IEEE 754: division by zero produces Infinity
-		if (result instanceof Double d) {
-			assertTrue(d.isInfinite());
-		} else {
-			assertSame(OclInvalid.INSTANCE, result);
-		}
+		// OCL v2.5 / Eclipse: division by zero → invalid (not IEEE 754 Infinity)
+		assertInvalid("1.0 / 0.0", self);
 	}
 
 	@Test
 	void integerDivByZero() throws OclParseException {
-		// 10 / 0 — OCL / always returns Real, so this is 10.0 / 0.0
-		Object result = eval("10 / 0", self);
-		if (result instanceof Double d) {
-			assertTrue(d.isInfinite());
-		} else {
-			assertSame(OclInvalid.INSTANCE, result);
-		}
+		// OCL / always returns Real; 10 / 0 → invalid
+		assertInvalid("10 / 0", self);
 	}
 
 	@Test

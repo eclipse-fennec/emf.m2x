@@ -16,12 +16,16 @@ package org.eclipse.fennec.m2m.ocl.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
+import org.eclipse.emf.common.notify.impl.AdapterImpl;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
@@ -613,6 +617,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
 		exp.setName(ctx.IDENTIFIER().getText());
+		ArrowCallMarker.mark(exp);
 
 		OclEnvironment savedEnv = this.environment;
 
@@ -632,14 +637,22 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 			iterVars.add(iterVar);
 			exp.getOwnedIterators().add(iterVar);
 		}
+		// §11.9: validate iterator variable count — forAll/exists allow up to 3, all others exactly 1
+		String iterName = ctx.IDENTIFIER().getText();
+		int maxVars = switch (iterName) {
+			case "forAll", "exists" -> 3;
+			default -> 1;
+		};
+		if (iterVars.size() > maxVars) {
+			this.environment = savedEnv;
+			throw new IllegalArgumentException("Iterator '" + iterName + "' allows at most "
+					+ maxVars + " variable(s), but got " + iterVars.size());
+		}
+
 		this.environment = this.environment.nested(iterVars);
 
 		// Body
 		exp.setOwnedBody((OclExpression) visit(ctx.expression()));
-
-		// Set result type: select/reject/closure preserve element type,
-		// collect yields the body type, forAll/exists/one/isUnique yield Boolean
-		String iterName = ctx.IDENTIFIER().getText();
 		if (elementType != null) {
 			switch (iterName) {
 				case "select", "reject", "sortedBy", "closure":
@@ -659,6 +672,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		IterateExp exp = FACTORY.createIterateExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
+		ArrowCallMarker.mark(exp);
 
 		OclEnvironment savedEnv = this.environment;
 
@@ -695,11 +709,25 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		return exp;
 	}
 
-	private OperationCallExp createCollectionOperation(OclExpression source,
+	private static final Set<String> ITERATOR_NAMES = Set.of(
+			"select", "reject", "collect", "collectNested", "forAll", "exists",
+			"any", "one", "isUnique", "sortedBy", "closure");
+
+	private OclExpression createCollectionOperation(OclExpression source,
 			OclParser.CollectionOperationCallContext ctx, boolean isSafe) {
+		String opName = ctx.IDENTIFIER().getText();
+
+		// OCL shorthand: ->any(expr) is ->any(_implicit | expr) (same for all iterators)
+		if (ITERATOR_NAMES.contains(opName) && ctx.argumentList() != null
+				&& ctx.argumentList().expression().size() == 1) {
+			return createImplicitIterator(source, opName, ctx.argumentList().expression(0), isSafe);
+		}
+
 		OperationCallExp exp = FACTORY.createOperationCallExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
+		// Mark as arrow call so the evaluator can do implicit oclAsSet() on null (§11.2.3)
+		ArrowCallMarker.mark(exp);
 
 		if (ctx.argumentList() != null) {
 			for (OclParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
@@ -707,8 +735,45 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 			}
 		}
 
-		String opName = ctx.IDENTIFIER().getText();
 		resolveOperation(exp, opName);
+		return exp;
+	}
+
+	private IteratorExp createImplicitIterator(OclExpression source, String iterName,
+			OclParser.ExpressionContext bodyCtx, boolean isSafe) {
+		IteratorExp exp = FACTORY.createIteratorExp();
+		exp.setOwnedSource(source);
+		exp.setName(iterName);
+		exp.setIsSafe(isSafe);
+		ArrowCallMarker.mark(exp);
+
+		OclEnvironment savedEnv = this.environment;
+
+		// Create implicit iterator variable typed to element type
+		OclType elementType = inferElementType(source);
+		Variable iterVar = FACTORY.createVariable();
+		iterVar.setName("_implicit");
+		if (elementType != null) {
+			iterVar.setType(elementType);
+		}
+		exp.getOwnedIterators().add(iterVar);
+		this.environment = this.environment.nestedImplicit(iterVar);
+
+		// Body
+		exp.setOwnedBody((OclExpression) visit(bodyCtx));
+
+		// Set result type for type-preserving iterators
+		if (elementType != null) {
+			switch (iterName) {
+				case "select", "reject", "sortedBy", "closure":
+					exp.setType(elementType);
+					break;
+				default:
+					break;
+			}
+		}
+
+		this.environment = savedEnv;
 		return exp;
 	}
 
@@ -870,6 +935,17 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	}
 
 	/**
+	 * Resolves a structural feature by name on the given OclType.
+	 * Returns null if the type is not an EClass or the feature is not found.
+	 */
+	private EStructuralFeature resolveFeatureOnType(OclType type, String featureName) {
+		if (type instanceof ClassifierType ct && ct.getReferredClassifier() instanceof EClass eClass) {
+			return eClass.getEStructuralFeature(featureName);
+		}
+		return null;
+	}
+
+	/**
 	 * Infers the element type for iterator variables from the source expression.
 	 * For collection navigation (e.g., self.employees), the element type is the
 	 * type of the collection elements (e.g., Person).
@@ -955,6 +1031,27 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	}
 
 	private OclExpression resolveImplicitProperty(String name) {
+		// Try as property on implicit iterator variable first (shorthand: ->select(name <> 'bob'))
+		Optional<Variable> implicitIter = environment.lookupImplicitIterator();
+		if (implicitIter.isPresent()) {
+			Variable iterVar = implicitIter.get();
+			EStructuralFeature feature = resolveFeatureOnType(iterVar.getType(), name);
+			if (feature != null) {
+				PropertyCallExp exp = FACTORY.createPropertyCallExp();
+				exp.setIsImplicit(true);
+				exp.setOwnedSource(createVariableExp(iterVar));
+				exp.setReferredProperty(feature);
+				EClassifier featureType = feature.getEType();
+				if (featureType != null) {
+					if (feature.isMany()) {
+						exp.setType(createCollectionTypeForFeature(feature));
+					} else {
+						exp.setType(createClassifierType(featureType));
+					}
+				}
+				return exp;
+			}
+		}
 		// Try as property on self
 		if (contextType instanceof EClass eClass) {
 			EStructuralFeature feature = eClass.getEStructuralFeature(name);
@@ -1067,6 +1164,32 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	}
 
 	private String unescapeString(String s) {
-		return s.replace("\\\\'", "'").replace("\\\\\\\\", "\\\\");
+		return s.replace("\\n", "\n")
+				.replace("\\t", "\t")
+				.replace("\\r", "\r")
+				.replace("\\f", "\f")
+				.replace("\\b", "\b")
+				.replace("\\'", "'")
+				.replace("\\\\", "\\");
+	}
+
+	/**
+	 * Marker adapter to flag AST nodes created from arrow calls ({@code ->}).
+	 * Used by the evaluator to apply implicit {@code oclAsSet()} on null sources (§11.2.3).
+	 */
+	static final class ArrowCallMarker extends AdapterImpl {
+
+		static void mark(EObject target) {
+			target.eAdapters().add(new ArrowCallMarker());
+		}
+
+		static boolean isArrowCall(EObject target) {
+			return target.eAdapters().stream().anyMatch(ArrowCallMarker.class::isInstance);
+		}
+
+		@Override
+		public boolean isAdapterForType(Object type) {
+			return type == ArrowCallMarker.class;
+		}
 	}
 }

@@ -64,7 +64,7 @@ class OclIteratorEdgeCaseTest extends AbstractOclTest {
 
 	@Test
 	void isUnique_invalidBody_divByZero() throws OclParseException {
-		// Body produces invalid for element 0 → isUnique should report invalid
+		// OCL v2.4 §11.9.1: "Results in invalid if body evaluates to invalid"
 		assertInvalid("Sequence{1, 0, 2}->isUnique(x | 1.div(x))", self);
 	}
 
@@ -94,10 +94,9 @@ class OclIteratorEdgeCaseTest extends AbstractOclTest {
 
 	@Test
 	void any_invalidBody_noMatch() throws OclParseException {
-		// All body evaluations are invalid → no element matched, result is null
-		Object result = eval("Sequence{0}->any(x | 1.div(x) > 0)", self);
-		// 1.div(0) is invalid, invalid > 0 is invalid, not TRUE → no match → null
-		assertEquals(null, result);
+		// All body evaluations are invalid → no element matched → invalid (not null)
+		// Eclipse: any with invalid body → invalid
+		assertInvalid("Sequence{0}->any(x | 1.div(x) > 0)", self);
 	}
 
 	@Test
@@ -130,5 +129,68 @@ class OclIteratorEdgeCaseTest extends AbstractOclTest {
 		assertTrue(result instanceof Collection<?>);
 		Collection<?> coll = (Collection<?>) result;
 		assertEquals(3, coll.iterator().next());
+	}
+
+	// === Multi-variable iterators (cartesian product, OCL §9.3.25 / §11.9.1) ===
+
+	@Test
+	void forAll_twoVars_allTrue() throws OclParseException {
+		// forAll(e1, e2 | ...) = cartesian product, all pairs satisfy condition
+		assertEquals(true,
+				eval("Set{1, 2, 3}->forAll(e1, e2 | e1 + e2 > 0)", self));
+	}
+
+	@Test
+	void forAll_twoVars_someFalse() throws OclParseException {
+		// e1=1, e2=2 → 1 > 2 = false → short-circuit
+		assertEquals(false,
+				eval("Set{1, 2}->forAll(e1, e2 | e1 >= e2)", self));
+	}
+
+	@Test
+	void forAll_twoVars_sameElement() throws OclParseException {
+		// includes pair (1,1), (2,2) etc — e1 = e2 true for these
+		assertEquals(false,
+				eval("Set{1, 2}->forAll(e1, e2 | e1 <> e2)", self));
+	}
+
+	@Test
+	void forAll_twoVars_emptyCollection() throws OclParseException {
+		// vacuously true
+		assertEquals(true,
+				eval("Set{}->forAll(e1, e2 | false)", self));
+	}
+
+	@Test
+	void exists_twoVars_found() throws OclParseException {
+		// exists pair (1,2) where 1 + 2 = 3
+		assertEquals(true,
+				eval("Set{1, 2, 3}->exists(e1, e2 | e1 + e2 = 3)", self));
+	}
+
+	@Test
+	void exists_twoVars_notFound() throws OclParseException {
+		assertEquals(false,
+				eval("Set{1, 2}->exists(e1, e2 | e1 + e2 = 100)", self));
+	}
+
+	@Test
+	void exists_twoVars_emptyCollection() throws OclParseException {
+		assertEquals(false,
+				eval("Set{}->exists(e1, e2 | true)", self));
+	}
+
+	@Test
+	void forAll_twoVars_sequence() throws OclParseException {
+		// Sequence includes duplicates: (1,1),(1,2),(2,1),(2,2)
+		assertEquals(true,
+				eval("Sequence{1, 2}->forAll(a, b | a + b <= 4)", self));
+	}
+
+	@Test
+	void exists_twoVars_sequence() throws OclParseException {
+		// (1,2): 1*2=2, (2,1): 2*1=2 — no pair with product=4 except (2,2)
+		assertEquals(true,
+				eval("Sequence{1, 2}->exists(a, b | a * b = 4)", self));
 	}
 }

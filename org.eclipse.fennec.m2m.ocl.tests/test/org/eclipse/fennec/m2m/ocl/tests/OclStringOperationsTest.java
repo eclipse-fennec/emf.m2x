@@ -84,18 +84,29 @@ class OclStringOperationsTest extends AbstractOclTest {
 	}
 
 	@Test
+	void toUpper_synonym() throws OclParseException {
+		assertEquals("HELLO", eval("'hello'.toUpper()", self));
+	}
+
+	@Test
+	void toLower_synonym() throws OclParseException {
+		assertEquals("hello", eval("'HELLO'.toLower()", self));
+	}
+
+	@Test
 	void trim() throws OclParseException {
 		assertEquals("hello", eval("'  hello  '.trim()", self));
 	}
 
 	@Test
 	void indexOf() throws OclParseException {
-		// OCL indexOf returns 1-based position, 0 if not found
+		// OCL indexOf returns 1-based position, invalid if not found
 		assertEquals(3, eval("'hello'.indexOf('llo')", self));
 	}
 
 	@Test
 	void indexOf_notFound() throws OclParseException {
+		// OCL v2.4 §11.5.3: "or zero if s is not a substring of self"
 		assertEquals(0, eval("'hello'.indexOf('xyz')", self));
 	}
 
@@ -155,5 +166,120 @@ class OclStringOperationsTest extends AbstractOclTest {
 	@Test
 	void matches_invalidRegex_returnsInvalid() throws OclParseException {
 		assertInvalid("'hello'.matches('[invalid')", self);
+	}
+
+	// --- substituteAll (Eclipse extension, literal non-regex replacement) ---
+
+	@Test
+	void substituteAll_basic() throws OclParseException {
+		assertEquals("subsTiTuTeAll operaTion",
+				eval("'substituteAll operation'.substituteAll('t', 'T')", self));
+	}
+
+	@Test
+	void substituteAll_notFound() throws OclParseException {
+		// Target not found → original string returned
+		assertEquals("hello", eval("'hello'.substituteAll('xyz', 'abc')", self));
+	}
+
+	@Test
+	void substituteAll_regexTreatedAsLiteral() throws OclParseException {
+		// Regex metacharacters treated as literal text
+		assertEquals("repla ce operation",
+				eval("'repla ce operation'.substituteAll('(\\\\w+)\\\\s*', '')", self));
+	}
+
+	@Test
+	void substituteAll_emptyTarget() throws OclParseException {
+		// Empty target inserts replacement between every character
+		assertEquals("xxrxxexxpxx", eval("'rep'.substituteAll('', 'xx')", self));
+	}
+
+	@Test
+	void substituteAll_emptyReplacement() throws OclParseException {
+		assertEquals("hll", eval("'hello'.substituteAll('e', '').substituteAll('o', '')", self));
+	}
+
+	// --- substituteFirst (Eclipse extension, literal non-regex replacement) ---
+
+	@Test
+	void substituteFirst_basic() throws OclParseException {
+		assertEquals("Hello world",
+				eval("'hello world'.substituteFirst('h', 'H')", self));
+	}
+
+	@Test
+	void substituteFirst_onlyFirst() throws OclParseException {
+		// Only replaces FIRST occurrence
+		assertEquals("Test", eval("'test'.substituteFirst('t', 'T')", self));
+	}
+
+	@Test
+	void substituteFirst_multiChar() throws OclParseException {
+		assertEquals("hXYZlo", eval("'hello'.substituteFirst('el', 'XYZ')", self));
+	}
+
+	@Test
+	void substituteFirst_notFound() throws OclParseException {
+		// Target not found → invalid
+		assertInvalid("'hello'.substituteFirst('xyz', 'abc')", self);
+	}
+
+	@Test
+	void substituteFirst_emptyTarget() throws OclParseException {
+		// Empty target found at start → inserts replacement at beginning
+		assertEquals("xxhello", eval("'hello'.substituteFirst('', 'xx')", self));
+	}
+
+	// --- tokenize (Eclipse extension, StringTokenizer-like) ---
+
+	@Test
+	void tokenize_defaultDelimiters() throws OclParseException {
+		// Default: whitespace delimiters (space, tab, newline, CR, FF)
+		assertEquals(List.of("a", "b", "c", "d"),
+				eval("'\\na b\\tc\\fd\\r'.tokenize()", self));
+	}
+
+	@Test
+	void tokenize_defaultDelimiters_leadingTrailing() throws OclParseException {
+		assertEquals(List.of("a", "b", "c", "d"),
+				eval("' \\t\\n\\r\\fa b\\tc\\fd \\t\\n\\r\\f'.tokenize()", self));
+	}
+
+	@Test
+	void tokenize_customDelimiter_spaceOnly() throws OclParseException {
+		// Only space as delimiter — newlines/tabs stay in tokens
+		assertEquals(List.of("\na", "b\tc\fd\r"),
+				eval("'\\na b\\tc\\fd\\r'.tokenize(' ')", self));
+	}
+
+	@Test
+	void tokenize_dotDelimiter() throws OclParseException {
+		assertEquals(List.of("1", "2", "3", "4"),
+				eval("'1.2.3.4'.tokenize('.')", self));
+	}
+
+	@Test
+	void tokenize_returnDelims_true() throws OclParseException {
+		// returnDelims=true includes delimiter tokens in result
+		assertEquals(List.of("\na", " ", "b\tc\fd\r"),
+				eval("'\\na b\\tc\\fd\\r'.tokenize(' ', true)", self));
+	}
+
+	@Test
+	void tokenize_emptyString() throws OclParseException {
+		assertEquals(List.of(), eval("''.tokenize(' ', true)", self));
+	}
+
+	@Test
+	void tokenize_emptyDelimiter() throws OclParseException {
+		// Empty delimiter: entire string is one token
+		assertEquals(List.of(" \t\n\r\f"),
+				eval("' \\t\\n\\r\\f'.tokenize('', true)", self));
+	}
+
+	@Test
+	void tokenize_emptyBoth() throws OclParseException {
+		assertEquals(List.of(), eval("''.tokenize('', true)", self));
 	}
 }

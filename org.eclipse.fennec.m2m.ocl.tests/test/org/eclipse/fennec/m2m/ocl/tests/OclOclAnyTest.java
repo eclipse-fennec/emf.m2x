@@ -17,10 +17,9 @@ package org.eclipse.fennec.m2m.ocl.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import java.util.LinkedHashSet;
-
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSet;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -81,9 +80,9 @@ class OclOclAnyTest extends AbstractOclTest {
 	@Test
 	void oclAsSet_integer() throws OclParseException {
 		Object result = eval("42.oclAsSet()", self);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 		@SuppressWarnings("unchecked")
-		LinkedHashSet<Object> set = (LinkedHashSet<Object>) result;
+		OclSet<Object> set = (OclSet<Object>) result;
 		assertEquals(1, set.size());
 		assertEquals(true, set.contains(42));
 	}
@@ -91,8 +90,8 @@ class OclOclAnyTest extends AbstractOclTest {
 	@Test
 	void oclAsSet_string() throws OclParseException {
 		Object result = eval("'hello'.oclAsSet()", self);
-		assertInstanceOf(LinkedHashSet.class, result);
-		assertEquals(1, ((LinkedHashSet<?>) result).size());
+		assertInstanceOf(OclSet.class, result);
+		assertEquals(1, ((OclSet<?>) result).size());
 	}
 
 	// --- toString ---

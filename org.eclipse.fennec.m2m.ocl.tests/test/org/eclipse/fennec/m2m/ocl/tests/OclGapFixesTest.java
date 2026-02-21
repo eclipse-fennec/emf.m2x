@@ -189,15 +189,12 @@ class OclGapFixesTest extends AbstractOclTest {
 	class Gap12OclAsSetCollection {
 
 		@Test
-		void oclAsSet_onSequence_convertsToSet() throws OclParseException {
+		void oclAsSet_onSequence_wrapsAsElement() throws OclParseException {
+			// §11.3.1: oclAsSet wraps value as sole element — Collection is NOT flattened
+			// Eclipse: Set{1..4}->oclAsSet() → Set{Set{1..4}}
 			Object result = eval("Sequence{1, 2, 2, 3}->oclAsSet()", self);
 			assertInstanceOf(Set.class, result);
-			@SuppressWarnings("unchecked")
-			Set<Object> set = (Set<Object>) result;
-			assertEquals(3, set.size()); // duplicates removed
-			assertTrue(set.contains(1));
-			assertTrue(set.contains(2));
-			assertTrue(set.contains(3));
+			assertEquals(1, ((Set<?>) result).size());
 		}
 
 		@Test
@@ -211,10 +208,11 @@ class OclGapFixesTest extends AbstractOclTest {
 		}
 
 		@Test
-		void oclAsSet_onSet_returnsNewSet() throws OclParseException {
+		void oclAsSet_onSet_wrapsAsElement() throws OclParseException {
+			// §11.3.1: Set{1,2,3}.oclAsSet() → Set{Set{1,2,3}} — size 1
 			Object result = eval("Set{1, 2, 3}->oclAsSet()", self);
 			assertInstanceOf(Set.class, result);
-			assertEquals(3, ((Set<?>) result).size());
+			assertEquals(1, ((Set<?>) result).size());
 		}
 	}
 
@@ -284,9 +282,10 @@ class OclGapFixesTest extends AbstractOclTest {
 		}
 
 		@Test
-		void closure_onSet_returnsOrderedSet() throws OclParseException {
+		void closure_onSet_returnsSet() throws OclParseException {
+			// §11.9.1: Set (unordered) source → Set result
 			Object result = eval("Set{1, 2, 3}->closure(i | i)", self);
-			assertInstanceOf(OclOrderedSet.class, result);
+			assertInstanceOf(Set.class, result);
 		}
 	}
 
@@ -302,7 +301,8 @@ class OclGapFixesTest extends AbstractOclTest {
 
 		@Test
 		void indexOf_notFound() throws OclParseException {
-			assertEquals(0, eval("Sequence{1, 2, 3}->indexOf(99)", self));
+			// OCL v2.5 / Eclipse: not found → invalid
+			assertInvalid("Sequence{1, 2, 3}->indexOf(99)", self);
 		}
 
 		@Test

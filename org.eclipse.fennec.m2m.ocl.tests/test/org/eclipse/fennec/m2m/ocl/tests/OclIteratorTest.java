@@ -20,12 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSet;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -75,7 +75,7 @@ class OclIteratorTest extends AbstractOclTest {
 	@Test
 	void select_preservesSetType() throws OclParseException {
 		Object result = eval("Set{1, 2, 3, 4}->select(i | i > 2)", self);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 	}
 
 	@Test

@@ -26,10 +26,10 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Tests for iterator behavior when the body expression produces
- * invalid or null values. Per OCL spec:
+ * invalid or null values. Per OCL v2.4 §11.9.1:
  * <ul>
- *   <li>forAll: if any body returns invalid (and no false), result is invalid</li>
- *   <li>exists: if any body returns invalid (and no true), result is invalid</li>
+ *   <li>forAll: false &gt; invalid &gt; null &gt; true</li>
+ *   <li>exists: true &gt; invalid &gt; null &gt; false</li>
  *   <li>select/reject: invalid body elements are typically excluded</li>
  *   <li>collect: invalid body values are included in result</li>
  *   <li>iterate: invalid accumulator propagates</li>
@@ -90,6 +90,67 @@ class OclIteratorInvalidBodyTest extends AbstractOclTest {
 		// x=1 → false (1/1 > 5 → false), x=0 → invalid (div by zero)
 		// No true found, invalid seen → invalid
 		assertInvalid("Sequence{1, 0}->exists(x | 1 / x > 5)", self);
+	}
+
+	// === forAll with null body (§11.9.1: false > invalid > null > true) ===
+
+	@Test
+	void forAll_nullBodyOnly_isNull() throws OclParseException {
+		// All bodies produce null → result is null (not invalid)
+		// null is produced by: if false then true else null endif
+		assertEquals(null, eval(
+				"Sequence{1, 2}->forAll(x | null)", self));
+	}
+
+	@Test
+	void forAll_nullAndTrue_isNull() throws OclParseException {
+		// x=1 → true, x=2 → null; no false, no invalid → null
+		assertEquals(null, eval(
+				"Sequence{1, 2}->forAll(x | if x = 1 then true else null endif)", self));
+	}
+
+	@Test
+	void forAll_invalidAndNull_isInvalid() throws OclParseException {
+		// x=1 → null, x=0 → invalid (div by zero); invalid > null → invalid
+		assertInvalid(
+				"Sequence{1, 0}->forAll(x | if x = 1 then null else 1 / 0 > 0 endif)", self);
+	}
+
+	@Test
+	void forAll_falseAndNull_isFalse() throws OclParseException {
+		// x=1 → false, x=2 → null; false > null → false
+		assertEquals(false, eval(
+				"Sequence{1, 2}->forAll(x | if x = 1 then false else null endif)", self));
+	}
+
+	// === exists with null body (§11.9.1: true > invalid > null > false) ===
+
+	@Test
+	void exists_nullBodyOnly_isNull() throws OclParseException {
+		// All bodies produce null → result is null (not invalid)
+		assertEquals(null, eval(
+				"Sequence{1, 2}->exists(x | null)", self));
+	}
+
+	@Test
+	void exists_nullAndFalse_isNull() throws OclParseException {
+		// x=1 → false, x=2 → null; no true, no invalid → null
+		assertEquals(null, eval(
+				"Sequence{1, 2}->exists(x | if x = 2 then null else false endif)", self));
+	}
+
+	@Test
+	void exists_invalidAndNull_isInvalid() throws OclParseException {
+		// x=1 → null, x=0 → invalid (div by zero); invalid > null → invalid
+		assertInvalid(
+				"Sequence{1, 0}->exists(x | if x = 1 then null else 1 / 0 > 0 endif)", self);
+	}
+
+	@Test
+	void exists_trueAndNull_isTrue() throws OclParseException {
+		// x=1 → true, x=2 → null; true > null → true
+		assertEquals(true, eval(
+				"Sequence{1, 2}->exists(x | if x = 1 then true else null endif)", self));
 	}
 
 	// === select with invalid body ===

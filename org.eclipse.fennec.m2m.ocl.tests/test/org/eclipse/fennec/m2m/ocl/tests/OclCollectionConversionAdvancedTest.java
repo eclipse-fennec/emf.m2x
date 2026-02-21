@@ -17,12 +17,12 @@ package org.eclipse.fennec.m2m.ocl.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSet;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -56,7 +56,7 @@ class OclCollectionConversionAdvancedTest extends AbstractOclTest {
 	@Test
 	void sequenceToSet_type() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->asSet()", self);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 	}
 
 	// --- Set -> Sequence ---

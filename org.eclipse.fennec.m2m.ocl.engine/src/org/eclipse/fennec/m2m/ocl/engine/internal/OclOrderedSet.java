@@ -16,14 +16,15 @@ package org.eclipse.fennec.m2m.ocl.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashSet;
 
 /**
- * Marker type for OCL OrderedSet collections.
+ * OCL OrderedSet — an ordered collection with unique elements.
  *
- * <p>An OrderedSet is an ordered collection with unique elements.
- * This class extends {@link ArrayList} for storage and order-sensitive
- * equality, while ensuring uniqueness by filtering duplicates on construction.
+ * <p>Uses OCL equality for uniqueness checks (§11.5.1: Integer is
+ * subclass of Real, so {@code 4 = 4.0} are considered equal and
+ * deduplicated).
+ *
+ * <p>Extends {@link ArrayList} for storage and order-sensitive equality.
  *
  * @param <E> element type
  * @since 1.0
@@ -38,14 +39,27 @@ public class OclOrderedSet<E> extends ArrayList<E> {
 
 	/**
 	 * Creates an OrderedSet from the given collection, removing duplicates
-	 * while preserving insertion order.
+	 * using OCL equality while preserving insertion order.
 	 */
 	public OclOrderedSet(Collection<? extends E> c) {
-		super(new LinkedHashSet<>(c));
+		super(c.size());
+		for (E e : c) {
+			add(e); // add uses OCL-equality contains check
+		}
 	}
 
 	public OclOrderedSet(int initialCapacity) {
 		super(initialCapacity);
+	}
+
+	@Override
+	public boolean contains(Object o) {
+		for (int i = 0; i < size(); i++) {
+			if (OclEqualityUtil.oclEquals(get(i), o)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override

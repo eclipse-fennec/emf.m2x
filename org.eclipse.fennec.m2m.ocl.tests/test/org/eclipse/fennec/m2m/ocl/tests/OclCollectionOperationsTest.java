@@ -19,13 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSet;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -278,7 +278,7 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 	@Test
 	void asSet_fromSequence() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 2, 3}->asSet()", self);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 		assertEquals(3, ((Collection<?>) result).size());
 	}
 
@@ -406,7 +406,8 @@ class OclCollectionOperationsTest extends AbstractOclTest {
 
 	@Test
 	void indexOf_notFound() throws OclParseException {
-		assertEquals(0, eval("Sequence{1, 2, 3}->indexOf(4)", self));
+		// OCL v2.5 / Eclipse: not found → invalid
+		assertInvalid("Sequence{1, 2, 3}->indexOf(4)", self);
 	}
 
 	// --- Ordered collection: reverse ---

@@ -16,9 +16,12 @@ package org.eclipse.fennec.m2m.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
@@ -206,5 +209,140 @@ class OclCollectionProductTest extends AbstractOclTest {
 		assertEquals(5, eval(
 				"Sequence{3, 1, 5, 2, 4}->iterate(i; acc: Integer = 0 | if i > acc then i else acc endif)",
 				alice));
+	}
+
+	// --- product() tests (OCL v2.4 §11.7.1) ---
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void product_basic_cartesianProduct() throws OclParseException {
+		// Set{1,2}->product(Set{3,4}) → 4 tuples
+		Object result = eval("Set{1, 2}->product(Set{3, 4})", alice);
+		assertInstanceOf(Set.class, result);
+		Set<Map<String, Object>> tuples = (Set<Map<String, Object>>) result;
+		assertEquals(4, tuples.size());
+		// Verify tuple structure: each has 'first' and 'second'
+		for (Map<String, Object> tuple : tuples) {
+			assertTrue(tuple.containsKey("first"));
+			assertTrue(tuple.containsKey("second"));
+		}
+	}
+
+	@Test
+	void product_size_isMultiplication() throws OclParseException {
+		// |source| × |argument| = result size
+		assertEquals(6, eval("Set{1, 2, 3}->product(Set{4, 5})->size()", alice));
+	}
+
+	@Test
+	void product_tupleAccess_first() throws OclParseException {
+		// Access .first on product tuples
+		assertEquals(true, eval(
+				"Set{1, 2}->product(Set{3})->forAll(t | t.first > 0)", alice));
+	}
+
+	@Test
+	void product_tupleAccess_second() throws OclParseException {
+		// Single-element product → access .second
+		assertEquals(3, eval(
+				"Set{1}->product(Set{3})->any(true).second", alice));
+	}
+
+	@Test
+	void product_resultIsAlwaysSet_fromSequence() throws OclParseException {
+		// Sequence->product() still yields a Set (§11.7.1)
+		Object result = eval("Sequence{1, 2}->product(Sequence{3, 4})", alice);
+		assertInstanceOf(Set.class, result);
+	}
+
+	@Test
+	void product_resultIsAlwaysSet_fromBag() throws OclParseException {
+		Object result = eval("Bag{1, 2}->product(Bag{3, 4})", alice);
+		assertInstanceOf(Set.class, result);
+	}
+
+	@Test
+	void product_resultIsAlwaysSet_fromOrderedSet() throws OclParseException {
+		Object result = eval("OrderedSet{1, 2}->product(OrderedSet{3, 4})", alice);
+		assertInstanceOf(Set.class, result);
+	}
+
+	@Test
+	void product_emptySource() throws OclParseException {
+		// Set{}->product(Set{1,2}) → Set{} (empty)
+		Object result = eval("Set{}->product(Set{1, 2})->size()", alice);
+		assertEquals(0, result);
+	}
+
+	@Test
+	void product_emptyArgument() throws OclParseException {
+		// Set{1,2}->product(Set{}) → Set{} (empty)
+		assertEquals(0, eval("Set{1, 2}->product(Set{})->size()", alice));
+	}
+
+	@Test
+	void product_bothEmpty() throws OclParseException {
+		assertEquals(0, eval("Set{}->product(Set{})->size()", alice));
+	}
+
+	@Test
+	void product_invalidSource() throws OclParseException {
+		assertInvalid("invalid->product(Set{1})", alice);
+	}
+
+	@Test
+	void product_invalidArgument() throws OclParseException {
+		assertInvalid("let x: Set(Integer) = invalid in Set{1}->product(x)", alice);
+	}
+
+	@Test
+	void product_invalidElementInSource() throws OclParseException {
+		// Well-formedness: collection with invalid element → invalid
+		assertInvalid("Set{invalid, 1}->product(Set{2})", alice);
+	}
+
+	@Test
+	void product_nullSource_arrowCall() throws OclParseException {
+		// null->product(Set{1}) → arrow-call converts null to Set{} → empty product
+		assertEquals(0, eval("null->product(Set{1})->size()", alice));
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void product_nullElementInSource() throws OclParseException {
+		// Set{null, 1}->product(Set{2}) → tuples with null as 'first'
+		Object result = eval("Set{null, 1}->product(Set{2})", alice);
+		assertInstanceOf(Set.class, result);
+		Set<Map<String, Object>> tuples = (Set<Map<String, Object>>) result;
+		assertEquals(2, tuples.size());
+		boolean hasNullFirst = tuples.stream().anyMatch(t -> t.get("first") == null);
+		assertTrue(hasNullFirst, "Expected a tuple with null as 'first'");
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void product_nullElementInArgument() throws OclParseException {
+		// Set{1}->product(Set{null}) → tuple with null as 'second'
+		Object result = eval("Set{1}->product(Set{null})", alice);
+		assertInstanceOf(Set.class, result);
+		Set<Map<String, Object>> tuples = (Set<Map<String, Object>>) result;
+		assertEquals(1, tuples.size());
+		Map<String, Object> tuple = tuples.iterator().next();
+		assertEquals(1, tuple.get("first"));
+		assertEquals(null, tuple.get("second"));
+	}
+
+	@Test
+	void product_forAll_onTuples() throws OclParseException {
+		assertEquals(true, eval(
+				"Set{1, 2}->product(Set{3})->forAll(t | t.first > 0 and t.second = 3)",
+				alice));
+	}
+
+	@Test
+	void product_mixedTypes() throws OclParseException {
+		// product of integers with strings
+		assertEquals(2, eval(
+				"Set{1}->product(Set{'a', 'b'})->size()", alice));
 	}
 }

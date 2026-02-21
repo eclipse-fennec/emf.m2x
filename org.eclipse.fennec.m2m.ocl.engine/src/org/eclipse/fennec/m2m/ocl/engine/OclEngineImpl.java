@@ -17,7 +17,6 @@ package org.eclipse.fennec.m2m.ocl.engine;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -53,6 +52,7 @@ import org.eclipse.fennec.m2m.ocl.engine.internal.OclEvaluator;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclInvocationDelegateFactory;
 import org.eclipse.fennec.m2m.ocl.engine.internal.PreStateSnapshot;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclOrderedSet;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSet;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclSettingDelegateFactory;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclUnlimitedNatural;
 import org.eclipse.fennec.m2m.ocl.engine.internal.OclValidationDelegateFactory;
@@ -469,8 +469,8 @@ public class OclEngineImpl implements OclEngine {
 			}
 			return narrowed;
 		}
-		if (value instanceof LinkedHashSet<?> set) {
-			LinkedHashSet<Object> narrowed = new LinkedHashSet<>(set.size());
+		if (value instanceof OclSet<?> set) {
+			OclSet<Object> narrowed = new OclSet<>();
 			for (Object elem : set) {
 				narrowed.add(narrowResult(elem));
 			}

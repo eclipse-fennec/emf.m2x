@@ -178,32 +178,32 @@ class OclInvalidNullSystematicTest extends AbstractOclTest {
 
 	@Test
 	void invalid_equals_invalid() throws OclParseException {
-		assertEquals(true, eval("invalid = invalid", self));
+		// OCL v2.5: any operation on invalid (except oclIsInvalid/oclIsUndefined) yields invalid
+		assertInvalid("invalid = invalid", self);
 	}
 
 	@Test
 	void invalid_equals_integer() throws OclParseException {
-		// invalid = 1 should be false (different values) or could be invalid
-		// Per OCL spec §11.2.2: = is strict, so invalid = anything-non-invalid = false?
-		// Actually, Eclipse OCL returns invalid for invalid = 1
-		// But our existing test (OclInvalidPropagationTest) says invalid <> 42 = true
-		// So we expect: invalid = 1 → false, invalid <> 1 → true
-		assertEquals(false, eval("invalid = 1", self));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("invalid = 1", self);
 	}
 
 	@Test
 	void integer_equals_invalid() throws OclParseException {
-		assertEquals(false, eval("1 = invalid", self));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("1 = invalid", self);
 	}
 
 	@Test
 	void invalid_notEquals_integer() throws OclParseException {
-		assertEquals(true, eval("invalid <> 1", self));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("invalid <> 1", self);
 	}
 
 	@Test
 	void invalid_notEquals_invalid() throws OclParseException {
-		assertEquals(false, eval("invalid <> invalid", self));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("invalid <> invalid", self);
 	}
 
 	// === Invalid propagation through collection operations ===
@@ -305,17 +305,20 @@ class OclInvalidNullSystematicTest extends AbstractOclTest {
 
 	@Test
 	void null_notEquals_invalid() throws OclParseException {
-		assertEquals(true, eval("null <> invalid", self));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("null <> invalid", self);
 	}
 
 	@Test
 	void invalid_notEquals_null() throws OclParseException {
-		assertEquals(true, eval("invalid <> null", self));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("invalid <> null", self);
 	}
 
 	@Test
 	void null_equals_invalid() throws OclParseException {
-		assertEquals(false, eval("null = invalid", self));
+		// OCL v2.5: any operation on invalid yields invalid
+		assertInvalid("null = invalid", self);
 	}
 
 	// === Null oclIsInvalid / oclIsUndefined ===

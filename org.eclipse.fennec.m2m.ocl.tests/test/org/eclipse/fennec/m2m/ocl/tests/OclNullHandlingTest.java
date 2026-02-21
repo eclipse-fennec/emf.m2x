@@ -156,10 +156,55 @@ class OclNullHandlingTest extends AbstractOclTest {
 		assertEquals(0, eval("null.oclAsSet()->size()", self));
 	}
 
+	// --- oclIsKindOf / oclIsTypeOf on null (§11.3.2) ---
+
+	@Test
+	void null_oclIsKindOf_isInvalid() throws OclParseException {
+		// Spec §11.3.2: null.oclIsKindOf(type) → invalid
+		assertInvalid("null.oclIsKindOf(Integer)", self);
+	}
+
+	@Test
+	void null_oclIsTypeOf_isInvalid() throws OclParseException {
+		// Spec §11.3.2: null.oclIsTypeOf(type) → invalid
+		assertInvalid("null.oclIsTypeOf(Integer)", self);
+	}
+
+	// --- oclAsType on null (§11.3.2) ---
+
+	@Test
+	void null_oclAsType_returnsNull() throws OclParseException {
+		// Spec §11.3.2: null.oclAsType(type) → self (null)
+		assertNull(eval("null.oclAsType(Integer)", self));
+	}
+
+	// --- invalid.oclAsSet (§11.3.3) ---
+
+	@Test
+	void invalid_oclAsSet_isInvalid() throws OclParseException {
+		// Spec §11.3.3: invalid.oclAsSet() → invalid
+		assertInvalid("invalid.oclAsSet()", self);
+	}
+
+	// --- implicit oclAsSet via -> on null (§11.2.3) ---
+
+	@Test
+	void null_arrow_isEmpty() throws OclParseException {
+		// null->isEmpty() = null.oclAsSet()->isEmpty() = Set{}->isEmpty() = true
+		assertEquals(true, eval("null->isEmpty()", self));
+	}
+
+	@Test
+	void null_arrow_notEmpty() throws OclParseException {
+		// null->notEmpty() = null.oclAsSet()->notEmpty() = Set{}->notEmpty() = false
+		assertEquals(false, eval("null->notEmpty()", self));
+	}
+
 	// --- null toString ---
 
 	@Test
 	void null_toString() throws OclParseException {
-		assertEquals("null", eval("null.toString()", self));
+		// Spec §11.2.3: toString() not defined on OclVoid → invalid (general rule).
+		assertInvalid("null.toString()", self);
 	}
 }

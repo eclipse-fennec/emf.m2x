@@ -15,7 +15,6 @@
 package org.eclipse.fennec.m2m.ocl.engine.internal;
 
 import java.util.Collection;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -62,7 +61,7 @@ final class OclCollectionUtil {
 	static Collection<Object> preserveCollectionKind(Collection<?> source, List<Object> elements) {
 		if (source instanceof OclOrderedSet<?>) return new OclOrderedSet<>(elements);
 		if (source instanceof OclBag<?>) return new OclBag<>(elements);
-		if (source instanceof Set<?>) return new LinkedHashSet<>(elements);
+		if (source instanceof Set<?>) return new OclSet<>(elements);
 		return elements;
 	}
 }

@@ -17,12 +17,12 @@ package org.eclipse.fennec.m2m.ocl.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSet;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -168,9 +168,9 @@ class OclNarrowingTest extends AbstractOclTest {
 	@Test
 	void setLiteral_elementsNarrowed() throws OclParseException {
 		Object result = eval("Set{10, 20, 30}", self);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 		@SuppressWarnings("unchecked")
-		LinkedHashSet<Object> set = (LinkedHashSet<Object>) result;
+		OclSet<Object> set = (OclSet<Object>) result;
 		for (Object elem : set) {
 			assertInstanceOf(Integer.class, elem);
 		}

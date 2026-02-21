@@ -18,10 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.LinkedHashSet;
-
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.ocl.api.OclParseException;
+import org.eclipse.fennec.m2m.ocl.engine.internal.OclSet;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -94,9 +93,9 @@ class OclTypeOperationsTest extends AbstractOclTest {
 	@Test
 	void oclAsSet_eobject() throws OclParseException {
 		Object result = eval("self.oclAsSet()", alice);
-		assertInstanceOf(LinkedHashSet.class, result);
+		assertInstanceOf(OclSet.class, result);
 		@SuppressWarnings("unchecked")
-		LinkedHashSet<Object> set = (LinkedHashSet<Object>) result;
+		OclSet<Object> set = (OclSet<Object>) result;
 		assertEquals(1, set.size());
 		assertTrue(set.contains(alice));
 	}
@@ -104,8 +103,8 @@ class OclTypeOperationsTest extends AbstractOclTest {
 	@Test
 	void oclAsSet_null() throws OclParseException {
 		Object result = eval("null.oclAsSet()", alice);
-		assertInstanceOf(LinkedHashSet.class, result);
-		assertTrue(((LinkedHashSet<?>) result).isEmpty());
+		assertInstanceOf(OclSet.class, result);
+		assertTrue(((OclSet<?>) result).isEmpty());
 	}
 
 	// --- Combined type + property tests ---
@@ -136,6 +135,7 @@ class OclTypeOperationsTest extends AbstractOclTest {
 
 	@Test
 	void toString_null() throws OclParseException {
-		assertEquals("null", eval("null.toString()", alice));
+		// Spec §11.2.3: toString() not defined on OclVoid → invalid (general rule).
+		assertInvalid("null.toString()", alice);
 	}
 }

@@ -39,12 +39,12 @@ import org.junit.jupiter.api.BeforeAll;
  * Abstract base class for QVT-O engine tests.
  * Provides shared setup for QvtoEngine and convenience methods for parsing and executing.
  */
-abstract class AbstractQvtoEngineTest {
+public abstract class AbstractQvtoEngineTest {
 
-	static QvtoEngineImpl engine;
-	static EcoreHelper ecoreHelper;
-	static EPackage sourcePackage;
-	static EPackage targetPackage;
+	protected static QvtoEngineImpl engine;
+	protected static EcoreHelper ecoreHelper;
+	protected static EPackage sourcePackage;
+	protected static EPackage targetPackage;
 
 	@BeforeAll
 	static void setUpEngine() throws IOException {
@@ -66,14 +66,14 @@ abstract class AbstractQvtoEngineTest {
 	/**
 	 * Parse a QVT-O source string.
 	 */
-	static OperationalTransformation parse(String source) throws QvtoParseException {
+	protected static OperationalTransformation parse(String source) throws QvtoParseException {
 		return engine.parse(source, "test");
 	}
 
 	/**
 	 * Parse and execute a QVT-O transformation with no model extents.
 	 */
-	static QvtoExecutionResult execute(String source) throws QvtoParseException {
+	protected static QvtoExecutionResult execute(String source) throws QvtoParseException {
 		OperationalTransformation t = parse(source);
 		return engine.execute(t, QvtoExecutionContext.of());
 	}
@@ -81,7 +81,8 @@ abstract class AbstractQvtoEngineTest {
 	/**
 	 * Parse and execute with a given context.
 	 */
-	static QvtoExecutionResult execute(String source, QvtoExecutionContext context) throws QvtoParseException {
+	protected static QvtoExecutionResult execute(String source, QvtoExecutionContext context)
+			throws QvtoParseException {
 		OperationalTransformation t = parse(source);
 		return engine.execute(t, context);
 	}
@@ -89,7 +90,7 @@ abstract class AbstractQvtoEngineTest {
 	/**
 	 * Parse and execute with options.
 	 */
-	static QvtoExecutionResult execute(String source, QvtoExecutionContext context,
+	protected static QvtoExecutionResult execute(String source, QvtoExecutionContext context,
 			QvtoEvaluationOptions options) throws QvtoParseException {
 		OperationalTransformation t = parse(source);
 		return engine.execute(t, context, options);
@@ -98,7 +99,7 @@ abstract class AbstractQvtoEngineTest {
 	/**
 	 * Parse and execute with model extents.
 	 */
-	static QvtoExecutionResult executeWithExtents(String source, QvtoModelExtent... extents)
+	protected static QvtoExecutionResult executeWithExtents(String source, QvtoModelExtent... extents)
 			throws QvtoParseException {
 		OperationalTransformation t = parse(source);
 		return engine.execute(t, QvtoExecutionContext.of(extents));
@@ -107,7 +108,7 @@ abstract class AbstractQvtoEngineTest {
 	/**
 	 * Parse and execute with model extents and custom options.
 	 */
-	static QvtoExecutionResult executeWithExtents(String source, QvtoEvaluationOptions options,
+	protected static QvtoExecutionResult executeWithExtents(String source, QvtoEvaluationOptions options,
 			QvtoModelExtent... extents) throws QvtoParseException {
 		OperationalTransformation t = parse(source);
 		return engine.execute(t, QvtoExecutionContext.of(extents), options);
@@ -116,7 +117,7 @@ abstract class AbstractQvtoEngineTest {
 	/**
 	 * Creates a SourceElement EObject with the given name and value.
 	 */
-	static EObject createSourceElement(String name, int value) {
+	protected static EObject createSourceElement(String name, int value) {
 		EClass sourceElementClass = ecoreHelper.getEClass(sourcePackage, "SourceElement");
 		EObject element = EcoreUtil.create(sourceElementClass);
 		element.eSet(sourceElementClass.getEStructuralFeature("name"), name);
@@ -127,7 +128,7 @@ abstract class AbstractQvtoEngineTest {
 	/**
 	 * Creates an empty model extent.
 	 */
-	static QvtoModelExtent emptyExtent() {
+	protected static QvtoModelExtent emptyExtent() {
 		return new BasicQvtoModelExtent();
 	}
 }

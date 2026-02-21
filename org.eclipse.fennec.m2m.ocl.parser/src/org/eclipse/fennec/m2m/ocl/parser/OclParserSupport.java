@@ -62,8 +62,12 @@ public class OclParserSupport implements OclExpressionParser {
 
 		checkErrors(errorListener, expression);
 
-		OclAstBuilder builder = new OclAstBuilder(contextType);
-		return builder.visitExpressionEntry(tree);
+		try {
+			OclAstBuilder builder = new OclAstBuilder(contextType);
+			return builder.visitExpressionEntry(tree);
+		} catch (IllegalArgumentException e) {
+			throw new OclParseException(e.getMessage());
+		}
 	}
 
 	/**

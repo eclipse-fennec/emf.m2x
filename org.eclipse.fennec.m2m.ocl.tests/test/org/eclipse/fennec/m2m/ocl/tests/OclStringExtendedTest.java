@@ -207,8 +207,9 @@ class OclStringExtendedTest extends AbstractOclTest {
 	}
 
 	@Test
-	void toBoolean_invalid() throws OclParseException {
-		assertInvalid("'maybe'.toBoolean()", self);
+	void toBoolean_nonBoolean_returnsFalse() throws OclParseException {
+		// Eclipse: toBoolean() returns false for anything that is not exactly "true"
+		assertEquals(false, eval("'maybe'.toBoolean()", self));
 	}
 
 	// --- matches edge cases ---

@@ -14,7 +14,6 @@
  */
 package org.eclipse.fennec.m2m.ocl.tests;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import org.eclipse.emf.ecore.EObject;
@@ -165,13 +164,13 @@ class OclEvaluationErrorTest extends AbstractOclTest {
 
 	@Test
 	void invalid_equalsInvalid() throws OclParseException {
-		// Our implementation: invalid = invalid → true (identity equality)
-		assertEquals(true, eval("invalid = invalid", self));
+		// OCL v2.5: any operation on invalid (except oclIsInvalid/oclIsUndefined) yields invalid
+		assertInvalid("invalid = invalid", self);
 	}
 
 	@Test
 	void invalid_notEqualsValue() throws OclParseException {
-		// Our implementation: invalid <> 1 → true
-		assertEquals(true, eval("invalid <> 1", self));
+		// OCL v2.5: any operation on invalid (except oclIsInvalid/oclIsUndefined) yields invalid
+		assertInvalid("invalid <> 1", self);
 	}
 }
