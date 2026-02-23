@@ -78,6 +78,7 @@ import org.eclipse.fennec.m2m.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.Variable;
 import org.eclipse.fennec.m2m.model.ocl.VariableExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingCallExp;
+import org.eclipse.fennec.m2m.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2m.model.qvtoperational.ObjectExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveExp;
@@ -336,6 +337,24 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				(OclExpression) visit(ctx.expression(1)));
 	}
 
+	// §8.2.2.4: AssignExp — assignment as expression (e.g., inside if-then-endif)
+	@Override
+	public OclExpression visitAssignExp(QvtOParser.AssignExpContext ctx) {
+		OclExpression left = (OclExpression) visit(ctx.expression(0));
+		OclExpression right = (OclExpression) visit(ctx.expression(1));
+
+		// var x := expr → combine into VariableInitExp with init
+		if (left instanceof VariableInitExp varInit) {
+			varInit.getReferredVariable().setOwnedInit(right);
+			return varInit;
+		}
+
+		// §8.2.2.11: optional 'default' clause
+		OclExpression defaultValue = ctx.defaultValue != null
+				? (OclExpression) visit(ctx.defaultValue) : null;
+		return buildAssignment(left, right, ctx.assignOp().getText(), defaultValue);
+	}
+
 	// ==================== Navigation ====================
 
 	@Override
@@ -346,6 +365,10 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		QvtOParser.PropertyOrCallSuffixContext suffix = ctx.propertyOrCallSuffix();
 		if (suffix instanceof QvtOParser.MappingCallSuffixContext mapCtx) {
 			return createDotMappingCall(source, mapCtx, isSafe);
+		} else if (suffix instanceof QvtOParser.ResolveCallSuffixContext resCtx) {
+			return createDotResolveCall(source, resCtx);
+		} else if (suffix instanceof QvtOParser.ResolveInCallSuffixContext resInCtx) {
+			return createDotResolveInCall(source, resInCtx);
 		} else if (suffix instanceof QvtOParser.PropertySuffixContext propCtx) {
 			return createPropertyCall(source, propCtx, isSafe);
 		} else if (suffix instanceof QvtOParser.DotCallSuffixContext callCtx) {
@@ -360,18 +383,89 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		boolean isSafe = ctx.getChild(1).getText().equals("?->");
 
 		QvtOParser.IteratorOrOperationCallContext call = ctx.iteratorOrOperationCall();
-		if (call instanceof QvtOParser.IteratorCallContext iterCtx) {
+		if (call instanceof QvtOParser.ForEachCallContext forCtx) {
+			return createForEachArrowCall(source, forCtx);
+		} else if (call instanceof QvtOParser.IteratorCallContext iterCtx) {
 			return createIteratorExp(source, iterCtx, isSafe);
 		} else if (call instanceof QvtOParser.IterateCallContext iterateCtx) {
 			return createIterateExp(source, iterateCtx, isSafe);
 		} else if (call instanceof QvtOParser.CollectionOperationCallContext opCtx) {
 			return createCollectionOperation(source, opCtx, isSafe);
+		} else if (call instanceof QvtOParser.ArrowResolveCallContext resCtx) {
+			return createArrowResolveCall(source, resCtx);
+		} else if (call instanceof QvtOParser.ArrowResolveInCallContext resInCtx) {
+			return createArrowResolveInCall(source, resInCtx);
 		}
 		return source;
 	}
 
+	// ==================== Xselect [Type] (§8.2.2.7) ====================
+
+	@Override
+	public OclExpression visitXselectExp(QvtOParser.XselectExpContext ctx) {
+		OclExpression source = (OclExpression) visit(ctx.expression(0));
+
+		// §8.2.2.7: If condition is a TypeExp, reinterpret as oclIsKindOf(Type)
+		// Try to resolve condition as a type first
+		OclExpression condition = null;
+		TypeExp typeCondition = tryBuildTypeCondition(ctx.expression(1));
+
+		if (typeCondition == null) {
+			condition = (OclExpression) visit(ctx.expression(1));
+		}
+
+		IteratorExp selectExp = OCL.createIteratorExp();
+		selectExp.setOwnedSource(source);
+		selectExp.setName("select");
+
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName("_xsel_it");
+		OclType elementType = inferElementType(source);
+		if (elementType != null) {
+			iterVar.setType(elementType);
+		}
+		selectExp.getOwnedIterators().add(iterVar);
+
+		if (typeCondition != null) {
+			// Build: oclIsKindOf(Type) call on the iterator variable
+			OperationCallExp oclIsKindOf = OCL.createOperationCallExp();
+			oclIsKindOf.setName("oclIsKindOf");
+			VariableExp iterRef = OCL.createVariableExp();
+			iterRef.setReferredVariable(iterVar);
+			oclIsKindOf.setOwnedSource(iterRef);
+			oclIsKindOf.getOwnedArguments().add(typeCondition);
+			selectExp.setOwnedBody(oclIsKindOf);
+		} else {
+			selectExp.setOwnedBody(condition);
+		}
+
+		return selectExp;
+	}
+
+	/**
+	 * Try to interpret an expression context as a type reference for xselect.
+	 * Returns a TypeExp if the expression is a simple path name that resolves to a type,
+	 * null otherwise.
+	 */
+	private TypeExp tryBuildTypeCondition(QvtOParser.ExpressionContext exprCtx) {
+		// Unwrap: expression → primaryExpression → pathNameExp
+		if (exprCtx instanceof QvtOParser.PrimaryExpContext primaryCtx) {
+			if (primaryCtx.primaryExpression() instanceof QvtOParser.PathNameExpContext pathCtx) {
+				List<String> segments = pathNameSegments(pathCtx.pathName());
+				EClassifier classifier = resolveClassifier(segments);
+				if (classifier != null) {
+					TypeExp typeExp = OCL.createTypeExp();
+					typeExp.setReferredType(createClassifierType(classifier));
+					return typeExp;
+				}
+			}
+		}
+		return null;
+	}
+
 	// ==================== If / Let ====================
 
+	// §8.2.2.8: imperative if — else is optional (extends OCL where else is mandatory)
 	@Override
 	public IfExp visitIfExp(QvtOParser.IfExpContext ctx) {
 		IfExp ifExp = OCL.createIfExp();
@@ -387,9 +481,36 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				current.setOwnedElse(nested);
 				current = nested;
 			}
-			current.setOwnedElse((OclExpression) visit(ctx.elseExp));
-		} else {
+			if (ctx.elseExp != null) {
+				current.setOwnedElse((OclExpression) visit(ctx.elseExp));
+			}
+		} else if (ctx.elseExp != null) {
 			ifExp.setOwnedElse((OclExpression) visit(ctx.elseExp));
+		}
+		// When else is absent, ownedElse stays null — engine returns null for false condition
+		return ifExp;
+	}
+
+	@Override
+	public IfExp visitImperativeIfExp(QvtOParser.ImperativeIfExpContext ctx) {
+		IfExp ifExp = OCL.createIfExp();
+		ifExp.setOwnedCondition((OclExpression) visit(ctx.impCondition));
+		ifExp.setOwnedThen(buildBlock(ctx.thenBlock));
+
+		if (ctx.elifCondition != null && !ctx.elifCondition.isEmpty()) {
+			IfExp current = ifExp;
+			for (int i = 0; i < ctx.elifCondition.size(); i++) {
+				IfExp nested = OCL.createIfExp();
+				nested.setOwnedCondition((OclExpression) visit(ctx.elifCondition.get(i)));
+				nested.setOwnedThen(buildBlock(ctx.elifBlock.get(i)));
+				current.setOwnedElse(nested);
+				current = nested;
+			}
+			if (ctx.elseBlock != null) {
+				current.setOwnedElse(buildBlock(ctx.elseBlock));
+			}
+		} else if (ctx.elseBlock != null) {
+			ifExp.setOwnedElse(buildBlock(ctx.elseBlock));
 		}
 		return ifExp;
 	}
@@ -622,9 +743,48 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return whileExp;
 	}
 
-	@Override
-	public ForExp visitForExp(QvtOParser.ForExpContext ctx) {
+	/**
+	 * §8.2.2.6: ForExp as arrow call — coll->forEach(x) { ... }
+	 * Sets the source of the ForExp to the collection expression.
+	 * If compute shorthand is used (forEach(i;x:X=init|cond)), wraps in ComputeExp.
+	 */
+	private OclExpression createForEachArrowCall(OclExpression source,
+			QvtOParser.ForEachCallContext ctx) {
 		ForExp forExp = IMP.createForExp();
+		forExp.setName(ctx.forKind().getText());
+		forExp.setOwnedSource(source);
+
+		QvtoEnvironment savedEnv = this.environment;
+
+		QvtOParser.ForVarListContext varList = ctx.forVarList();
+		QvtOParser.IteratorVariablesContext iterVars = varList.iteratorVariables();
+
+		for (int i = 0; i < iterVars.qvtoIdentifier().size(); i++) {
+			Variable iterVar = OCL.createVariable();
+			iterVar.setName(qvtoIdentifierText(iterVars.qvtoIdentifier(i)));
+			if (i < iterVars.typeExpression().size() && iterVars.typeExpression(i) != null) {
+				iterVar.setType(resolveTypeExpression(iterVars.typeExpression(i)));
+			}
+			forExp.getOwnedIterators().add(iterVar);
+			this.environment = this.environment.nested(iterVar);
+		}
+
+		if (ctx.expression() != null) {
+			forExp.setCondition((OclExpression) visit(ctx.expression()));
+		}
+
+		forExp.setOwnedBody(buildBlock(ctx.block()));
+
+		this.environment = savedEnv;
+
+		// §8.2.2.6: compute shorthand — forEach(i;x:X=init|cond) ≡ compute(x:X=init) forEach(i|cond)
+		return wrapInComputeIfShorthand(forExp, varList, savedEnv);
+	}
+
+	@Override
+	public OclExpression visitForExp(QvtOParser.ForExpContext ctx) {
+		ForExp forExp = IMP.createForExp();
+		forExp.setName(ctx.forKind().getText());
 
 		QvtoEnvironment savedEnv = this.environment;
 
@@ -649,7 +809,35 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		forExp.setOwnedBody(buildBlock(ctx.block()));
 
 		this.environment = savedEnv;
-		return forExp;
+
+		// §8.2.2.6: compute shorthand — forEach(i;x:X=init|cond) ≡ compute(x:X=init) forEach(i|cond)
+		return wrapInComputeIfShorthand(forExp, varList, savedEnv);
+	}
+
+	/**
+	 * §8.2.2.6: If forVarList has a compute shorthand (name:Type=init after ';'),
+	 * wraps the ForExp in a ComputeExp. Otherwise returns the ForExp unchanged.
+	 * Detects compute shorthand by the presence of qvtoIdentifier (the variable name).
+	 */
+	private OclExpression wrapInComputeIfShorthand(ForExp forExp,
+			QvtOParser.ForVarListContext varList, QvtoEnvironment savedEnv) {
+		// Compute shorthand: forVarList matched alternative 1 (i;x:Type=init)
+		// Detected by qvtoIdentifier being present (the compute variable name)
+		if (varList.qvtoIdentifier() == null) {
+			return forExp;
+		}
+		ComputeExp computeExp = IMP.createComputeExp();
+		Variable computeVar = OCL.createVariable();
+		computeVar.setName(qvtoIdentifierText(varList.qvtoIdentifier()));
+		if (varList.typeExpression() != null) {
+			computeVar.setType(resolveTypeExpression(varList.typeExpression()));
+		}
+		if (varList.expression() != null) {
+			computeVar.setOwnedInit((OclExpression) visit(varList.expression()));
+		}
+		computeExp.setReturnedElement(computeVar);
+		computeExp.setBody(forExp);
+		return computeExp;
 	}
 
 	@Override
@@ -786,8 +974,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		exp.setIsInverse(kind.startsWith("inv"));
 		exp.setOne(kind.contains("one"));
 
-		// The scoped name references a mapping operation (unresolved at parse time)
-		// inMapping will be resolved during linking phase
+		// §8.1.11.4: Resolve the scoped mapping name to a MappingOperation reference
+		exp.setInMapping(resolveInMapping(ctx.scopedName()));
 
 		if (ctx.resolveArgs() != null) {
 			buildResolveArgs(exp, ctx.resolveArgs());
@@ -910,8 +1098,17 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	@Override
-	public VariableInitExp visitVarDeclExp(QvtOParser.VarDeclExpContext ctx) {
-		return buildVariableInitExp(ctx.varDeclarator());
+	public OclExpression visitVarDeclExp(QvtOParser.VarDeclExpContext ctx) {
+		List<QvtOParser.VarDeclaratorContext> declarators = ctx.varDeclarator();
+		if (declarators.size() == 1) {
+			return buildVariableInitExp(declarators.get(0));
+		}
+		// §8.2.2.10: Multiple variable declarations grouped with unique var keyword
+		BlockExp block = IMP.createBlockExp();
+		for (QvtOParser.VarDeclaratorContext decl : declarators) {
+			block.getBody().add(buildVariableInitExp(decl));
+		}
+		return block;
 	}
 
 	// ==================== Statement Building ====================
@@ -925,28 +1122,23 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * variable declaration with init rather than producing an AssignExp.
 	 */
 	OclExpression buildStatement(QvtOParser.StatementContext ctx) {
-		if (ctx instanceof QvtOParser.AssignStatementContext assignCtx) {
-			OclExpression left = (OclExpression) visit(assignCtx.expression(0));
-			OclExpression right = (OclExpression) visit(assignCtx.expression(1));
-
-			// var x := expr → combine into VariableInitExp with init
-			if (left instanceof VariableInitExp varInit) {
-				varInit.getReferredVariable().setOwnedInit(right);
-				return varInit;
-			}
-
-			return buildAssignment(left, right, assignCtx.assignOp().getText());
+		if (ctx instanceof QvtOParser.VarDeclStatementContext varDeclCtx) {
+			return visitVarDeclExp(varDeclCtx.varDeclExp());
 		} else if (ctx instanceof QvtOParser.ExpressionStatementContext exprCtx) {
 			return (OclExpression) visit(exprCtx.expression());
 		}
 		return null;
 	}
 
-	private AssignExp buildAssignment(OclExpression left, OclExpression right, String op) {
+	private AssignExp buildAssignment(OclExpression left, OclExpression right, String op,
+			OclExpression defaultValue) {
 		AssignExp assign = IMP.createAssignExp();
 		assign.setLeft(left);
 		assign.getValue().add(right);
 		assign.setIsReset(":=".equals(op) || "::=".equals(op));
+		if (defaultValue != null) {
+			assign.setDefaultValue(defaultValue);
+		}
 		return assign;
 	}
 
@@ -1215,6 +1407,75 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return exp;
 	}
 
+	private ResolveExp createDotResolveCall(OclExpression source,
+			QvtOParser.ResolveCallSuffixContext ctx) {
+		ResolveExp exp = QVTO.createResolveExp();
+		exp.setOwnedSource(source);
+
+		String kind = ctx.resolveKind().getText();
+		exp.setIsDeferred(ctx.getStart().getText().equals("late"));
+		exp.setIsInverse(kind.startsWith("inv"));
+		exp.setOne(kind.contains("one"));
+
+		if (ctx.resolveArgs() != null) {
+			buildResolveArgs(exp, ctx.resolveArgs());
+		}
+
+		return exp;
+	}
+
+	private ResolveInExp createDotResolveInCall(OclExpression source,
+			QvtOParser.ResolveInCallSuffixContext ctx) {
+		ResolveInExp exp = QVTO.createResolveInExp();
+		exp.setOwnedSource(source);
+
+		String kind = ctx.resolveInKind().getText();
+		exp.setIsDeferred(ctx.getStart().getText().equals("late"));
+		exp.setIsInverse(kind.startsWith("inv"));
+		exp.setOne(kind.contains("one"));
+
+		// §8.1.11.4: Resolve the scoped mapping name to a MappingOperation reference
+		exp.setInMapping(resolveInMapping(ctx.scopedName()));
+
+		if (ctx.resolveArgs() != null) {
+			buildResolveArgs(exp, ctx.resolveArgs());
+		}
+
+		return exp;
+	}
+
+	// §8.1.11.7: coll->late resolve(Type) = coll->xcollect(late resolve(Type))
+	// Build ResolveExp with collection source — engine handles per-element iteration
+	private ResolveExp createArrowResolveCall(OclExpression source,
+			QvtOParser.ArrowResolveCallContext ctx) {
+		ResolveExp exp = QVTO.createResolveExp();
+		exp.setOwnedSource(source);
+		String kind = ctx.resolveKind().getText();
+		exp.setIsDeferred(ctx.getStart().getText().equals("late"));
+		exp.setIsInverse(kind.startsWith("inv"));
+		exp.setOne(kind.contains("one"));
+		if (ctx.resolveArgs() != null) {
+			buildResolveArgs(exp, ctx.resolveArgs());
+		}
+		return exp;
+	}
+
+	// §8.1.11.7: coll->late resolveIn(Mapping, Type) = coll->xcollect(late resolveIn(Mapping, Type))
+	private ResolveInExp createArrowResolveInCall(OclExpression source,
+			QvtOParser.ArrowResolveInCallContext ctx) {
+		ResolveInExp exp = QVTO.createResolveInExp();
+		exp.setOwnedSource(source);
+		String kind = ctx.resolveInKind().getText();
+		exp.setIsDeferred(ctx.getStart().getText().equals("late"));
+		exp.setIsInverse(kind.startsWith("inv"));
+		exp.setOne(kind.contains("one"));
+		exp.setInMapping(resolveInMapping(ctx.scopedName()));
+		if (ctx.resolveArgs() != null) {
+			buildResolveArgs(exp, ctx.resolveArgs());
+		}
+		return exp;
+	}
+
 	private MappingCallExp createDotMappingCall(OclExpression source,
 			QvtOParser.MappingCallSuffixContext ctx, boolean isSafe) {
 		MappingCallExp exp = QVTO.createMappingCallExp();
@@ -1438,6 +1699,11 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		Variable var = buildVarFromDeclarator(ctx);
 		initExp.setReferredVariable(var);
 
+		// §8.2.2.10: '::=' notation — withResult=true, the expression returns the init value
+		if (ctx.varInitOp() != null && ctx.varInitOp().getText().equals("::=")) {
+			initExp.setWithResult(true);
+		}
+
 		// Register in current environment
 		this.environment = this.environment.nested(var);
 
@@ -1447,8 +1713,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private void buildResolveArgs(ResolveExp exp, QvtOParser.ResolveArgsContext ctx) {
 		if (ctx.resolveTarget() != null) {
 			Variable target = OCL.createVariable();
-			target.setName(qvtoIdentifierText(ctx.resolveTarget().qvtoIdentifier()));
-			target.setType(resolveTypeExpression(ctx.resolveTarget().typeExpression()));
+			if (ctx.resolveTarget() instanceof QvtOParser.NamedResolveTargetContext named) {
+				target.setName(qvtoIdentifierText(named.qvtoIdentifier()));
+				target.setType(resolveTypeExpression(named.typeExpression()));
+			} else if (ctx.resolveTarget() instanceof QvtOParser.TypeOnlyResolveTargetContext typeOnly) {
+				target.setName("_it");
+				target.setType(resolveTypeExpression(typeOnly.typeExpression()));
+			}
 			exp.setTarget(target);
 		}
 		if (ctx.expression() != null) {
@@ -1483,9 +1754,56 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return segments;
 	}
 
+	/**
+	 * §8.2.1.10: Resolve the context type from a scoped name (e.g., String::wrap, Integer::doubled,
+	 * SourceElement::toTarget). Returns null if no context prefix present.
+	 */
+	OclType resolveContextType(QvtOParser.ScopedNameContext ctx) {
+		if (ctx.primitiveType() != null) {
+			return createPrimitiveType(ctx.primitiveType().getText());
+		}
+		if (ctx.collectionType() != null) {
+			return resolveCollectionType(ctx.collectionType());
+		}
+		if (ctx.qualifiedName() != null) {
+			List<String> segments = new ArrayList<>();
+			for (QvtOParser.QvtoIdentifierContext idCtx : ctx.qualifiedName().qvtoIdentifier()) {
+				segments.add(qvtoIdentifierText(idCtx));
+			}
+			return createClassifierType(resolveClassifier(segments));
+		}
+		return null;
+	}
+
+	/**
+	 * §8.1.11.4: Creates a MappingOperation stub from a scopedName for resolveIn references.
+	 * The scoped name may be "ContextType::mappingName" or just "mappingName".
+	 * Only the operation name is used for trace lookup at runtime.
+	 */
+	private MappingOperation resolveInMapping(QvtOParser.ScopedNameContext ctx) {
+		String fullName = scopedNameText(ctx);
+		// Extract just the operation name (last segment after ::)
+		String mappingName = fullName.contains("::")
+				? fullName.substring(fullName.lastIndexOf("::") + 2)
+				: fullName;
+		MappingOperation stub = QVTO.createMappingOperation();
+		stub.setName(mappingName);
+		return stub;
+	}
+
 	String scopedNameText(QvtOParser.ScopedNameContext ctx) {
 		if (ctx.qualifiedName() != null) {
 			return qualifiedNameText(ctx.qualifiedName())
+					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier());
+		}
+		// §8.1.9: Contextual operations on primitive types (e.g., query String::wrap())
+		if (ctx.primitiveType() != null) {
+			return ctx.primitiveType().getText()
+					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier());
+		}
+		// §8.1.9: Contextual operations on collection types (e.g., query Collection(Real)::op())
+		if (ctx.collectionType() != null) {
+			return ctx.collectionType().getText()
 					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier());
 		}
 		return qvtoIdentifierText(ctx.qvtoIdentifier());

@@ -247,6 +247,178 @@ class QvtoE2eTraceTest extends AbstractQvtoEngineTest {
 		assertEquals(3, result.trace().getTraceRecords().size());
 	}
 
+	// ---- P4-01: Trace Record fields (§8.1.11.1) ----
+
+	// §8.1.11.1: in-parameters are captured in trace record
+	@Test
+	void trace_hasInParameters() throws Exception {
+		EObject src = createSourceElement("p", 42);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoEvaluationOptions options = QvtoEvaluationOptions.defaults().withTracing(true);
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget(in label : String) : r : TargetElement {
+				        r.name := label;
+				        r.value := self.value;
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) {
+				            e.map toTarget('hello');
+				        };
+				    }
+				}
+				""", options, inExtent, outExtent);
+		assertSuccess(result);
+		Trace trace = result.trace();
+		assertNotNull(trace);
+		assertEquals(1, trace.getTraceRecords().size());
+		TraceRecord record = trace.getTraceRecords().get(0);
+		assertNotNull(record.getParameters());
+		assertTrue(record.getParameters().getParameters().size() >= 1,
+				"Trace should capture in-parameters; got: " + record.getParameters().getParameters());
+	}
+
+	// §8.1.11.1: when-guard failure → no trace record created
+	@Test
+	void trace_whenGuardFails_noTraceRecord() throws Exception {
+		EObject src = createSourceElement("guarded", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoEvaluationOptions options = QvtoEvaluationOptions.defaults().withTracing(true);
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : r : TargetElement
+				        when { false } {
+				        r.name := self.name;
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) {
+				            e.map toTarget();
+				        };
+				    }
+				}
+				""", options, inExtent, outExtent);
+		assertSuccess(result);
+		Trace trace = result.trace();
+		assertNotNull(trace);
+		assertEquals(0, trace.getTraceRecords().size(),
+				"when { false } should prevent trace record creation");
+	}
+
+	// §8.1.11.1: No trace for object expressions — only mappings produce trace
+	@Test
+	void trace_objectExpression_noTraceRecord() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoEvaluationOptions options = QvtoEvaluationOptions.defaults().withTracing(true);
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(out t : TGT) {
+				    main() {
+				        var elem := object TargetElement { name := 'obj'; };
+				    }
+				}
+				""", options, outExtent);
+		assertSuccess(result);
+		Trace trace = result.trace();
+		assertNotNull(trace);
+		assertEquals(0, trace.getTraceRecords().size(),
+				"object expressions should NOT produce trace records");
+	}
+
+	// §8.1.11.1: Trace records are in mapping execution order
+	@Test
+	void trace_executionOrder() throws Exception {
+		EObject src1 = createSourceElement("first", 1);
+		EObject src2 = createSourceElement("second", 2);
+		EObject src3 = createSourceElement("third", 3);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src1, src2, src3);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoEvaluationOptions options = QvtoEvaluationOptions.defaults().withTracing(true);
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : r : TargetElement {
+				        r.name := self.name;
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) {
+				            e.map toTarget();
+				        };
+				    }
+				}
+				""", options, inExtent, outExtent);
+		assertSuccess(result);
+		Trace trace = result.trace();
+		assertEquals(3, trace.getTraceRecords().size());
+		// Verify trace records are in execution order by checking context objects
+		assertEquals(src1, trace.getTraceRecords().get(0).getContext().getContext().getValue().getModelElement());
+		assertEquals(src2, trace.getTraceRecords().get(1).getContext().getContext().getValue().getModelElement());
+		assertEquals(src3, trace.getTraceRecords().get(2).getContext().getContext().getValue().getModelElement());
+	}
+
+	// §8.1.11.1: inout parameters traced once as in-parameters
+	@Test
+	void trace_inoutParam_tracedAsIn() throws Exception {
+		EObject src = createSourceElement("io", 5);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoEvaluationOptions options = QvtoEvaluationOptions.defaults().withTracing(true);
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget(inout count : Integer) : r : TargetElement {
+				        count := count + 1;
+				        r.name := self.name;
+				        r.value := count;
+				    }
+				    main() {
+				        var c : Integer := 0;
+				        s.objectsOfType(SourceElement)->forEach(e) {
+				            e.map toTarget(c);
+				        };
+				    }
+				}
+				""", options, inExtent, outExtent);
+		assertSuccess(result);
+		TraceRecord record = result.trace().getTraceRecords().get(0);
+		assertNotNull(record.getParameters());
+		// inout parameter should appear in parameters (traced as in)
+		assertTrue(record.getParameters().getParameters().size() >= 1,
+				"inout parameter should be traced in parameters list");
+	}
+
+	// §8.1.11.1: Mapping without context (no self) — context handling
+	@Test
+	void trace_mappingWithoutContext() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoEvaluationOptions options = QvtoEvaluationOptions.defaults().withTracing(true);
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(out t : TGT) {
+				    mapping createElem() : r : TargetElement {
+				        r.name := 'no-context';
+				    }
+				    main() {
+				        map createElem();
+				    }
+				}
+				""", options, outExtent);
+		assertSuccess(result);
+		Trace trace = result.trace();
+		assertEquals(1, trace.getTraceRecords().size());
+		TraceRecord record = trace.getTraceRecords().get(0);
+		// Mapping without context type: context may be null or have null value
+		assertNotNull(record.getMappingOperation());
+		assertEquals("createElem", record.getMappingOperation().getName());
+	}
+
 	// ---- Helpers ----
 
 	private static void assertSuccess(QvtoExecutionResult result) {

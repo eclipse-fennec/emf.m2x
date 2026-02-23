@@ -211,6 +211,52 @@ class QvtoE2eConfigPropertyTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "debug-mode");
 	}
 
+	// ---- P2-13: Configuration Properties vertieft ----
+
+	// §8.2.1.1: Integer config property with arithmetic
+	@Test
+	void configProperty_integer_arithmetic() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionContext ctx = QvtoExecutionContext.of(
+				List.of(outExtent),
+				Map.of("limit", 100));
+		QvtoExecutionResult result = execute("""
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(out t : TGT) {
+				    configuration property limit : Integer;
+				    main() {
+				        var doubled := limit * 2;
+				        log(doubled.toString());
+				    }
+				}
+				""", ctx);
+		assertSuccess(result);
+		assertLogged(result, "200");
+	}
+
+	// §8.2.1.1 + Eclipse invalidConfigProp.qvto: Unset config properties are null/undefined
+	@Test
+	void configProperty_unset_isUndefined() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionContext ctx = QvtoExecutionContext.of(
+				List.of(outExtent),
+				Map.of());
+		QvtoExecutionResult result = execute("""
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(out t : TGT) {
+				    configuration property intProp : Integer;
+				    configuration property boolProp : Boolean;
+				    main() {
+				        log(if intProp = null then 'int-null' else 'int-set' endif);
+				        log(if boolProp = null then 'bool-null' else 'bool-set' endif);
+				    }
+				}
+				""", ctx);
+		assertSuccess(result);
+		assertLogged(result, "int-null");
+		assertLogged(result, "bool-null");
+	}
+
 	// ---- Helpers ----
 
 	private static void assertSuccess(QvtoExecutionResult result) {

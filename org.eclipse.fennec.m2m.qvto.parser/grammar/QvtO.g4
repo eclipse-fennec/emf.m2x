@@ -133,7 +133,18 @@ mappingDef
     ;
 
 mappingSignature
-    : '(' inputParams=paramList? ')' (':' resultParams=paramList)?
+    : '(' inputParams=paramList? ')' (':' resultList)?
+    ;
+
+resultList
+    : resultParam (',' resultParam)*
+    ;
+
+// §8.4: <declarator> ::= <typespec> | <scoped_identifier> ':' <typespec>
+// Allows both named (r : Type) and unnamed (Type → implicit 'result') result parameters.
+resultParam
+    : qvtoIdentifier ':' typeExpression                                                     # NamedResult
+    | typeExpression                                                                        # UnnamedResult
     ;
 
 paramList
@@ -141,7 +152,7 @@ paramList
     ;
 
 param
-    : qvtoIdentifier ':' typeExpression
+    : directionKind? qvtoIdentifier ':' typeExpression
     ;
 
 mappingExtension
@@ -155,19 +166,29 @@ mappingExtensionKind
     ;
 
 whenClause
-    : 'when' block
+    : 'when' guardBlock
     ;
 
 whereClause
-    : 'where' block
+    : 'where' guardBlock
+    ;
+
+// §8.4: when/where use ocl_expression_list where ';' is a separator, not a terminator.
+// This allows: when { expr }, when { expr; }, when { expr1; expr2 }
+guardBlock
+    : '{' expression (';' expression)* ';'? '}'
     ;
 
 mappingBody
-    : '{' initSection? statementList endSection? '}'
+    : '{' initSection? (populationSection | statementList) endSection? '}'
     ;
 
 initSection
     : 'init' block
+    ;
+
+populationSection
+    : 'population' block
     ;
 
 endSection
@@ -231,7 +252,7 @@ statementList
     ;
 
 statement
-    : expression assignOp expression ';'                                                 # AssignStatement
+    : varDeclExp ';'                                                                     # VarDeclStatement
     | expression ';'                                                                     # ExpressionStatement
     ;
 
@@ -249,6 +270,28 @@ block
 
 // ==================== Expression Override ====================
 
+// Override expression to add assignment as lowest-precedence expression operator.
+// §8.2.2.4 AssignExp: assignment IS an expression in QVT-O (not just a statement).
+// This is required for: if cond then x := e endif (§8.4 <expression_block>).
+// Assignment must be lowest precedence so x := y + 1 means x := (y + 1).
+expression
+    : expression ('.' | '?.') propertyOrCallSuffix                                       # NavigationExp
+    | expression ('->' | '?->') iteratorOrOperationCall                                  # ArrowExp
+    | expression '[' xselectCondition=expression ']'                                     # XselectExp
+    | 'not' expression                                                                   # NotExp
+    | '-' expression                                                                     # UnaryMinusExp
+    | expression op=('*' | '/') expression                                               # MultExp
+    | expression op=('+' | '-') expression                                               # AddExp
+    | expression op=('<' | '>' | '<=' | '>=') expression                                 # CompareExp
+    | expression op=('=' | '<>') expression                                              # EqualityExp
+    | expression 'and' expression                                                        # AndExp
+    | expression 'or' expression                                                         # OrExp
+    | expression 'xor' expression                                                        # XorExp
+    | expression 'implies' expression                                                    # ImpliesExp
+    | <assoc=right> expression assignOp expression ('default' defaultValue=expression)?   # AssignExp
+    | primaryExpression                                                                  # PrimaryExp
+    ;
+
 // Override primaryExpression to add imperative constructs.
 // QVT-O alternatives MUST come BEFORE pathName/OperationCallExp because
 // soft keywords (break, continue, return, resolve, log, assert, etc.)
@@ -257,9 +300,14 @@ block
 primaryExpression
     : '(' expression ')'                                                                 # ParenExp
     | 'self'                                                                             # SelfExp
+    // §8.2.2.8: imperative if — else is optional (extends OCL if where else is mandatory)
     | 'if' condition=expression 'then' thenExp=expression
       ('elseif' elseIfCondition+=expression 'then' elseIfExp+=expression)*
-      'else' elseExp=expression 'endif'                                                  # IfExp
+      ('else' elseExp=expression)? 'endif'                                                # IfExp
+    // §8.2.2.8: imperative if with block syntax — if (cond) { stmts } else { stmts }
+    | 'if' '(' impCondition=expression ')' thenBlock=block
+      ('elif' '(' elifCondition+=expression ')' elifBlock+=block)*
+      ('else' elseBlock=block)? 'endif'?                                                  # ImperativeIfExp
     | 'let' letBinding (',' letBinding)* 'in' expression                                 # LetExp
     | literalExpression                                                                  # LiteralExp
     // === QVT-O Imperative Expressions (before pathName to win ambiguity) ===
@@ -313,8 +361,10 @@ dictType
 
 // ==================== Imperative Expressions ====================
 
+// §8.2.2.2: 'do' keyword can be skipped inside if, switch, compute, and for expressions
 blockExp
     : 'do' '{' statement* '}'
+    | '{' statement* '}'
     ;
 
 whileExp
@@ -330,9 +380,13 @@ forKind
     | 'forOne'
     ;
 
+// §8.2.2.6 + §8.4 p170: <for_exp> ::= ... '(' <iter_declarator_list> (';' <declarator>)? ...
+// <declarator> is either a named compute var (x:Type=init) or just a type (Integer).
+// The ':' after qvtoIdentifier disambiguates compute shorthand from plain type.
 forVarList
-    : iteratorVariables ';' typeExpression
-    | iteratorVariables
+    : iteratorVariables ';' qvtoIdentifier ':' typeExpression (varInitOp expression)?      // compute shorthand: i;x:Type=init
+    | iteratorVariables ';' typeExpression                                                 // iterator type: i;Integer
+    | iteratorVariables                                                                    // plain: i
     ;
 
 switchExp
@@ -391,7 +445,8 @@ resolveArgs
     ;
 
 resolveTarget
-    : qvtoIdentifier ':' typeExpression
+    : qvtoIdentifier ':' typeExpression                                                    # NamedResolveTarget
+    | typeExpression                                                                        # TypeOnlyResolveTarget
     ;
 
 tryExp
@@ -427,7 +482,7 @@ returnExp
     ;
 
 varDeclExp
-    : 'var' varDeclarator
+    : 'var' varDeclarator (',' varDeclarator)*
     ;
 
 varDeclarator
@@ -448,15 +503,23 @@ pathName
     ;
 
 // Override navigation suffixes: obj.result, obj.object(), obj.map target(), etc.
+// §8.1.11: source.resolve(...), source.late resolve(...), source.resolveIn(...)
 propertyOrCallSuffix
     : mappingCallKind scopedName '(' argumentList? ')'                                     # MappingCallSuffix
+    | 'late'? resolveKind '(' resolveArgs? ')'                                             # ResolveCallSuffix
+    | 'late'? resolveInKind '(' scopedName (',' resolveArgs)? ')'                          # ResolveInCallSuffix
     | qvtoIdentifier '(' argumentList? ')' isMarkedPre?                                    # DotCallSuffix
     | qvtoIdentifier isMarkedPre?                                                          # PropertySuffix
     ;
 
 // Override iterator/operation calls: coll->collect(result | ...), coll->iterate(...)
+// §8.2.1.5: ForExp as arrow call: coll->forEach(x) { ... }, coll->forOne(x | cond) { ... }
+// §8.1.11.7: coll->late resolve(Type) = coll->xcollect(late resolve(Type))
 iteratorOrOperationCall
-    : qvtoIdentifier '(' iteratorVariables '|' expression ')'                              # IteratorCall
+    : forKind '(' forVarList ('|' expression)? ')' block                                    # ForEachCall
+    | 'late'? resolveKind '(' resolveArgs? ')'                                              # ArrowResolveCall
+    | 'late'? resolveInKind '(' scopedName (',' resolveArgs)? ')'                           # ArrowResolveInCall
+    | qvtoIdentifier '(' iteratorVariables '|' expression ')'                              # IteratorCall
     | qvtoIdentifier '(' qvtoIdentifier (':' iterType=typeExpression)?
       ';' qvtoIdentifier (':' accType=typeExpression)? '=' expression '|' expression ')'   # IterateCall
     | qvtoIdentifier '(' argumentList? ')'                                                 # CollectionOperationCall
@@ -486,6 +549,8 @@ tupleLiteralPart
 
 scopedName
     : qualifiedName '::' qvtoIdentifier
+    | primitiveType '::' qvtoIdentifier
+    | collectionType '::' qvtoIdentifier
     | qvtoIdentifier
     ;
 

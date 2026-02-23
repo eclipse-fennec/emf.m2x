@@ -575,13 +575,22 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int FOR_EXP__CONDITION = IMPERATIVE_LOOP_EXP__CONDITION;
 
 	/**
+	 * The feature id for the '<em><b>Name</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int FOR_EXP__NAME = IMPERATIVE_LOOP_EXP_FEATURE_COUNT + 0;
+
+	/**
 	 * The number of structural features of the '<em>For Exp</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int FOR_EXP_FEATURE_COUNT = IMPERATIVE_LOOP_EXP_FEATURE_COUNT + 0;
+	int FOR_EXP_FEATURE_COUNT = IMPERATIVE_LOOP_EXP_FEATURE_COUNT + 1;
 
 	/**
 	 * The number of operations of the '<em>For Exp</em>' class.
@@ -1949,6 +1958,17 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	EClass getForExp();
 
 	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2m.model.imperativeocl.ForExp#getName <em>Name</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Name</em>'.
+	 * @see org.eclipse.fennec.m2m.model.imperativeocl.ForExp#getName()
+	 * @see #getForExp()
+	 * @generated
+	 */
+	EAttribute getForExp_Name();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2m.model.imperativeocl.ImperativeIterateExp <em>Imperative Iterate Exp</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2558,6 +2578,14 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EClass FOR_EXP = eINSTANCE.getForExp();
+
+		/**
+		 * The meta object literal for the '<em><b>Name</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute FOR_EXP__NAME = eINSTANCE.getForExp_Name();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2m.model.imperativeocl.impl.ImperativeIterateExpImpl <em>Imperative Iterate Exp</em>}' class.

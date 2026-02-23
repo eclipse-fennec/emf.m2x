@@ -388,6 +388,143 @@ class QvtoE2eHelperQueryTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "Target:src");
 	}
 
+	// ---- P3-01: Helper vertieft E2E Tests ----
+
+	// §8.2.1.12: Helper creates object via object expression (side-effect)
+	@Test
+	void helper_createsObjectInMapping() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(out t : TGT) {
+				    helper createTarget(n : String) : TargetElement {
+				        return object TargetElement { name := n; };
+				    }
+				    main() {
+				        var elem := createTarget('from-helper');
+				        log(elem.name);
+				    }
+				}
+				""", outExtent);
+		assertSuccess(result);
+		assertLogged(result, "from-helper");
+		// object expression auto-adds to default output extent
+		assertTrue(outExtent.getContents().size() >= 1,
+				"Output extent should contain the created object");
+		assertEquals("from-helper", eGet(outExtent.getContents().get(0), "name"));
+	}
+
+	// §8.2.1.12: Helper returning Tuple, caller uses tuple parts
+	@Test
+	void helper_tupleReturn_usedByCaller() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    helper pair(a : String, b : Integer) : Tuple(name : String, value : Integer) {
+				        return Tuple{name = a, value = b};
+				    }
+				    main() {
+				        var t := pair('item', 42);
+				        log(t.name + ':' + t.value.toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "item:42");
+	}
+
+	// ---- P3-03: Contextual Helper vertieft E2E Tests ----
+
+	// §8.2.1.10 p101: Two contextual helpers same name on different model types
+	@Test
+	void helper_sameNameOnSourceAndTarget() throws Exception {
+		EObject src = createSourceElement("elem1", 5);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    helper SourceElement::describe() : String {
+				        return 'src:' + self.name;
+				    }
+				    helper TargetElement::describe() : String {
+				        return 'tgt:' + self.name;
+				    }
+				    mapping SourceElement::toTarget() : r : TargetElement {
+				        r.name := self.name;
+				        log(self.describe());
+				        log(r.describe());
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->collect(e | e.map toTarget());
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertLogged(result, "src:elem1");
+		assertLogged(result, "tgt:elem1");
+	}
+
+	// ---- P3-02: Query vertieft E2E Tests ----
+
+	// §8.1.9 + Eclipse Simpleuml_To_Rdb: Query used in mapping when-guard
+	@Test
+	void query_inMappingGuard() throws Exception {
+		EObject src1 = createSourceElement("persistent", 1);
+		EObject src2 = createSourceElement("transient", 0);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src1, src2);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    query SourceElement::isPersistent() : Boolean = self.value > 0;
+				    mapping SourceElement::toTarget() : r : TargetElement
+				        when { self.isPersistent(); }
+				    {
+				        r.name := self.name;
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->collect(e | e.map toTarget());
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertEquals(1, outExtent.getContents().size());
+		assertEquals("persistent", eGet(outExtent.getContents().get(0), "name"));
+	}
+
+	// §8.1.9: Recursive query (expression body)
+	@Test
+	void query_recursive_factorial() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    query factorial(n : Integer) : Integer =
+				        if n <= 1 then 1 else n * factorial(n - 1) endif;
+				    main() {
+				        log(factorial(6).toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "720");
+	}
+
+	// §8.1.9: Helper with expression body (= expr) returns value
+	@Test
+	void helper_expressionBody_returnsValue() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    helper square(n : Integer) : Integer = n * n;
+				    main() {
+				        log(square(7).toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "49");
+	}
+
 	// ---- Helpers ----
 
 	private static void assertSuccess(QvtoExecutionResult result) {

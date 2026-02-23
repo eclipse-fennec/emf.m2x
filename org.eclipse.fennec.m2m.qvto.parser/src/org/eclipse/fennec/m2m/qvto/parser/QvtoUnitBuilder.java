@@ -25,8 +25,8 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
-import org.eclipse.fennec.m2m.model.imperativeocl.Typedef;
 import org.eclipse.fennec.m2m.model.imperativeocl.ImperativeOclFactory;
+import org.eclipse.fennec.m2m.model.imperativeocl.Typedef;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.model.ocl.OclFactory;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
@@ -91,32 +91,59 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public OperationalTransformation visitCompilationUnit(QvtOParser.CompilationUnitContext ctx) {
-		// First pass: find transformation/library and collect modeltypes
+		// First pass: find transformation/library and collect modeltypes + inline libraries
 		OperationalTransformation transformation = null;
 		List<ModelType> modelTypes = new ArrayList<>();
+		List<Library> inlineLibraries = new ArrayList<>();
 
 		for (QvtOParser.UnitElementContext elemCtx : ctx.unitElement()) {
 			if (elemCtx.transformationDef() != null) {
 				transformation = visitTransformationDef(elemCtx.transformationDef());
 			} else if (elemCtx.libraryDef() != null) {
 				Library lib = visitLibraryDef(elemCtx.libraryDef());
-				// Wrap library as transformation for uniform return type
-				if (transformation == null) {
-					transformation = QVTO.createOperationalTransformation();
-					transformation.setName(lib.getName());
-				}
+				inlineLibraries.add(lib);
 			} else if (elemCtx.modeltypeDecl() != null) {
 				modelTypes.add(visitModeltypeDecl(elemCtx.modeltypeDecl()));
 			}
 		}
 
 		if (transformation == null) {
-			transformation = QVTO.createOperationalTransformation();
-			transformation.setName("_unnamed");
+			// Standalone library — wrap as transformation for uniform return type
+			if (!inlineLibraries.isEmpty()) {
+				Library firstLib = inlineLibraries.remove(0);
+				transformation = QVTO.createOperationalTransformation();
+				transformation.setName(firstLib.getName());
+			} else {
+				transformation = QVTO.createOperationalTransformation();
+				transformation.setName("_unnamed");
+			}
 		}
 
 		// Add all collected modeltypes to transformation
 		transformation.getUsedModelType().addAll(modelTypes);
+
+		// Link model parameters to their ModelType declarations
+		for (ModelParameter mp : transformation.getModelParameter()) {
+			EAnnotation ann = mp.getEAnnotation("qvto.modeltype");
+			if (ann != null) {
+				String typeName = ann.getDetails().get("name");
+				for (ModelType mt : modelTypes) {
+					if (mt.getName().equals(typeName)) {
+						mp.setEType(mt);
+						break;
+					}
+				}
+				mp.getEAnnotations().remove(ann);
+			}
+		}
+
+		// Register inline libraries as implicit access imports (§8.1.4)
+		for (Library lib : inlineLibraries) {
+			ModuleImport imp = QVTO.createModuleImport();
+			imp.setKind(ImportKind.ACCESS);
+			imp.setImportedModule(lib);
+			transformation.getModuleImport().add(imp);
+		}
 
 		// Second pass: imports and top-level module elements
 		for (QvtOParser.UnitElementContext elemCtx : ctx.unitElement()) {
@@ -208,7 +235,11 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	public ModuleImport visitQvtoImportDecl(QvtOParser.QvtoImportDeclContext ctx) {
 		ModuleImport imp = QVTO.createModuleImport();
 		imp.setKind(ImportKind.ACCESS);
-		// The imported module name is stored; actual resolution happens at link time
+		// Store qualified name as stub library for link-time resolution
+		String qualifiedName = qualifiedNameText(ctx.qualifiedName());
+		Library stub = QVTO.createLibrary();
+		stub.setName(qualifiedName);
+		imp.setImportedModule(stub);
 		return imp;
 	}
 
@@ -228,6 +259,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			EPackage resolvedPkg = resolvePackageRef(refCtx);
 			if (resolvedPkg != null) {
 				modelType.getMetamodel().add(resolvedPkg);
+			}
+		}
+
+		// §8.2.1.6: Additional conditions from where clause
+		if (ctx.modeltypeWhere() != null) {
+			for (QvtOParser.ExpressionContext exprCtx : ctx.modeltypeWhere().expression()) {
+				OclExpression condition = (OclExpression) expressionBuilder.visit(exprCtx);
+				if (condition != null) {
+					modelType.getAdditionalCondition().add(condition);
+				}
 			}
 		}
 
@@ -291,18 +332,18 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Scoped name: may include context type (Type::mappingName)
 		String fullName = expressionBuilder.scopedNameText(ctx.scopedName());
 		String mappingName = fullName;
-		String contextName = null;
 		int colonIdx = fullName.lastIndexOf("::");
 		if (colonIdx >= 0) {
-			contextName = fullName.substring(0, colonIdx);
 			mappingName = fullName.substring(colonIdx + 2);
 		}
 		mapping.setName(mappingName);
 
-		// Context parameter
-		if (contextName != null) {
+		// Context parameter — resolve type from scoped name
+		OclType contextType = expressionBuilder.resolveContextType(ctx.scopedName());
+		if (contextType != null) {
 			VarParameter ctxParam = QVTO.createVarParameter();
 			ctxParam.setName("self");
+			setParameterType(ctxParam, contextType);
 			mapping.setContext(ctxParam);
 		}
 
@@ -323,20 +364,20 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		// When clause
+		// When clause — §8.4: guardBlock with expression list (';' as separator)
 		if (ctx.whenClause() != null) {
-			for (QvtOParser.StatementContext stmtCtx : ctx.whenClause().block().statement()) {
-				OclExpression whenExpr = expressionBuilder.buildStatement(stmtCtx);
+			for (QvtOParser.ExpressionContext exprCtx : ctx.whenClause().guardBlock().expression()) {
+				OclExpression whenExpr = (OclExpression) expressionBuilder.visit(exprCtx);
 				if (whenExpr != null) {
 					mapping.getWhen().add(whenExpr);
 				}
 			}
 		}
 
-		// Where clause
+		// Where clause — §8.4: guardBlock with expression list
 		if (ctx.whereClause() != null) {
-			for (QvtOParser.StatementContext stmtCtx : ctx.whereClause().block().statement()) {
-				OclExpression whereExpr = expressionBuilder.buildStatement(stmtCtx);
+			for (QvtOParser.ExpressionContext exprCtx : ctx.whereClause().guardBlock().expression()) {
+				OclExpression whereExpr = (OclExpression) expressionBuilder.visit(exprCtx);
 				if (whereExpr != null) {
 					// where has single expression slot
 					mapping.setWhere(whereExpr);
@@ -368,7 +409,15 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 
 		// Population section (main body between init and end)
-		if (ctx.statementList() != null) {
+		if (ctx.populationSection() != null) {
+			// §8.2.1.19: Explicit population keyword — content goes into body.content
+			for (QvtOParser.StatementContext stmtCtx : ctx.populationSection().block().statement()) {
+				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
+				if (expr != null) {
+					body.getContent().add(expr);
+				}
+			}
+		} else if (ctx.statementList() != null) {
 			for (QvtOParser.StatementContext stmtCtx : ctx.statementList().statement()) {
 				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
 				if (expr != null) {
@@ -401,8 +450,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			applyOperationQualifier(helper, qCtx.getText());
 		}
 
-		String fullName = expressionBuilder.scopedNameText(ctx.scopedName());
-		setOperationNameAndContext(helper, fullName);
+		setOperationNameAndContext(helper, ctx.scopedName());
 
 		// Signature
 		buildSimpleSignature(helper, ctx.simpleSignature());
@@ -447,8 +495,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			applyOperationQualifier(query, qCtx.getText());
 		}
 
-		String fullName = expressionBuilder.scopedNameText(ctx.scopedName());
-		setOperationNameAndContext(query, fullName);
+		setOperationNameAndContext(query, ctx.scopedName());
 
 		buildSimpleSignature(query, ctx.simpleSignature());
 
@@ -485,8 +532,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	public Constructor visitConstructorDef(QvtOParser.ConstructorDefContext ctx) {
 		Constructor constructor = QVTO.createConstructor();
 
-		String fullName = expressionBuilder.scopedNameText(ctx.scopedName());
-		setOperationNameAndContext(constructor, fullName);
+		setOperationNameAndContext(constructor, ctx.scopedName());
 
 		buildSimpleSignature(constructor, ctx.simpleSignature());
 
@@ -610,6 +656,34 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			ot.getIntermediateClass().add(intermediateClass);
 		}
 		module.getEClassifiers().add(intermediateClass);
+
+		// §8.2.1.3: Register in _INTERMEDIATE package so resolveClassifier finds it
+		// and EcoreUtil.create() can instantiate it via the package's EFactory
+		EPackage intermPkg = getOrCreateIntermediatePackage(module);
+		intermPkg.getEClassifiers().add(intermediateClass);
+	}
+
+	/**
+	 * §8.2.1.3: Gets or creates the implicit _INTERMEDIATE package for intermediate classes.
+	 * Registers the package in the packageRegistry so type resolution works.
+	 */
+	private EPackage getOrCreateIntermediatePackage(Module module) {
+		String nsURI = "http://intermediate/" + module.getName();
+		if (packageRegistry != null) {
+			EPackage existing = packageRegistry.getEPackage(nsURI);
+			if (existing != null) {
+				return existing;
+			}
+		}
+		EPackage pkg = EcoreFactory.eINSTANCE.createEPackage();
+		pkg.setName("_INTERMEDIATE");
+		pkg.setNsPrefix("_intermediate");
+		pkg.setNsURI(nsURI);
+		// Dynamic EFactory is created automatically when EPackage has classifiers
+		if (packageRegistry != null) {
+			packageRegistry.put(nsURI, pkg);
+		}
+		return pkg;
 	}
 
 	// ==================== Tag ====================
@@ -653,6 +727,15 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		ModelParameter param = QVTO.createModelParameter();
 		param.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 		param.setKind(resolveDirection(ctx.directionKind().getText()));
+		// Store the type name from typeSpec for later linking to ModelType
+		if (ctx.typeSpec() != null && ctx.typeSpec().typeExpression() != null) {
+			String typeName = ctx.typeSpec().typeExpression().getText();
+			// Temporarily store as EAnnotation for post-processing
+			EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
+			ann.setSource("qvto.modeltype");
+			ann.getDetails().put("name", typeName);
+			param.getEAnnotations().add(ann);
+		}
 		return param;
 	}
 
@@ -672,15 +755,23 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		// Result parameters (labeled 'resultParams' in grammar, after ':')
-		if (sigCtx.resultParams != null) {
-			for (QvtOParser.ParamContext paramCtx : sigCtx.resultParams.param()) {
+		// Result parameters (§8.4: named 'r : Type' or unnamed 'Type' → implicit 'result')
+		if (sigCtx.resultList() != null) {
+			for (QvtOParser.ResultParamContext rCtx : sigCtx.resultList().resultParam()) {
 				VarParameter resultParam = QVTO.createVarParameter();
-				resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
-						paramCtx.qvtoIdentifier()));
-				OclType type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
-				if (type != null) {
-					setParameterType(resultParam, type);
+				if (rCtx instanceof QvtOParser.NamedResultContext named) {
+					resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
+							named.qvtoIdentifier()));
+					OclType type = expressionBuilder.resolveTypeExpression(named.typeExpression());
+					if (type != null) {
+						setParameterType(resultParam, type);
+					}
+				} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
+					resultParam.setName("result");
+					OclType type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
+					if (type != null) {
+						setParameterType(resultParam, type);
+					}
 				}
 				operation.getResult().add(resultParam);
 			}
@@ -737,16 +828,20 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private void setOperationNameAndContext(
 			org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation operation,
-			String fullName) {
+			QvtOParser.ScopedNameContext scopedNameCtx) {
+		String fullName = expressionBuilder.scopedNameText(scopedNameCtx);
 		int colonIdx = fullName.lastIndexOf("::");
 		if (colonIdx >= 0) {
-			// TODO: resolve contextName to EClassifier and set context parameter type
-			String contextName = fullName.substring(0, colonIdx);
 			String opName = fullName.substring(colonIdx + 2);
 			operation.setName(opName);
 
 			VarParameter ctxParam = QVTO.createVarParameter();
 			ctxParam.setName("self");
+			// §8.2.1.10: Resolve context type so engine can dispatch by owner type
+			OclType contextType = expressionBuilder.resolveContextType(scopedNameCtx);
+			if (contextType != null) {
+				setParameterType(ctxParam, contextType);
+			}
 			operation.setContext(ctxParam);
 		} else {
 			operation.setName(fullName);
@@ -768,6 +863,11 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (type instanceof org.eclipse.fennec.m2m.model.ocl.ClassifierType ct
 				&& ct.getReferredClassifier() != null) {
 			param.setEType(ct.getReferredClassifier());
+		} else if (type instanceof org.eclipse.fennec.m2m.model.ocl.PrimitiveType pt) {
+			// §8.2.1.10: Store primitive context type as EDataType for engine dispatch
+			org.eclipse.emf.ecore.EDataType dt = EcoreFactory.eINSTANCE.createEDataType();
+			dt.setName(pt.getName());
+			param.setEType(dt);
 		}
 	}
 
@@ -780,11 +880,14 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private void processModuleUsage(Module module, QvtOParser.ModuleUsageContext ctx) {
 		String kind = ctx.moduleUsageKind().getText();
-		// TODO: resolve module references and set imp.setImportedModule() during linking phase
 		for (QvtOParser.QualifiedNameContext nameCtx : ctx.moduleRefList().qualifiedName()) {
-			// nameCtx → resolve to Module and set as importedModule
 			ModuleImport imp = QVTO.createModuleImport();
 			imp.setKind("extends".equals(kind) ? ImportKind.EXTENSION : ImportKind.ACCESS);
+			// Store qualified name as stub library for link-time resolution
+			String qualifiedName = qualifiedNameText(nameCtx);
+			Library stub = QVTO.createLibrary();
+			stub.setName(qualifiedName);
+			imp.setImportedModule(stub);
 			module.getModuleImport().add(imp);
 		}
 	}
@@ -853,8 +956,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 		EClass moduleClass = getOrCreateModuleClass(module);
 		for (PendingExtension pe : pendingExtensions) {
+			// Extract simple name from scoped name (e.g., "SourceElement::toHigh" → "toHigh")
+			String simpleName = pe.name.contains("::")
+					? pe.name.substring(pe.name.lastIndexOf("::") + 2)
+					: pe.name;
 			for (EOperation op : moduleClass.getEOperations()) {
-				if (op instanceof MappingOperation mo && pe.name.equals(mo.getName())) {
+				if (op instanceof MappingOperation mo && simpleName.equals(mo.getName())) {
 					switch (pe.kind) {
 					case "inherits" -> pe.mapping.getInherited().add(mo);
 					case "merges" -> pe.mapping.getMerged().add(mo);

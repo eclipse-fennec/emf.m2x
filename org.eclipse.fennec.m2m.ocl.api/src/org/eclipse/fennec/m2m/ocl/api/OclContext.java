@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiFunction;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.resource.ResourceSet;
@@ -53,6 +54,10 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
  * @param extent the model extent for {@code allInstances()}, or {@code null} if not needed
  * @param variables external variables accessible by name, never {@code null}
  * @param resourceSet optional {@code ResourceSet} for package resolution, or {@code null}
+ * @param propertyInterceptor optional interceptor for property access, or {@code null}.
+ *     When set, the OCL evaluator calls this function before doing {@code eGet()}.
+ *     The function receives the target EObject and property name, and returns the value
+ *     or {@link #PROPERTY_NOT_HANDLED} if the interceptor does not handle the property.
  * @author Data In Motion Consulting
  * @since 1.0
  */
@@ -60,7 +65,14 @@ public record OclContext(
 		EObject self,
 		OclModelExtent extent,
 		Map<String, Object> variables,
-		ResourceSet resourceSet) {
+		ResourceSet resourceSet,
+		BiFunction<EObject, String, Object> propertyInterceptor) {
+
+	/**
+	 * Sentinel returned by {@link #propertyInterceptor()} when it does not handle
+	 * the property. The OCL evaluator then falls through to normal {@code eGet()}.
+	 */
+	public static final Object PROPERTY_NOT_HANDLED = new Object();
 
 	/**
 	 * Canonical constructor with validation.
@@ -71,17 +83,31 @@ public record OclContext(
 		variables = Collections.unmodifiableMap(new LinkedHashMap<>(variables));
 		// extent is nullable — not every evaluation needs allInstances()
 		// resourceSet is nullable — not every evaluation needs it
+		// propertyInterceptor is nullable — only needed for QVT-O intermediate properties
 	}
 
 	/**
-	 * Backward-compatible constructor without resourceSet.
+	 * Backward-compatible constructor without propertyInterceptor.
+	 *
+	 * @param self the context object
+	 * @param extent the model extent, or {@code null}
+	 * @param variables external variables
+	 * @param resourceSet the resource set, or {@code null}
+	 */
+	public OclContext(EObject self, OclModelExtent extent, Map<String, Object> variables,
+			ResourceSet resourceSet) {
+		this(self, extent, variables, resourceSet, null);
+	}
+
+	/**
+	 * Backward-compatible constructor without resourceSet or propertyInterceptor.
 	 *
 	 * @param self the context object
 	 * @param extent the model extent, or {@code null}
 	 * @param variables external variables
 	 */
 	public OclContext(EObject self, OclModelExtent extent, Map<String, Object> variables) {
-		this(self, extent, variables, null);
+		this(self, extent, variables, null, null);
 	}
 
 	/**

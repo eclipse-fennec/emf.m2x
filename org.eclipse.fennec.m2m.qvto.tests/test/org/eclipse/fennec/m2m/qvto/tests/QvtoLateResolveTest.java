@@ -42,7 +42,7 @@ class QvtoLateResolveTest extends AbstractQvtoEngineTest {
 				transformation test(in s : SRC, out t : TGT) {
 				    mapping SourceElement::toTarget() : r : TargetElement {
 				        r.name := self.name;
-				        r.ref := late resolveone(t : TargetElement);
+				        r.ref := self.late resolveone(t : TargetElement);
 				    }
 				    main() {
 				        s.objectsOfType(SourceElement)->collect(e | e.map toTarget());
@@ -52,12 +52,12 @@ class QvtoLateResolveTest extends AbstractQvtoEngineTest {
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
 		assertEquals(2, outExtent.getContents().size());
-		// After late resolve, each target's ref should point to itself
-		// (since resolve(self) finds the target created from that source)
+		// §8.1.11.3+7: self.late resolveone — explicit source filters trace to self's record.
+		// Each target's ref should point to itself (target mapped from its own source).
 		for (EObject target : outExtent.getContents()) {
 			Object ref = target.eGet(target.eClass().getEStructuralFeature("ref"));
 			assertNotNull(ref, "Late resolve should have assigned ref");
-			assertEquals(target, ref, "resolve(self) should find the target mapped from self");
+			assertEquals(target, ref, "self.resolveone should find the target mapped from self");
 		}
 	}
 
@@ -128,7 +128,7 @@ class QvtoLateResolveTest extends AbstractQvtoEngineTest {
 				    mapping SourceElement::toTarget() : r : TargetElement {
 				        r.name := self.name;
 				        r.value := self.value;
-				        r.ref := late resolveone(t : TargetElement | t.value > 15);
+				        r.ref := self.late resolveone(t : TargetElement | t.value > 15);
 				    }
 				    main() {
 				        s.objectsOfType(SourceElement)->collect(e | e.map toTarget());
@@ -138,8 +138,9 @@ class QvtoLateResolveTest extends AbstractQvtoEngineTest {
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
 		assertEquals(2, outExtent.getContents().size());
-		// src1 (value=10) maps to target1 (value=10). resolve with condition value>15 should not match.
-		// src2 (value=20) maps to target2 (value=20). resolve with condition value>15 should match target2.
+		// §8.1.11.3+7: self.late resolveone with condition and explicit source.
+		// src1 (value=10) → self.resolveone finds target1 (value=10) → doesn't pass >15 → null
+		// src2 (value=20) → self.resolveone finds target2 (value=20) → passes >15 → target2
 		EObject target1 = outExtent.getContents().stream()
 				.filter(e -> "x".equals(e.eGet(e.eClass().getEStructuralFeature("name"))))
 				.findFirst().orElse(null);
@@ -148,12 +149,10 @@ class QvtoLateResolveTest extends AbstractQvtoEngineTest {
 				.findFirst().orElse(null);
 		assertNotNull(target1);
 		assertNotNull(target2);
-		// target1's resolve(self=src1) produces target1 (value=10), which doesn't pass >15
 		assertNull(target1.eGet(target1.eClass().getEStructuralFeature("ref")),
-				"Condition value>15 should filter out target with value=10");
-		// target2's resolve(self=src2) produces target2 (value=20), which passes >15
+				"self=src1 → target1(value=10) doesn't match >15 → null");
 		assertEquals(target2, target2.eGet(target2.eClass().getEStructuralFeature("ref")),
-				"Condition value>15 should match target with value=20");
+				"self=src2 → target2(value=20) matches >15 → target2");
 	}
 
 	@Test
@@ -196,7 +195,7 @@ class QvtoLateResolveTest extends AbstractQvtoEngineTest {
 				transformation test(in s : SRC, out t : TGT) {
 				    mapping SourceElement::toTarget() : r : TargetElement {
 				        r.name := self.name;
-				        r.ref := late resolveone(t : TargetElement);
+				        r.ref := self.late resolveone(t : TargetElement);
 				    }
 				    main() {
 				        s.objectsOfType(SourceElement)->collect(e | e.map toTarget());
@@ -206,11 +205,12 @@ class QvtoLateResolveTest extends AbstractQvtoEngineTest {
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
 		assertEquals(2, outExtent.getContents().size());
-		// Both late resolves should have been executed
+		// §8.1.11.3+7: self.late resolveone — each deferred resolve should execute after all mappings.
+		// With explicit self, each target's ref points to itself.
 		for (EObject target : outExtent.getContents()) {
 			Object ref = target.eGet(target.eClass().getEStructuralFeature("ref"));
 			assertNotNull(ref, "Each late resolveone should have been executed");
-			assertEquals(target, ref);
+			assertEquals(target, ref, "self.resolveone should find target mapped from self");
 		}
 	}
 }

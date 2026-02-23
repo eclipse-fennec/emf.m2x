@@ -53,7 +53,7 @@ class QvtoObjectExpTest extends AbstractQvtoEngineTest {
 				transformation test(out t : SRC) {
 				    main() {
 				        object SourceElement {
-				            self.name := 'test';
+				            name := 'test';
 				        };
 				    }
 				}
@@ -73,7 +73,7 @@ class QvtoObjectExpTest extends AbstractQvtoEngineTest {
 				transformation test(out t : SRC) {
 				    main() {
 				        var elem := object SourceElement {
-				            self.name := 'named';
+				            name := 'named';
 				        };
 				        log(elem.name);
 				    }
@@ -94,8 +94,8 @@ class QvtoObjectExpTest extends AbstractQvtoEngineTest {
 				transformation test(out t : SRC) {
 				    main() {
 				        object SourceElement {
-				            self.name := 'multi';
-				            self.value := 42;
+				            name := 'multi';
+				            value := 42;
 				        };
 				    }
 				}
@@ -131,7 +131,7 @@ class QvtoObjectExpTest extends AbstractQvtoEngineTest {
 				modeltype SRC uses 'http://test/source/1.0';
 				transformation test(out t : SRC) {
 				    main() {
-				        object SourceElement { self.name := 'a'; };
+				        object SourceElement { name := 'a'; };
 				    }
 				}
 				""", outExtent);
@@ -147,8 +147,8 @@ class QvtoObjectExpTest extends AbstractQvtoEngineTest {
 				modeltype SRC uses 'http://test/source/1.0';
 				transformation test(out t : SRC) {
 				    main() {
-				        object SourceElement { self.name := 'first'; };
-				        object SourceElement { self.name := 'second'; };
+				        object SourceElement { name := 'first'; };
+				        object SourceElement { name := 'second'; };
 				    }
 				}
 				""", outExtent);
@@ -165,8 +165,8 @@ class QvtoObjectExpTest extends AbstractQvtoEngineTest {
 				transformation test(out t : SRC) {
 				    main() {
 				        object SourceContainer {
-				            self.name := 'container';
-				            self.elements += object SourceElement { self.name := 'child'; };
+				            name := 'container';
+				            elements += object SourceElement { name := 'child'; };
 				        };
 				    }
 				}

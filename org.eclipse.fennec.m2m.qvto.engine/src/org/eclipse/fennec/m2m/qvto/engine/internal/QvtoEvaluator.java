@@ -16,6 +16,8 @@ package org.eclipse.fennec.m2m.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -47,17 +49,24 @@ import org.eclipse.fennec.m2m.model.imperativeocl.SwitchExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.util.ImperativeOclSwitch;
+import org.eclipse.fennec.m2m.model.ocl.IfExp;
+import org.eclipse.fennec.m2m.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
+import org.eclipse.fennec.m2m.model.ocl.OclType;
 import org.eclipse.fennec.m2m.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2m.model.ocl.Variable;
 import org.eclipse.fennec.m2m.model.ocl.VariableExp;
+import org.eclipse.fennec.m2m.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2m.model.qvtoperational.ConstructorBody;
+import org.eclipse.fennec.m2m.model.qvtoperational.ContextualProperty;
 import org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2m.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingBody;
+import org.eclipse.fennec.m2m.model.qvtoperational.Module;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingCallExp;
+import org.eclipse.fennec.m2m.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2m.model.qvtoperational.ObjectExp;
 import org.eclipse.fennec.m2m.model.trace.Trace;
@@ -99,6 +108,9 @@ public class QvtoEvaluator {
 	/** Sentinel for wrapping null values (EMF switches treat null as "not handled"). */
 	private static final Object WRAPPED_NULL = new Object();
 
+	/** Sentinel indicating a mapping's when-guard failed (§8.1.14: disjunct candidate selection). */
+	private static final Object GUARD_FAILED = new Object();
+
 	private final OclEngineImpl oclEngine;
 	private final QvtoEvalEnvironment env;
 	private final QvtoEvaluationOptions options;
@@ -109,6 +121,9 @@ public class QvtoEvaluator {
 	private final ImperativeDispatch imperativeSwitch = new ImperativeDispatch();
 	private final QvtOpDispatch qvtOpSwitch = new QvtOpDispatch();
 	private int stackDepth;
+
+	// §8.1.10: Intermediate property storage — per-instance values for ContextualProperty
+	private final IdentityHashMap<EObject, Map<String, Object>> intermediatePropertyValues = new IdentityHashMap<>();
 
 	// Late resolve support
 	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
@@ -144,6 +159,14 @@ public class QvtoEvaluator {
 			QvtoModelExtent extent = extentManager.getExtent(i);
 			if (mp.getName() != null && extent != null) {
 				env.define(mp.getName(), extent);
+			}
+		}
+
+		// Register configuration properties — undefined ones get null
+		for (EStructuralFeature configProp : transformation.getConfigProperty()) {
+			String propName = configProp.getName();
+			if (propName != null && env.lookup(propName) == null) {
+				env.define(propName, null);
 			}
 		}
 
@@ -190,8 +213,187 @@ public class QvtoEvaluator {
 			}
 		}
 
-		// 4. OCL delegation
+		// 4. IteratorExp — evaluate source through QVT-O dispatch so extent
+		// operations (rootObjects, objectsOfType) and imperative expressions work
+		if (expr instanceof IteratorExp iterExp) {
+			return evalIteratorExp(iterExp);
+		}
+
+		// 5. IfExp — evaluate here to ensure imperative body expressions
+		// (BlockExp, etc.) are dispatched through QVT-O eval, not OCL eval
+		if (expr instanceof IfExp ifExp) {
+			return evalIfExp(ifExp);
+		}
+
+		// 6. §8.1.10: Intermediate property read — intercept before OCL delegation
+		if (expr instanceof PropertyCallExp propCall) {
+			Object propResult = evalIntermediatePropertyRead(propCall);
+			if (propResult != UNHANDLED) {
+				return unwrapNull(propResult);
+			}
+		}
+
+		// 6.5. QVT-O lenient null handling for string concat — OCL strict mode
+		// rejects null arguments, but QVT-O should coerce null to "" in string context
+		if (expr instanceof OperationCallExp opCall && "+".equals(opCall.getName())) {
+			Object source = eval(opCall.getOwnedSource());
+			if (source instanceof String || source == null) {
+				Object arg = !opCall.getOwnedArguments().isEmpty()
+						? eval(opCall.getOwnedArguments().get(0)) : null;
+				String left = source != null ? source.toString() : "";
+				String right = arg != null ? arg.toString() : "";
+				return left + right;
+			}
+		}
+
+		// 7. OCL delegation
 		return evalOcl(expr);
+	}
+
+	/**
+	 * Evaluates an OCL IfExp using the QVT-O dispatch chain so that imperative
+	 * body expressions (BlockExp, etc.) are handled correctly.
+	 * §8.2.2.8: imperative if — else is optional (returns null when absent).
+	 */
+	private Object evalIfExp(IfExp ifExp) {
+		Object condVal = eval(ifExp.getOwnedCondition());
+		if (Boolean.TRUE.equals(condVal)) {
+			return eval(ifExp.getOwnedThen());
+		} else if (ifExp.getOwnedElse() != null) {
+			return eval(ifExp.getOwnedElse());
+		}
+		return null;
+	}
+
+	/**
+	 * Evaluates an OCL IteratorExp (select, reject, collect, etc.) using the
+	 * QVT-O dispatch chain for source evaluation, so that extent operations
+	 * (rootObjects, objectsOfType) and imperative expressions are handled.
+	 */
+	private Object evalIteratorExp(IteratorExp iterExp) {
+		Object sourceVal = eval(iterExp.getOwnedSource());
+		if (!(sourceVal instanceof Collection<?> coll)) {
+			// Fallback to OCL for non-collection sources
+			return evalOcl(iterExp);
+		}
+
+		List<Variable> iterVars = iterExp.getOwnedIterators();
+		String iterName = iterVars.isEmpty() ? "_it" : iterVars.get(0).getName();
+		OclExpression body = iterExp.getOwnedBody();
+		String opName = iterExp.getName();
+
+		return switch (opName) {
+			case "select" -> {
+				List<Object> result = new ArrayList<>();
+				for (Object elem : coll) {
+					env.pushScope();
+					try {
+						env.define(iterName, elem);
+						Object bodyVal = eval(body);
+						if (Boolean.TRUE.equals(bodyVal)) {
+							result.add(elem);
+						}
+					} finally {
+						env.popScope();
+					}
+				}
+				yield result;
+			}
+			case "reject" -> {
+				List<Object> result = new ArrayList<>();
+				for (Object elem : coll) {
+					env.pushScope();
+					try {
+						env.define(iterName, elem);
+						Object bodyVal = eval(body);
+						if (!Boolean.TRUE.equals(bodyVal)) {
+							result.add(elem);
+						}
+					} finally {
+						env.popScope();
+					}
+				}
+				yield result;
+			}
+			case "collect" -> {
+				List<Object> result = new ArrayList<>();
+				for (Object elem : coll) {
+					env.pushScope();
+					try {
+						env.define(iterName, elem);
+						result.add(eval(body));
+					} finally {
+						env.popScope();
+					}
+				}
+				yield result;
+			}
+			case "forAll" -> {
+				for (Object elem : coll) {
+					env.pushScope();
+					try {
+						env.define(iterName, elem);
+						if (!Boolean.TRUE.equals(eval(body))) {
+							yield Boolean.FALSE;
+						}
+					} finally {
+						env.popScope();
+					}
+				}
+				yield Boolean.TRUE;
+			}
+			case "exists" -> {
+				for (Object elem : coll) {
+					env.pushScope();
+					try {
+						env.define(iterName, elem);
+						if (Boolean.TRUE.equals(eval(body))) {
+							yield Boolean.TRUE;
+						}
+					} finally {
+						env.popScope();
+					}
+				}
+				yield Boolean.FALSE;
+			}
+			case "any" -> {
+				for (Object elem : coll) {
+					env.pushScope();
+					try {
+						env.define(iterName, elem);
+						if (Boolean.TRUE.equals(eval(body))) {
+							yield elem;
+						}
+					} finally {
+						env.popScope();
+					}
+				}
+				yield wrapNull(null);
+			}
+			default -> evalOcl(iterExp);
+		};
+	}
+
+	/**
+	 * §8.1.10: Checks if a PropertyCallExp refers to an intermediate property
+	 * and reads the value from intermediate storage if so.
+	 *
+	 * @return the value, or UNHANDLED if this is not an intermediate property
+	 */
+	private Object evalIntermediatePropertyRead(PropertyCallExp propCall) {
+		String propName = propCall.getReferredProperty() != null
+				? propCall.getReferredProperty().getName() : null;
+		if (propName == null) {
+			return UNHANDLED;
+		}
+		Object sourceObj = eval(propCall.getOwnedSource());
+		if (sourceObj instanceof EObject eo) {
+			ContextualProperty cp = findIntermediateProperty(eo, propName);
+			if (cp != null) {
+				return wrapNull(getIntermediatePropertyValue(eo, propName));
+			}
+		}
+		return UNHANDLED;
 	}
 
 	/**
@@ -205,14 +407,34 @@ public class QvtoEvaluator {
 		if (selfObj instanceof EObject eo) {
 			self = eo;
 		}
-		OclContext oclCtx = self != null
-				? OclContext.of(self, vars)
-				: OclContext.of(vars);
+		// §8.1.10: Intermediate property interceptor for OCL sub-expressions
+		boolean hasIntermediateProps = !transformation.getIntermediateProperty().isEmpty();
+		OclContext oclCtx;
+		if (hasIntermediateProps) {
+			oclCtx = new OclContext(self, null, vars, null, this::interceptIntermediateProperty);
+		} else {
+			oclCtx = self != null
+					? OclContext.of(self, vars)
+					: OclContext.of(vars);
+		}
 		// Use LENIENT null handling for QVT-O — module-level operations have no self
 		OclEvaluationOptions oclOpts = OclEvaluationOptions.lenient();
 		OclResult oclResult = oclEngine.evaluateWithDiagnostics(expr, oclCtx, oclOpts);
 		diagnostics.addAll(oclResult.diagnostics());
 		return oclResult.value();
+	}
+
+	/**
+	 * §8.1.10: Property interceptor for OCL delegated evaluation.
+	 * Returns the intermediate property value if the property is an intermediate property,
+	 * otherwise returns {@link OclContext#PROPERTY_NOT_HANDLED}.
+	 */
+	private Object interceptIntermediateProperty(EObject target, String propName) {
+		ContextualProperty cp = findIntermediateProperty(target, propName);
+		if (cp != null) {
+			return getIntermediatePropertyValue(target, propName);
+		}
+		return OclContext.PROPERTY_NOT_HANDLED;
 	}
 
 	/**
@@ -253,6 +475,10 @@ public class QvtoEvaluator {
 		if ("objects".equals(opName)) {
 			return wrapNull(new ArrayList<>(extent.getContents()));
 		}
+		// §8.2.1.3: rootObjects() returns top-level objects of the extent
+		if ("rootObjects".equals(opName)) {
+			return wrapNull(new ArrayList<>(extent.getContents()));
+		}
 		return UNHANDLED;
 	}
 
@@ -266,7 +492,8 @@ public class QvtoEvaluator {
 	 */
 	Object callOperation(ImperativeOperation operation, Object self, Object[] args) {
 		if (operation instanceof MappingOperation mappingOp) {
-			return callMapping(mappingOp, self, args);
+			Object result = callMapping(mappingOp, self, args);
+			return result == GUARD_FAILED ? null : result;
 		}
 		if (++stackDepth > options.maxStackDepth()) {
 			--stackDepth;
@@ -290,7 +517,13 @@ public class QvtoEvaluator {
 			EList<VarParameter> resultParams = operation.getResult();
 			if (!resultParams.isEmpty()) {
 				String resultName = resultParams.get(0).getName();
-				return env.lookup(resultName);
+				Object resultValue = env.lookup(resultName);
+				// §8.2.1.12: For expression bodies (= expr), the result variable is
+				// uninitialized — use the last evaluated expression as return value
+				if (resultValue == null && lastResult != null) {
+					return lastResult;
+				}
+				return resultValue;
 			}
 			return lastResult;
 		} catch (ReturnException e) {
@@ -302,20 +535,49 @@ public class QvtoEvaluator {
 	}
 
 	/**
+	 * Executes a mapping in strict mode (xmap): when-guard is a pre-condition.
+	 * If the when-guard fails, this is an assertion failure (§8.2.1.15).
+	 */
+	private Object callMappingStrict(MappingOperation mappingOp, Object self, Object[] args) {
+		// Strict mode: check when-guards as pre-conditions
+		if (++stackDepth > options.maxStackDepth()) {
+			--stackDepth;
+			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
+			return null;
+		}
+		try {
+			env.pushScope();
+			bindOperationParams(mappingOp, self, args);
+			for (OclExpression whenExpr : mappingOp.getWhen()) {
+				Object whenVal = eval(whenExpr);
+				if (!Boolean.TRUE.equals(whenVal)) {
+					addError("xmap pre-condition failed for mapping: " + mappingOp.getName());
+					return null;
+				}
+			}
+		} finally {
+			env.popScope();
+			--stackDepth;
+		}
+		// Pre-condition passed — delegate to standard callMapping for body execution
+		return callMapping(mappingOp, self, args);
+	}
+
+	/**
 	 * Executes a mapping operation with full mapping semantics:
 	 * when-guard, init/population/end, result creation, where-postcondition, trace recording.
 	 */
 	private Object callMapping(MappingOperation mappingOp, Object self, Object[] args) {
-		// Disjuncts: try each disjunct, first with passing when-guard wins
+		// Disjuncts: try each disjunct, first with passing when-guard wins (§8.1.14.1)
 		EList<MappingOperation> disjuncts = mappingOp.getDisjunct();
 		if (disjuncts != null && !disjuncts.isEmpty()) {
 			for (MappingOperation disjunct : disjuncts) {
 				Object result = callMapping(disjunct, self, args);
-				if (result != null) {
-					return result;
+				if (result != GUARD_FAILED) {
+					return result; // First candidate whose guard passes wins (even if result is null)
 				}
 			}
-			return null;
+			return null; // No candidate matched
 		}
 
 		if (++stackDepth > options.maxStackDepth()) {
@@ -331,7 +593,15 @@ public class QvtoEvaluator {
 			for (OclExpression whenExpr : mappingOp.getWhen()) {
 				Object whenVal = eval(whenExpr);
 				if (!Boolean.TRUE.equals(whenVal)) {
-					return null;
+					return GUARD_FAILED;
+				}
+			}
+
+			// Implicit inhibition (§8.2.1.15 p106): check trace for cached result
+			if (traceManager != null) {
+				Object cached = traceManager.lookupCachedResult(mappingOp, self, args);
+				if (cached != null) {
+					return cached;
 				}
 			}
 
@@ -352,25 +622,29 @@ public class QvtoEvaluator {
 				}
 			}
 
-			// Execute mapping body: init → population → end
+			// Execute mapping body (§8.2.1.15 p106-107):
+			// init → inherited → population → end → merged
 			OperationBody body = mappingOp.getBody();
 			if (body instanceof MappingBody mappingBody) {
+				// 1. Init section
 				for (OclExpression initExpr : mappingBody.getInitSection()) {
 					eval(initExpr);
 				}
-				for (OclExpression contentExpr : mappingBody.getContent()) {
-					eval(contentExpr);
-				}
-				// Inherited mappings: execute only population section
+				// 2. Inherited mappings: after init+instantiation, before population (§8.1.15)
 				for (MappingOperation inherited : mappingOp.getInherited()) {
 					executePopulationOnly(inherited, self, args);
 				}
-				// Merged mappings: execute only population section
-				for (MappingOperation merged : mappingOp.getMerged()) {
-					executePopulationOnly(merged, self, args);
+				// 3. Population section (main body)
+				for (OclExpression contentExpr : mappingBody.getContent()) {
+					eval(contentExpr);
 				}
+				// 4. End section
 				for (OclExpression endExpr : mappingBody.getEndSection()) {
 					eval(endExpr);
+				}
+				// 5. Merged mappings: after end section (§8.1.15)
+				for (MappingOperation merged : mappingOp.getMerged()) {
+					executePopulationOnly(merged, self, args);
 				}
 			} else if (body != null) {
 				for (OclExpression expr : body.getContent()) {
@@ -394,8 +668,8 @@ public class QvtoEvaluator {
 				result = env.lookup(resultParams.get(0).getName());
 			}
 
-			// Record trace
-			traceManager.addRecord(mappingOp, self, result);
+			// Record trace (§8.1.11.1: context, in-params, result)
+			traceManager.addRecord(mappingOp, self, args, result);
 
 			return result;
 		} catch (ReturnException e) {
@@ -403,7 +677,7 @@ public class QvtoEvaluator {
 			if (result == null && !mappingOp.getResult().isEmpty()) {
 				result = env.lookup(mappingOp.getResult().get(0).getName());
 			}
-			traceManager.addRecord(mappingOp, self, result);
+			traceManager.addRecord(mappingOp, self, args, result);
 			return result;
 		} finally {
 			env.popScope();
@@ -415,6 +689,13 @@ public class QvtoEvaluator {
 	 * Executes only the population section of a mapping body (for inherited/merged).
 	 */
 	private void executePopulationOnly(MappingOperation mapping, Object self, Object[] args) {
+		// §8.1.15: A merged/inherited mapping is not invoked if its when-guard is not satisfied
+		for (OclExpression whenExpr : mapping.getWhen()) {
+			Object whenVal = eval(whenExpr);
+			if (!Boolean.TRUE.equals(whenVal)) {
+				return;
+			}
+		}
 		OperationBody body = mapping.getBody();
 		if (body instanceof MappingBody mappingBody) {
 			for (OclExpression expr : mappingBody.getContent()) {
@@ -469,10 +750,14 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * Adds an EObject to the default output extent if available.
+	 * Adds an EObject to the appropriate output extent. First tries to match
+	 * by metamodel (EPackage), then falls back to the default output extent.
 	 */
 	private void addToDefaultExtent(EObject eObject) {
-		QvtoModelExtent extent = extentManager.getDefaultOutputExtent();
+		QvtoModelExtent extent = extentManager.getExtentForClassifier(eObject.eClass());
+		if (extent == null) {
+			extent = extentManager.getDefaultOutputExtent();
+		}
 		if (extent != null) {
 			extent.add(eObject);
 		}
@@ -519,19 +804,204 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * Finds an imperative operation by name in the transformation's module class.
+	 * Finds an imperative operation by name in the transformation's module class
+	 * and imported modules (§8.2.1.4 ModuleImport).
 	 */
 	ImperativeOperation findOperation(String name, Object contextType) {
+		List<ImperativeOperation> all = findAllOperations(name);
+		return all.isEmpty() ? null : all.get(0);
+	}
+
+	/**
+	 * Finds all imperative operations with the given name across the transformation
+	 * and imported modules. Used for implicit disjunction (§8.1.14.2).
+	 */
+	List<ImperativeOperation> findAllOperations(String name) {
+		List<ImperativeOperation> result = new ArrayList<>();
+		// 1. Search main transformation module class
+		EClass moduleClass = findModuleClass();
+		if (moduleClass != null) {
+			for (EOperation op : moduleClass.getEOperations()) {
+				if (op instanceof ImperativeOperation impOp && name.equals(op.getName())) {
+					result.add(impOp);
+				}
+			}
+		}
+		// 2. Search imported modules (§8.1.4: library operations accessible via import)
+		for (ModuleImport mi : transformation.getModuleImport()) {
+			Module importedModule = mi.getImportedModule();
+			if (importedModule != null) {
+				EClass importedModuleClass = findModuleClassIn(importedModule);
+				if (importedModuleClass != null) {
+					for (EOperation op : importedModuleClass.getEOperations()) {
+						if (op instanceof ImperativeOperation impOp && name.equals(op.getName())) {
+							result.add(impOp);
+						}
+					}
+				}
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Filters candidates by context type compatibility, then sorts by specificity
+	 * (§8.1.14.2/§8.1.14.3). Most-derived context type first.
+	 */
+	private static List<ImperativeOperation> filterAndSortByType(
+			List<ImperativeOperation> candidates, Object sourceObj) {
+		if (!(sourceObj instanceof EObject eObj)) {
+			return candidates;
+		}
+		EClass sourceClass = eObj.eClass();
+		// Filter: only candidates whose context type is compatible with sourceObj
+		List<ImperativeOperation> compatible = new ArrayList<>();
+		for (ImperativeOperation op : candidates) {
+			EClassifier ct = contextType(op);
+			if (ct == null || (ct instanceof EClass ctClass && ctClass.isSuperTypeOf(sourceClass))) {
+				compatible.add(op);
+			}
+		}
+		if (compatible.isEmpty()) {
+			return candidates; // fallback to all if nothing matches
+		}
+		// Sort: most-derived context type first
+		compatible.sort((a, b) -> {
+			EClassifier typeA = contextType(a);
+			EClassifier typeB = contextType(b);
+			if (typeA == typeB) return 0;
+			if (typeA == null) return 1;
+			if (typeB == null) return -1;
+			if (typeA instanceof EClass ca && typeB instanceof EClass cb) {
+				if (ca.isSuperTypeOf(cb)) return 1;
+				if (cb.isSuperTypeOf(ca)) return -1;
+			}
+			return 0;
+		});
+		return compatible;
+	}
+
+	private static EClassifier contextType(ImperativeOperation op) {
+		VarParameter ctx = op.getContext();
+		return ctx != null ? ctx.getEType() : null;
+	}
+
+	/**
+	 * Finds the internal module EClass within any Module (transformation or library).
+	 */
+	private static EClass findModuleClassIn(Module module) {
+		String name = module.getName();
+		if (name == null) {
+			return null;
+		}
+		return module.getEClassifiers().stream()
+				.filter(EClass.class::isInstance)
+				.map(EClass.class::cast)
+				.filter(c -> c.getName().equals(name))
+				.findFirst()
+				.orElse(null);
+	}
+
+	/**
+	 * Finds a constructor for the given EClass by matching the class name and argument count.
+	 * §8.2.1.13: Constructor name is usually the class name. Constructors are looked up
+	 * in the module's operations list.
+	 */
+	private Constructor findConstructor(EClass eClass, int argCount) {
 		EClass moduleClass = findModuleClass();
 		if (moduleClass == null) {
 			return null;
 		}
+		String className = eClass.getName();
 		for (EOperation op : moduleClass.getEOperations()) {
-			if (op instanceof ImperativeOperation impOp && name.equals(op.getName())) {
-				return impOp;
+			if (op instanceof Constructor ctor && className.equals(op.getName())) {
+				// Match by argument count (excluding result params)
+				int paramCount = ctor.getEParameters().size();
+				if (ctor.getResult() != null) {
+					paramCount -= ctor.getResult().size();
+				}
+				if (paramCount == argCount) {
+					return ctor;
+				}
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Returns the default value for a type when no initializer is provided.
+	 * §8.2.2.10: "zero for a numeric type, the empty string for a string,
+	 * and null for all other elements"
+	 */
+	/**
+	 * Returns the default value for a type when no initializer is provided.
+	 * §8.2.2.10: "zero for a numeric type, the empty string for a string,
+	 * and null for all other elements"
+	 */
+	private static Object defaultValueForType(OclType type) {
+		if (type == null) {
+			return null;
+		}
+		String typeName = type.getName();
+		if (typeName == null) {
+			return null;
+		}
+		return switch (typeName) {
+			case "Integer" -> 0;
+			case "Real" -> 0.0;
+			case "Boolean" -> Boolean.FALSE;
+			case "String" -> "";
+			default -> null;
+		};
+	}
+
+	/**
+	 * Calls a constructor operation on a created object.
+	 * §8.2.1.13 + Eclipse semantics: self is moved to result inside the constructor body,
+	 * so unqualified property assignments resolve to the created object.
+	 */
+	private void callConstructor(Constructor ctor, EObject created, List<Object> args) {
+		if (++stackDepth > options.maxStackDepth()) {
+			--stackDepth;
+			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
+			return;
+		}
+		try {
+			env.pushScope();
+
+			// Bind parameters from args
+			List<?> formalParams = ctor.getEParameters();
+			EList<VarParameter> resultParams = ctor.getResult();
+			int argIdx = 0;
+			for (int i = 0; i < formalParams.size(); i++) {
+				Object param = formalParams.get(i);
+				if (param instanceof VarParameter vp) {
+					if (resultParams != null && resultParams.contains(vp)) {
+						continue;
+					}
+					Object value = argIdx < args.size() ? args.get(argIdx++) : null;
+					env.define(vp.getName(), value);
+				}
+			}
+
+			// §8.2.1.13/Eclipse: self → result (constructor body uses 'result' for the object)
+			env.define("result", created);
+			// Also define _objectExp for resolveImplicitPropertyTarget
+			env.define("_objectExp", created);
+
+			// Execute constructor body
+			OperationBody body = ctor.getBody();
+			if (body != null) {
+				for (OclExpression expr : body.getContent()) {
+					eval(expr);
+				}
+			}
+		} catch (ReturnException e) {
+			// Constructor body may have return — ignore the value
+		} finally {
+			env.popScope();
+			--stackDepth;
+		}
 	}
 
 	private void addError(String message) {
@@ -609,6 +1079,91 @@ public class QvtoEvaluator {
 	}
 
 	/**
+	 * §8.2.1.17: Resolves an unqualified property name against the implicit context
+	 * object. Checks 'self' (ObjectExp context) and 'result' (mapping body context).
+	 *
+	 * @return the EObject that owns the feature, or null if not resolvable
+	 */
+	private EObject resolveImplicitPropertyTarget(String featureName) {
+		// ObjectExp: check the _objectExp variable first (innermost object scope)
+		Object objectExp = env.lookup("_objectExp");
+		if (objectExp instanceof EObject eo
+				&& eo.eClass().getEStructuralFeature(featureName) != null) {
+			return eo;
+		}
+		// §8.2.1.17: Mapping body — result has priority over self for implicit properties,
+		// because mapping body assignments target the result object.
+		Object result = env.lookup("result");
+		if (result instanceof EObject eo
+				&& eo.eClass().getEStructuralFeature(featureName) != null) {
+			return eo;
+		}
+		// self context (constructor body, standalone helper)
+		Object self = env.lookup("self");
+		if (self instanceof EObject eo
+				&& eo.eClass().getEStructuralFeature(featureName) != null) {
+			return eo;
+		}
+		return null;
+	}
+
+	/**
+	 * §8.1.10/§8.2.1.14: Finds a ContextualProperty (intermediate property) matching
+	 * the given name for the given EObject's type.
+	 */
+	private ContextualProperty findIntermediateProperty(EObject target, String propName) {
+		EClass targetClass = target.eClass();
+		for (EStructuralFeature sf : transformation.getIntermediateProperty()) {
+			if (sf instanceof ContextualProperty cp
+					&& propName.equals(cp.getName())
+					&& cp.getContext() != null
+					&& isTypeMatch(cp.getContext(), targetClass)) {
+				return cp;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Checks if contextClass matches or is a supertype of targetClass.
+	 * Uses name-based comparison as fallback for cross-package EClass identity.
+	 */
+	private static boolean isTypeMatch(EClass contextClass, EClass targetClass) {
+		if (contextClass.isSuperTypeOf(targetClass)) {
+			return true;
+		}
+		// Fallback: name-based comparison for cross-package identity
+		return contextClass.getName().equals(targetClass.getName());
+	}
+
+	/**
+	 * Reads an intermediate property value for a given EObject instance.
+	 * §8.2.1.14: If no value has been set, evaluates the initExpression if present.
+	 */
+	private Object getIntermediatePropertyValue(EObject target, String propName) {
+		Map<String, Object> props = intermediatePropertyValues.get(target);
+		if (props != null && props.containsKey(propName)) {
+			return props.get(propName);
+		}
+		// §8.2.1.14: Evaluate initExpression for uninitialized properties
+		ContextualProperty cp = findIntermediateProperty(target, propName);
+		if (cp != null && cp.getInitExpression() != null) {
+			Object initValue = eval(cp.getInitExpression());
+			setIntermediatePropertyValue(target, propName, initValue);
+			return initValue;
+		}
+		return null;
+	}
+
+	/**
+	 * Writes an intermediate property value for a given EObject instance.
+	 */
+	private void setIntermediatePropertyValue(EObject target, String propName, Object value) {
+		intermediatePropertyValues.computeIfAbsent(target, k -> new HashMap<>())
+				.put(propName, value);
+	}
+
+	/**
 	 * Coerces a value to match the expected EMF structural feature type.
 	 * OCL evaluates integer literals as Long, but EMF EInt expects Integer.
 	 */
@@ -649,9 +1204,15 @@ public class QvtoEvaluator {
 			Object value = null;
 			if (var.getOwnedInit() != null) {
 				value = eval(var.getOwnedInit());
+			} else if (var.getType() != null) {
+				// §8.2.2.10: Default values when no init — zero for numeric,
+				// empty string for String, empty collection for Collection, null otherwise
+				value = defaultValueForType(var.getType());
 			}
 			env.define(var.getName(), value);
-			return wrapNull(value);
+			// §8.2.2.10: withResult=true (::=) → expression returns the init value
+			// withResult=false (:= or =) → expression returns null (statement, no value)
+			return exp.isWithResult() ? wrapNull(value) : WRAPPED_NULL;
 		}
 
 		@Override
@@ -677,14 +1238,42 @@ public class QvtoEvaluator {
 				value = eval(values.get(0));
 			}
 
+			// §8.2.2.11: defaultValue — replace null with the default expression
+			if (value == null && exp.getDefaultValue() != null) {
+				value = eval(exp.getDefaultValue());
+			}
+
 			// Clear pending l-value after RHS evaluation
 			pendingLvalueOwner = null;
 			pendingLvalueFeature = null;
 			if (left instanceof VariableExp varExp) {
-				// Variable assignment
 				String varName = varExp.getReferredVariable().getName();
+				// §8.2.1.17: Implicit property assignment — inside object expressions
+				// (self = created object) and mapping bodies with single result
+				// (result = created object), unqualified names resolve as properties
+				// of the context object.
+				if (!env.contains(varName)) {
+					EObject target = resolveImplicitPropertyTarget(varName);
+					if (target != null) {
+						EStructuralFeature sf = target.eClass().getEStructuralFeature(varName);
+						Object coerced = coerceForFeature(sf, value);
+						if (exp.isIsReset()) {
+							target.eSet(sf, coerced);
+						} else {
+							Object current = target.eGet(sf);
+							if (current instanceof Collection<?>) {
+								@SuppressWarnings("unchecked")
+								Collection<Object> col = (Collection<Object>) current;
+								col.add(coerced);
+							} else {
+								target.eSet(sf, coerced);
+							}
+						}
+						return wrapNull(value);
+					}
+				}
+				// Variable assignment
 				if (exp.isIsReset()) {
-					// = (reset): replace value
 					env.assign(varName, value);
 				} else {
 					// += (append): add to collection
@@ -694,7 +1283,6 @@ public class QvtoEvaluator {
 						Collection<Object> col = (Collection<Object>) current;
 						col.add(value);
 					} else {
-						// No collection yet — just set value
 						env.assign(varName, value);
 					}
 				}
@@ -703,6 +1291,12 @@ public class QvtoEvaluator {
 				Object source = eval(propExp.getOwnedSource());
 				EStructuralFeature sf = propExp.getReferredProperty();
 				if (source instanceof EObject eo && sf != null) {
+					// §8.1.10: Check intermediate property first
+					ContextualProperty icp = findIntermediateProperty(eo, sf.getName());
+					if (icp != null) {
+						setIntermediatePropertyValue(eo, sf.getName(), value);
+						return wrapNull(value);
+					}
 					// Resolve the feature from the actual EClass to handle
 					// cross-package identity (dynamic Ecore models)
 					EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
@@ -718,7 +1312,13 @@ public class QvtoEvaluator {
 						if (current instanceof Collection<?>) {
 							@SuppressWarnings("unchecked")
 							Collection<Object> col = (Collection<Object>) current;
-							col.add(coerced);
+							if (coerced instanceof Collection<?> rhs) {
+								for (Object item : rhs) {
+									col.add(coerceForFeature(actualSf, item));
+								}
+							} else {
+								col.add(coerced);
+							}
 						} else {
 							eo.eSet(actualSf, coerced);
 						}
@@ -756,13 +1356,20 @@ public class QvtoEvaluator {
 				return WRAPPED_NULL;
 			}
 
+			// §8.2.2.6: non-ordered collections are implicitly converted to ordered
+			// (Set → OrderedSet/LinkedHashSet, Bag → Sequence/ArrayList)
+			Iterable<?> iterable = coll;
+			if (coll instanceof java.util.Set<?> && !(coll instanceof java.util.SequencedSet<?>)) {
+				iterable = new java.util.LinkedHashSet<>(coll);
+			}
+
 			List<Variable> iterVars = exp.getOwnedIterators();
 			String iterName = iterVars.isEmpty() ? "_it" : iterVars.get(0).getName();
 			OclExpression condition = exp.getCondition();
 			OclExpression body = exp.getOwnedBody();
-			Object lastResult = null;
+			boolean isForOne = "forOne".equals(exp.getName());
 
-			for (Object element : coll) {
+			for (Object element : iterable) {
 				env.pushScope();
 				try {
 					env.define(iterName, element);
@@ -773,7 +1380,11 @@ public class QvtoEvaluator {
 							continue;
 						}
 					}
-					lastResult = eval(body);
+					eval(body);
+					// §8.2.2.6: forOne executes body only for the first matching element
+					if (isForOne) {
+						break;
+					}
 				} catch (BreakException e) {
 					break;
 				} catch (ContinueException e) {
@@ -782,7 +1393,8 @@ public class QvtoEvaluator {
 					env.popScope();
 				}
 			}
-			return wrapNull(lastResult);
+			// §8.2.2.6: ForExp returns null
+			return WRAPPED_NULL;
 		}
 
 		@Override
@@ -918,8 +1530,28 @@ public class QvtoEvaluator {
 				addError("Cannot instantiate: " + (eClass == null ? "null" : eClass.getName()));
 				return WRAPPED_NULL;
 			}
+
+			// §8.2.2.22: Create the instance BEFORE constructor runs
 			EObject created = EcoreUtil.create(eClass);
 			addToDefaultExtent(created);
+
+			// Evaluate arguments
+			List<Object> argValues = new ArrayList<>();
+			for (OclExpression arg : exp.getArgument()) {
+				argValues.add(eval(arg));
+			}
+
+			// §8.2.1.13: Look up matching constructor in module
+			Constructor ctor = findConstructor(eClass, argValues.size());
+			if (ctor != null) {
+				callConstructor(ctor, created, argValues);
+			} else if (!argValues.isEmpty()) {
+				// §8.2.2.22: No constructor found but args present → error
+				addError("No constructor found for " + eClass.getName()
+						+ " with " + argValues.size() + " arguments");
+			}
+			// else: no args, implicit default constructor → no-op (object already created)
+
 			return wrapNull(created);
 		}
 
@@ -974,17 +1606,27 @@ public class QvtoEvaluator {
 				addError("Cannot instantiate: " + (eClass == null ? "null" : eClass.getName()));
 				return WRAPPED_NULL;
 			}
-			EObject created = EcoreUtil.create(eClass);
 
-			// Bind the referred object variable
+			// §8.2.1.24: Check referredObject variable for update semantics
 			Variable refObj = exp.getReferredObject();
 			String varName = (refObj != null && refObj.getName() != null)
 					? refObj.getName() : "_objectExp";
 
+			// Only check for update when variable was explicitly named (§8.2.1.24)
+			// Default names "result" / "_objectExp" mean no explicit variable reference
+			boolean isExplicitVar = !"result".equals(varName) && !"_objectExp".equals(varName);
+			Object existing = isExplicitVar ? env.lookup(varName) : null;
+			boolean isUpdate = (existing instanceof EObject);
+			EObject target = isUpdate ? (EObject) existing : EcoreUtil.create(eClass);
+
 			env.pushScope();
 			try {
-				env.define(varName, created);
-				env.define("self", created);
+				env.define(varName, target);
+				// Dedicated variable for resolveImplicitPropertyTarget lookups
+				env.define("_objectExp", target);
+				// §8.2.1.17/§8.2.1.18: self is NOT rebound inside object expressions.
+				// self always represents the contextual argument of the enclosing operation.
+				// Unqualified property assignments resolve to the created object via _objectExp.
 
 				// Execute constructor body
 				ConstructorBody body = exp.getBody();
@@ -997,8 +1639,15 @@ public class QvtoEvaluator {
 				env.popScope();
 			}
 
-			addToDefaultExtent(created);
-			return wrapNull(created);
+			// Only add to extent for newly created objects (not updates)
+			if (!isUpdate) {
+				addToDefaultExtent(target);
+				// §8.2.1.24: Assign newly created object to the referred variable in outer scope
+				if (isExplicitVar) {
+					env.assign(varName, target);
+				}
+			}
+			return wrapNull(target);
 		}
 
 		@Override
@@ -1016,23 +1665,49 @@ public class QvtoEvaluator {
 				args[i] = eval(argExprs.get(i));
 			}
 
-			// Find target operation
+			// Find all candidate operations (§8.1.14.2: implicit disjunction)
 			String opName = exp.getName();
-			ImperativeOperation targetOp = findOperation(opName, sourceObj);
-			if (targetOp == null) {
+			List<ImperativeOperation> candidates = findAllOperations(opName);
+			if (candidates.isEmpty()) {
 				addError("Mapping not found: " + opName);
 				return WRAPPED_NULL;
 			}
 
-			return wrapNull(callOperation(targetOp, sourceObj, args));
+			boolean isStrict = exp.isIsStrict();
+
+			// Single candidate: direct call
+			if (candidates.size() == 1) {
+				ImperativeOperation targetOp = candidates.get(0);
+				if (isStrict && targetOp instanceof MappingOperation mappingOp) {
+					return wrapNull(callMappingStrict(mappingOp, sourceObj, args));
+				}
+				return wrapNull(callOperation(targetOp, sourceObj, args));
+			}
+
+			// Multiple candidates: implicit disjunction (§8.1.14.2)
+			// Filter by context type compatibility, then sort most-derived first
+			List<ImperativeOperation> sorted = filterAndSortByType(candidates, sourceObj);
+			for (ImperativeOperation candidate : sorted) {
+				if (candidate instanceof MappingOperation mappingOp) {
+					Object result = isStrict
+							? callMappingStrict(mappingOp, sourceObj, args)
+							: callMapping(mappingOp, sourceObj, args);
+					if (result != GUARD_FAILED) {
+						return wrapNull(result);
+					}
+				}
+			}
+			// No candidate matched (§8.1.14: returns null)
+			return WRAPPED_NULL;
 		}
 
 		@Override
 		public Object caseResolveExp(ResolveExp exp) {
 			if (exp.isIsDeferred() && !isDeferredExecution) {
 				// Deferred (late) resolve: capture source eagerly, defer actual resolve
+				// §8.1.11.3: null source = search all records
 				Object sourceObj = exp.getOwnedSource() != null
-						? eval(exp.getOwnedSource()) : env.lookup("self");
+						? eval(exp.getOwnedSource()) : null;
 				if (pendingLvalueOwner != null) {
 					deferredTasks.add(new DeferredResolveTask(
 							exp, pendingLvalueOwner, pendingLvalueFeature,
@@ -1043,26 +1718,57 @@ public class QvtoEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			// Source object (implicit self when no explicit source)
+			// Source object: §8.1.11.3 — when no explicit source, search ALL trace records (null)
 			Object sourceObj = null;
 			if (exp.getOwnedSource() != null) {
 				sourceObj = eval(exp.getOwnedSource());
-			} else {
-				sourceObj = env.lookup("self");
+			}
+			// else: sourceObj stays null → resolve searches all records
+
+			// §8.1.11.7: coll->resolve(Type) = coll->xcollect(resolve(Type))
+			// When source is a Collection, iterate per-element and collect results
+			if (sourceObj instanceof Collection<?> coll) {
+				List<EObject> allResults = new ArrayList<>();
+				for (Object elem : coll) {
+					allResults.addAll(resolveForSource(exp, elem));
+				}
+				if (exp.isOne()) {
+					return wrapNull(allResults.isEmpty() ? null : allResults.get(0));
+				}
+				return wrapNull(allResults);
 			}
 
-			// Target type
+			List<EObject> candidates = resolveForSource(exp, sourceObj);
+
+			if (exp.isOne()) {
+				return wrapNull(candidates.isEmpty() ? null : candidates.get(0));
+			}
+			return wrapNull(candidates);
+		}
+
+		/** Resolves candidates for a single source object (or null for all records). */
+		private List<EObject> resolveForSource(ResolveExp exp, Object sourceObj) {
+			// Target type — may be EClass directly or wrapped in ClassifierType
 			EClass targetType = null;
 			Variable target = exp.getTarget();
-			if (target != null && target.getType() instanceof EClass tc) {
-				targetType = tc;
+			if (target != null) {
+				if (target.getType() instanceof EClass tc) {
+					targetType = tc;
+				} else if (target.getType() instanceof ClassifierType ct
+						&& ct.getReferredClassifier() instanceof EClass tc) {
+					targetType = tc;
+				}
 			}
 
-			// Resolve
+			// Resolve — dispatch based on inverse/in-mapping flags
 			List<EObject> candidates;
 			if (exp instanceof ResolveInExp resolveIn && resolveIn.getInMapping() != null) {
-				candidates = traceManager.resolveIn(
-						resolveIn.getInMapping().getName(), sourceObj, targetType);
+				String mappingName = resolveIn.getInMapping().getName();
+				if (exp.isIsInverse()) {
+					candidates = traceManager.invResolveIn(mappingName, sourceObj, targetType);
+				} else {
+					candidates = traceManager.resolveIn(mappingName, sourceObj, targetType);
+				}
 			} else if (exp.isIsInverse()) {
 				candidates = traceManager.invResolve(sourceObj, targetType);
 			} else {
@@ -1087,11 +1793,7 @@ public class QvtoEvaluator {
 				}
 				candidates = filtered;
 			}
-
-			if (exp.isOne()) {
-				return wrapNull(candidates.isEmpty() ? null : candidates.get(0));
-			}
-			return wrapNull(candidates);
+			return candidates;
 		}
 
 		@Override

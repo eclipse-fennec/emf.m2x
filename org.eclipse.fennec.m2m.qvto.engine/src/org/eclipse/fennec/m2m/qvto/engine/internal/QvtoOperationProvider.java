@@ -19,12 +19,18 @@ import java.util.List;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.fennec.m2m.model.ocl.AnyType;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2m.model.ocl.OclFactory;
+import org.eclipse.fennec.m2m.model.ocl.OclType;
+import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation;
+import org.eclipse.fennec.m2m.model.qvtoperational.Module;
+import org.eclipse.fennec.m2m.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.ocl.api.OclOperation;
 import org.eclipse.fennec.m2m.ocl.api.OclOperationProvider;
@@ -90,6 +96,15 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					}
 					return List.of();
 				}));
+		// §8.1.3: addObject — add an element to a model extent
+		ops.add(new OclOperation("addObject", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoModelExtent extent && args.length > 0
+							&& args[0] instanceof EObject eo) {
+						extent.add(eo);
+					}
+					return null;
+				}));
 
 		// Module-level helpers/queries/mappings
 		EClass moduleClass = findModuleClass();
@@ -97,22 +112,77 @@ public class QvtoOperationProvider implements OclOperationProvider {
 			return ops;
 		}
 
+		addModuleOperations(ops, moduleClass);
+
+		// Also export operations from imported modules (§8.1.4 Library access)
+		for (ModuleImport mi : transformation.getModuleImport()) {
+			Module importedModule = mi.getImportedModule();
+			if (importedModule != null) {
+				EClass importedModuleClass = findModuleClassIn(importedModule);
+				if (importedModuleClass != null) {
+					addModuleOperations(ops, importedModuleClass);
+				}
+			}
+		}
+
+		return ops;
+	}
+
+	private void addModuleOperations(List<OclOperation> ops, EClass moduleClass) {
 		for (EOperation eOp : moduleClass.getEOperations()) {
 			if (eOp instanceof ImperativeOperation impOp) {
 				String name = impOp.getName();
 				if (name == null || "main".equals(name)) {
-					continue; // skip main entry
+					continue;
 				}
+				// §8.2.1.10: Use context type for dispatch so same-name operations
+				// on different context types are dispatched correctly
+				OclType ownerType = resolveOwnerType(impOp);
 				ops.add(new OclOperation(
 						name,
+						ownerType,
+						List.of(),
 						ANY_TYPE,
-						List.of(), // parameter types (not checked at this level)
-						ANY_TYPE,  // return type
 						(self, args) -> evaluator.callOperation(impOp, self, args)
 				));
 			}
 		}
-		return ops;
+	}
+
+	/**
+	 * §8.2.1.10: Resolves the owner type for an imperative operation from its context parameter.
+	 * Returns ANY_TYPE for non-contextual operations.
+	 */
+	private OclType resolveOwnerType(ImperativeOperation impOp) {
+		var ctxParam = impOp.getContext();
+		if (ctxParam == null || ctxParam.getEType() == null) {
+			return ANY_TYPE;
+		}
+		EClassifier classifier = ctxParam.getEType();
+		if (classifier instanceof EClass ec) {
+			ClassifierType ct = OclFactory.eINSTANCE.createClassifierType();
+			ct.setReferredClassifier(ec);
+			return ct;
+		}
+		if (classifier instanceof EDataType dt) {
+			PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
+			pt.setName(dt.getName());
+			return pt;
+		}
+		return ANY_TYPE;
+	}
+
+	private static EClass findModuleClassIn(Module module) {
+		String name = module.getName();
+		if (name == null) {
+			return null;
+		}
+		return module.getEClassifiers().stream()
+				.filter(EClass.class::isInstance)
+				.map(EClass.class::cast)
+				.filter(c -> c.getName().equals(name))
+				.findFirst()
+				.orElse(null);
 	}
 
 	private static EClass resolveEClassArg(Object arg) {

@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.fennec.m2m.model.qvtoperational.DirectionKind;
+import org.eclipse.fennec.m2m.model.qvtoperational.EntryOperation;
 import org.eclipse.fennec.m2m.model.qvtoperational.ImportKind;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModelType;
@@ -178,5 +179,251 @@ class QvtoTransformationParseTest extends AbstractQvtoParserTest {
 				library MyLib {}
 				""");
 		assertNotNull(t);
+	}
+
+	// ---- Library Parse Tests (P2-03) ----
+
+	// §8.2.1.2: Library with helpers and queries
+	@Test
+	void libraryWithOperations() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				library StringUtils {
+				    helper toUpper(s : String) : String {
+				        return s;
+				    }
+				    query greet(name : String) : String = 'Hello ' + name;
+				}
+				""");
+		assertNotNull(t);
+		assertEquals("StringUtils", t.getName());
+	}
+
+	// §8.2.1.2: Library with multiple operations
+	@Test
+	void libraryWithMultipleOperations() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				library MathLib {
+				    helper add(a : Integer, b : Integer) : Integer {
+				        return a + b;
+				    }
+				    query multiply(a : Integer, b : Integer) : Integer = a * b;
+				}
+				""");
+		assertNotNull(t);
+		assertEquals("MathLib", t.getName());
+	}
+
+	// §8.2.1.4: Import with access keyword (moduleUsage on transformation)
+	@Test
+	void transformationWithAccessUsage() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() access MyLib {}
+				""");
+		assertFalse(t.getModuleImport().isEmpty());
+		ModuleImport mi = t.getModuleImport().get(0);
+		assertEquals(ImportKind.ACCESS, mi.getKind());
+		assertNotNull(mi.getImportedModule());
+		assertEquals("MyLib", mi.getImportedModule().getName());
+	}
+
+	// §8.2.1.4: Import with extends keyword (moduleUsage on transformation)
+	@Test
+	void transformationWithExtendsUsage() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() extends BaseLib {}
+				""");
+		assertFalse(t.getModuleImport().isEmpty());
+		ModuleImport mi = t.getModuleImport().get(0);
+		assertEquals(ImportKind.EXTENSION, mi.getKind());
+		assertNotNull(mi.getImportedModule());
+		assertEquals("BaseLib", mi.getImportedModule().getName());
+	}
+
+	// §8.2.1.4: import declaration stores qualified name
+	@Test
+	void importDeclarationStoresName() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				import some.library;
+				transformation T() {}
+				""");
+		assertFalse(t.getModuleImport().isEmpty());
+		ModuleImport mi = t.getModuleImport().get(0);
+		assertEquals(ImportKind.ACCESS, mi.getKind());
+		assertNotNull(mi.getImportedModule());
+		assertEquals("some.library", mi.getImportedModule().getName());
+	}
+
+	// ---- P2-09: ModelType Parse Tests ----
+
+	// §8.2.1.6: ModelType without compliance kind defaults to "effective"
+	@Test
+	void modeltypeDefaultCompliance() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				modeltype SRC uses 'http://test/source/1.0';
+				transformation T(in s : SRC) {}
+				""");
+		ModelType mt = t.getUsedModelType().get(0);
+		// Default: conformanceKind is null (= "effective" by spec default)
+		assertTrue(mt.getConformanceKind() == null || "effective".equals(mt.getConformanceKind()));
+	}
+
+	// §8.2.1.6: ModelType with explicit "effective" compliance kind
+	@Test
+	void modeltypeEffectiveCompliance() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				modeltype SRC 'effective' uses 'http://test/source/1.0';
+				transformation T(in s : SRC) {}
+				""");
+		assertEquals("effective", t.getUsedModelType().get(0).getConformanceKind());
+	}
+
+	// §8.2.1.6: ModelType with two packages
+	@Test
+	void modeltypeMultiplePackages() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				modeltype M uses 'http://test/source/1.0', 'http://test/target/1.0';
+				transformation T(in s : M) {}
+				""");
+		ModelType mt = t.getUsedModelType().get(0);
+		assertEquals(2, mt.getMetamodel().size());
+	}
+
+	// §8.4 p167: ModelType with where clause
+	@Test
+	void modeltypeWithWhereClause() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				modeltype SRC uses 'http://test/source/1.0' where { self.objectsOfType(SourceElement)->notEmpty() };
+				transformation T(in s : SRC) {}
+				""");
+		ModelType mt = t.getUsedModelType().get(0);
+		assertNotNull(mt);
+		assertFalse(mt.getAdditionalCondition().isEmpty());
+	}
+
+	// §8.2.1.6 + §8.1.1: Two modeltypes in transformation
+	@Test
+	void twoModeltypesInTransformation() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation T(in s : SRC, out t : TGT) {}
+				""");
+		assertEquals(2, t.getUsedModelType().size());
+		assertEquals("SRC", t.getUsedModelType().get(0).getName());
+		assertEquals("TGT", t.getUsedModelType().get(1).getName());
+	}
+
+	// ---- P2-10: Entry Operation (main) Parse Tests ----
+
+	// §8.2.1.11: main() is parsed as EntryOperation
+	@Test
+	void mainParsedAsEntryOperation() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    main() {
+				        log('hello');
+				    }
+				}
+				""");
+		EntryOperation entry = t.getEntry();
+		assertNotNull(entry, "Entry operation should be set on transformation");
+		assertEquals("main", entry.getName());
+	}
+
+	// §8.2.1.11: main() body contains ordered expressions
+	@Test
+	void mainBodyOrderedExpressions() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    main() {
+				        log('first');
+				        log('second');
+				        log('third');
+				    }
+				}
+				""");
+		EntryOperation entry = t.getEntry();
+		assertNotNull(entry);
+		assertNotNull(entry.getBody());
+		assertEquals(3, entry.getBody().getContent().size());
+	}
+
+	// §8.2.1.11: main() has no parameters
+	@Test
+	void mainHasNoParameters() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    main() {
+				    }
+				}
+				""");
+		EntryOperation entry = t.getEntry();
+		assertNotNull(entry);
+		assertTrue(entry.getEParameters().isEmpty());
+	}
+
+	// §8.1.4: Inline library creates ModuleImport on transformation
+	@Test
+	void inlineLibraryCreatesImport() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				library MyLib {
+				    helper greet() : String {
+				        return 'hello';
+				    }
+				}
+				transformation T() {
+				    main() {
+				        log(greet());
+				    }
+				}
+				""");
+		assertEquals("T", t.getName());
+		assertFalse(t.getModuleImport().isEmpty());
+		ModuleImport mi = t.getModuleImport().get(0);
+		assertEquals(ImportKind.ACCESS, mi.getKind());
+		assertNotNull(mi.getImportedModule());
+		assertEquals("MyLib", mi.getImportedModule().getName());
+	}
+
+	// ---- P2-13: Configuration Properties Parse Tests ----
+
+	// §8.2.1.1 + §8.4 p94: configuration property declaration → configProperty in AST
+	@Test
+	void configPropertyDeclaration() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    configuration property maxSize : Integer;
+				}
+				""");
+		assertFalse(t.getConfigProperty().isEmpty());
+		assertEquals("maxSize", t.getConfigProperty().get(0).getName());
+	}
+
+	// §8.2.1.1: multiple configuration properties of different types
+	@Test
+	void configPropertyMultipleTypes() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    configuration property name : String;
+				    configuration property count : Integer;
+				    configuration property flag : Boolean;
+				}
+				""");
+		assertEquals(3, t.getConfigProperty().size());
+		assertEquals("name", t.getConfigProperty().get(0).getName());
+		assertEquals("count", t.getConfigProperty().get(1).getName());
+		assertEquals("flag", t.getConfigProperty().get(2).getName());
+	}
+
+	// §8.4 p167: configuration property with default value expression
+	@Test
+	void configPropertyWithDefaultValue() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    configuration property name : String = 'default';
+				}
+				""");
+		assertFalse(t.getConfigProperty().isEmpty());
+		assertEquals("name", t.getConfigProperty().get(0).getName());
 	}
 }

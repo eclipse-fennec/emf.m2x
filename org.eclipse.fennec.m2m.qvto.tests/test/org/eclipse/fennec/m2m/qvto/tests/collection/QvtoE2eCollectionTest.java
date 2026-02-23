@@ -278,20 +278,55 @@ class QvtoE2eCollectionTest extends AbstractQvtoEngineTest {
 	// ---- Collection isEmpty/notEmpty ----
 
 	@Test
-	void collection_isEmpty_notEmpty() throws Exception {
+	void collection_isEmpty_emptySequence_returnsTrue() throws Exception {
 		QvtoExecutionResult result = execute("""
 				transformation test() {
 				    main() {
-				        log(Sequence{}->isEmpty().toString());
-				        log(Sequence{1}->isEmpty().toString());
-				        log(Sequence{}->notEmpty().toString());
-				        log(Sequence{1}->notEmpty().toString());
+				        log('isEmpty-empty:' + Sequence{}->isEmpty().toString());
 				    }
 				}
 				""");
 		assertSuccess(result);
-		assertLogged(result, "true");
-		assertLogged(result, "false");
+		assertLogged(result, "isEmpty-empty:true");
+	}
+
+	@Test
+	void collection_isEmpty_nonEmptySequence_returnsFalse() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        log('isEmpty-nonempty:' + Sequence{1}->isEmpty().toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "isEmpty-nonempty:false");
+	}
+
+	@Test
+	void collection_notEmpty_emptySequence_returnsFalse() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        log('notEmpty-empty:' + Sequence{}->notEmpty().toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "notEmpty-empty:false");
+	}
+
+	@Test
+	void collection_notEmpty_nonEmptySequence_returnsTrue() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        log('notEmpty-nonempty:' + Sequence{1}->notEmpty().toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "notEmpty-nonempty:true");
 	}
 
 	// ---- Sequence first/last ----
@@ -320,14 +355,15 @@ class QvtoE2eCollectionTest extends AbstractQvtoEngineTest {
 				transformation test() {
 				    main() {
 				        var s := Sequence{1, 2};
-				        var s2 := s->append(3);
-				        log(s2->size().toString());
-				        log(s2->last().toString());
+				        var s2 := s->append(99);
+				        log('size:' + s2->size().toString());
+				        log('last:' + s2->last().toString());
 				    }
 				}
 				""");
 		assertSuccess(result);
-		assertLogged(result, "3");
+		assertLogged(result, "size:3");
+		assertLogged(result, "last:99");
 	}
 
 	// ---- Helpers ----

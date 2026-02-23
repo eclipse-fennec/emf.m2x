@@ -93,12 +93,17 @@ class QvtoE2eObjectExpTest extends AbstractQvtoEngineTest {
 				}
 				""", outExtent);
 		assertSuccess(result);
-		assertFalse(outExtent.getContents().isEmpty());
 		EObject container = outExtent.getContents().stream()
 				.filter(e -> e.eClass().getName().equals("TargetContainer"))
 				.findFirst().orElse(null);
-		assertNotNull(container);
+		assertNotNull(container, "Container should be in out extent");
 		assertEquals("root", eGet(container, "name"));
+		@SuppressWarnings("unchecked")
+		List<EObject> children = (List<EObject>) container.eGet(
+				container.eClass().getEStructuralFeature("elements"));
+		assertEquals(2, children.size(), "Container should have 2 children");
+		assertEquals("child1", eGet(children.get(0), "name"));
+		assertEquals("child2", eGet(children.get(1), "name"));
 	}
 
 	@Test
@@ -119,7 +124,17 @@ class QvtoE2eObjectExpTest extends AbstractQvtoEngineTest {
 				}
 				""", outExtent);
 		assertSuccess(result);
-		assertFalse(outExtent.getContents().isEmpty());
+		EObject container = outExtent.getContents().stream()
+				.filter(e -> e.eClass().getName().equals("SourceContainer"))
+				.findFirst().orElse(null);
+		assertNotNull(container, "SourceContainer should be in out extent");
+		assertEquals("outer", eGet(container, "name"));
+		@SuppressWarnings("unchecked")
+		List<EObject> children = (List<EObject>) container.eGet(
+				container.eClass().getEStructuralFeature("elements"));
+		assertEquals(1, children.size(), "Container should have 1 child");
+		assertEquals("inner", eGet(children.get(0), "name"));
+		assertEquals(99, eGet(children.get(0), "value"));
 	}
 
 	// ---- Object assigned to variable ----
@@ -166,7 +181,14 @@ class QvtoE2eObjectExpTest extends AbstractQvtoEngineTest {
 				}
 				""", inExtent, outExtent);
 		assertSuccess(result);
-		assertFalse(outExtent.getContents().isEmpty());
+		// Mapping result + nested object expression → at least the mapping result in extent
+		EObject mapped = outExtent.getContents().stream()
+				.filter(e -> "src".equals(eGet(e, "name")))
+				.findFirst().orElse(null);
+		assertNotNull(mapped, "Mapped TargetElement 'src' should be in out extent");
+		EObject ref = (EObject) eGet(mapped, "ref");
+		assertNotNull(ref, "ref should be set by nested object expression");
+		assertEquals("ref-src", eGet(ref, "name"), "Nested object should have name 'ref-src'");
 	}
 
 	// ---- Multiple objects ----
@@ -214,25 +236,27 @@ class QvtoE2eObjectExpTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "3");
 	}
 
-	// ---- Object using self ----
+	// ---- Object with named variable ----
 
 	@Test
-	void object_selfReferenceInBody() throws Exception {
+	void object_namedVariable_accessibleInBody() throws Exception {
 		QvtoModelExtent outExtent = emptyExtent();
 		QvtoExecutionResult result = executeWithExtents("""
 				modeltype TGT uses 'http://test/target/1.0';
 				transformation test(out t : TGT) {
 				    main() {
-				        object TargetElement {
-				            self.name := 'self-ref';
-				            self.value := 123;
+				        var elem := object TargetElement {
+				            name := 'direct-access';
+				            value := 123;
 				        };
+				        log(elem.name + ':' + elem.value.toString());
 				    }
 				}
 				""", outExtent);
 		assertSuccess(result);
+		assertLogged(result, "direct-access:123");
 		EObject elem = outExtent.getContents().get(0);
-		assertEquals("self-ref", eGet(elem, "name"));
+		assertEquals("direct-access", eGet(elem, "name"));
 		assertEquals(123, eGet(elem, "value"));
 	}
 
@@ -320,6 +344,171 @@ class QvtoE2eObjectExpTest extends AbstractQvtoEngineTest {
 				""", outExtent);
 		assertSuccess(result);
 		assertEquals(2, outExtent.getContents().size());
+	}
+
+	// ---- P2-08: Object Update Semantics (§8.1.6 p70, §8.2.1.24 p116) ----
+
+	// §8.2.1.24: referredObject is null → create new object
+	@Test
+	void object_creation_whenVariableNull() throws Exception {
+		EObject src = createSourceElement("c", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        var x : TargetElement := null;
+				        object x : TargetElement { name := 'created'; value := 42; };
+				        log('name:' + x.name);
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertLogged(result, "name:created");
+	}
+
+	// §8.2.1.24: referredObject is non-null → update existing (no new creation)
+	@Test
+	void object_update_existingObject() throws Exception {
+		EObject src = createSourceElement("u", 5);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : r : TargetElement {
+				        r.name := 'original';
+				        r.value := 1;
+				        -- update existing object (r is non-null)
+				        object r : TargetElement { value := 99; };
+				        log('name:' + r.name + ',value:' + r.value.toString());
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		// name should still be 'original' (not reset), value updated to 99
+		assertLogged(result, "name:original,value:99");
+		// Only 1 object in extent (update, not new creation)
+		assertEquals(1, outExtent.getContents().size(),
+				"Object update should not create a new object");
+	}
+
+	// §8.2.1.24: object without variable → always create
+	@Test
+	void object_noVariable_alwaysCreates() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(out t : TGT) {
+				    main() {
+				        object TargetElement { name := 'first'; };
+				        object TargetElement { name := 'second'; };
+				    }
+				}
+				""", outExtent);
+		assertSuccess(result);
+		assertEquals(2, outExtent.getContents().size(),
+				"object without variable should always create new");
+	}
+
+	// §8.1.6: Object update does not add duplicate to extent
+	@Test
+	void object_update_noExtentDuplicate() throws Exception {
+		EObject src = createSourceElement("d", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : r : TargetElement {
+				        r.name := 'orig';
+				        -- update r three times
+				        object r : TargetElement { value := 1; };
+				        object r : TargetElement { value := 2; };
+				        object r : TargetElement { value := 3; };
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		// Only 1 object despite 3 updates
+		assertEquals(1, outExtent.getContents().size(),
+				"Updates should not add duplicates to extent");
+		EObject target = outExtent.getContents().get(0);
+		assertEquals("orig", eGet(target, "name"));
+		assertEquals(3, eGet(target, "value"), "Last update wins");
+	}
+
+	// §8.1.6 p70: Object update in mapping end section
+	@Test
+	void object_update_inEndSection() throws Exception {
+		EObject src = createSourceElement("e", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : r : TargetElement {
+				        r.name := 'pop';
+				        r.value := 10;
+				        end {
+				            object r : TargetElement { name := 'end-updated'; };
+				        }
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertEquals(1, outExtent.getContents().size());
+		EObject target = outExtent.getContents().get(0);
+		assertEquals("end-updated", eGet(target, "name"));
+		assertEquals(10, eGet(target, "value"), "Value unchanged by end update");
+	}
+
+	// §8.2.1.24: Object with conditional body
+	@Test
+	void object_conditionalBody() throws Exception {
+		EObject src = createSourceElement("cond", 5);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        object TargetElement {
+				            if (self.value > 3) {
+				                name := 'high';
+				            } else {
+				                name := 'low';
+				            };
+				        };
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		// 2 objects: mapping result + object expression
+		boolean found = outExtent.getContents().stream()
+				.anyMatch(o -> "high".equals(eGet(o, "name")));
+		assertTrue(found, "Conditional body should set name='high' for value>3");
 	}
 
 	// ---- Helpers ----

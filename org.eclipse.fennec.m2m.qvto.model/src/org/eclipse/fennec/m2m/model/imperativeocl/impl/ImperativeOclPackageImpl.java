@@ -485,6 +485,16 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 	 * @generated
 	 */
 	@Override
+	public EAttribute getForExp_Name() {
+		return (EAttribute)forExpEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getImperativeIterateExp() {
 		return imperativeIterateExpEClass;
 	}
@@ -934,6 +944,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 		createEReference(imperativeLoopExpEClass, IMPERATIVE_LOOP_EXP__CONDITION);
 
 		forExpEClass = createEClass(FOR_EXP);
+		createEAttribute(forExpEClass, FOR_EXP__NAME);
 
 		imperativeIterateExpEClass = createEClass(IMPERATIVE_ITERATE_EXP);
 		createEReference(imperativeIterateExpEClass, IMPERATIVE_ITERATE_EXP__TARGET);
@@ -1074,6 +1085,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 		initEReference(getImperativeLoopExp_Condition(), theOclPackage.getOclExpression(), null, "condition", null, 0, 1, ImperativeLoopExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(forExpEClass, ForExp.class, "ForExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEAttribute(getForExp_Name(), ecorePackage.getEString(), "name", null, 0, 1, ForExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(imperativeIterateExpEClass, ImperativeIterateExp.class, "ImperativeIterateExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getImperativeIterateExp_Target(), theOclPackage.getVariable(), null, "target", null, 0, 1, ImperativeIterateExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

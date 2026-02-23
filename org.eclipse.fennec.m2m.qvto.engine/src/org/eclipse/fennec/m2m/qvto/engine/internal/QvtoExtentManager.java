@@ -19,8 +19,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2m.model.qvtoperational.DirectionKind;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
+import org.eclipse.fennec.m2m.model.qvtoperational.ModelType;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2m.qvto.api.QvtoModelExtent;
@@ -101,5 +104,38 @@ public class QvtoExtentManager {
 			}
 		}
 		return extents.isEmpty() ? null : extents.get(extents.size() - 1);
+	}
+
+	/**
+	 * Returns the output extent whose metamodel contains the given classifier.
+	 * Matches by EPackage nsURI of the classifier against the ModelType's
+	 * metamodel packages of each OUT/INOUT model parameter.
+	 *
+	 * @param classifier the classifier to find an extent for
+	 * @return the matching extent, or {@code null} if no match found
+	 */
+	QvtoModelExtent getExtentForClassifier(EClassifier classifier) {
+		if (classifier == null) {
+			return null;
+		}
+		EPackage objPkg = classifier.getEPackage();
+		if (objPkg == null) {
+			return null;
+		}
+		String nsURI = objPkg.getNsURI();
+		for (int i = 0; i < modelParams.size(); i++) {
+			DirectionKind kind = modelParams.get(i).getKind();
+			if (kind != DirectionKind.OUT && kind != DirectionKind.INOUT) {
+				continue;
+			}
+			if (modelParams.get(i).getEType() instanceof ModelType modelType) {
+				for (EPackage metamodel : modelType.getMetamodel()) {
+					if (nsURI != null && nsURI.equals(metamodel.getNsURI())) {
+						return extents.get(i);
+					}
+				}
+			}
+		}
+		return null;
 	}
 }

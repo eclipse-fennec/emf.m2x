@@ -86,8 +86,13 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ForExp" eSuperTypes="#//ImperativeLoopExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="ForEach loop expression: collection->forEach(iter | condition) { body } (QVT v1.3 Section 8.2.1.5)."/>
+      <details key="documentation" value="ForExp: imperative loop over a collection with two variants 'forEach' (all elements) and 'forOne' (first match only). The name attribute distinguishes the variants (QVT v1.3 §8.2.2.6)."/>
     </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The loop variant name: 'forEach' or 'forOne' (QVT v1.3 §8.2.2.6)."/>
+      </eAnnotations>
+    </eStructuralFeatures>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ImperativeIterateExp" eSuperTypes="#//ImperativeLoopExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">

@@ -326,9 +326,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 			List<Object> result = new ArrayList<>(col.size());
 			for (Object elem : col) {
 				if (elem instanceof EObject elemObj) {
-					EStructuralFeature actual = resolveFeature(elemObj, sf);
-					Object value = getProperty(elemObj, actual);
-					result.add(value == null ? OCL_NULL : widenInteger(value));
+					Object intercepted = tryPropertyInterceptor(elemObj, sf.getName());
+					if (intercepted != OclContext.PROPERTY_NOT_HANDLED) {
+						result.add(intercepted == null ? OCL_NULL : widenInteger(intercepted));
+					} else {
+						EStructuralFeature actual = resolveFeature(elemObj, sf);
+						Object value = getProperty(elemObj, actual);
+						result.add(value == null ? OCL_NULL : widenInteger(value));
+					}
 				} else {
 					result.add(OclInvalid.INSTANCE);
 				}
@@ -344,6 +349,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// @pre support: return captured pre-state value
 		if (exp.isIsPre() && preStateSnapshot.hasPreValue(exp)) {
 			return wrapNull(widenInteger(preStateSnapshot.getPreValue(exp)));
+		}
+
+		// Property interceptor (e.g., QVT-O intermediate properties)
+		Object intercepted = tryPropertyInterceptor(eo, sf.getName());
+		if (intercepted != OclContext.PROPERTY_NOT_HANDLED) {
+			return intercepted == null ? OCL_NULL : widenInteger(intercepted);
 		}
 
 		sf = resolveFeature(eo, sf);
@@ -1182,6 +1193,19 @@ public class OclEvaluator extends OclSwitch<Object> {
 			return accessor.get(eo);
 		}
 		return eo.eGet(sf);
+	}
+
+	/**
+	 * Tries the property interceptor from the OclContext, if present.
+	 *
+	 * @return the intercepted value, or {@link OclContext#PROPERTY_NOT_HANDLED} if not intercepted
+	 */
+	private Object tryPropertyInterceptor(EObject target, String propName) {
+		OclContext ctx = env.getContext();
+		if (ctx != null && ctx.propertyInterceptor() != null) {
+			return ctx.propertyInterceptor().apply(target, propName);
+		}
+		return OclContext.PROPERTY_NOT_HANDLED;
 	}
 
 	private static Collection<Object> preserveKind(Collection<?> source, List<Object> elements) {

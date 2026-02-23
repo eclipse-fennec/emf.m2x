@@ -38,7 +38,9 @@
     <genClasses image="false" ecoreClass="imperativeocl.ecore#//ImperativeLoopExp">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//ImperativeLoopExp/condition"/>
     </genClasses>
-    <genClasses ecoreClass="imperativeocl.ecore#//ForExp"/>
+    <genClasses ecoreClass="imperativeocl.ecore#//ForExp">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute imperativeocl.ecore#//ForExp/name"/>
+    </genClasses>
     <genClasses ecoreClass="imperativeocl.ecore#//ImperativeIterateExp">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//ImperativeIterateExp/target"/>
     </genClasses>

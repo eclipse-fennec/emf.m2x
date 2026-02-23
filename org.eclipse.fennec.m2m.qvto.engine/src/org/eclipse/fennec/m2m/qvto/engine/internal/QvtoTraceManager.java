@@ -21,6 +21,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingOperation;
+import org.eclipse.fennec.m2m.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2m.model.trace.EDirectionKind;
 import org.eclipse.fennec.m2m.model.trace.EMappingContext;
 import org.eclipse.fennec.m2m.model.trace.EMappingOperation;
@@ -55,11 +56,12 @@ class QvtoTraceManager {
 	 *
 	 * @param mappingOp the mapping operation AST node
 	 * @param source the source object
+	 * @param args the in/inout parameter values (may be empty)
 	 * @param result the result object
 	 */
-	void addRecord(MappingOperation mappingOp, Object source, Object result) {
+	void addRecord(MappingOperation mappingOp, Object source, Object[] args, Object result) {
 		String mappingName = mappingOp.getName();
-		records.add(new QvtoTraceRecord(mappingName, mappingOp, source, result));
+		records.add(new QvtoTraceRecord(mappingName, mappingOp, source, args.clone(), result));
 
 		// Build parallel EMF TraceRecord for export
 		TraceRecord emfRecord = TraceFactory.eINSTANCE.createTraceRecord();
@@ -91,8 +93,22 @@ class QvtoTraceManager {
 		}
 		emfRecord.setContext(emfContext);
 
-		// EMappingParameters (empty — parameter trace not yet captured)
+		// EMappingParameters — capture in/inout parameters (§8.1.11.1: inout traced as in)
 		EMappingParameters emfParams = TraceFactory.eINSTANCE.createEMappingParameters();
+		List<?> formalParams = mappingOp.getEParameters();
+		var resultParams = mappingOp.getResult();
+		int argIdx = 0;
+		for (int i = 0; i < formalParams.size(); i++) {
+			Object fp = formalParams.get(i);
+			if (fp instanceof VarParameter vp && !resultParams.contains(vp)) {
+				Object argValue = argIdx < args.length ? args[argIdx++] : null;
+				if (argValue != null) {
+					VarParameterValue paramVal = createVarParameterValue(
+							EDirectionKind.IN, vp.getName(), argValue);
+					emfParams.getParameters().add(paramVal);
+				}
+			}
+		}
 		emfRecord.setParameters(emfParams);
 
 		// EMappingResults
@@ -115,12 +131,38 @@ class QvtoTraceManager {
 	}
 
 	/**
+	 * Checks if a mapping has already been executed for the given source and args.
+	 * §8.1.11.2: Match on executed-mapping + context-parameter + in-parameters.
+	 * Class instances by identity, DataType values by deep equality.
+	 *
+	 * @param mappingOp the mapping operation
+	 * @param source the source object (identity-based check)
+	 * @param args the in/inout parameter values
+	 * @return the cached result, or {@code null} if no cache hit
+	 */
+	Object lookupCachedResult(MappingOperation mappingOp, Object source, Object[] args) {
+		String mappingName = mappingOp.getName();
+		for (QvtoTraceRecord record : records) {
+			if (record.mappingName().equals(mappingName)
+					&& record.source() == source
+					&& record.argsMatch(args)) {
+				return record.result();
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Forward resolve: finds all result EObjects created from the given source.
+	 * §8.1.11.3: When source is null, ALL trace records are searched.
 	 */
 	List<EObject> resolve(Object source, EClass targetType) {
 		List<EObject> results = new ArrayList<>();
 		for (QvtoTraceRecord record : records) {
-			if (record.source() == source && record.result() instanceof EObject eo) {
+			if (source != null && record.source() != source) {
+				continue;
+			}
+			if (record.result() instanceof EObject eo) {
 				if (targetType == null || targetType.isInstance(eo)) {
 					results.add(eo);
 				}
@@ -131,11 +173,15 @@ class QvtoTraceManager {
 
 	/**
 	 * Inverse resolve: finds all source EObjects that produced the given result.
+	 * When result is null, ALL trace records are searched.
 	 */
 	List<EObject> invResolve(Object result, EClass sourceType) {
 		List<EObject> results = new ArrayList<>();
 		for (QvtoTraceRecord record : records) {
-			if (record.result() == result && record.source() instanceof EObject eo) {
+			if (result != null && record.result() != result) {
+				continue;
+			}
+			if (record.source() instanceof EObject eo) {
 				if (sourceType == null || sourceType.isInstance(eo)) {
 					results.add(eo);
 				}
@@ -146,14 +192,43 @@ class QvtoTraceManager {
 
 	/**
 	 * Forward resolve constrained to a specific mapping.
+	 * When source is null, ALL trace records for the mapping are searched.
 	 */
 	List<EObject> resolveIn(String mappingName, Object source, EClass targetType) {
 		List<EObject> results = new ArrayList<>();
 		for (QvtoTraceRecord record : records) {
-			if (record.mappingName().equals(mappingName)
-					&& record.source() == source
-					&& record.result() instanceof EObject eo) {
+			if (!record.mappingName().equals(mappingName)) {
+				continue;
+			}
+			if (source != null && record.source() != source) {
+				continue;
+			}
+			if (record.result() instanceof EObject eo) {
 				if (targetType == null || targetType.isInstance(eo)) {
+					results.add(eo);
+				}
+			}
+		}
+		return results;
+	}
+
+	/**
+	 * Inverse resolve constrained to a specific mapping.
+	 * §8.1.11.5: invresolveIn searches source objects from trace records
+	 * where invoked-mapping or executed-mapping matches the given mapping.
+	 * When result is null, ALL trace records for the mapping are searched.
+	 */
+	List<EObject> invResolveIn(String mappingName, Object result, EClass sourceType) {
+		List<EObject> results = new ArrayList<>();
+		for (QvtoTraceRecord record : records) {
+			if (!record.mappingName().equals(mappingName)) {
+				continue;
+			}
+			if (result != null && record.result() != result) {
+				continue;
+			}
+			if (record.source() instanceof EObject eo) {
+				if (sourceType == null || sourceType.isInstance(eo)) {
 					results.add(eo);
 				}
 			}

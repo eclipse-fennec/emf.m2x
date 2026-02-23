@@ -404,6 +404,96 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "hello world");
 	}
 
+	// ---- forOne (§8.2.2.6: executes body only for first matching element) ----
+
+	@Test
+	void forOne_stopsAfterFirstMatch() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        var count : Integer := 0;
+				        Sequence{1, 2, 3, 4, 5}->forOne(n) {
+				            count := count + 1;
+				        };
+				        log(count.toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "1");
+	}
+
+	@Test
+	void forOne_withCondition_findsFirstMatch() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        var found : Integer := 0;
+				        Sequence{1, 2, 3, 4, 5}->forOne(n | n > 3) {
+				            found := n;
+				        };
+				        log(found.toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "4");
+	}
+
+	@Test
+	void forOne_noMatch_executesNothing() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        var count : Integer := 0;
+				        Sequence{1, 2, 3}->forOne(n | n > 10) {
+				            count := count + 1;
+				        };
+				        log(count.toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "0");
+	}
+
+	// ---- forEach compute shorthand (§8.2.2.6) ----
+
+	@Test
+	void forEach_computeShorthand_accumulatesResult() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        var total : String := Sequence{'a', 'b', 'c'}->forEach(s; acc : String = '') {
+				            acc := acc + s;
+				        };
+				        log(total);
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "abc");
+	}
+
+	// ---- forEach over Set → ordered conversion (§8.2.2.6) ----
+
+	@Test
+	void forEach_overSet_iteratesAllElements() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        var count : Integer := 0;
+				        Set{1, 2, 3}->forEach(n) {
+				            count := count + n;
+				        };
+				        log(count.toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "6");
+	}
+
 	// ---- If/then/else (imperative style) ----
 
 	@Test

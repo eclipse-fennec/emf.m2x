@@ -36,12 +36,14 @@ abstract class AbstractQvtoParserTest {
 	static QvtoParserSupport parser;
 	static EcoreHelper ecoreHelper;
 	static EPackage sourcePackage;
+	static EPackage targetPackage;
 
 	@BeforeAll
 	static void setUp() throws IOException {
 		parser = new QvtoParserSupport();
 		ecoreHelper = new EcoreHelper(AbstractQvtoParserTest.class);
 		sourcePackage = ecoreHelper.loadEcore("source.ecore");
+		targetPackage = ecoreHelper.loadEcore("target.ecore");
 	}
 
 	@AfterAll

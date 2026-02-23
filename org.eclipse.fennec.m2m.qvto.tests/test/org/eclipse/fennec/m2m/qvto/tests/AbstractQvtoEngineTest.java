@@ -126,6 +126,18 @@ public abstract class AbstractQvtoEngineTest {
 	}
 
 	/**
+	 * Creates a SpecialSourceElement EObject with the given name, value and tag.
+	 */
+	protected static EObject createSpecialSourceElement(String name, int value, String tag) {
+		EClass specialClass = ecoreHelper.getEClass(sourcePackage, "SpecialSourceElement");
+		EObject element = EcoreUtil.create(specialClass);
+		element.eSet(specialClass.getEStructuralFeature("name"), name);
+		element.eSet(specialClass.getEStructuralFeature("value"), value);
+		element.eSet(specialClass.getEStructuralFeature("tag"), tag);
+		return element;
+	}
+
+	/**
 	 * Creates an empty model extent.
 	 */
 	protected static QvtoModelExtent emptyExtent() {

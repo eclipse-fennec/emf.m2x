@@ -130,4 +130,119 @@ class QvtoMappingCallResolveParseTest extends AbstractQvtoParserTest {
 		OclExpression expr = parseBodyExpr("resolveIn(target);");
 		assertInstanceOf(ResolveInExp.class, expr);
 	}
+
+	// ---- P4-08: Resolve Parse (vertieft) ----
+
+	// §8.4: resolveoneIn(mapping, Type) → ResolveInExp, isOne=true
+	@Test
+	void resolveoneIn_withType() throws QvtoParseException {
+		OclExpression expr = parseBodyExpr("resolveoneIn(target, t : String);");
+		ResolveInExp resolveIn = assertInstanceOf(ResolveInExp.class, expr);
+		assertTrue(resolveIn.isOne());
+		assertFalse(resolveIn.isIsInverse());
+		assertNotNull(resolveIn.getInMapping());
+		assertNotNull(resolveIn.getTarget());
+	}
+
+	// §8.4: invresolveIn(mapping) → ResolveInExp, isInverse=true
+	@Test
+	void invresolveIn_parse() throws QvtoParseException {
+		OclExpression expr = parseBodyExpr("invresolveIn(target);");
+		ResolveInExp resolveIn = assertInstanceOf(ResolveInExp.class, expr);
+		assertTrue(resolveIn.isIsInverse());
+		assertFalse(resolveIn.isOne());
+		assertNotNull(resolveIn.getInMapping());
+	}
+
+	// §8.4: invresolveoneIn(mapping, Type) → all flags set
+	@Test
+	void invresolveoneIn_allFlags() throws QvtoParseException {
+		OclExpression expr = parseBodyExpr("invresolveoneIn(target, t : String);");
+		ResolveInExp resolveIn = assertInstanceOf(ResolveInExp.class, expr);
+		assertTrue(resolveIn.isIsInverse());
+		assertTrue(resolveIn.isOne());
+		assertNotNull(resolveIn.getInMapping());
+		assertNotNull(resolveIn.getTarget());
+	}
+
+	// §8.4: late resolveIn(mapping) → isDeferred=true + inMapping
+	@Test
+	void lateResolveIn_parse() throws QvtoParseException {
+		OclExpression expr = parseBodyExpr("late resolveIn(target);");
+		ResolveInExp resolveIn = assertInstanceOf(ResolveInExp.class, expr);
+		assertTrue(resolveIn.isIsDeferred());
+		assertNotNull(resolveIn.getInMapping());
+	}
+
+	// §8.4: late invresolveone(Type) → deferred + inverse + one
+	@Test
+	void lateInvresolveone_allFlags() throws QvtoParseException {
+		OclExpression expr = parseBodyExpr("late invresolveone(t : String);");
+		ResolveExp resolveExp = assertInstanceOf(ResolveExp.class, expr);
+		assertTrue(resolveExp.isIsDeferred());
+		assertTrue(resolveExp.isIsInverse());
+		assertTrue(resolveExp.isOne());
+	}
+
+	// §8.4: source.resolve(t : Type | cond) → source + target + condition
+	@Test
+	void dotResolve_sourceTargetCondition() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    mapping doIt() {
+				        var x : String := 'test';
+				        x.resolve(t : String | t = 'y');
+				    }
+				}
+				""");
+		MappingOperation mapping = (MappingOperation) getOperation(t, "doIt");
+		MappingBody body = (MappingBody) mapping.getBody();
+		// Second statement (after var decl) is the resolve
+		OclExpression expr = body.getContent().get(1);
+		ResolveExp resolveExp = assertInstanceOf(ResolveExp.class, expr);
+		assertNotNull(resolveExp.getOwnedSource(), "Should have source expression");
+		assertNotNull(resolveExp.getTarget(), "Should have target variable");
+		assertNotNull(resolveExp.getCondition(), "Should have condition");
+	}
+
+	// §8.4: source.resolveoneIn(mapping, t : Type | cond) → full syntax
+	@Test
+	void dotResolveoneIn_fullSyntax() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    mapping target() {}
+				    mapping doIt() {
+				        var x : String := 'test';
+				        x.resolveoneIn(target, t : String | t = 'y');
+				    }
+				}
+				""");
+		MappingOperation mapping = (MappingOperation) getOperation(t, "doIt");
+		MappingBody body = (MappingBody) mapping.getBody();
+		OclExpression expr = body.getContent().get(1);
+		ResolveInExp resolveIn = assertInstanceOf(ResolveInExp.class, expr);
+		assertTrue(resolveIn.isOne());
+		assertNotNull(resolveIn.getOwnedSource(), "Should have source expression");
+		assertNotNull(resolveIn.getInMapping(), "Should have inMapping");
+		assertNotNull(resolveIn.getTarget(), "Should have target variable");
+		assertNotNull(resolveIn.getCondition(), "Should have condition");
+	}
+
+	// §8.4, Eclipse resolve_vardecl: resolve in var declaration
+	@Test
+	void resolveone_inVarDeclaration() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    mapping target() {}
+				    mapping doIt() {
+				        map target();
+				        var x := resolveone(String);
+				    }
+				}
+				""");
+		MappingOperation mapping = (MappingOperation) getOperation(t, "doIt");
+		MappingBody body = (MappingBody) mapping.getBody();
+		// var x := resolveone(String) is a VariableInitExp
+		assertEquals(2, body.getContent().size());
+	}
 }

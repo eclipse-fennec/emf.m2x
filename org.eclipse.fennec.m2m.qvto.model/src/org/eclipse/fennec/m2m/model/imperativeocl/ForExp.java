@@ -22,9 +22,15 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * ForEach loop expression: collection->forEach(iter | condition) { body } (QVT v1.3 Section 8.2.1.5).
+ * ForExp: imperative loop over a collection with two variants 'forEach' (all elements) and 'forOne' (first match only). The name attribute distinguishes the variants (QVT v1.3 §8.2.2.6).
  * <!-- end-model-doc -->
  *
+ * <p>
+ * The following features are supported:
+ * </p>
+ * <ul>
+ *   <li>{@link org.eclipse.fennec.m2m.model.imperativeocl.ForExp#getName <em>Name</em>}</li>
+ * </ul>
  *
  * @see org.eclipse.fennec.m2m.model.imperativeocl.ImperativeOclPackage#getForExp()
  * @model
@@ -32,4 +38,29 @@ import org.osgi.annotation.versioning.ProviderType;
  */
 @ProviderType
 public interface ForExp extends ImperativeLoopExp {
+	/**
+	 * Returns the value of the '<em><b>Name</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * The loop variant name: 'forEach' or 'forOne' (QVT v1.3 §8.2.2.6).
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Name</em>' attribute.
+	 * @see #setName(String)
+	 * @see org.eclipse.fennec.m2m.model.imperativeocl.ImperativeOclPackage#getForExp_Name()
+	 * @model
+	 * @generated
+	 */
+	String getName();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2m.model.imperativeocl.ForExp#getName <em>Name</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Name</em>' attribute.
+	 * @see #getName()
+	 * @generated
+	 */
+	void setName(String value);
+
 } // ForExp
