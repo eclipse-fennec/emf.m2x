@@ -31,7 +31,9 @@ package org.eclipse.fennec.m2m.qvto.engine.internal;
 sealed abstract class QvtoControlFlowException extends RuntimeException
 		permits QvtoControlFlowException.ReturnException,
 				QvtoControlFlowException.BreakException,
-				QvtoControlFlowException.ContinueException {
+				QvtoControlFlowException.ContinueException,
+				QvtoControlFlowException.FatalAssertionException,
+				QvtoControlFlowException.RaiseException {
 
 	private static final long serialVersionUID = 1L;
 
@@ -63,5 +65,33 @@ sealed abstract class QvtoControlFlowException extends RuntimeException
 	 */
 	static final class ContinueException extends QvtoControlFlowException {
 		private static final long serialVersionUID = 1L;
+	}
+
+	/**
+	 * Thrown by {@code AssertExp} with fatal severity to terminate execution.
+	 * §8.2.2.20: "the execution terminates with the exception AssertionFailed"
+	 */
+	static final class FatalAssertionException extends QvtoControlFlowException {
+		private static final long serialVersionUID = 1L;
+		final String message;
+
+		FatalAssertionException(String message) {
+			this.message = message;
+		}
+	}
+
+	/**
+	 * Thrown by {@code RaiseExp} to propagate a user-raised exception.
+	 * §8.2.2.15: "A raise expression produces an exception"
+	 */
+	static final class RaiseException extends QvtoControlFlowException {
+		private static final long serialVersionUID = 1L;
+		final String exceptionType;
+		final String argument;
+
+		RaiseException(String exceptionType, String argument) {
+			this.exceptionType = exceptionType;
+			this.argument = argument;
+		}
 	}
 }

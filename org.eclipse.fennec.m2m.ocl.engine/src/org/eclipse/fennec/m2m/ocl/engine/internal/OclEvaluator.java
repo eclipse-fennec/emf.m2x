@@ -259,6 +259,16 @@ public class OclEvaluator extends OclSwitch<Object> {
 		if (env.contains(name)) {
 			return wrapNull(env.lookup(name));
 		}
+		// §7.5.6 / §8.1.18: implicit self — bare name resolves to self.featureName
+		if (env.contains("self")) {
+			Object self = env.lookup("self");
+			if (self instanceof EObject eObj) {
+				EStructuralFeature sf = eObj.eClass().getEStructuralFeature(name);
+				if (sf != null) {
+					return wrapNull(eObj.eGet(sf));
+				}
+			}
+		}
 		return addError("Unresolved variable: " + name);
 	}
 
@@ -1073,7 +1083,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 			// LENIENT: propagate null
 			return null;
 		}
-		// Source is valid — return a non-null sentinel to indicate "proceed"
+		// Source is valid — return null to indicate "proceed with evaluation"
 		return null;
 	}
 
@@ -1110,6 +1120,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private static boolean isCompatibleOwner(OclType ownerType, Object source) {
 		if (ownerType instanceof AnyType) {
+			return true;
+		}
+		// OCL §7.4.7: OclVoid (null) conforms to all types
+		if (source == null) {
 			return true;
 		}
 		if (ownerType instanceof PrimitiveType pt) {

@@ -30,6 +30,7 @@ import org.eclipse.fennec.m2m.model.imperativeocl.Typedef;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.model.ocl.OclFactory;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
+import org.eclipse.fennec.m2m.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.Variable;
 import org.eclipse.fennec.m2m.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2m.model.qvtoperational.ContextualProperty;
@@ -616,7 +617,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			if (module instanceof OperationalTransformation ot) {
 				ot.getIntermediateProperty().add(prop);
 			}
-		} else {
+		} else if (ctx.getChild(0).getText().equals("configuration")) {
 			// configuration property
 			EAttribute configProp = EcoreFactory.eINSTANCE.createEAttribute();
 			configProp.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
@@ -627,6 +628,18 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 
 			module.getConfigProperty().add(configProp);
+		} else {
+			// §8.1.18: module-level property (non-configuration, non-intermediate)
+			// Store as Variable in module.ownedVariable for evaluation at startup
+			Variable moduleProp = OCL.createVariable();
+			moduleProp.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
+
+			if (ctx.expression() != null) {
+				moduleProp.setOwnedInit(
+						(OclExpression) expressionBuilder.visit(ctx.expression()));
+			}
+
+			module.getOwnedVariable().add(moduleProp);
 		}
 	}
 
@@ -690,13 +703,28 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private EAnnotation buildTag(QvtOParser.TagDeclContext ctx) {
 		EAnnotation annotation = EcoreFactory.eINSTANCE.createEAnnotation();
-		String tagSource = ctx.STRING_LITERAL().getText();
+		String tagSource = ctx.STRING_LITERAL() != null
+				? ctx.STRING_LITERAL().getText()
+				: ctx.DOUBLE_QUOTED_STRING().getText();
 		annotation.setSource(tagSource.substring(1, tagSource.length() - 1));
+
+		// Store the tag target path (e.g. "ecore::EPackage::name")
+		if (ctx.tagTarget() != null) {
+			String targetPath = ctx.tagTarget().qvtoIdentifier().stream()
+					.map(QvtoExpressionBuilder::qvtoIdentifierText)
+					.reduce((a, b) -> a + "::" + b)
+					.orElse("");
+			annotation.getDetails().put("target", targetPath);
+		}
 
 		if (ctx.expression() != null) {
 			OclExpression value = (OclExpression) expressionBuilder.visit(ctx.expression());
-			// Store tag value as detail entry
-			annotation.getDetails().put("value", value.toString());
+			// Store tag value — extract string from StringLiteralExp
+			if (value instanceof StringLiteralExp strLit) {
+				annotation.getDetails().put("value", strLit.getStringSymbol());
+			} else {
+				annotation.getDetails().put("value", value.toString());
+			}
 		}
 
 		return annotation;

@@ -283,6 +283,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitTagDecl(QvtOParser.TagDeclContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#tagTarget}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTagTarget(QvtOParser.TagTargetContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#typedefDecl}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -363,6 +369,13 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitNavigationExp(QvtOParser.NavigationExpContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code XselectOneExp}
+	 * labeled alternative in {@link QvtOParser#expression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitXselectOneExp(QvtOParser.XselectOneExpContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code ImpliesExp}
 	 * labeled alternative in {@link QvtOParser#expression}.
 	 * @param ctx the parse tree
@@ -439,6 +452,13 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitSelfExp(QvtOParser.SelfExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code ThisExp}
+	 * labeled alternative in {@link QvtOParser#primaryExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitThisExp(QvtOParser.ThisExpContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code IfExp}
 	 * labeled alternative in {@link QvtOParser#primaryExpression}.
@@ -654,17 +674,127 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitDictType(QvtOParser.DictTypeContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#collectionKind}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCollectionKind(QvtOParser.CollectionKindContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code IntegerLiteral}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitIntegerLiteral(QvtOParser.IntegerLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code RealLiteral}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitRealLiteral(QvtOParser.RealLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code StringLiteral}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringLiteral(QvtOParser.StringLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code TrueLiteral}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTrueLiteral(QvtOParser.TrueLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code FalseLiteral}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitFalseLiteral(QvtOParser.FalseLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code NullLiteral}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitNullLiteral(QvtOParser.NullLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code InvalidLiteral}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitInvalidLiteral(QvtOParser.InvalidLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code UnlimitedNaturalLiteral}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitUnlimitedNaturalLiteral(QvtOParser.UnlimitedNaturalLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code CollectionLit}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitCollectionLit(QvtOParser.CollectionLitContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code TupleLit}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTupleLit(QvtOParser.TupleLitContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code MapLit}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMapLit(QvtOParser.MapLitContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code DictLit}
+	 * labeled alternative in {@link QvtOParser#literalExpression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDictLit(QvtOParser.DictLitContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#dictLiteral}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDictLiteral(QvtOParser.DictLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#dictLiteralPart}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDictLiteralPart(QvtOParser.DictLiteralPartContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#blockExp}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitBlockExp(QvtOParser.BlockExpContext ctx);
 	/**
-	 * Visit a parse tree produced by {@link QvtOParser#whileExp}.
+	 * Visit a parse tree produced by the {@code WhileWithInit}
+	 * labeled alternative in {@link QvtOParser#whileExp}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitWhileExp(QvtOParser.WhileExpContext ctx);
+	T visitWhileWithInit(QvtOParser.WhileWithInitContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code WhileBasic}
+	 * labeled alternative in {@link QvtOParser#whileExp}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitWhileBasic(QvtOParser.WhileBasicContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#forExp}.
 	 * @param ctx the parse tree
@@ -898,6 +1028,13 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitArrowResolveInCall(QvtOParser.ArrowResolveInCallContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code ArrowMappingCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArrowMappingCall(QvtOParser.ArrowMappingCallContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code IteratorCall}
 	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
 	 * @param ctx the parse tree
@@ -918,6 +1055,13 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitCollectionOperationCall(QvtOParser.CollectionOperationCallContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code ArrowPropertyCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArrowPropertyCall(QvtOParser.ArrowPropertyCallContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#iteratorVariables}.
 	 * @param ctx the parse tree
@@ -1098,94 +1242,11 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitIsMarkedPre(QvtOParser.IsMarkedPreContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code IntegerLiteral}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitIntegerLiteral(QvtOParser.IntegerLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code RealLiteral}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitRealLiteral(QvtOParser.RealLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code StringLiteral}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitStringLiteral(QvtOParser.StringLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code TrueLiteral}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitTrueLiteral(QvtOParser.TrueLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code FalseLiteral}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitFalseLiteral(QvtOParser.FalseLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code NullLiteral}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitNullLiteral(QvtOParser.NullLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code InvalidLiteral}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitInvalidLiteral(QvtOParser.InvalidLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code UnlimitedNaturalLiteral}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitUnlimitedNaturalLiteral(QvtOParser.UnlimitedNaturalLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code CollectionLit}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitCollectionLit(QvtOParser.CollectionLitContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code TupleLit}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitTupleLit(QvtOParser.TupleLitContext ctx);
-	/**
-	 * Visit a parse tree produced by the {@code MapLit}
-	 * labeled alternative in {@link QvtOParser#literalExpression}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitMapLit(QvtOParser.MapLitContext ctx);
-	/**
 	 * Visit a parse tree produced by {@link QvtOParser#collectionLiteral}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitCollectionLiteral(QvtOParser.CollectionLiteralContext ctx);
-	/**
-	 * Visit a parse tree produced by {@link QvtOParser#collectionKind}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitCollectionKind(QvtOParser.CollectionKindContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#collectionLiteralPart}.
 	 * @param ctx the parse tree

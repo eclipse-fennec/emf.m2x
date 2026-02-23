@@ -393,7 +393,7 @@ class QvtoE2eMappingOverloadTest extends AbstractQvtoEngineTest {
 				        name := 'special-' + self.name;
 				    }
 				    main() {
-				        s.objectsOfType(SourceElement)->forEach(e) {
+				        s.objectsOfKind(SourceElement)->forEach(e) {
 				            e.map convert();
 				        };
 				    }
@@ -450,7 +450,7 @@ class QvtoE2eMappingOverloadTest extends AbstractQvtoEngineTest {
 				        name := 'special-' + self.name;
 				    }
 				    main() {
-				        s.objectsOfType(SourceElement)->forEach(e) {
+				        s.objectsOfKind(SourceElement)->forEach(e) {
 				            e.map convert();
 				        };
 				    }

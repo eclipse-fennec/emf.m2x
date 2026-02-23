@@ -28,8 +28,11 @@ import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2m.model.imperativeocl.AltExp;
@@ -42,8 +45,11 @@ import org.eclipse.fennec.m2m.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ForExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ImperativeIterateExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.InstantiationExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.LogExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.RaiseExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ReturnExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.SeverityKind;
 import org.eclipse.fennec.m2m.model.imperativeocl.SwitchExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.VariableInitExp;
@@ -80,10 +86,13 @@ import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
 import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2m.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2m.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.BreakException;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.ContinueException;
+import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.FatalAssertionException;
+import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.RaiseException;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.ReturnException;
 
 /**
@@ -124,6 +133,9 @@ public class QvtoEvaluator {
 
 	// §8.1.10: Intermediate property storage — per-instance values for ContextualProperty
 	private final IdentityHashMap<EObject, Map<String, Object>> intermediatePropertyValues = new IdentityHashMap<>();
+
+	// §8.1.16 / §8.3.19: tag "alias" — maps alias name → (EClass, real feature name)
+	private final Map<String, Map.Entry<EClass, String>> aliasRegistry = new HashMap<>();
 
 	// Late resolve support
 	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
@@ -170,6 +182,24 @@ public class QvtoEvaluator {
 			}
 		}
 
+		// §8.1.18: 'this' represents the transformation instance
+		env.define("this", transformation);
+
+		// §8.3.19: Build alias registry from tag "alias" declarations
+		buildAliasRegistry();
+
+		// Initialize module-level properties (property name : Type = init;)
+		for (Variable moduleVar : transformation.getOwnedVariable()) {
+			String varName = moduleVar.getName();
+			if (varName != null) {
+				Object value = null;
+				if (moduleVar.getOwnedInit() != null) {
+					value = eval(moduleVar.getOwnedInit());
+				}
+				env.define(varName, value);
+			}
+		}
+
 		ImperativeOperation mainOp = findMainOperation();
 		if (mainOp == null) {
 			addError("No main() entry operation found in transformation '"
@@ -180,6 +210,13 @@ public class QvtoEvaluator {
 			callOperation(mainOp, null, new Object[0]);
 		} catch (ReturnException e) {
 			// main() returned — normal
+		} catch (FatalAssertionException e) {
+			// §8.2.2.20: fatal assert terminates execution
+			addError("Assertion failed: " + e.message);
+		} catch (RaiseException e) {
+			// §8.2.2.15: uncaught raise terminates execution
+			addError("Uncaught exception: " + e.exceptionType
+					+ (e.argument != null ? " - " + e.argument : ""));
 		}
 		processDeferredTasks();
 		return diagnostics;
@@ -211,12 +248,17 @@ public class QvtoEvaluator {
 			if (result != UNHANDLED) {
 				return unwrapNull(result);
 			}
+			// §8.3.4: Element operations (metaClassName, subobjects, clone, etc.)
+			result = handleElementOperation(opCall);
+			if (result != UNHANDLED) {
+				return unwrapNull(result);
+			}
 		}
 
 		// 4. IteratorExp — evaluate source through QVT-O dispatch so extent
 		// operations (rootObjects, objectsOfType) and imperative expressions work
 		if (expr instanceof IteratorExp iterExp) {
-			return evalIteratorExp(iterExp);
+			return unwrapNull(evalIteratorExp(iterExp));
 		}
 
 		// 5. IfExp — evaluate here to ensure imperative body expressions
@@ -321,7 +363,13 @@ public class QvtoEvaluator {
 					env.pushScope();
 					try {
 						env.define(iterName, elem);
-						result.add(eval(body));
+						Object bodyVal = eval(body);
+						// collect flattens one level (OCL §11.9.1)
+						if (bodyVal instanceof Collection<?> nested) {
+							result.addAll(nested);
+						} else {
+							result.add(bodyVal);
+						}
 					} finally {
 						env.popScope();
 					}
@@ -438,7 +486,7 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * Handles QVT-O model extent operations: objectsOfType, objects.
+	 * Handles QVT-O model extent operations (§8.3.5).
 	 * Returns {@link #UNHANDLED} if the expression is not an extent operation.
 	 */
 	private Object handleExtentOperation(OperationCallExp opCall) {
@@ -451,20 +499,13 @@ public class QvtoEvaluator {
 		}
 
 		String opName = opCall.getName();
+		// §8.3.5.3: objectsOfType — exact type match only (not subtypes)
 		if ("objectsOfType".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			Object typeArg = eval(opCall.getOwnedArguments().get(0));
-			EClass filterType = null;
-			if (typeArg instanceof EClass ec) {
-				filterType = ec;
-			} else if (typeArg instanceof ClassifierType ct
-					&& ct.getReferredClassifier() instanceof EClass ec) {
-				filterType = ec;
-			}
+			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
 			if (filterType != null) {
-				EClass ft = filterType;
 				List<EObject> result = new ArrayList<>();
 				for (EObject eo : extent.getContents()) {
-					if (ft.isInstance(eo)) {
+					if (eo.eClass() == filterType) {
 						result.add(eo);
 					}
 				}
@@ -472,12 +513,180 @@ public class QvtoEvaluator {
 			}
 			return wrapNull(new ArrayList<>(extent.getContents()));
 		}
+		// §8.3.5.2: objectsOfKind — includes subtypes
+		if ("objectsOfKind".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
+			if (filterType != null) {
+				List<EObject> result = new ArrayList<>();
+				for (EObject eo : extent.getContents()) {
+					if (filterType.isInstance(eo)) {
+						result.add(eo);
+					}
+				}
+				return wrapNull(result);
+			}
+			return wrapNull(new ArrayList<>(extent.getContents()));
+		}
+		// §8.3.5.1: objects — all objects
 		if ("objects".equals(opName)) {
 			return wrapNull(new ArrayList<>(extent.getContents()));
 		}
-		// §8.2.1.3: rootObjects() returns top-level objects of the extent
+		// §8.3.5.4: rootObjects — top-level objects not contained by others
 		if ("rootObjects".equals(opName)) {
 			return wrapNull(new ArrayList<>(extent.getContents()));
+		}
+		// §8.3.5.5: addElement — add element to extent
+		if ("addElement".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			Object arg = eval(opCall.getOwnedArguments().get(0));
+			if (arg instanceof EObject eo) {
+				extent.add(eo);
+			}
+			return wrapNull(null);
+		}
+		// §8.3.5.6: removeElement — remove element from extent
+		if ("removeElement".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			Object arg = eval(opCall.getOwnedArguments().get(0));
+			if (arg instanceof EObject eo) {
+				extent.getContents().remove(eo);
+			}
+			return wrapNull(null);
+		}
+		// §8.3.5.9: createEmptyModel — create new empty model extent
+		if ("createEmptyModel".equals(opName)) {
+			return wrapNull(new BasicQvtoModelExtent());
+		}
+		// §8.3.5.8: copy — deep copy of model and its extent
+		if ("copy".equals(opName)) {
+			List<EObject> copies = new ArrayList<>();
+			for (EObject eo : extent.getContents()) {
+				copies.add(EcoreUtil.copy(eo));
+			}
+			BasicQvtoModelExtent copyExtent = new BasicQvtoModelExtent();
+			copyExtent.setContents(copies);
+			return wrapNull(copyExtent);
+		}
+		return UNHANDLED;
+	}
+
+	private static EClass resolveEClassArg(Object arg) {
+		if (arg instanceof EClass ec) {
+			return ec;
+		}
+		if (arg instanceof ClassifierType ct && ct.getReferredClassifier() instanceof EClass ec) {
+			return ec;
+		}
+		return null;
+	}
+
+	/**
+	 * Handles §8.3.4 Element operations on EObject instances.
+	 * <p>Operations: metaClassName, subobjects, allSubobjects,
+	 * subobjectsOfType/Kind, allSubobjectsOfType/Kind, clone, deepclone, container.
+	 */
+	private Object handleElementOperation(OperationCallExp opCall) {
+		if (opCall.getOwnedSource() == null) {
+			return UNHANDLED;
+		}
+		Object source = eval(opCall.getOwnedSource());
+		if (!(source instanceof EObject eObj)) {
+			return UNHANDLED;
+		}
+		String opName = opCall.getName();
+
+		// §8.3.4.3: metaClassName() : String
+		if ("metaClassName".equals(opName)) {
+			return wrapNull(eObj.eClass().getName());
+		}
+		// §8.3.4.4: subobjects() : Set(Element) — immediate children
+		if ("subobjects".equals(opName)) {
+			return wrapNull(new ArrayList<>(eObj.eContents()));
+		}
+		// §8.3.4.5: allSubobjects() : Set(Element) — all descendants
+		if ("allSubobjects".equals(opName)) {
+			List<EObject> result = new ArrayList<>();
+			for (var iter = eObj.eAllContents(); iter.hasNext(); ) {
+				result.add(iter.next());
+			}
+			return wrapNull(result);
+		}
+		// §8.3.4.6: subobjectsOfType(type) — immediate children, exact type
+		if ("subobjectsOfType".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
+			if (filterType != null) {
+				List<EObject> result = new ArrayList<>();
+				for (EObject child : eObj.eContents()) {
+					if (child.eClass() == filterType) {
+						result.add(child);
+					}
+				}
+				return wrapNull(result);
+			}
+			return wrapNull(new ArrayList<>(eObj.eContents()));
+		}
+		// §8.3.4.8: subobjectsOfKind(type) — immediate children, includes subtypes
+		if ("subobjectsOfKind".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
+			if (filterType != null) {
+				List<EObject> result = new ArrayList<>();
+				for (EObject child : eObj.eContents()) {
+					if (filterType.isInstance(child)) {
+						result.add(child);
+					}
+				}
+				return wrapNull(result);
+			}
+			return wrapNull(new ArrayList<>(eObj.eContents()));
+		}
+		// §8.3.4.7: allSubobjectsOfType(type) — all descendants, exact type
+		if ("allSubobjectsOfType".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
+			if (filterType != null) {
+				List<EObject> result = new ArrayList<>();
+				for (var iter = eObj.eAllContents(); iter.hasNext(); ) {
+					EObject desc = iter.next();
+					if (desc.eClass() == filterType) {
+						result.add(desc);
+					}
+				}
+				return wrapNull(result);
+			}
+			return wrapNull(new ArrayList<>());
+		}
+		// §8.3.4.9: allSubobjectsOfKind(type) — all descendants, includes subtypes
+		if ("allSubobjectsOfKind".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
+			if (filterType != null) {
+				List<EObject> result = new ArrayList<>();
+				for (var iter = eObj.eAllContents(); iter.hasNext(); ) {
+					EObject desc = iter.next();
+					if (filterType.isInstance(desc)) {
+						result.add(desc);
+					}
+				}
+				return wrapNull(result);
+			}
+			return wrapNull(new ArrayList<>());
+		}
+		// §8.3.4.10: clone() — shallow copy (containments NOT cloned)
+		if ("clone".equals(opName)) {
+			EcoreUtil.Copier copier = new EcoreUtil.Copier() {
+				private static final long serialVersionUID = 1L;
+				@Override
+				protected void copyContainment(EReference ref, EObject src, EObject tgt) {
+					// shallow: skip containment references
+				}
+			};
+			EObject result = copier.copy(eObj);
+			copier.copyReferences();
+			return wrapNull(result);
+		}
+		// §8.3.4.11: deepclone() — deep copy (containments cloned recursively)
+		if ("deepclone".equals(opName)) {
+			return wrapNull(EcoreUtil.copy(eObj));
+		}
+		// §8.3.4 (MOF reflective): container() — returns containing object
+		if ("container".equals(opName)) {
+			return wrapNull(eObj.eContainer());
 		}
 		return UNHANDLED;
 	}
@@ -1088,21 +1297,111 @@ public class QvtoEvaluator {
 		// ObjectExp: check the _objectExp variable first (innermost object scope)
 		Object objectExp = env.lookup("_objectExp");
 		if (objectExp instanceof EObject eo
-				&& eo.eClass().getEStructuralFeature(featureName) != null) {
+				&& (eo.eClass().getEStructuralFeature(featureName) != null
+						|| resolveAlias(featureName, eo) != null)) {
 			return eo;
 		}
 		// §8.2.1.17: Mapping body — result has priority over self for implicit properties,
 		// because mapping body assignments target the result object.
 		Object result = env.lookup("result");
 		if (result instanceof EObject eo
-				&& eo.eClass().getEStructuralFeature(featureName) != null) {
+				&& (eo.eClass().getEStructuralFeature(featureName) != null
+						|| resolveAlias(featureName, eo) != null)) {
 			return eo;
 		}
 		// self context (constructor body, standalone helper)
 		Object self = env.lookup("self");
 		if (self instanceof EObject eo
-				&& eo.eClass().getEStructuralFeature(featureName) != null) {
+				&& (eo.eClass().getEStructuralFeature(featureName) != null
+						|| resolveAlias(featureName, eo) != null)) {
 			return eo;
+		}
+		return null;
+	}
+
+	/**
+	 * §8.3.19: Builds the alias registry from tag "alias" declarations.
+	 * Maps alias name → (EClass, real feature name) for property resolution.
+	 */
+	private void buildAliasRegistry() {
+		for (EAnnotation tag : transformation.getOwnedTag()) {
+			if (!"alias".equals(tag.getSource())) {
+				continue;
+			}
+			String target = tag.getDetails().get("target");
+			String aliasValue = tag.getDetails().get("value");
+			if (target == null || aliasValue == null) {
+				continue;
+			}
+			String aliasName = aliasValue;
+			// Parse target path: e.g. "ecore::EPackage::name" → class=EPackage, feature=name
+			String[] parts = target.split("::");
+			if (parts.length >= 2) {
+				String className = parts[parts.length - 2];
+				String featureName = parts[parts.length - 1];
+				// Find the EClass in the transformation's used metamodels
+				EClass eClass = findEClassByName(className);
+				if (eClass != null && eClass.getEStructuralFeature(featureName) != null) {
+					aliasRegistry.put(aliasName, Map.entry(eClass, featureName));
+				}
+			}
+		}
+	}
+
+	private EClass findEClassByName(String name) {
+		// Search through all EPackages known to the extent manager
+		for (int i = 0; i < transformation.getModelParameter().size(); i++) {
+			QvtoModelExtent extent = extentManager.getExtent(i);
+			if (extent == null) {
+				continue;
+			}
+			for (EObject obj : extent.getContents()) {
+				EClass ec = obj.eClass();
+				if (name.equals(ec.getName())) {
+					return ec;
+				}
+				// Check the package for the class
+				EClass found = findEClassInPackage(ec.getEPackage(), name);
+				if (found != null) {
+					return found;
+				}
+			}
+		}
+		// Fallback: search EPackage.Registry
+		for (Object value : EPackage.Registry.INSTANCE.values()) {
+			if (value instanceof EPackage pkg) {
+				EClass found = findEClassInPackage(pkg, name);
+				if (found != null) {
+					return found;
+				}
+			}
+		}
+		return null;
+	}
+
+	private static EClass findEClassInPackage(EPackage pkg, String name) {
+		for (var classifier : pkg.getEClassifiers()) {
+			if (classifier instanceof EClass ec && name.equals(ec.getName())) {
+				return ec;
+			}
+		}
+		for (EPackage sub : pkg.getESubpackages()) {
+			EClass found = findEClassInPackage(sub, name);
+			if (found != null) {
+				return found;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * §8.3.19: Resolves a tag "alias" name to the real feature name for the given EObject.
+	 * @return the real feature name, or null if not an alias
+	 */
+	String resolveAlias(String name, EObject target) {
+		var entry = aliasRegistry.get(name);
+		if (entry != null && entry.getKey().isInstance(target)) {
+			return entry.getValue();
 		}
 		return null;
 	}
@@ -1255,7 +1554,10 @@ public class QvtoEvaluator {
 				if (!env.contains(varName)) {
 					EObject target = resolveImplicitPropertyTarget(varName);
 					if (target != null) {
-						EStructuralFeature sf = target.eClass().getEStructuralFeature(varName);
+						// §8.3.19: Resolve alias to real feature name
+						String realName = resolveAlias(varName, target);
+						EStructuralFeature sf = target.eClass().getEStructuralFeature(
+								realName != null ? realName : varName);
 						Object coerced = coerceForFeature(sf, value);
 						if (exp.isIsReset()) {
 							target.eSet(sf, coerced);
@@ -1330,21 +1632,21 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseWhileExp(WhileExp exp) {
-			Object lastResult = null;
+			// §8.2.2.4: WhileExp returns null
 			while (true) {
 				Object condition = eval(exp.getCondition());
 				if (!Boolean.TRUE.equals(condition)) {
 					break;
 				}
 				try {
-					lastResult = eval(exp.getBody());
+					eval(exp.getBody());
 				} catch (BreakException e) {
 					break;
 				} catch (ContinueException e) {
 					continue;
 				}
 			}
-			return wrapNull(lastResult);
+			return WRAPPED_NULL;
 		}
 
 		@Override
@@ -1479,6 +1781,66 @@ public class QvtoEvaluator {
 		}
 
 		@Override
+		public Object caseTryExp(TryExp exp) {
+			try {
+				Object lastResult = WRAPPED_NULL;
+				for (OclExpression bodyExpr : exp.getTryBody()) {
+					lastResult = wrapNull(eval(bodyExpr));
+				}
+				return lastResult;
+			} catch (RaiseException | FatalAssertionException ex) {
+				// §8.2.2.13: search except clauses for matching type
+				String exType = (ex instanceof RaiseException re) ? re.exceptionType : "AssertionFailed";
+				String exArg = (ex instanceof RaiseException re) ? re.argument : ((FatalAssertionException) ex).message;
+
+				for (CatchExp catchExp : exp.getExceptClause()) {
+					if (matchesExceptClause(catchExp, exType)) {
+						Object result = WRAPPED_NULL;
+						for (OclExpression bodyExpr : catchExp.getBody()) {
+							result = wrapNull(eval(bodyExpr));
+						}
+						return result;
+					}
+				}
+				// No matching clause — re-throw
+				throw ex;
+			}
+		}
+
+		private boolean matchesExceptClause(CatchExp catchExp, String exType) {
+			// Empty exception list = catch-all
+			if (catchExp.getException().isEmpty()) {
+				return true;
+			}
+			// Check if any declared exception type matches
+			for (EClassifier declaredType : catchExp.getException()) {
+				String typeName = declaredType.getName();
+				if (typeName.equals(exType) || "Exception".equals(typeName)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		@Override
+		public Object caseRaiseExp(RaiseExp exp) {
+			// §8.2.2.15: raise produces an exception
+			String exType = "Exception";
+			String argument = null;
+			if (exp.getException() != null) {
+				exType = exp.getException().getName();
+			}
+			if (exp.getArgument() != null) {
+				Object argVal = eval(exp.getArgument());
+				argument = argVal != null ? argVal.toString() : null;
+			} else if (exp.getException() == null) {
+				// raise with only string literal — stored as argument in the AST
+				// This case is handled by the parser setting argument
+			}
+			throw new RaiseException(exType, argument);
+		}
+
+		@Override
 		public Object caseReturnExp(ReturnExp exp) {
 			Object value = exp.getValue() != null ? eval(exp.getValue()) : null;
 			throw new ReturnException(value);
@@ -1580,6 +1942,13 @@ public class QvtoEvaluator {
 					if (sb.length() > 0) {
 						message = sb.toString();
 					}
+				}
+
+				// §8.2.2.20: fatal severity terminates with AssertionFailed
+				// Don't add diagnostic here — if caught by try/except, transformation continues.
+				// Uncaught fatal adds diagnostic in execute().
+				if (severity == SeverityKind.FATAL) {
+					throw new FatalAssertionException(message);
 				}
 
 				diagnostics.add(new BasicDiagnostic(diagSeverity, SOURCE_ID, 0, message, null));

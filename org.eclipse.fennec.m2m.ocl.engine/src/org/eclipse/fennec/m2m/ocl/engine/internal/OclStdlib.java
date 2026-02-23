@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
 import org.eclipse.emf.ecore.EClassifier;
@@ -151,6 +152,8 @@ class OclStdlib {
 			}
 			case "oclType" -> oclType(source);
 			case "toString" -> source == null ? OclInvalid.INSTANCE : String.valueOf(source);
+			// QVT-O §8.3.3.1: Object::repr() — textual representation of any object
+			case "repr" -> String.valueOf(source);
 			default -> NOT_FOUND;
 		};
 	}
@@ -705,6 +708,140 @@ class OclStdlib {
 			case ">" -> source.compareTo(asString(args[0])) > 0;
 			case ">=" -> source.compareTo(asString(args[0])) >= 0;
 			case "toString" -> source;
+			// QVT-O §8.3.16.2: length (deprecated synonym for size)
+			case "length" -> (long) source.length();
+			// QVT-O §8.3.16.3: substringBefore
+			case "substringBefore" -> {
+				int idx = source.indexOf(asString(args[0]));
+				yield idx < 0 ? null : source.substring(0, idx);
+			}
+			// QVT-O §8.3.16.4: substringAfter
+			case "substringAfter" -> {
+				String match = asString(args[0]);
+				int idx = source.indexOf(match);
+				yield idx < 0 ? null : source.substring(idx + match.length());
+			}
+			// QVT-O §8.3.16.7: firstToUpper
+			case "firstToUpper" -> source.isEmpty() ? source
+					: Character.toUpperCase(source.charAt(0)) + source.substring(1);
+			// QVT-O §8.3.16.8: lastToUpper
+			case "lastToUpper" -> source.isEmpty() ? source
+					: source.substring(0, source.length() - 1)
+					+ Character.toUpperCase(source.charAt(source.length() - 1));
+			// QVT-O §8.3.16.9: indexOf — 1-indexed, returns -1 if not found
+			// (Note: OCL indexOf returns 0 if not found; QVT-O version returns -1)
+			// QVT-O §8.3.16.13: normalizeSpace
+			case "normalizeSpace" -> source.trim().replaceAll("\\s+", " ");
+			// QVT-O §8.3.16.14: replace (literal, all occurrences)
+			case "replace" -> source.replace(asString(args[0]), asString(args[1]));
+			// QVT-O §8.3.16.15: match (full-string regex)
+			case "match" -> {
+				String pattern = asString(args[0]);
+				if (pattern.length() > options.maxRegexLength()) {
+					yield OclInvalid.INSTANCE;
+				}
+				try {
+					yield Pattern.matches(pattern, source);
+				} catch (PatternSyntaxException e) {
+					yield OclInvalid.INSTANCE;
+				}
+			}
+			// QVT-O §8.3.16.17: find — 1-indexed, returns -1 if not found
+			case "find" -> {
+				int idx = source.indexOf(asString(args[0]));
+				yield (long) (idx < 0 ? -1 : idx + 1);
+			}
+			// QVT-O §8.3.16.18: rfind — 1-indexed from right, returns -1 if not found
+			case "rfind" -> {
+				int idx = source.lastIndexOf(asString(args[0]));
+				yield (long) (idx < 0 ? -1 : idx + 1);
+			}
+			// QVT-O §8.3.16.19: isQuoted
+			case "isQuoted" -> {
+				String q = asString(args[0]);
+				yield source.length() >= q.length() * 2
+						&& source.startsWith(q) && source.endsWith(q);
+			}
+			// QVT-O §8.3.16.20: quotify
+			case "quotify" -> asString(args[0]) + source + asString(args[0]);
+			// QVT-O §8.3.16.21: unquotify
+			case "unquotify" -> {
+				String q = asString(args[0]);
+				if (source.length() >= q.length() * 2
+						&& source.startsWith(q) && source.endsWith(q)) {
+					yield source.substring(q.length(), source.length() - q.length());
+				}
+				yield source;
+			}
+			// QVT-O §8.3.16.22: matchBoolean — "true"/"false"/"0"/"1" case-insensitive
+			case "matchBoolean" -> {
+				String lower = source.trim().toLowerCase();
+				yield "true".equals(lower) || "false".equals(lower)
+						|| "0".equals(lower) || "1".equals(lower);
+			}
+			// QVT-O §8.3.16.23: matchInteger
+			case "matchInteger" -> {
+				try {
+					Long.parseLong(source.trim());
+					yield true;
+				} catch (NumberFormatException e) {
+					yield false;
+				}
+			}
+			// QVT-O §8.3.16.24/25: matchFloat/matchReal
+			case "matchFloat", "matchReal" -> {
+				try {
+					Double.parseDouble(source.trim());
+					yield true;
+				} catch (NumberFormatException e) {
+					yield false;
+				}
+			}
+			// QVT-O §8.3.16.26: matchIdentifier — letter first, then alphanumeric
+			case "matchIdentifier" -> {
+				if (source.isEmpty() || !Character.isLetter(source.charAt(0))) {
+					yield false;
+				}
+				boolean valid = true;
+				for (int i = 1; i < source.length(); i++) {
+					if (!Character.isLetterOrDigit(source.charAt(i))) {
+						valid = false;
+						break;
+					}
+				}
+				yield valid;
+			}
+			// QVT-O §8.3.16.27: asBoolean — "true"/"1" → true, "false"/"0" → false, else null
+			case "asBoolean" -> {
+				String lower = source.trim().toLowerCase();
+				if ("true".equals(lower) || "1".equals(lower)) yield true;
+				if ("false".equals(lower) || "0".equals(lower)) yield false;
+				yield null; // unparseable
+			}
+			// QVT-O §8.3.16.28: asInteger — returns null on failure (unlike OCL toInteger → invalid)
+			case "asInteger" -> {
+				try {
+					yield Long.parseLong(source.trim());
+				} catch (NumberFormatException e) {
+					yield null;
+				}
+			}
+			// QVT-O §8.3.16.29/30: asFloat/asReal — returns null on failure
+			case "asFloat", "asReal" -> {
+				try {
+					yield Double.parseDouble(source.trim());
+				} catch (NumberFormatException e) {
+					yield null;
+				}
+			}
+			// QVT-O §8.3.16.1: format — %s/%d/%f placeholder substitution
+			case "format" -> {
+				try {
+					yield String.format(source, args[0]);
+				} catch (Exception e) {
+					yield OclInvalid.INSTANCE;
+				}
+			}
 			default -> NOT_FOUND;
 		};
 	}
@@ -959,6 +1096,65 @@ class OclStdlib {
 				yield result;
 			}
 			case "toString" -> source.toString();
+			// QVT-O §8.3.9.3: List::add(object) — mutating append
+			case "add" -> {
+				@SuppressWarnings("unchecked")
+				var list = (Collection<Object>) source;
+				list.add(args[0]);
+				yield null; // returns Void
+			}
+			// QVT-O §8.3.9.35: List::remove(element) — mutating remove ALL equal elements
+			case "remove" -> {
+				if (source instanceof List<?> list) {
+					list.removeIf(e -> Objects.equals(e, args[0]));
+				}
+				yield null; // returns Void
+			}
+			// QVT-O §8.3.9.38: List::removeAt(index) — mutating remove at 1-based index, returns removed
+			case "removeAt" -> {
+				if (source instanceof List<?> list && args[0] instanceof Long idx) {
+					int i = idx.intValue() - 1; // 1-based to 0-based
+					if (i >= 0 && i < list.size()) {
+						yield list.remove(i);
+					}
+				}
+				yield OclInvalid.INSTANCE;
+			}
+			// QVT-O §8.3.9.39: List::removeFirst() — mutating remove first, returns removed
+			case "removeFirst" -> {
+				if (source instanceof List<?> list && !list.isEmpty()) {
+					yield list.remove(0);
+				}
+				yield OclInvalid.INSTANCE;
+			}
+			// QVT-O §8.3.9.40: List::removeLast() — mutating remove last, returns removed
+			case "removeLast" -> {
+				if (source instanceof List<?> list && !list.isEmpty()) {
+					yield list.remove(list.size() - 1);
+				}
+				yield OclInvalid.INSTANCE;
+			}
+			// QVT-O §8.3.9.36: List::removeAll(elements) — mutating remove all matching
+			case "removeAll" -> {
+				if (args[0] instanceof Collection<?> toRemove && source instanceof List<?> list) {
+					list.removeIf(e -> toRemove.stream().anyMatch(r -> Objects.equals(e, r)));
+				}
+				yield null; // returns Void
+			}
+			// QVT-O §8.3.9.28: List::joinfields(sep, begin, end) — string join
+			case "joinfields" -> {
+				String sep = args.length > 0 ? String.valueOf(args[0]) : "";
+				String begin = args.length > 1 ? String.valueOf(args[1]) : "";
+				String end = args.length > 2 ? String.valueOf(args[2]) : "";
+				StringBuilder sb = new StringBuilder(begin);
+				int pos = 0;
+				for (Object e : source) {
+					if (pos++ > 0) sb.append(sep);
+					sb.append(String.valueOf(e));
+				}
+				sb.append(end);
+				yield sb.toString();
+			}
 			default -> NOT_FOUND;
 		};
 	}
@@ -1074,6 +1270,25 @@ class OclStdlib {
 				yield result;
 			}
 			case "toString" -> source.toString();
+			// QVT-O §8.3.8.2: Dict::hasKey(k) — check key existence
+			case "hasKey" -> source.containsKey(args[0]);
+			// QVT-O §8.3.8.3: Dict::defaultget(k, default) — get with fallback
+			case "defaultget" -> {
+				Object val = source.get(args[0]);
+				yield val != null && source.containsKey(args[0]) ? val : args[1];
+			}
+			// QVT-O §8.3.8.4: Dict::put(k, v) — mutable insert/update
+			case "put" -> {
+				@SuppressWarnings("unchecked")
+				var mutableMap = (Map<Object, Object>) source;
+				mutableMap.put(args[0], args[1]);
+				yield null; // returns Void
+			}
+			// QVT-O §8.3.8.5: Dict::clear() — mutable remove all
+			case "clear" -> {
+				source.clear();
+				yield null; // returns Void
+			}
 			default -> NOT_FOUND;
 		};
 	}

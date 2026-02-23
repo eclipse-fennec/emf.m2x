@@ -267,6 +267,25 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return exp;
 	}
 
+	// §8.2.2.27: Dict literal — desugars to MapLiteralExp (D26)
+	@Override
+	public MapLiteralExp visitDictLit(QvtOParser.DictLitContext ctx) {
+		return visitDictLiteral(ctx.dictLiteral());
+	}
+
+	public MapLiteralExp visitDictLiteral(QvtOParser.DictLiteralContext ctx) {
+		MapLiteralExp exp = OCL.createMapLiteralExp();
+		if (ctx.dictLiteralPart() != null) {
+			for (QvtOParser.DictLiteralPartContext partCtx : ctx.dictLiteralPart()) {
+				MapLiteralPart part = OCL.createMapLiteralPart();
+				part.setOwnedKey((OclExpression) visit(partCtx.key));
+				part.setOwnedValue((OclExpression) visit(partCtx.value));
+				exp.getOwnedParts().add(part);
+			}
+		}
+		return exp;
+	}
+
 	// ==================== Unary Expressions ====================
 
 	@Override
@@ -370,6 +389,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		} else if (suffix instanceof QvtOParser.ResolveInCallSuffixContext resInCtx) {
 			return createDotResolveInCall(source, resInCtx);
 		} else if (suffix instanceof QvtOParser.PropertySuffixContext propCtx) {
+			// §8.1.18: this.propName → desugar to variable access for module properties
+			if (source instanceof VariableExp ve && "this".equals(ve.getReferredVariable().getName())) {
+				String propName = qvtoIdentifierText(propCtx.qvtoIdentifier());
+				Variable propVar = OCL.createVariable();
+				propVar.setName(propName);
+				return createVariableExp(propVar);
+			}
 			return createPropertyCall(source, propCtx, isSafe);
 		} else if (suffix instanceof QvtOParser.DotCallSuffixContext callCtx) {
 			return createDotOperationCall(source, callCtx, isSafe);
@@ -395,6 +421,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			return createArrowResolveCall(source, resCtx);
 		} else if (call instanceof QvtOParser.ArrowResolveInCallContext resInCtx) {
 			return createArrowResolveInCall(source, resInCtx);
+		} else if (call instanceof QvtOParser.ArrowPropertyCallContext propCtx) {
+			// §8.2.2.7: list->prop = list->xcollect(i | i.prop) — collect shorthand
+			return createXcollectPropertyCall(source, propCtx);
+		} else if (call instanceof QvtOParser.ArrowMappingCallContext mapCtx) {
+			// §8.2.2.7: list->map f() — mapping call on collection
+			return createArrowMappingCallOnCollection(source, mapCtx);
 		}
 		return source;
 	}
@@ -406,28 +438,31 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		OclExpression source = (OclExpression) visit(ctx.expression(0));
 
 		// §8.2.2.7: If condition is a TypeExp, reinterpret as oclIsKindOf(Type)
-		// Try to resolve condition as a type first
-		OclExpression condition = null;
-		TypeExp typeCondition = tryBuildTypeCondition(ctx.expression(1));
+		QvtOParser.ExpressionContext conditionCtx = ctx.xselectCondition;
+		TypeExp typeCondition = tryBuildTypeCondition(conditionCtx);
 
-		if (typeCondition == null) {
-			condition = (OclExpression) visit(ctx.expression(1));
-		}
+		// Determine iterator variable name
+		String iterName = ctx.xselectIter != null
+				? qvtoIdentifierText(ctx.xselectIter)
+				: "_xsel_it";
 
 		IteratorExp selectExp = OCL.createIteratorExp();
 		selectExp.setOwnedSource(source);
 		selectExp.setName("select");
 
 		Variable iterVar = OCL.createVariable();
-		iterVar.setName("_xsel_it");
+		iterVar.setName(iterName);
 		OclType elementType = inferElementType(source);
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
 		selectExp.getOwnedIterators().add(iterVar);
 
+		// Register iterator in environment for condition evaluation
+		QvtoEnvironment savedEnv = this.environment;
+		this.environment = this.environment.nested(iterVar);
+
 		if (typeCondition != null) {
-			// Build: oclIsKindOf(Type) call on the iterator variable
 			OperationCallExp oclIsKindOf = OCL.createOperationCallExp();
 			oclIsKindOf.setName("oclIsKindOf");
 			VariableExp iterRef = OCL.createVariableExp();
@@ -436,10 +471,45 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			oclIsKindOf.getOwnedArguments().add(typeCondition);
 			selectExp.setOwnedBody(oclIsKindOf);
 		} else {
+			OclExpression condition = (OclExpression) visit(conditionCtx);
 			selectExp.setOwnedBody(condition);
 		}
 
+		this.environment = savedEnv;
 		return selectExp;
+	}
+
+	@Override
+	public OclExpression visitXselectOneExp(QvtOParser.XselectOneExpContext ctx) {
+		// §8.2.2.7: list![condition] = xselectOne — returns first matching element
+		OclExpression source = (OclExpression) visit(ctx.expression(0));
+
+		String iterName = ctx.xselectOneIter != null
+				? qvtoIdentifierText(ctx.xselectOneIter)
+				: "_xsel1_it";
+
+		// Build as: source->any(iter | condition)
+		IteratorExp anyExp = OCL.createIteratorExp();
+		anyExp.setOwnedSource(source);
+		anyExp.setName("any");
+
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName(iterName);
+		OclType elementType = inferElementType(source);
+		if (elementType != null) {
+			iterVar.setType(elementType);
+		}
+		anyExp.getOwnedIterators().add(iterVar);
+
+		QvtoEnvironment savedEnv = this.environment;
+		this.environment = this.environment.nested(iterVar);
+
+		OclExpression condition = (OclExpression) visit(ctx.xselectOneCondition);
+
+		this.environment = savedEnv;
+
+		anyExp.setOwnedBody(condition);
+		return anyExp;
 	}
 
 	/**
@@ -559,6 +629,17 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 					Variable selfVar = OCL.createVariable();
 					selfVar.setName("self");
 					return createVariableExp(selfVar);
+				});
+	}
+
+	@Override
+	public OclExpression visitThisExp(QvtOParser.ThisExpContext ctx) {
+		return environment.lookup("this")
+				.<OclExpression>map(this::createVariableExp)
+				.orElseGet(() -> {
+					Variable thisVar = OCL.createVariable();
+					thisVar.setName("this");
+					return createVariableExp(thisVar);
 				});
 	}
 
@@ -736,11 +817,35 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	@Override
-	public WhileExp visitWhileExp(QvtOParser.WhileExpContext ctx) {
+	public WhileExp visitWhileBasic(QvtOParser.WhileBasicContext ctx) {
 		WhileExp whileExp = IMP.createWhileExp();
 		whileExp.setCondition((OclExpression) visit(ctx.expression()));
 		whileExp.setBody(buildBlock(ctx.block()));
 		return whileExp;
+	}
+
+	@Override
+	public ComputeExp visitWhileWithInit(QvtOParser.WhileWithInitContext ctx) {
+		// §8.2.2.4: while (x:Type := init; condition) { body }
+		// Desugars to: compute (x:Type = init) { while (condition) { body } }
+		QvtoEnvironment savedEnv = this.environment;
+
+		Variable returnedElement = OCL.createVariable();
+		returnedElement.setName(qvtoIdentifierText(ctx.varName));
+		returnedElement.setType(resolveTypeExpression(ctx.type));
+		returnedElement.setOwnedInit((OclExpression) visit(ctx.initValue));
+		this.environment = this.environment.nested(returnedElement);
+
+		WhileExp whileExp = IMP.createWhileExp();
+		whileExp.setCondition((OclExpression) visit(ctx.condition));
+		whileExp.setBody(buildBlock(ctx.block()));
+
+		ComputeExp computeExp = IMP.createComputeExp();
+		computeExp.setReturnedElement(returnedElement);
+		computeExp.setBody(whileExp);
+
+		this.environment = savedEnv;
+		return computeExp;
 	}
 
 	/**
@@ -1495,6 +1600,66 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return exp;
 	}
 
+	private IteratorExp createXcollectPropertyCall(OclExpression source,
+			QvtOParser.ArrowPropertyCallContext propCtx) {
+		// §8.2.2.7: list->prop desugars to list->collect(i | i.prop)
+		IteratorExp collectExp = OCL.createIteratorExp();
+		collectExp.setOwnedSource(source);
+		collectExp.setName("collect");
+
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName("_xcol_it");
+		OclType elementType = inferElementType(source);
+		if (elementType != null) {
+			iterVar.setType(elementType);
+		}
+		collectExp.getOwnedIterators().add(iterVar);
+
+		// Build body: i.prop
+		VariableExp iterRef = OCL.createVariableExp();
+		iterRef.setReferredVariable(iterVar);
+		PropertyCallExp propAccess = OCL.createPropertyCallExp();
+		propAccess.setOwnedSource(iterRef);
+		String propName = qvtoIdentifierText(propCtx.qvtoIdentifier());
+		resolveProperty(propAccess, propName);
+		collectExp.setOwnedBody(propAccess);
+
+		return collectExp;
+	}
+
+	private IteratorExp createArrowMappingCallOnCollection(OclExpression source,
+			QvtOParser.ArrowMappingCallContext mapCtx) {
+		// §8.2.2.7: list->map f() desugars to list->xcollect(i | i.map f())
+		IteratorExp collectExp = OCL.createIteratorExp();
+		collectExp.setOwnedSource(source);
+		collectExp.setName("collect");
+
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName("_xmap_it");
+		OclType elementType = inferElementType(source);
+		if (elementType != null) {
+			iterVar.setType(elementType);
+		}
+		collectExp.getOwnedIterators().add(iterVar);
+
+		// Build body: i.map f(args)
+		VariableExp iterRef = OCL.createVariableExp();
+		iterRef.setReferredVariable(iterVar);
+		MappingCallExp mapCall = QVTO.createMappingCallExp();
+		mapCall.setOwnedSource(iterRef);
+		mapCall.setIsStrict("xmap".equals(mapCtx.mappingCallKind().getText()));
+		String name = scopedNameText(mapCtx.scopedName());
+		mapCall.setName(name);
+		if (mapCtx.argumentList() != null) {
+			for (QvtOParser.ExpressionContext argCtx : mapCtx.argumentList().expression()) {
+				mapCall.getOwnedArguments().add((OclExpression) visit(argCtx));
+			}
+		}
+		collectExp.setOwnedBody(mapCall);
+
+		return collectExp;
+	}
+
 	private IteratorExp createIteratorExp(OclExpression source,
 			QvtOParser.IteratorCallContext ctx, boolean isSafe) {
 		IteratorExp exp = OCL.createIteratorExp();
@@ -1826,7 +1991,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			case "Set" -> CollectionKind.SET;
 			case "OrderedSet" -> CollectionKind.ORDERED_SET;
 			case "Bag" -> CollectionKind.BAG;
-			case "Sequence" -> CollectionKind.SEQUENCE;
+			case "Sequence", "List" -> CollectionKind.SEQUENCE; // D26: List alias for Sequence
 			default -> CollectionKind.COLLECTION;
 		};
 	}

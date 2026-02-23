@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2m.qvto.engine.internal;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 
@@ -22,7 +23,9 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2m.model.ocl.AnyType;
 import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2m.model.ocl.OclFactory;
@@ -34,6 +37,7 @@ import org.eclipse.fennec.m2m.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.ocl.api.OclOperation;
 import org.eclipse.fennec.m2m.ocl.api.OclOperationProvider;
+import org.eclipse.fennec.m2m.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.api.QvtoModelExtent;
 
 /**
@@ -73,7 +77,25 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		List<OclOperation> ops = new ArrayList<>();
 
 		// Built-in model extent operations
+		// §8.3.5.3: objectsOfType — exact type match only (not subtypes)
 		ops.add(new OclOperation("objectsOfType", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoModelExtent extent && args.length > 0) {
+						EClass filterType = resolveEClassArg(args[0]);
+						if (filterType != null) {
+							List<EObject> result = new ArrayList<>();
+							for (EObject eo : extent.getContents()) {
+								if (eo.eClass() == filterType) {
+									result.add(eo);
+								}
+							}
+							return result;
+						}
+					}
+					return List.of();
+				}));
+		// §8.3.5.2: objectsOfKind — includes subtypes
+		ops.add(new OclOperation("objectsOfKind", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0) {
 						EClass filterType = resolveEClassArg(args[0]);
@@ -89,6 +111,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					}
 					return List.of();
 				}));
+		// §8.3.5.1: objects — all objects
 		ops.add(new OclOperation("objects", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent) {
@@ -96,12 +119,204 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					}
 					return List.of();
 				}));
-		// §8.1.3: addObject — add an element to a model extent
+		// §8.3.5.4: rootObjects — top-level objects not contained by others
+		ops.add(new OclOperation("rootObjects", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoModelExtent extent) {
+						return new ArrayList<>(extent.getContents());
+					}
+					return List.of();
+				}));
+		// §8.3.5.5: addElement — add element to extent
+		ops.add(new OclOperation("addElement", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoModelExtent extent && args.length > 0
+							&& args[0] instanceof EObject eo) {
+						extent.add(eo);
+					}
+					return null;
+				}));
+		// §8.1.3: addObject — legacy alias for addElement
 		ops.add(new OclOperation("addObject", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
 						extent.add(eo);
+					}
+					return null;
+				}));
+		// §8.3.5.6: removeElement — remove element from extent
+		ops.add(new OclOperation("removeElement", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoModelExtent extent && args.length > 0
+							&& args[0] instanceof EObject eo) {
+						extent.getContents().remove(eo);
+					}
+					return null;
+				}));
+		// §8.3.5.8: copy — deep copy of model and its extent
+		ops.add(new OclOperation("copy", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoModelExtent extent) {
+						List<EObject> copies = new ArrayList<>();
+						for (EObject eo : extent.getContents()) {
+							copies.add(EcoreUtil.copy(eo));
+						}
+						BasicQvtoModelExtent copyExtent = new BasicQvtoModelExtent();
+						copyExtent.setContents(copies);
+						return copyExtent;
+					}
+					return null;
+				}));
+
+		// §8.3.5.9: createEmptyModel — create new empty model extent
+		ops.add(new OclOperation("createEmptyModel", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoModelExtent) {
+						return new BasicQvtoModelExtent();
+					}
+					return null;
+				}));
+
+		// §8.3.9.6 / Eclipse CollectionTypeOperations: asList() on any Collection → mutable List
+		ops.add(new OclOperation("asList", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof Collection<?> coll) {
+						return new ArrayList<>(coll);
+					}
+					return null;
+				}));
+
+		// §8.3.4: Element operations (on EObject)
+		// §8.3.4.3: metaClassName() : String
+		ops.add(new OclOperation("metaClassName", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo) {
+						return eo.eClass().getName();
+					}
+					return null;
+				}));
+		// §8.3.4.4: subobjects() : Set(Element)
+		ops.add(new OclOperation("subobjects", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo) {
+						return new ArrayList<>(eo.eContents());
+					}
+					return List.of();
+				}));
+		// §8.3.4.5: allSubobjects() : Set(Element)
+		ops.add(new OclOperation("allSubobjects", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo) {
+						List<EObject> result = new ArrayList<>();
+						for (var iter = eo.eAllContents(); iter.hasNext(); ) {
+							result.add(iter.next());
+						}
+						return result;
+					}
+					return List.of();
+				}));
+		// §8.3.4.6: subobjectsOfType(type) — exact type
+		ops.add(new OclOperation("subobjectsOfType", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo && args.length > 0) {
+						EClass filterType = resolveEClassArg(args[0]);
+						if (filterType != null) {
+							List<EObject> result = new ArrayList<>();
+							for (EObject child : eo.eContents()) {
+								if (child.eClass() == filterType) {
+									result.add(child);
+								}
+							}
+							return result;
+						}
+					}
+					return List.of();
+				}));
+		// §8.3.4.8: subobjectsOfKind(type) — includes subtypes
+		ops.add(new OclOperation("subobjectsOfKind", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo && args.length > 0) {
+						EClass filterType = resolveEClassArg(args[0]);
+						if (filterType != null) {
+							List<EObject> result = new ArrayList<>();
+							for (EObject child : eo.eContents()) {
+								if (filterType.isInstance(child)) {
+									result.add(child);
+								}
+							}
+							return result;
+						}
+					}
+					return List.of();
+				}));
+		// §8.3.4.7: allSubobjectsOfType(type) — exact type, recursive
+		ops.add(new OclOperation("allSubobjectsOfType", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo && args.length > 0) {
+						EClass filterType = resolveEClassArg(args[0]);
+						if (filterType != null) {
+							List<EObject> result = new ArrayList<>();
+							for (var iter = eo.eAllContents(); iter.hasNext(); ) {
+								EObject desc = iter.next();
+								if (desc.eClass() == filterType) {
+									result.add(desc);
+								}
+							}
+							return result;
+						}
+					}
+					return List.of();
+				}));
+		// §8.3.4.9: allSubobjectsOfKind(type) — includes subtypes, recursive
+		ops.add(new OclOperation("allSubobjectsOfKind", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo && args.length > 0) {
+						EClass filterType = resolveEClassArg(args[0]);
+						if (filterType != null) {
+							List<EObject> result = new ArrayList<>();
+							for (var iter = eo.eAllContents(); iter.hasNext(); ) {
+								EObject desc = iter.next();
+								if (filterType.isInstance(desc)) {
+									result.add(desc);
+								}
+							}
+							return result;
+						}
+					}
+					return List.of();
+				}));
+		// §8.3.4.10: clone() — shallow copy (skip containments)
+		ops.add(new OclOperation("clone", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo) {
+						EcoreUtil.Copier copier = new EcoreUtil.Copier() {
+							private static final long serialVersionUID = 1L;
+							@Override
+							protected void copyContainment(EReference ref,
+									EObject src, EObject tgt) {
+								// shallow: skip containment references
+							}
+						};
+						EObject result = copier.copy(eo);
+						copier.copyReferences();
+						return result;
+					}
+					return null;
+				}));
+		// §8.3.4.11: deepclone() — deep copy (recursive)
+		ops.add(new OclOperation("deepclone", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo) {
+						return EcoreUtil.copy(eo);
+					}
+					return null;
+				}));
+		// §8.3.4 (MOF reflective): container() — containing object
+		ops.add(new OclOperation("container", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof EObject eo) {
+						return eo.eContainer();
 					}
 					return null;
 				}));
@@ -143,7 +358,13 @@ public class QvtoOperationProvider implements OclOperationProvider {
 						ownerType,
 						List.of(),
 						ANY_TYPE,
-						(self, args) -> evaluator.callOperation(impOp, self, args)
+						(self, args) -> {
+							// §8.1.19: contextual operation on null → propagate null
+							if (self == null && impOp.getContext() != null) {
+								return null;
+							}
+							return evaluator.callOperation(impOp, self, args);
+						}
 				));
 			}
 		}

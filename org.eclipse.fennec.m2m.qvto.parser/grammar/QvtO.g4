@@ -223,6 +223,7 @@ simpleSignature
 propertyDecl
     : 'intermediate' 'property' scopedName ':' typeExpression ('=' expression)? ';'
     | 'configuration' 'property' qvtoIdentifier ':' typeExpression ('=' expression)? ';'
+    | 'property' qvtoIdentifier ':' typeExpression ('=' expression)? ';'
     ;
 
 intermediateClassDef
@@ -238,7 +239,12 @@ classifierFeature
     ;
 
 tagDecl
-    : 'tag' STRING_LITERAL scopedName ('=' expression)?
+    : 'tag' (STRING_LITERAL | DOUBLE_QUOTED_STRING) tagTarget ('=' expression)?
+    ;
+
+// §8.4: tag target can reference deeply scoped names like Package::Class::feature
+tagTarget
+    : qvtoIdentifier ('::' qvtoIdentifier)*
     ;
 
 typedefDecl
@@ -277,7 +283,9 @@ block
 expression
     : expression ('.' | '?.') propertyOrCallSuffix                                       # NavigationExp
     | expression ('->' | '?->') iteratorOrOperationCall                                  # ArrowExp
-    | expression '[' xselectCondition=expression ']'                                     # XselectExp
+    // §8.2.2.7: xselect — list[condition], xselectOne — list![condition]
+    | expression '[' (xselectIter=qvtoIdentifier '|')? xselectCondition=expression ']'  # XselectExp
+    | expression '!' '[' (xselectOneIter=qvtoIdentifier '|')? xselectOneCondition=expression ']'  # XselectOneExp
     | 'not' expression                                                                   # NotExp
     | '-' expression                                                                     # UnaryMinusExp
     | expression op=('*' | '/') expression                                               # MultExp
@@ -300,9 +308,10 @@ expression
 primaryExpression
     : '(' expression ')'                                                                 # ParenExp
     | 'self'                                                                             # SelfExp
+    | 'this'                                                                             # ThisExp
     // §8.2.2.8: imperative if — else is optional (extends OCL if where else is mandatory)
     | 'if' condition=expression 'then' thenExp=expression
-      ('elseif' elseIfCondition+=expression 'then' elseIfExp+=expression)*
+      (('elseif'|'elif') elseIfCondition+=expression 'then' elseIfExp+=expression)*
       ('else' elseExp=expression)? 'endif'                                                # IfExp
     // §8.2.2.8: imperative if with block syntax — if (cond) { stmts } else { stmts }
     | 'if' '(' impCondition=expression ')' thenBlock=block
@@ -359,6 +368,45 @@ dictType
     : 'Dict' '(' typeExpression ',' typeExpression ')'
     ;
 
+// ==================== Collection Kind Override ====================
+
+// Override to add List as collection literal kind (D26: List alias for Sequence)
+collectionKind
+    : 'Set'
+    | 'OrderedSet'
+    | 'Bag'
+    | 'Sequence'
+    | 'Collection'
+    | 'List'
+    ;
+
+// ==================== Literal Expression Override ====================
+
+// Override to add Dict literal syntax (§8.2.2.27)
+// Dict { 'key1' = value1, 'key2' = value2 }
+literalExpression
+    : INTEGER_LITERAL                                                                    # IntegerLiteral
+    | REAL_LITERAL                                                                       # RealLiteral
+    | STRING_LITERAL                                                                     # StringLiteral
+    | 'true'                                                                             # TrueLiteral
+    | 'false'                                                                            # FalseLiteral
+    | 'null'                                                                             # NullLiteral
+    | 'invalid'                                                                          # InvalidLiteral
+    | '*'                                                                                # UnlimitedNaturalLiteral
+    | collectionLiteral                                                                  # CollectionLit
+    | tupleLiteral                                                                       # TupleLit
+    | mapLiteral                                                                         # MapLit
+    | dictLiteral                                                                        # DictLit
+    ;
+
+dictLiteral
+    : 'Dict' '{' (dictLiteralPart (',' dictLiteralPart)*)? '}'
+    ;
+
+dictLiteralPart
+    : key=expression '=' value=expression
+    ;
+
 // ==================== Imperative Expressions ====================
 
 // §8.2.2.2: 'do' keyword can be skipped inside if, switch, compute, and for expressions
@@ -368,7 +416,10 @@ blockExp
     ;
 
 whileExp
-    : 'while' '(' expression ')' block
+    // §8.2.2.4: while with init variable (compute shorthand) — must be before WhileBasic
+    // while (x:Type := init; condition) { body }
+    : 'while' '(' varName=qvtoIdentifier ':' type=typeExpression ':=' initValue=expression ';' condition=expression ')' block  # WhileWithInit
+    | 'while' '(' expression ')' block                                                    # WhileBasic
     ;
 
 forExp
@@ -454,7 +505,7 @@ tryExp
     ;
 
 catchClause
-    : 'catch' ('(' exceptionTypeList ')')? block
+    : ('catch'|'except') ('(' ((exceptionVar=qvtoIdentifier ':')? exceptionTypeList)? ')')? block
     ;
 
 exceptionTypeList
@@ -519,10 +570,14 @@ iteratorOrOperationCall
     : forKind '(' forVarList ('|' expression)? ')' block                                    # ForEachCall
     | 'late'? resolveKind '(' resolveArgs? ')'                                              # ArrowResolveCall
     | 'late'? resolveInKind '(' scopedName (',' resolveArgs)? ')'                           # ArrowResolveInCall
+    // §8.2.2.7: list->map f() = list->xcollect(i | i.map f()) — mapping call on collection
+    | mappingCallKind scopedName '(' argumentList? ')'                                      # ArrowMappingCall
     | qvtoIdentifier '(' iteratorVariables '|' expression ')'                              # IteratorCall
     | qvtoIdentifier '(' qvtoIdentifier (':' iterType=typeExpression)?
       ';' qvtoIdentifier (':' accType=typeExpression)? '=' expression '|' expression ')'   # IterateCall
     | qvtoIdentifier '(' argumentList? ')'                                                 # CollectionOperationCall
+    // §8.2.2.7: list->prop = list->xcollect(i | i.prop) — property collect shorthand
+    | qvtoIdentifier                                                                       # ArrowPropertyCall
     ;
 
 // Override iterator variables to accept soft keywords as names
@@ -580,6 +635,7 @@ qvtoIdentifier
     | 'helper'
     | 'inherits'
     | 'init'
+    | 'inv'
     | 'intermediate'
     | 'invresolve'
     | 'invresolveone'
@@ -617,6 +673,7 @@ qvtoIdentifier
     | 'raise'
     | 'try'
     | 'catch'
+    | 'except'
     | 'assert'
     | 'log'
     | 'compute'
@@ -640,4 +697,9 @@ ADD_ASSIGN
 
 ORDERED_COPY
     : '::='
+    ;
+
+// §8.4: tag declarations use double-quoted strings for tag identifiers (e.g. tag "alias")
+DOUBLE_QUOTED_STRING
+    : '"' ( '\\\\' | '\\"' | ~["\\] )* '"'
     ;
