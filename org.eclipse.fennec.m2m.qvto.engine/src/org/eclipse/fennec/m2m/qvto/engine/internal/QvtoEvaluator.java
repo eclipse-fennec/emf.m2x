@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2m.qvto.engine.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,14 +26,14 @@ import java.util.Objects;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
-import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2m.model.imperativeocl.AltExp;
@@ -40,25 +41,27 @@ import org.eclipse.fennec.m2m.model.imperativeocl.AssertExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.AssignExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.BlockExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.BreakExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ComputeExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ForExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ImperativeIterateExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.InstantiationExp;
-import org.eclipse.fennec.m2m.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.LogExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.RaiseExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ReturnExp;
-import org.eclipse.fennec.m2m.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.SeverityKind;
 import org.eclipse.fennec.m2m.model.imperativeocl.SwitchExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.util.ImperativeOclSwitch;
+import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2m.model.ocl.IfExp;
 import org.eclipse.fennec.m2m.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
+import org.eclipse.fennec.m2m.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2m.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2m.model.ocl.Variable;
 import org.eclipse.fennec.m2m.model.ocl.VariableExp;
@@ -66,22 +69,21 @@ import org.eclipse.fennec.m2m.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2m.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2m.model.qvtoperational.ContextualProperty;
 import org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation;
-import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
-import org.eclipse.fennec.m2m.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingBody;
-import org.eclipse.fennec.m2m.model.qvtoperational.Module;
-import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingCallExp;
-import org.eclipse.fennec.m2m.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingOperation;
+import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
+import org.eclipse.fennec.m2m.model.qvtoperational.Module;
+import org.eclipse.fennec.m2m.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2m.model.qvtoperational.ObjectExp;
-import org.eclipse.fennec.m2m.model.trace.Trace;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationBody;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveInExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2m.model.qvtoperational.util.QvtOperationalSwitch;
+import org.eclipse.fennec.m2m.model.trace.Trace;
+import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
@@ -725,6 +727,10 @@ public class QvtoEvaluator {
 			// Return result variable value (if exists), otherwise last expression value
 			EList<VarParameter> resultParams = operation.getResult();
 			if (!resultParams.isEmpty()) {
+				// §8.4: Multi-result → return as Tuple (Map)
+				if (resultParams.size() > 1) {
+					return collectMultiResult(resultParams);
+				}
 				String resultName = resultParams.get(0).getName();
 				Object resultValue = env.lookup(resultName);
 				// §8.2.1.12: For expression bodies (= expr), the result variable is
@@ -874,7 +880,11 @@ public class QvtoEvaluator {
 			// Collect result
 			Object result = null;
 			if (!resultParams.isEmpty()) {
-				result = env.lookup(resultParams.get(0).getName());
+				if (resultParams.size() > 1) {
+					result = collectMultiResult(resultParams);
+				} else {
+					result = env.lookup(resultParams.get(0).getName());
+				}
 			}
 
 			// Record trace (§8.1.11.1: context, in-params, result)
@@ -984,6 +994,25 @@ public class QvtoEvaluator {
 	 */
 	public Trace getTrace() {
 		return traceManager.getTrace();
+	}
+
+	/**
+	 * §8.1.10: Initializes default values for intermediate class features.
+	 * Default expressions are stored in EAnnotations with source "fennec:intermediate:default"
+	 * by the parser's QvtoUnitBuilder.
+	 */
+	private void initIntermediateClassDefaults(EObject target, EClass eClass) {
+		for (EStructuralFeature feature : eClass.getEAllStructuralFeatures()) {
+			EAnnotation ann = feature.getEAnnotation("fennec:intermediate:default");
+			if (ann != null && !ann.getReferences().isEmpty()
+					&& ann.getReferences().get(0) instanceof OclExpression defaultExpr) {
+				Object defaultValue = eval(defaultExpr);
+				Object unwrapped = unwrapNull(defaultValue);
+				if (unwrapped != null) {
+					target.eSet(feature, unwrapped);
+				}
+			}
+		}
 	}
 
 	// --- Internal helpers ---
@@ -1288,6 +1317,17 @@ public class QvtoEvaluator {
 	}
 
 	/**
+	 * §8.4: Collects multiple named result variables into a Tuple (Map).
+	 */
+	private Map<String, Object> collectMultiResult(EList<VarParameter> resultParams) {
+		Map<String, Object> tuple = new LinkedHashMap<>();
+		for (VarParameter rp : resultParams) {
+			tuple.put(rp.getName(), env.lookup(rp.getName()));
+		}
+		return tuple;
+	}
+
+	/**
 	 * §8.2.1.17: Resolves an unqualified property name against the implicit context
 	 * object. Checks 'self' (ObjectExp context) and 'result' (mapping body context).
 	 *
@@ -1564,9 +1604,12 @@ public class QvtoEvaluator {
 						} else {
 							Object current = target.eGet(sf);
 							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.add(coerced);
+								// Eclipse bug449445: invalid is silently ignored on +=
+								if (coerced != OclInvalid.INSTANCE) {
+									@SuppressWarnings("unchecked")
+									Collection<Object> col = (Collection<Object>) current;
+									col.add(coerced);
+								}
 							} else {
 								target.eSet(sf, coerced);
 							}
@@ -1581,22 +1624,62 @@ public class QvtoEvaluator {
 					// += (append): add to collection
 					Object current = env.lookup(varName);
 					if (current instanceof Collection<?>) {
-						@SuppressWarnings("unchecked")
-						Collection<Object> col = (Collection<Object>) current;
-						col.add(value);
+						// Eclipse bug449445: invalid is silently ignored on +=
+						if (value != OclInvalid.INSTANCE) {
+							@SuppressWarnings("unchecked")
+							Collection<Object> col = (Collection<Object>) current;
+							col.add(value);
+						}
 					} else {
 						env.assign(varName, value);
 					}
 				}
 			} else if (left instanceof PropertyCallExp propExp) {
-				// Property assignment: eObject.eSet(feature, value)
+				// Property assignment: eObject.eSet(feature, value) or tuple.part
 				Object source = eval(propExp.getOwnedSource());
 				EStructuralFeature sf = propExp.getReferredProperty();
-				if (source instanceof EObject eo && sf != null) {
+				// Tuple part assignment (tuples are Map<String, Object>)
+				if (source instanceof Map<?, ?> && sf != null) {
+					@SuppressWarnings("unchecked")
+					Map<String, Object> tuple = (Map<String, Object>) source;
+					String partName = sf.getName();
+					if (exp.isIsReset()) {
+						tuple.put(partName, value);
+					} else {
+						// += on tuple part: only valid for mutable collections (List)
+						Object current = tuple.get(partName);
+						if (current instanceof Collection<?>) {
+							@SuppressWarnings("unchecked")
+							Collection<Object> col = (Collection<Object>) current;
+							if (value instanceof Collection<?> rhs) {
+								col.addAll((Collection<?>) rhs);
+							} else {
+								col.add(value);
+							}
+						} else {
+							tuple.put(partName, value);
+						}
+					}
+				} else if (source instanceof EObject eo && sf != null) {
 					// §8.1.10: Check intermediate property first
 					ContextualProperty icp = findIntermediateProperty(eo, sf.getName());
 					if (icp != null) {
-						setIntermediatePropertyValue(eo, sf.getName(), value);
+						// Eclipse bug449445: invalid → null for property assignment,
+						// or clear if current value is a collection
+						if (value == OclInvalid.INSTANCE && exp.isIsReset()) {
+							Object current = getIntermediatePropertyValue(eo, sf.getName());
+							if (current instanceof Collection<?>) {
+								@SuppressWarnings("unchecked")
+								Collection<Object> col = (Collection<Object>) current;
+								col.clear();
+							} else {
+								setIntermediatePropertyValue(eo, sf.getName(), null);
+							}
+						} else if (value == OclInvalid.INSTANCE) {
+							// += invalid: silently ignored
+						} else {
+							setIntermediatePropertyValue(eo, sf.getName(), value);
+						}
 						return wrapNull(value);
 					}
 					// Resolve the feature from the actual EClass to handle
@@ -1605,24 +1688,40 @@ public class QvtoEvaluator {
 					if (actualSf == null) {
 						actualSf = sf;
 					}
-					Object coerced = coerceForFeature(actualSf, value);
+					// Eclipse bug449445: invalid → null for EObject property assignment
+					Object coerced = coerceForFeature(actualSf,
+							value == OclInvalid.INSTANCE ? null : value);
 					if (exp.isIsReset()) {
-						eo.eSet(actualSf, coerced);
-					} else {
-						// += on EReference/EAttribute list
-						Object current = eo.eGet(actualSf);
-						if (current instanceof Collection<?>) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							if (coerced instanceof Collection<?> rhs) {
-								for (Object item : rhs) {
-									col.add(coerceForFeature(actualSf, item));
-								}
+						if (value == OclInvalid.INSTANCE) {
+							// Clear collection or set null
+							Object current = eo.eGet(actualSf);
+							if (current instanceof Collection<?>) {
+								@SuppressWarnings("unchecked")
+								Collection<Object> col = (Collection<Object>) current;
+								col.clear();
 							} else {
-								col.add(coerced);
+								eo.eSet(actualSf, null);
 							}
 						} else {
 							eo.eSet(actualSf, coerced);
+						}
+					} else {
+						// += on EReference/EAttribute list
+						if (coerced != OclInvalid.INSTANCE) {
+							Object current = eo.eGet(actualSf);
+							if (current instanceof Collection<?>) {
+								@SuppressWarnings("unchecked")
+								Collection<Object> col = (Collection<Object>) current;
+								if (coerced instanceof Collection<?> rhs) {
+									for (Object item : rhs) {
+										col.add(coerceForFeature(actualSf, item));
+									}
+								} else {
+									col.add(coerced);
+								}
+							} else {
+								eo.eSet(actualSf, coerced);
+							}
 						}
 					}
 				}
@@ -1791,7 +1890,6 @@ public class QvtoEvaluator {
 			} catch (RaiseException | FatalAssertionException ex) {
 				// §8.2.2.13: search except clauses for matching type
 				String exType = (ex instanceof RaiseException re) ? re.exceptionType : "AssertionFailed";
-				String exArg = (ex instanceof RaiseException re) ? re.argument : ((FatalAssertionException) ex).message;
 
 				for (CatchExp catchExp : exp.getExceptClause()) {
 					if (matchesExceptClause(catchExp, exType)) {
@@ -1987,6 +2085,11 @@ public class QvtoEvaluator {
 			Object existing = isExplicitVar ? env.lookup(varName) : null;
 			boolean isUpdate = (existing instanceof EObject);
 			EObject target = isUpdate ? (EObject) existing : EcoreUtil.create(eClass);
+
+			// §8.1.10: Apply default values from intermediate class feature definitions
+			if (!isUpdate) {
+				initIntermediateClassDefaults(target, eClass);
+			}
 
 			env.pushScope();
 			try {

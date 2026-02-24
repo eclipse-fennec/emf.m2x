@@ -498,6 +498,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 				Object first = eval(range.getOwnedFirst());
 				Object last = eval(range.getOwnedLast());
 				if (!(first instanceof Long f) || !(last instanceof Long l)) {
+					// Eclipse bug415661: invalid/null bounds → silently return invalid
+					if (first == OclInvalid.INSTANCE || last == OclInvalid.INSTANCE
+							|| first == null || last == null) {
+						return OclInvalid.INSTANCE;
+					}
 					return addError("Collection range requires Integer bounds");
 				}
 				long rangeSize = l - f + 1;
@@ -1108,12 +1113,57 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	private Object dispatchCustomOperation(String opName, Object source, Object[] args) {
+		// §8.1.14.3: most-specific-type-first dispatch
+		// Priority: exact match > widening (Integer→Real) > OclAny/AnyType catch-all
+		// OCL §7.4.7: null (OclVoid) conforms to all types → first named match wins
+		OclOperation fallback = null;
+		OclOperation wideningMatch = null;
 		for (OclOperationProvider provider : customProviders) {
 			for (OclOperation op : provider.getOperations()) {
-				if (opName.equals(op.name()) && isCompatibleOwner(op.ownerType(), source)) {
+				if (!opName.equals(op.name())) {
+					continue;
+				}
+				// Null source: OclVoid conforms to all → first matching op wins
+				if (source == null) {
+					return op.implementation().apply(source, args);
+				}
+				OclType ownerType = op.ownerType();
+				// Exact primitive type match
+				if (ownerType instanceof PrimitiveType pt) {
+					String typeName = pt.getName();
+					if (OclStdlib.matchesPrimitiveType(source, typeName)) {
+						return op.implementation().apply(source, args);
+					}
+					// Widening: Integer→Real
+					if ("Real".equals(typeName)
+							&& (source instanceof Long || source instanceof Integer)) {
+						wideningMatch = op;
+						continue;
+					}
+					// OclAny catches all
+					if ("OclAny".equals(typeName)) {
+						fallback = op;
+						continue;
+					}
+					continue;
+				}
+				// AnyType catches all
+				if (ownerType instanceof AnyType) {
+					fallback = op;
+					continue;
+				}
+				// Other types: use isCompatibleOwner
+				if (isCompatibleOwner(ownerType, source)) {
 					return op.implementation().apply(source, args);
 				}
 			}
+		}
+		// Widening match before catch-all
+		if (wideningMatch != null) {
+			return wideningMatch.implementation().apply(source, args);
+		}
+		if (fallback != null) {
+			return fallback.implementation().apply(source, args);
 		}
 		return OclStdlib.NOT_FOUND;
 	}
@@ -1127,7 +1177,20 @@ public class OclEvaluator extends OclSwitch<Object> {
 			return true;
 		}
 		if (ownerType instanceof PrimitiveType pt) {
-			return OclStdlib.matchesPrimitiveType(source, pt.getName());
+			String typeName = pt.getName();
+			// §8.2.1.10: OclAny matches everything (catch-all dispatch)
+			if ("OclAny".equals(typeName)) {
+				return true;
+			}
+			// Exact type match first
+			if (OclStdlib.matchesPrimitiveType(source, typeName)) {
+				return true;
+			}
+			// OCL §11.5.1: Integer conforms to Real (widening)
+			if ("Real".equals(typeName) && (source instanceof Long || source instanceof Integer)) {
+				return true;
+			}
+			return false;
 		}
 		if (ownerType instanceof ClassifierType ct) {
 			EClassifier ec = ct.getReferredClassifier();

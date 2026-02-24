@@ -202,7 +202,7 @@ helperDef
     ;
 
 queryDef
-    : qualifier* 'query' scopedName simpleSignature ':' typeExpression (block | '=' expression ';' | ';')
+    : qualifier* 'query' scopedName simpleSignature ':' resultList (block | '=' expression ';' | ';')
     ;
 
 constructorDef
@@ -235,7 +235,14 @@ typeList
     ;
 
 classifierFeature
-    : qvtoIdentifier ':' typeExpression ('=' expression)? ';'
+    : classifierFeatureModifier* qvtoIdentifier ':' typeExpression ('=' expression)? ';'
+    ;
+
+classifierFeatureModifier
+    : 'static'
+    | 'readonly'
+    | 'references'
+    | 'composes'
     ;
 
 tagDecl
@@ -387,7 +394,7 @@ collectionKind
 literalExpression
     : INTEGER_LITERAL                                                                    # IntegerLiteral
     | REAL_LITERAL                                                                       # RealLiteral
-    | STRING_LITERAL                                                                     # StringLiteral
+    | stringLiteral_                                                                      # StringLiteral
     | 'true'                                                                             # TrueLiteral
     | 'false'                                                                            # FalseLiteral
     | 'null'                                                                             # NullLiteral
@@ -397,6 +404,11 @@ literalExpression
     | tupleLiteral                                                                       # TupleLit
     | mapLiteral                                                                         # MapLit
     | dictLiteral                                                                        # DictLit
+    ;
+
+// §8.4: String literals — single-quoted, double-quoted, and adjacent concatenation
+stringLiteral_
+    : (STRING_LITERAL | DOUBLE_QUOTED_STRING)+
     ;
 
 dictLiteral
@@ -699,7 +711,7 @@ ORDERED_COPY
     : '::='
     ;
 
-// §8.4: tag declarations use double-quoted strings for tag identifiers (e.g. tag "alias")
+// §8.4: double-quoted string literals (used in tags, expressions, and adjacent concatenation)
 DOUBLE_QUOTED_STRING
-    : '"' ( '\\\\' | '\\"' | ~["\\] )* '"'
+    : '"' ( '\\\\' | '\\"' | '\\\'' | '\\n' | '\\t' | '\\r' | '\\f' | '\\b' | '\\' [0-3]? [0-7] [0-7]? | ~["\\] )* '"'
     ;

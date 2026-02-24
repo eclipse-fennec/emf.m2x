@@ -1164,13 +1164,39 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	}
 
 	private String unescapeString(String s) {
-		return s.replace("\\n", "\n")
-				.replace("\\t", "\t")
-				.replace("\\r", "\r")
-				.replace("\\f", "\f")
-				.replace("\\b", "\b")
-				.replace("\\'", "'")
-				.replace("\\\\", "\\");
+		StringBuilder sb = new StringBuilder(s.length());
+		for (int i = 0; i < s.length(); i++) {
+			char c = s.charAt(i);
+			if (c == '\\' && i + 1 < s.length()) {
+				char next = s.charAt(i + 1);
+				switch (next) {
+					case 'n' -> { sb.append('\n'); i++; }
+					case 't' -> { sb.append('\t'); i++; }
+					case 'r' -> { sb.append('\r'); i++; }
+					case 'f' -> { sb.append('\f'); i++; }
+					case 'b' -> { sb.append('\b'); i++; }
+					case '\\' -> { sb.append('\\'); i++; }
+					case '\'' -> { sb.append('\''); i++; }
+					case '"' -> { sb.append('"'); i++; }
+					case '0', '1', '2', '3', '4', '5', '6', '7' -> {
+						// Octal escape: \0 to \377
+						int start = i + 1;
+						int end = start + 1;
+						while (end < s.length() && end - start < 3
+								&& s.charAt(end) >= '0' && s.charAt(end) <= '7') {
+							end++;
+						}
+						int octalVal = Integer.parseInt(s.substring(start, end), 8);
+						sb.append((char) octalVal);
+						i = end - 1;
+					}
+					default -> { sb.append(c); } // unknown escape, keep backslash
+				}
+			} else {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
 	}
 
 	/**

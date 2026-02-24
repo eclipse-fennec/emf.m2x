@@ -277,6 +277,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitClassifierFeature(QvtOParser.ClassifierFeatureContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#classifierFeatureModifier}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitClassifierFeatureModifier(QvtOParser.ClassifierFeatureModifierContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#tagDecl}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -763,6 +769,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitDictLit(QvtOParser.DictLitContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#stringLiteral_}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringLiteral_(QvtOParser.StringLiteral_Context ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#dictLiteral}.
 	 * @param ctx the parse tree

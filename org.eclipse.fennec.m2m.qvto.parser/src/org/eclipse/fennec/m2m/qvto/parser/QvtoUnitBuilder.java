@@ -68,6 +68,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private static final OclFactory OCL = OclFactory.eINSTANCE;
 	private static final ImperativeOclFactory IMP = ImperativeOclFactory.eINSTANCE;
 	private static final QvtOperationalFactory QVTO = QvtOperationalFactory.eINSTANCE;
+	private static final java.util.concurrent.atomic.AtomicLong INTERMEDIATE_SEQ =
+			new java.util.concurrent.atomic.AtomicLong();
 
 	private record PendingExtension(MappingOperation mapping, String kind, String name) {}
 
@@ -75,6 +77,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoEnvironment environment;
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
+	private String intermediatePackageUri;
 
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
@@ -154,6 +157,11 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			} else if (elemCtx.moduleElement() != null) {
 				processModuleElement(elemCtx.moduleElement(), transformation);
 			}
+		}
+
+		// Clean up intermediate package from global registry (no longer needed after parse)
+		if (intermediatePackageUri != null && packageRegistry != null) {
+			packageRegistry.remove(intermediatePackageUri);
 		}
 
 		return transformation;
@@ -500,8 +508,25 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		buildSimpleSignature(query, ctx.simpleSignature());
 
-		OclType returnType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
-		setReturnType(query, returnType);
+		// §8.4: query supports resultList (single or multi-result)
+		for (QvtOParser.ResultParamContext rCtx : ctx.resultList().resultParam()) {
+			VarParameter resultParam = QVTO.createVarParameter();
+			if (rCtx instanceof QvtOParser.NamedResultContext named) {
+				resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
+						named.qvtoIdentifier()));
+				OclType type = expressionBuilder.resolveTypeExpression(named.typeExpression());
+				if (type != null) {
+					setParameterType(resultParam, type);
+				}
+			} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
+				resultParam.setName("result");
+				OclType type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
+				if (type != null) {
+					setParameterType(resultParam, type);
+				}
+			}
+			query.getResult().add(resultParam);
+		}
 
 		QvtoEnvironment savedEnv = this.environment;
 		setupOperationEnvironment(query);
@@ -650,30 +675,61 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		EClass intermediateClass = EcoreFactory.eINSTANCE.createEClass();
 		intermediateClass.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 
-		// TODO: resolve intermediate class supertypes during linking phase
+		// §8.2.1.3: Register in _INTERMEDIATE package so resolveClassifier finds it
+		// and EcoreUtil.create() can instantiate it via the package's EFactory.
+		// MUST be added to intermPkg LAST since EMF containment moves the EClass.
+		EPackage intermPkg = getOrCreateIntermediatePackage(module);
+
+		// Temporarily add to intermPkg so supertype resolution can find it
+		intermPkg.getEClassifiers().add(intermediateClass);
+
+		// Resolve intermediate class supertypes (extends clause)
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
-				// typeCtx → intermediateClass.getESuperTypes().add(...)
+				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
+				if (resolved instanceof org.eclipse.fennec.m2m.model.ocl.ClassifierType ct
+						&& ct.getReferredClassifier() instanceof EClass superClass) {
+					intermediateClass.getESuperTypes().add(superClass);
+				}
 			}
 		}
 
-		// Features
+		// Features (with optional modifiers and default value expressions)
 		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
 			EAttribute attr = EcoreFactory.eINSTANCE.createEAttribute();
 			attr.setName(QvtoExpressionBuilder.qvtoIdentifierText(featureCtx.qvtoIdentifier()));
 			attr.setEType(EcorePackage.Literals.EJAVA_OBJECT);
+
+			// Process modifiers: static, readonly, references, composes
+			for (QvtOParser.ClassifierFeatureModifierContext modCtx : featureCtx.classifierFeatureModifier()) {
+				String modText = modCtx.getText();
+				EAnnotation modAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+				modAnn.setSource("fennec:intermediate:modifier");
+				modAnn.getDetails().put(modText, "true");
+				attr.getEAnnotations().add(modAnn);
+			}
+
+			// Store default value expression if present
+			if (featureCtx.expression() != null) {
+				OclExpression defaultExpr = (OclExpression) expressionBuilder.visit(featureCtx.expression());
+				if (defaultExpr != null) {
+					EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
+					ann.setSource("fennec:intermediate:default");
+					ann.getReferences().add(defaultExpr);
+					attr.getEAnnotations().add(ann);
+				}
+			}
+
 			intermediateClass.getEStructuralFeatures().add(attr);
 		}
 
 		if (module instanceof OperationalTransformation ot) {
 			ot.getIntermediateClass().add(intermediateClass);
 		}
-		module.getEClassifiers().add(intermediateClass);
 
-		// §8.2.1.3: Register in _INTERMEDIATE package so resolveClassifier finds it
-		// and EcoreUtil.create() can instantiate it via the package's EFactory
-		EPackage intermPkg = getOrCreateIntermediatePackage(module);
-		intermPkg.getEClassifiers().add(intermediateClass);
+		// Ensure the EClass ends up in intermPkg (not module) for EcoreUtil.create()
+		// The add to intermPkg above already placed it there; module.getEClassifiers
+		// would move it (EMF containment). So we do NOT add to module.eClassifiers.
 	}
 
 	/**
@@ -681,20 +737,21 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 * Registers the package in the packageRegistry so type resolution works.
 	 */
 	private EPackage getOrCreateIntermediatePackage(Module module) {
-		String nsURI = "http://intermediate/" + module.getName();
-		if (packageRegistry != null) {
-			EPackage existing = packageRegistry.getEPackage(nsURI);
+		if (intermediatePackageUri != null && packageRegistry != null) {
+			EPackage existing = packageRegistry.getEPackage(intermediatePackageUri);
 			if (existing != null) {
 				return existing;
 			}
 		}
+		// Unique URI per builder instance to avoid cross-parse collisions
+		intermediatePackageUri = "http://intermediate/" + module.getName()
+				+ "/" + INTERMEDIATE_SEQ.incrementAndGet();
 		EPackage pkg = EcoreFactory.eINSTANCE.createEPackage();
 		pkg.setName("_INTERMEDIATE");
 		pkg.setNsPrefix("_intermediate");
-		pkg.setNsURI(nsURI);
-		// Dynamic EFactory is created automatically when EPackage has classifiers
+		pkg.setNsURI(intermediatePackageUri);
 		if (packageRegistry != null) {
-			packageRegistry.put(nsURI, pkg);
+			packageRegistry.put(intermediatePackageUri, pkg);
 		}
 		return pkg;
 	}

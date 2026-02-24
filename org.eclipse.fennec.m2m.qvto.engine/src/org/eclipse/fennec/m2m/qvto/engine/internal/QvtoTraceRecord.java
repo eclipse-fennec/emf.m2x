@@ -14,7 +14,6 @@
  */
 package org.eclipse.fennec.m2m.qvto.engine.internal;
 
-import java.util.Arrays;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EObject;

@@ -131,8 +131,15 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	@Override
 	public StringLiteralExp visitStringLiteral(QvtOParser.StringLiteralContext ctx) {
 		StringLiteralExp exp = OCL.createStringLiteralExp();
-		String text = ctx.STRING_LITERAL().getText();
-		exp.setStringSymbol(unescapeString(text.substring(1, text.length() - 1)));
+		// stringLiteral_ rule: (STRING_LITERAL | DOUBLE_QUOTED_STRING)+
+		// Adjacent tokens are concatenated in order (Eclipse multilineStrings_262733)
+		QvtOParser.StringLiteral_Context strCtx = ctx.stringLiteral_();
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < strCtx.getChildCount(); i++) {
+			String text = strCtx.getChild(i).getText();
+			sb.append(unescapeString(text.substring(1, text.length() - 1)));
+		}
+		exp.setStringSymbol(sb.toString());
 		return exp;
 	}
 
@@ -998,6 +1005,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			OclType type = resolveTypeExpression(ctx.typeExpression());
 			if (type instanceof ClassifierType ct && ct.getReferredClassifier() instanceof EClass ec) {
 				objectExp.setInstantiatedClass(ec);
+				objectExp.setType(type);
+				refVar.setType(type);
 			}
 		}
 
@@ -1853,7 +1862,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			var.setType(resolveTypeExpression(ctx.typeExpression()));
 		}
 		if (ctx.expression() != null) {
-			var.setOwnedInit((OclExpression) visit(ctx.expression()));
+			OclExpression init = (OclExpression) visit(ctx.expression());
+			var.setOwnedInit(init);
+			// Infer type from init expression if not explicitly declared
+			if (var.getType() == null && init != null && init.getType() != null) {
+				var.setType(copyType(init.getType()));
+			}
 		}
 		return var;
 	}
@@ -1997,6 +2011,38 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private String unescapeString(String s) {
-		return s.replace("\\\\'", "'").replace("\\\\\\\\", "\\\\");
+		StringBuilder sb = new StringBuilder(s.length());
+		for (int i = 0; i < s.length(); i++) {
+			char c = s.charAt(i);
+			if (c == '\\' && i + 1 < s.length()) {
+				char next = s.charAt(i + 1);
+				switch (next) {
+					case 'n' -> { sb.append('\n'); i++; }
+					case 't' -> { sb.append('\t'); i++; }
+					case 'r' -> { sb.append('\r'); i++; }
+					case 'f' -> { sb.append('\f'); i++; }
+					case 'b' -> { sb.append('\b'); i++; }
+					case '\\' -> { sb.append('\\'); i++; }
+					case '\'' -> { sb.append('\''); i++; }
+					case '"' -> { sb.append('"'); i++; }
+					case '0', '1', '2', '3', '4', '5', '6', '7' -> {
+						// Octal escape: \0 to \377
+						int start = i + 1;
+						int end = start + 1;
+						while (end < s.length() && end - start < 3
+								&& s.charAt(end) >= '0' && s.charAt(end) <= '7') {
+							end++;
+						}
+						int octalVal = Integer.parseInt(s.substring(start, end), 8);
+						sb.append((char) octalVal);
+						i = end - 1;
+					}
+					default -> { sb.append(c); } // unknown escape, keep backslash
+				}
+			} else {
+				sb.append(c);
+			}
+		}
+		return sb.toString();
 	}
 }

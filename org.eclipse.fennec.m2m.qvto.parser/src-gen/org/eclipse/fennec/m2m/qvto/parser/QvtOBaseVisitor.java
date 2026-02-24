@@ -326,6 +326,13 @@ public class QvtOBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Q
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
+	@Override public T visitClassifierFeatureModifier(QvtOParser.ClassifierFeatureModifierContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
 	@Override public T visitTagDecl(QvtOParser.TagDeclContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
@@ -817,6 +824,13 @@ public class QvtOBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Q
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitDictLit(QvtOParser.DictLitContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitStringLiteral_(QvtOParser.StringLiteral_Context ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
