@@ -58,11 +58,14 @@ public class QvtoOperationProvider implements OclOperationProvider {
 
 	private final OperationalTransformation transformation;
 	private final QvtoEvaluator evaluator;
+	private final QvtoOperationResolver operationResolver;
 	private List<OclOperation> operations;
 
-	public QvtoOperationProvider(OperationalTransformation transformation, QvtoEvaluator evaluator) {
+	public QvtoOperationProvider(OperationalTransformation transformation, QvtoEvaluator evaluator,
+			QvtoOperationResolver operationResolver) {
 		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
 		this.evaluator = Objects.requireNonNull(evaluator, "evaluator must not be null");
+		this.operationResolver = Objects.requireNonNull(operationResolver, "operationResolver must not be null");
 	}
 
 	@Override
@@ -322,7 +325,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				}));
 
 		// Module-level helpers/queries/mappings
-		EClass moduleClass = findModuleClass();
+		EClass moduleClass = operationResolver.findModuleClass();
 		if (moduleClass == null) {
 			return ops;
 		}
@@ -333,7 +336,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		for (ModuleImport mi : transformation.getModuleImport()) {
 			Module importedModule = mi.getImportedModule();
 			if (importedModule != null) {
-				EClass importedModuleClass = findModuleClassIn(importedModule);
+				EClass importedModuleClass = QvtoOperationResolver.findModuleClassIn(importedModule);
 				if (importedModuleClass != null) {
 					addModuleOperations(ops, importedModuleClass);
 				}
@@ -393,19 +396,6 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		return ANY_TYPE;
 	}
 
-	private static EClass findModuleClassIn(Module module) {
-		String name = module.getName();
-		if (name == null) {
-			return null;
-		}
-		return module.getEClassifiers().stream()
-				.filter(EClass.class::isInstance)
-				.map(EClass.class::cast)
-				.filter(c -> c.getName().equals(name))
-				.findFirst()
-				.orElse(null);
-	}
-
 	private static EClass resolveEClassArg(Object arg) {
 		if (arg instanceof EClass ec) {
 			return ec;
@@ -414,15 +404,5 @@ public class QvtoOperationProvider implements OclOperationProvider {
 			return ec;
 		}
 		return null;
-	}
-
-	private EClass findModuleClass() {
-		String name = transformation.getName();
-		return transformation.getEClassifiers().stream()
-				.filter(EClass.class::isInstance)
-				.map(EClass.class::cast)
-				.filter(c -> c.getName().equals(name))
-				.findFirst()
-				.orElse(null);
 	}
 }

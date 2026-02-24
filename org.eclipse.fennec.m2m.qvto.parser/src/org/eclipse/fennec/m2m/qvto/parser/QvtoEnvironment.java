@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2m.qvto.parser;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.eclipse.fennec.m2m.model.ocl.Variable;
@@ -58,6 +59,7 @@ class QvtoEnvironment {
 	 * @return a new child environment
 	 */
 	QvtoEnvironment nested(Variable variable) {
+		Objects.requireNonNull(variable, "variable must not be null");
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		vars.put(variable.getName(), variable);
 		return new QvtoEnvironment(this, vars);
@@ -70,6 +72,7 @@ class QvtoEnvironment {
 	 * @return a new child environment
 	 */
 	QvtoEnvironment nested(Iterable<Variable> additionalVariables) {
+		Objects.requireNonNull(additionalVariables, "additionalVariables must not be null");
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		for (Variable v : additionalVariables) {
 			vars.put(v.getName(), v);
@@ -84,6 +87,7 @@ class QvtoEnvironment {
 	 * @return the variable, or empty if not found
 	 */
 	Optional<Variable> lookup(String name) {
+		Objects.requireNonNull(name, "name must not be null");
 		Variable local = variables.get(name);
 		if (local != null) {
 			return Optional.of(local);

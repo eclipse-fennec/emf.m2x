@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2m.qvto.parser;
 
+import java.util.Objects;
+
 import org.eclipse.emf.ecore.resource.Resource;
 
 /**
@@ -31,7 +33,7 @@ class QvtoParseDiagnostic implements Resource.Diagnostic {
 	private final String location;
 
 	QvtoParseDiagnostic(String message, int line, int column, String location) {
-		this.message = message;
+		this.message = Objects.requireNonNull(message, "message must not be null");
 		this.line = line;
 		this.column = column;
 		this.location = location;

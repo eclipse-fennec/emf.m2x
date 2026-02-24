@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2m.qvto.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -108,7 +109,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoEnvironment environment;
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
-		this.environment = environment;
+		this.environment = Objects.requireNonNull(environment,
+				"environment must not be null");
 		this.packageRegistry = packageRegistry;
 	}
 

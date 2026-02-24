@@ -118,7 +118,8 @@ public class QvtoEngineImpl implements QvtoEngine {
 				oclEngine, env, options, transformation, extentManager);
 
 		// Register QVT-O operations as OCL custom provider for mutual recursion
-		QvtoOperationProvider qvtoProvider = new QvtoOperationProvider(transformation, evaluator);
+		QvtoOperationProvider qvtoProvider = new QvtoOperationProvider(
+				transformation, evaluator, evaluator.getOperationResolver());
 		oclEngine.registerOperations(qvtoProvider);
 		try {
 			List<Diagnostic> diagnostics = evaluator.execute();

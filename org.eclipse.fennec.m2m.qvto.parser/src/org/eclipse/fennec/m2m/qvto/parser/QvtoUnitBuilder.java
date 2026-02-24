@@ -16,8 +16,11 @@ package org.eclipse.fennec.m2m.qvto.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
@@ -27,9 +30,11 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2m.model.imperativeocl.ImperativeOclFactory;
 import org.eclipse.fennec.m2m.model.imperativeocl.Typedef;
+import org.eclipse.fennec.m2m.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2m.model.ocl.OclExpression;
 import org.eclipse.fennec.m2m.model.ocl.OclFactory;
 import org.eclipse.fennec.m2m.model.ocl.OclType;
+import org.eclipse.fennec.m2m.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2m.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2m.model.ocl.Variable;
 import org.eclipse.fennec.m2m.model.qvtoperational.Constructor;
@@ -37,6 +42,7 @@ import org.eclipse.fennec.m2m.model.qvtoperational.ContextualProperty;
 import org.eclipse.fennec.m2m.model.qvtoperational.DirectionKind;
 import org.eclipse.fennec.m2m.model.qvtoperational.EntryOperation;
 import org.eclipse.fennec.m2m.model.qvtoperational.Helper;
+import org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2m.model.qvtoperational.ImportKind;
 import org.eclipse.fennec.m2m.model.qvtoperational.Library;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingBody;
@@ -68,8 +74,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private static final OclFactory OCL = OclFactory.eINSTANCE;
 	private static final ImperativeOclFactory IMP = ImperativeOclFactory.eINSTANCE;
 	private static final QvtOperationalFactory QVTO = QvtOperationalFactory.eINSTANCE;
-	private static final java.util.concurrent.atomic.AtomicLong INTERMEDIATE_SEQ =
-			new java.util.concurrent.atomic.AtomicLong();
+	private static final AtomicLong INTERMEDIATE_SEQ =
+			new AtomicLong();
 
 	private record PendingExtension(MappingOperation mapping, String kind, String name) {}
 
@@ -687,7 +693,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
 				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
-				if (resolved instanceof org.eclipse.fennec.m2m.model.ocl.ClassifierType ct
+				if (resolved instanceof ClassifierType ct
 						&& ct.getReferredClassifier() instanceof EClass superClass) {
 					intermediateClass.getESuperTypes().add(superClass);
 				}
@@ -795,7 +801,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		typedef.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 
 		OclType baseType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
-		if (baseType instanceof org.eclipse.fennec.m2m.model.ocl.ClassifierType ct) {
+		if (baseType instanceof ClassifierType ct) {
 			typedef.setBase(ct.getReferredClassifier());
 		}
 
@@ -825,7 +831,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void buildSignature(
-			org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation operation,
+			ImperativeOperation operation,
 			QvtOParser.MappingSignatureContext sigCtx) {
 		// Input parameters (labeled 'inputParams' in grammar)
 		if (sigCtx.inputParams != null) {
@@ -864,7 +870,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void buildSimpleSignature(
-			org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation operation,
+			ImperativeOperation operation,
 			QvtOParser.SimpleSignatureContext sigCtx) {
 		if (sigCtx == null || sigCtx.paramList() == null) {
 			return;
@@ -881,7 +887,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void setupOperationEnvironment(
-			org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation operation) {
+			ImperativeOperation operation) {
 		// self (context parameter)
 		if (operation.getContext() != null) {
 			Variable selfVar = OCL.createVariable();
@@ -912,7 +918,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void setOperationNameAndContext(
-			org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation operation,
+			ImperativeOperation operation,
 			QvtOParser.ScopedNameContext scopedNameCtx) {
 		String fullName = expressionBuilder.scopedNameText(scopedNameCtx);
 		int colonIdx = fullName.lastIndexOf("::");
@@ -934,7 +940,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void setReturnType(
-			org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation operation,
+			ImperativeOperation operation,
 			OclType type) {
 		VarParameter resultParam = QVTO.createVarParameter();
 		resultParam.setName("result");
@@ -945,19 +951,19 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void setParameterType(VarParameter param, OclType type) {
-		if (type instanceof org.eclipse.fennec.m2m.model.ocl.ClassifierType ct
+		if (type instanceof ClassifierType ct
 				&& ct.getReferredClassifier() != null) {
 			param.setEType(ct.getReferredClassifier());
-		} else if (type instanceof org.eclipse.fennec.m2m.model.ocl.PrimitiveType pt) {
+		} else if (type instanceof PrimitiveType pt) {
 			// §8.2.1.10: Store primitive context type as EDataType for engine dispatch
-			org.eclipse.emf.ecore.EDataType dt = EcoreFactory.eINSTANCE.createEDataType();
+			EDataType dt = EcoreFactory.eINSTANCE.createEDataType();
 			dt.setName(pt.getName());
 			param.setEType(dt);
 		}
 	}
 
 	private void setFeatureType(ContextualProperty prop, OclType type) {
-		if (type instanceof org.eclipse.fennec.m2m.model.ocl.ClassifierType ct
+		if (type instanceof ClassifierType ct
 				&& ct.getReferredClassifier() != null) {
 			prop.setEType(ct.getReferredClassifier());
 		}
@@ -984,7 +990,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void applyOperationQualifier(
-			org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation operation,
+			ImperativeOperation operation,
 			String qualifier) {
 		if ("blackbox".equals(qualifier)) {
 			operation.setIsBlackbox(true);

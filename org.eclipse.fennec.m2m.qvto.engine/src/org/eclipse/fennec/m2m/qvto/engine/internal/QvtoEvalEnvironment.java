@@ -87,6 +87,7 @@ public class QvtoEvalEnvironment {
 	 * @param value the variable value (may be {@code null})
 	 */
 	public void define(String name, Object value) {
+		Objects.requireNonNull(name, "name must not be null");
 		scopeStack.peek().put(name, value);
 	}
 
@@ -101,6 +102,7 @@ public class QvtoEvalEnvironment {
 	 * @param value the new value
 	 */
 	public void assign(String name, Object value) {
+		Objects.requireNonNull(name, "name must not be null");
 		for (Map<String, Object> scope : scopeStack) {
 			if (scope.containsKey(name)) {
 				scope.put(name, value);
@@ -118,6 +120,7 @@ public class QvtoEvalEnvironment {
 	 * @return the variable value, or {@code null} if not found or bound to null
 	 */
 	public Object lookup(String name) {
+		Objects.requireNonNull(name, "name must not be null");
 		for (Map<String, Object> scope : scopeStack) {
 			if (scope.containsKey(name)) {
 				return scope.get(name);
@@ -133,6 +136,7 @@ public class QvtoEvalEnvironment {
 	 * @return {@code true} if the variable is bound
 	 */
 	public boolean contains(String name) {
+		Objects.requireNonNull(name, "name must not be null");
 		for (Map<String, Object> scope : scopeStack) {
 			if (scope.containsKey(name)) {
 				return true;

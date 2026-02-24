@@ -16,9 +16,7 @@ package org.eclipse.fennec.m2m.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -26,14 +24,10 @@ import java.util.Objects;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.EList;
-import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.EOperation;
-import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2m.model.imperativeocl.AltExp;
@@ -73,8 +67,6 @@ import org.eclipse.fennec.m2m.model.qvtoperational.MappingBody;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingCallExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
-import org.eclipse.fennec.m2m.model.qvtoperational.Module;
-import org.eclipse.fennec.m2m.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2m.model.qvtoperational.ObjectExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationBody;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
@@ -88,7 +80,6 @@ import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
 import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
-import org.eclipse.fennec.m2m.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2m.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.BreakException;
@@ -134,10 +125,12 @@ public class QvtoEvaluator {
 	private int stackDepth;
 
 	// §8.1.10: Intermediate property storage — per-instance values for ContextualProperty
-	private final IdentityHashMap<EObject, Map<String, Object>> intermediatePropertyValues = new IdentityHashMap<>();
+	private final QvtoIntermediatePropertyStore intermediateStore;
 
 	// §8.1.16 / §8.3.19: tag "alias" — maps alias name → (EClass, real feature name)
-	private final Map<String, Map.Entry<EClass, String>> aliasRegistry = new HashMap<>();
+	private final QvtoAliasRegistry aliasRegistry;
+	private final QvtoOperationResolver operationResolver;
+	private final QvtoModelOperations modelOperations;
 
 	// Late resolve support
 	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
@@ -158,6 +151,10 @@ public class QvtoEvaluator {
 		this.options = Objects.requireNonNull(options, "options must not be null");
 		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
 		this.extentManager = Objects.requireNonNull(extentManager, "extentManager must not be null");
+		this.intermediateStore = new QvtoIntermediatePropertyStore(transformation, this::eval);
+		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager);
+		this.operationResolver = new QvtoOperationResolver(transformation);
+		this.modelOperations = new QvtoModelOperations(this::eval);
 	}
 
 	/**
@@ -188,7 +185,7 @@ public class QvtoEvaluator {
 		env.define("this", transformation);
 
 		// §8.3.19: Build alias registry from tag "alias" declarations
-		buildAliasRegistry();
+		aliasRegistry.build();
 
 		// Initialize module-level properties (property name : Type = init;)
 		for (Variable moduleVar : transformation.getOwnedVariable()) {
@@ -202,7 +199,7 @@ public class QvtoEvaluator {
 			}
 		}
 
-		ImperativeOperation mainOp = findMainOperation();
+		ImperativeOperation mainOp = operationResolver.findMainOperation();
 		if (mainOp == null) {
 			addError("No main() entry operation found in transformation '"
 					+ transformation.getName() + "'");
@@ -246,14 +243,14 @@ public class QvtoEvaluator {
 
 		// 3. QVT-O model extent operations (objectsOfType, objects)
 		if (expr instanceof OperationCallExp opCall) {
-			result = handleExtentOperation(opCall);
-			if (result != UNHANDLED) {
-				return unwrapNull(result);
+			result = modelOperations.handleExtentOperation(opCall);
+			if (result != QvtoModelOperations.UNHANDLED) {
+				return QvtoModelOperations.unwrapNull(result);
 			}
 			// §8.3.4: Element operations (metaClassName, subobjects, clone, etc.)
-			result = handleElementOperation(opCall);
-			if (result != UNHANDLED) {
-				return unwrapNull(result);
+			result = modelOperations.handleElementOperation(opCall);
+			if (result != QvtoModelOperations.UNHANDLED) {
+				return QvtoModelOperations.unwrapNull(result);
 			}
 		}
 
@@ -438,9 +435,9 @@ public class QvtoEvaluator {
 		}
 		Object sourceObj = eval(propCall.getOwnedSource());
 		if (sourceObj instanceof EObject eo) {
-			ContextualProperty cp = findIntermediateProperty(eo, propName);
+			ContextualProperty cp = intermediateStore.findIntermediateProperty(eo, propName);
 			if (cp != null) {
-				return wrapNull(getIntermediatePropertyValue(eo, propName));
+				return wrapNull(intermediateStore.getIntermediatePropertyValue(eo, propName));
 			}
 		}
 		return UNHANDLED;
@@ -458,10 +455,9 @@ public class QvtoEvaluator {
 			self = eo;
 		}
 		// §8.1.10: Intermediate property interceptor for OCL sub-expressions
-		boolean hasIntermediateProps = !transformation.getIntermediateProperty().isEmpty();
 		OclContext oclCtx;
-		if (hasIntermediateProps) {
-			oclCtx = new OclContext(self, null, vars, null, this::interceptIntermediateProperty);
+		if (intermediateStore.hasIntermediateProperties()) {
+			oclCtx = new OclContext(self, null, vars, null, intermediateStore::interceptIntermediateProperty);
 		} else {
 			oclCtx = self != null
 					? OclContext.of(self, vars)
@@ -474,224 +470,7 @@ public class QvtoEvaluator {
 		return oclResult.value();
 	}
 
-	/**
-	 * §8.1.10: Property interceptor for OCL delegated evaluation.
-	 * Returns the intermediate property value if the property is an intermediate property,
-	 * otherwise returns {@link OclContext#PROPERTY_NOT_HANDLED}.
-	 */
-	private Object interceptIntermediateProperty(EObject target, String propName) {
-		ContextualProperty cp = findIntermediateProperty(target, propName);
-		if (cp != null) {
-			return getIntermediatePropertyValue(target, propName);
-		}
-		return OclContext.PROPERTY_NOT_HANDLED;
-	}
 
-	/**
-	 * Handles QVT-O model extent operations (§8.3.5).
-	 * Returns {@link #UNHANDLED} if the expression is not an extent operation.
-	 */
-	private Object handleExtentOperation(OperationCallExp opCall) {
-		if (opCall.getOwnedSource() == null) {
-			return UNHANDLED;
-		}
-		Object source = eval(opCall.getOwnedSource());
-		if (!(source instanceof QvtoModelExtent extent)) {
-			return UNHANDLED;
-		}
-
-		String opName = opCall.getName();
-		// §8.3.5.3: objectsOfType — exact type match only (not subtypes)
-		if ("objectsOfType".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
-			if (filterType != null) {
-				List<EObject> result = new ArrayList<>();
-				for (EObject eo : extent.getContents()) {
-					if (eo.eClass() == filterType) {
-						result.add(eo);
-					}
-				}
-				return wrapNull(result);
-			}
-			return wrapNull(new ArrayList<>(extent.getContents()));
-		}
-		// §8.3.5.2: objectsOfKind — includes subtypes
-		if ("objectsOfKind".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
-			if (filterType != null) {
-				List<EObject> result = new ArrayList<>();
-				for (EObject eo : extent.getContents()) {
-					if (filterType.isInstance(eo)) {
-						result.add(eo);
-					}
-				}
-				return wrapNull(result);
-			}
-			return wrapNull(new ArrayList<>(extent.getContents()));
-		}
-		// §8.3.5.1: objects — all objects
-		if ("objects".equals(opName)) {
-			return wrapNull(new ArrayList<>(extent.getContents()));
-		}
-		// §8.3.5.4: rootObjects — top-level objects not contained by others
-		if ("rootObjects".equals(opName)) {
-			return wrapNull(new ArrayList<>(extent.getContents()));
-		}
-		// §8.3.5.5: addElement — add element to extent
-		if ("addElement".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			Object arg = eval(opCall.getOwnedArguments().get(0));
-			if (arg instanceof EObject eo) {
-				extent.add(eo);
-			}
-			return wrapNull(null);
-		}
-		// §8.3.5.6: removeElement — remove element from extent
-		if ("removeElement".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			Object arg = eval(opCall.getOwnedArguments().get(0));
-			if (arg instanceof EObject eo) {
-				extent.getContents().remove(eo);
-			}
-			return wrapNull(null);
-		}
-		// §8.3.5.9: createEmptyModel — create new empty model extent
-		if ("createEmptyModel".equals(opName)) {
-			return wrapNull(new BasicQvtoModelExtent());
-		}
-		// §8.3.5.8: copy — deep copy of model and its extent
-		if ("copy".equals(opName)) {
-			List<EObject> copies = new ArrayList<>();
-			for (EObject eo : extent.getContents()) {
-				copies.add(EcoreUtil.copy(eo));
-			}
-			BasicQvtoModelExtent copyExtent = new BasicQvtoModelExtent();
-			copyExtent.setContents(copies);
-			return wrapNull(copyExtent);
-		}
-		return UNHANDLED;
-	}
-
-	private static EClass resolveEClassArg(Object arg) {
-		if (arg instanceof EClass ec) {
-			return ec;
-		}
-		if (arg instanceof ClassifierType ct && ct.getReferredClassifier() instanceof EClass ec) {
-			return ec;
-		}
-		return null;
-	}
-
-	/**
-	 * Handles §8.3.4 Element operations on EObject instances.
-	 * <p>Operations: metaClassName, subobjects, allSubobjects,
-	 * subobjectsOfType/Kind, allSubobjectsOfType/Kind, clone, deepclone, container.
-	 */
-	private Object handleElementOperation(OperationCallExp opCall) {
-		if (opCall.getOwnedSource() == null) {
-			return UNHANDLED;
-		}
-		Object source = eval(opCall.getOwnedSource());
-		if (!(source instanceof EObject eObj)) {
-			return UNHANDLED;
-		}
-		String opName = opCall.getName();
-
-		// §8.3.4.3: metaClassName() : String
-		if ("metaClassName".equals(opName)) {
-			return wrapNull(eObj.eClass().getName());
-		}
-		// §8.3.4.4: subobjects() : Set(Element) — immediate children
-		if ("subobjects".equals(opName)) {
-			return wrapNull(new ArrayList<>(eObj.eContents()));
-		}
-		// §8.3.4.5: allSubobjects() : Set(Element) — all descendants
-		if ("allSubobjects".equals(opName)) {
-			List<EObject> result = new ArrayList<>();
-			for (var iter = eObj.eAllContents(); iter.hasNext(); ) {
-				result.add(iter.next());
-			}
-			return wrapNull(result);
-		}
-		// §8.3.4.6: subobjectsOfType(type) — immediate children, exact type
-		if ("subobjectsOfType".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
-			if (filterType != null) {
-				List<EObject> result = new ArrayList<>();
-				for (EObject child : eObj.eContents()) {
-					if (child.eClass() == filterType) {
-						result.add(child);
-					}
-				}
-				return wrapNull(result);
-			}
-			return wrapNull(new ArrayList<>(eObj.eContents()));
-		}
-		// §8.3.4.8: subobjectsOfKind(type) — immediate children, includes subtypes
-		if ("subobjectsOfKind".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
-			if (filterType != null) {
-				List<EObject> result = new ArrayList<>();
-				for (EObject child : eObj.eContents()) {
-					if (filterType.isInstance(child)) {
-						result.add(child);
-					}
-				}
-				return wrapNull(result);
-			}
-			return wrapNull(new ArrayList<>(eObj.eContents()));
-		}
-		// §8.3.4.7: allSubobjectsOfType(type) — all descendants, exact type
-		if ("allSubobjectsOfType".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
-			if (filterType != null) {
-				List<EObject> result = new ArrayList<>();
-				for (var iter = eObj.eAllContents(); iter.hasNext(); ) {
-					EObject desc = iter.next();
-					if (desc.eClass() == filterType) {
-						result.add(desc);
-					}
-				}
-				return wrapNull(result);
-			}
-			return wrapNull(new ArrayList<>());
-		}
-		// §8.3.4.9: allSubobjectsOfKind(type) — all descendants, includes subtypes
-		if ("allSubobjectsOfKind".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			EClass filterType = resolveEClassArg(eval(opCall.getOwnedArguments().get(0)));
-			if (filterType != null) {
-				List<EObject> result = new ArrayList<>();
-				for (var iter = eObj.eAllContents(); iter.hasNext(); ) {
-					EObject desc = iter.next();
-					if (filterType.isInstance(desc)) {
-						result.add(desc);
-					}
-				}
-				return wrapNull(result);
-			}
-			return wrapNull(new ArrayList<>());
-		}
-		// §8.3.4.10: clone() — shallow copy (containments NOT cloned)
-		if ("clone".equals(opName)) {
-			EcoreUtil.Copier copier = new EcoreUtil.Copier() {
-				private static final long serialVersionUID = 1L;
-				@Override
-				protected void copyContainment(EReference ref, EObject src, EObject tgt) {
-					// shallow: skip containment references
-				}
-			};
-			EObject result = copier.copy(eObj);
-			copier.copyReferences();
-			return wrapNull(result);
-		}
-		// §8.3.4.11: deepclone() — deep copy (containments cloned recursively)
-		if ("deepclone".equals(opName)) {
-			return wrapNull(EcoreUtil.copy(eObj));
-		}
-		// §8.3.4 (MOF reflective): container() — returns containing object
-		if ("container".equals(opName)) {
-			return wrapNull(eObj.eContainer());
-		}
-		return UNHANDLED;
-	}
 
 	/**
 	 * Calls an imperative operation (helper/query/mapping entry).
@@ -997,180 +776,14 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * §8.1.10: Initializes default values for intermediate class features.
-	 * Default expressions are stored in EAnnotations with source "fennec:intermediate:default"
-	 * by the parser's QvtoUnitBuilder.
+	 * Returns the operation resolver for use by {@link QvtoOperationProvider}.
 	 */
-	private void initIntermediateClassDefaults(EObject target, EClass eClass) {
-		for (EStructuralFeature feature : eClass.getEAllStructuralFeatures()) {
-			EAnnotation ann = feature.getEAnnotation("fennec:intermediate:default");
-			if (ann != null && !ann.getReferences().isEmpty()
-					&& ann.getReferences().get(0) instanceof OclExpression defaultExpr) {
-				Object defaultValue = eval(defaultExpr);
-				Object unwrapped = unwrapNull(defaultValue);
-				if (unwrapped != null) {
-					target.eSet(feature, unwrapped);
-				}
-			}
-		}
+	public QvtoOperationResolver getOperationResolver() {
+		return operationResolver;
 	}
 
-	// --- Internal helpers ---
 
-	private ImperativeOperation findMainOperation() {
-		// Find the module EClass (named like the transformation)
-		EClass moduleClass = findModuleClass();
-		if (moduleClass == null) {
-			return null;
-		}
-		for (EOperation op : moduleClass.getEOperations()) {
-			if (op instanceof ImperativeOperation impOp && "main".equals(op.getName())) {
-				return impOp;
-			}
-		}
-		return null;
-	}
 
-	private EClass findModuleClass() {
-		String name = transformation.getName();
-		return transformation.getEClassifiers().stream()
-				.filter(EClass.class::isInstance)
-				.map(EClass.class::cast)
-				.filter(c -> c.getName().equals(name))
-				.findFirst()
-				.orElse(null);
-	}
-
-	/**
-	 * Finds an imperative operation by name in the transformation's module class
-	 * and imported modules (§8.2.1.4 ModuleImport).
-	 */
-	ImperativeOperation findOperation(String name, Object contextType) {
-		List<ImperativeOperation> all = findAllOperations(name);
-		return all.isEmpty() ? null : all.get(0);
-	}
-
-	/**
-	 * Finds all imperative operations with the given name across the transformation
-	 * and imported modules. Used for implicit disjunction (§8.1.14.2).
-	 */
-	List<ImperativeOperation> findAllOperations(String name) {
-		List<ImperativeOperation> result = new ArrayList<>();
-		// 1. Search main transformation module class
-		EClass moduleClass = findModuleClass();
-		if (moduleClass != null) {
-			for (EOperation op : moduleClass.getEOperations()) {
-				if (op instanceof ImperativeOperation impOp && name.equals(op.getName())) {
-					result.add(impOp);
-				}
-			}
-		}
-		// 2. Search imported modules (§8.1.4: library operations accessible via import)
-		for (ModuleImport mi : transformation.getModuleImport()) {
-			Module importedModule = mi.getImportedModule();
-			if (importedModule != null) {
-				EClass importedModuleClass = findModuleClassIn(importedModule);
-				if (importedModuleClass != null) {
-					for (EOperation op : importedModuleClass.getEOperations()) {
-						if (op instanceof ImperativeOperation impOp && name.equals(op.getName())) {
-							result.add(impOp);
-						}
-					}
-				}
-			}
-		}
-		return result;
-	}
-
-	/**
-	 * Filters candidates by context type compatibility, then sorts by specificity
-	 * (§8.1.14.2/§8.1.14.3). Most-derived context type first.
-	 */
-	private static List<ImperativeOperation> filterAndSortByType(
-			List<ImperativeOperation> candidates, Object sourceObj) {
-		if (!(sourceObj instanceof EObject eObj)) {
-			return candidates;
-		}
-		EClass sourceClass = eObj.eClass();
-		// Filter: only candidates whose context type is compatible with sourceObj
-		List<ImperativeOperation> compatible = new ArrayList<>();
-		for (ImperativeOperation op : candidates) {
-			EClassifier ct = contextType(op);
-			if (ct == null || (ct instanceof EClass ctClass && ctClass.isSuperTypeOf(sourceClass))) {
-				compatible.add(op);
-			}
-		}
-		if (compatible.isEmpty()) {
-			return candidates; // fallback to all if nothing matches
-		}
-		// Sort: most-derived context type first
-		compatible.sort((a, b) -> {
-			EClassifier typeA = contextType(a);
-			EClassifier typeB = contextType(b);
-			if (typeA == typeB) return 0;
-			if (typeA == null) return 1;
-			if (typeB == null) return -1;
-			if (typeA instanceof EClass ca && typeB instanceof EClass cb) {
-				if (ca.isSuperTypeOf(cb)) return 1;
-				if (cb.isSuperTypeOf(ca)) return -1;
-			}
-			return 0;
-		});
-		return compatible;
-	}
-
-	private static EClassifier contextType(ImperativeOperation op) {
-		VarParameter ctx = op.getContext();
-		return ctx != null ? ctx.getEType() : null;
-	}
-
-	/**
-	 * Finds the internal module EClass within any Module (transformation or library).
-	 */
-	private static EClass findModuleClassIn(Module module) {
-		String name = module.getName();
-		if (name == null) {
-			return null;
-		}
-		return module.getEClassifiers().stream()
-				.filter(EClass.class::isInstance)
-				.map(EClass.class::cast)
-				.filter(c -> c.getName().equals(name))
-				.findFirst()
-				.orElse(null);
-	}
-
-	/**
-	 * Finds a constructor for the given EClass by matching the class name and argument count.
-	 * §8.2.1.13: Constructor name is usually the class name. Constructors are looked up
-	 * in the module's operations list.
-	 */
-	private Constructor findConstructor(EClass eClass, int argCount) {
-		EClass moduleClass = findModuleClass();
-		if (moduleClass == null) {
-			return null;
-		}
-		String className = eClass.getName();
-		for (EOperation op : moduleClass.getEOperations()) {
-			if (op instanceof Constructor ctor && className.equals(op.getName())) {
-				// Match by argument count (excluding result params)
-				int paramCount = ctor.getEParameters().size();
-				if (ctor.getResult() != null) {
-					paramCount -= ctor.getResult().size();
-				}
-				if (paramCount == argCount) {
-					return ctor;
-				}
-			}
-		}
-		return null;
-	}
-
-	/**
-	 * Returns the default value for a type when no initializer is provided.
-	 * §8.2.2.10: "zero for a numeric type, the empty string for a string,
-	 * and null for all other elements"
-	 */
 	/**
 	 * Returns the default value for a type when no initializer is provided.
 	 * §8.2.2.10: "zero for a numeric type, the empty string for a string,
@@ -1360,147 +973,13 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * §8.3.19: Builds the alias registry from tag "alias" declarations.
-	 * Maps alias name → (EClass, real feature name) for property resolution.
-	 */
-	private void buildAliasRegistry() {
-		for (EAnnotation tag : transformation.getOwnedTag()) {
-			if (!"alias".equals(tag.getSource())) {
-				continue;
-			}
-			String target = tag.getDetails().get("target");
-			String aliasValue = tag.getDetails().get("value");
-			if (target == null || aliasValue == null) {
-				continue;
-			}
-			String aliasName = aliasValue;
-			// Parse target path: e.g. "ecore::EPackage::name" → class=EPackage, feature=name
-			String[] parts = target.split("::");
-			if (parts.length >= 2) {
-				String className = parts[parts.length - 2];
-				String featureName = parts[parts.length - 1];
-				// Find the EClass in the transformation's used metamodels
-				EClass eClass = findEClassByName(className);
-				if (eClass != null && eClass.getEStructuralFeature(featureName) != null) {
-					aliasRegistry.put(aliasName, Map.entry(eClass, featureName));
-				}
-			}
-		}
-	}
-
-	private EClass findEClassByName(String name) {
-		// Search through all EPackages known to the extent manager
-		for (int i = 0; i < transformation.getModelParameter().size(); i++) {
-			QvtoModelExtent extent = extentManager.getExtent(i);
-			if (extent == null) {
-				continue;
-			}
-			for (EObject obj : extent.getContents()) {
-				EClass ec = obj.eClass();
-				if (name.equals(ec.getName())) {
-					return ec;
-				}
-				// Check the package for the class
-				EClass found = findEClassInPackage(ec.getEPackage(), name);
-				if (found != null) {
-					return found;
-				}
-			}
-		}
-		// Fallback: search EPackage.Registry
-		for (Object value : EPackage.Registry.INSTANCE.values()) {
-			if (value instanceof EPackage pkg) {
-				EClass found = findEClassInPackage(pkg, name);
-				if (found != null) {
-					return found;
-				}
-			}
-		}
-		return null;
-	}
-
-	private static EClass findEClassInPackage(EPackage pkg, String name) {
-		for (var classifier : pkg.getEClassifiers()) {
-			if (classifier instanceof EClass ec && name.equals(ec.getName())) {
-				return ec;
-			}
-		}
-		for (EPackage sub : pkg.getESubpackages()) {
-			EClass found = findEClassInPackage(sub, name);
-			if (found != null) {
-				return found;
-			}
-		}
-		return null;
-	}
-
-	/**
 	 * §8.3.19: Resolves a tag "alias" name to the real feature name for the given EObject.
 	 * @return the real feature name, or null if not an alias
 	 */
 	String resolveAlias(String name, EObject target) {
-		var entry = aliasRegistry.get(name);
-		if (entry != null && entry.getKey().isInstance(target)) {
-			return entry.getValue();
-		}
-		return null;
+		return aliasRegistry.resolveAlias(name, target);
 	}
 
-	/**
-	 * §8.1.10/§8.2.1.14: Finds a ContextualProperty (intermediate property) matching
-	 * the given name for the given EObject's type.
-	 */
-	private ContextualProperty findIntermediateProperty(EObject target, String propName) {
-		EClass targetClass = target.eClass();
-		for (EStructuralFeature sf : transformation.getIntermediateProperty()) {
-			if (sf instanceof ContextualProperty cp
-					&& propName.equals(cp.getName())
-					&& cp.getContext() != null
-					&& isTypeMatch(cp.getContext(), targetClass)) {
-				return cp;
-			}
-		}
-		return null;
-	}
-
-	/**
-	 * Checks if contextClass matches or is a supertype of targetClass.
-	 * Uses name-based comparison as fallback for cross-package EClass identity.
-	 */
-	private static boolean isTypeMatch(EClass contextClass, EClass targetClass) {
-		if (contextClass.isSuperTypeOf(targetClass)) {
-			return true;
-		}
-		// Fallback: name-based comparison for cross-package identity
-		return contextClass.getName().equals(targetClass.getName());
-	}
-
-	/**
-	 * Reads an intermediate property value for a given EObject instance.
-	 * §8.2.1.14: If no value has been set, evaluates the initExpression if present.
-	 */
-	private Object getIntermediatePropertyValue(EObject target, String propName) {
-		Map<String, Object> props = intermediatePropertyValues.get(target);
-		if (props != null && props.containsKey(propName)) {
-			return props.get(propName);
-		}
-		// §8.2.1.14: Evaluate initExpression for uninitialized properties
-		ContextualProperty cp = findIntermediateProperty(target, propName);
-		if (cp != null && cp.getInitExpression() != null) {
-			Object initValue = eval(cp.getInitExpression());
-			setIntermediatePropertyValue(target, propName, initValue);
-			return initValue;
-		}
-		return null;
-	}
-
-	/**
-	 * Writes an intermediate property value for a given EObject instance.
-	 */
-	private void setIntermediatePropertyValue(EObject target, String propName, Object value) {
-		intermediatePropertyValues.computeIfAbsent(target, k -> new HashMap<>())
-				.put(propName, value);
-	}
 
 	/**
 	 * Coerces a value to match the expected EMF structural feature type.
@@ -1662,23 +1141,23 @@ public class QvtoEvaluator {
 					}
 				} else if (source instanceof EObject eo && sf != null) {
 					// §8.1.10: Check intermediate property first
-					ContextualProperty icp = findIntermediateProperty(eo, sf.getName());
+					ContextualProperty icp = intermediateStore.findIntermediateProperty(eo, sf.getName());
 					if (icp != null) {
 						// Eclipse bug449445: invalid → null for property assignment,
 						// or clear if current value is a collection
 						if (value == OclInvalid.INSTANCE && exp.isIsReset()) {
-							Object current = getIntermediatePropertyValue(eo, sf.getName());
+							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
 							if (current instanceof Collection<?>) {
 								@SuppressWarnings("unchecked")
 								Collection<Object> col = (Collection<Object>) current;
 								col.clear();
 							} else {
-								setIntermediatePropertyValue(eo, sf.getName(), null);
+								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), null);
 							}
 						} else if (value == OclInvalid.INSTANCE) {
 							// += invalid: silently ignored
 						} else {
-							setIntermediatePropertyValue(eo, sf.getName(), value);
+							intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
 						}
 						return wrapNull(value);
 					}
@@ -2002,7 +1481,7 @@ public class QvtoEvaluator {
 			}
 
 			// §8.2.1.13: Look up matching constructor in module
-			Constructor ctor = findConstructor(eClass, argValues.size());
+			Constructor ctor = operationResolver.findConstructor(eClass, argValues.size());
 			if (ctor != null) {
 				callConstructor(ctor, created, argValues);
 			} else if (!argValues.isEmpty()) {
@@ -2088,7 +1567,7 @@ public class QvtoEvaluator {
 
 			// §8.1.10: Apply default values from intermediate class feature definitions
 			if (!isUpdate) {
-				initIntermediateClassDefaults(target, eClass);
+				intermediateStore.initIntermediateClassDefaults(target, eClass);
 			}
 
 			env.pushScope();
@@ -2139,7 +1618,7 @@ public class QvtoEvaluator {
 
 			// Find all candidate operations (§8.1.14.2: implicit disjunction)
 			String opName = exp.getName();
-			List<ImperativeOperation> candidates = findAllOperations(opName);
+			List<ImperativeOperation> candidates = operationResolver.findAllOperations(opName);
 			if (candidates.isEmpty()) {
 				addError("Mapping not found: " + opName);
 				return WRAPPED_NULL;
@@ -2158,7 +1637,7 @@ public class QvtoEvaluator {
 
 			// Multiple candidates: implicit disjunction (§8.1.14.2)
 			// Filter by context type compatibility, then sort most-derived first
-			List<ImperativeOperation> sorted = filterAndSortByType(candidates, sourceObj);
+			List<ImperativeOperation> sorted = QvtoOperationResolver.filterAndSortByType(candidates, sourceObj);
 			for (ImperativeOperation candidate : sorted) {
 				if (candidate instanceof MappingOperation mappingOp) {
 					Object result = isStrict

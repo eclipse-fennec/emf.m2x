@@ -36,7 +36,7 @@ public class QvtoParseException extends Exception {
 	private final List<Resource.Diagnostic> errors;
 
 	public QvtoParseException(String message, List<Resource.Diagnostic> errors) {
-		super(message);
+		super(Objects.requireNonNull(message, "message must not be null"));
 		this.errors = List.copyOf(Objects.requireNonNull(errors, "errors must not be null"));
 	}
 
@@ -45,7 +45,7 @@ public class QvtoParseException extends Exception {
 	}
 
 	public QvtoParseException(String message, Throwable cause) {
-		super(message, cause);
+		super(Objects.requireNonNull(message, "message must not be null"), cause);
 		this.errors = Collections.emptyList();
 	}
 
