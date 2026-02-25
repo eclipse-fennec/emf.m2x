@@ -58,10 +58,17 @@ public class OclEvalEnvironment {
 	 * @param context the evaluation context
 	 * @return a new root environment
 	 */
+	/**
+	 * Default value for the {@code oclLocale} property (OCL v2.4 §11.2.1).
+	 * Can be overridden via {@code let oclLocale : String = 'fr_CA' in ...}.
+	 */
+	static final String DEFAULT_OCL_LOCALE = "en_us";
+
 	public static OclEvalEnvironment root(OclContext context) {
 		Objects.requireNonNull(context, "context must not be null");
 		Map<String, Object> bindings = new HashMap<>();
 		bindings.put("self", context.self());
+		bindings.put("oclLocale", DEFAULT_OCL_LOCALE);
 		bindings.putAll(context.variables());
 		return new OclEvalEnvironment(null, bindings, context);
 	}

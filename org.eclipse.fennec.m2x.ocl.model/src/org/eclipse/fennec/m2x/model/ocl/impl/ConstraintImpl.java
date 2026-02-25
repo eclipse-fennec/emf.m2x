@@ -45,6 +45,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclPackage;
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getContextClassifier <em>Context Classifier</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getContextOperation <em>Context Operation</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getContextProperty <em>Context Property</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#isIsStatic <em>Is Static</em>}</li>
  * </ul>
  *
  * @generated
@@ -129,6 +130,26 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 	 * @ordered
 	 */
 	protected EStructuralFeature contextProperty;
+
+	/**
+	 * The default value of the '{@link #isIsStatic() <em>Is Static</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #isIsStatic()
+	 * @generated
+	 * @ordered
+	 */
+	protected static final boolean IS_STATIC_EDEFAULT = false;
+
+	/**
+	 * The cached value of the '{@link #isIsStatic() <em>Is Static</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #isIsStatic()
+	 * @generated
+	 * @ordered
+	 */
+	protected boolean isStatic = IS_STATIC_EDEFAULT;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -366,6 +387,29 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 	 * @generated
 	 */
 	@Override
+	public boolean isIsStatic() {
+		return isStatic;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setIsStatic(boolean newIsStatic) {
+		boolean oldIsStatic = isStatic;
+		isStatic = newIsStatic;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.CONSTRAINT__IS_STATIC, oldIsStatic, isStatic));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
 		switch (featureID) {
 			case OclPackage.CONSTRAINT__SPECIFICATION:
@@ -397,6 +441,8 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 			case OclPackage.CONSTRAINT__CONTEXT_PROPERTY:
 				if (resolve) return getContextProperty();
 				return basicGetContextProperty();
+			case OclPackage.CONSTRAINT__IS_STATIC:
+				return isIsStatic();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}
@@ -426,6 +472,9 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 				return;
 			case OclPackage.CONSTRAINT__CONTEXT_PROPERTY:
 				setContextProperty((EStructuralFeature)newValue);
+				return;
+			case OclPackage.CONSTRAINT__IS_STATIC:
+				setIsStatic((Boolean)newValue);
 				return;
 		}
 		super.eSet(featureID, newValue);
@@ -457,6 +506,9 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 			case OclPackage.CONSTRAINT__CONTEXT_PROPERTY:
 				setContextProperty((EStructuralFeature)null);
 				return;
+			case OclPackage.CONSTRAINT__IS_STATIC:
+				setIsStatic(IS_STATIC_EDEFAULT);
+				return;
 		}
 		super.eUnset(featureID);
 	}
@@ -481,6 +533,8 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 				return contextOperation != null;
 			case OclPackage.CONSTRAINT__CONTEXT_PROPERTY:
 				return contextProperty != null;
+			case OclPackage.CONSTRAINT__IS_STATIC:
+				return isStatic != IS_STATIC_EDEFAULT;
 		}
 		return super.eIsSet(featureID);
 	}
@@ -499,6 +553,8 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 		result.append(name);
 		result.append(", kind: ");
 		result.append(kind);
+		result.append(", isStatic: ");
+		result.append(isStatic);
 		result.append(')');
 		return result.toString();
 	}

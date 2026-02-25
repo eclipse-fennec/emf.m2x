@@ -209,6 +209,25 @@ public class OclSwitch<T> extends Switch<T> {
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
+			case OclPackage.NAVIGATION_CALL_EXP: {
+				NavigationCallExp navigationCallExp = (NavigationCallExp)theEObject;
+				T result = caseNavigationCallExp(navigationCallExp);
+				if (result == null) result = caseFeatureCallExp(navigationCallExp);
+				if (result == null) result = caseCallExp(navigationCallExp);
+				if (result == null) result = caseOclExpression(navigationCallExp);
+				if (result == null) result = defaultCase(theEObject);
+				return result;
+			}
+			case OclPackage.ASSOCIATION_CLASS_CALL_EXP: {
+				AssociationClassCallExp associationClassCallExp = (AssociationClassCallExp)theEObject;
+				T result = caseAssociationClassCallExp(associationClassCallExp);
+				if (result == null) result = caseNavigationCallExp(associationClassCallExp);
+				if (result == null) result = caseFeatureCallExp(associationClassCallExp);
+				if (result == null) result = caseCallExp(associationClassCallExp);
+				if (result == null) result = caseOclExpression(associationClassCallExp);
+				if (result == null) result = defaultCase(theEObject);
+				return result;
+			}
 			case OclPackage.OPERATION_CALL_EXP: {
 				OperationCallExp operationCallExp = (OperationCallExp)theEObject;
 				T result = caseOperationCallExp(operationCallExp);
@@ -435,6 +454,13 @@ public class OclSwitch<T> extends Switch<T> {
 			case OclPackage.TUPLE_PART: {
 				TuplePart tuplePart = (TuplePart)theEObject;
 				T result = caseTuplePart(tuplePart);
+				if (result == null) result = defaultCase(theEObject);
+				return result;
+			}
+			case OclPackage.STATE_EXP: {
+				StateExp stateExp = (StateExp)theEObject;
+				T result = caseStateExp(stateExp);
+				if (result == null) result = caseOclExpression(stateExp);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -709,6 +735,36 @@ public class OclSwitch<T> extends Switch<T> {
 	 * @generated
 	 */
 	public T casePropertyCallExp(PropertyCallExp object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>Navigation Call Exp</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>Navigation Call Exp</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseNavigationCallExp(NavigationCallExp object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>Association Class Call Exp</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>Association Class Call Exp</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseAssociationClassCallExp(AssociationClassCallExp object) {
 		return null;
 	}
 
@@ -1159,6 +1215,21 @@ public class OclSwitch<T> extends Switch<T> {
 	 * @generated
 	 */
 	public T caseTuplePart(TuplePart object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>State Exp</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>State Exp</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseStateExp(StateExp object) {
 		return null;
 	}
 

@@ -69,7 +69,7 @@ invariantConstraint
     ;
 
 definitionConstraint
-    : 'def' IDENTIFIER? ':'
+    : 'static'? 'def' IDENTIFIER? ':'
       ( IDENTIFIER ':' typeExpression '=' expression                                     // attribute def
       | IDENTIFIER '(' parameterList? ')' ':' typeExpression '=' expression              // operation def
       )

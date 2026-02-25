@@ -22,7 +22,9 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
@@ -164,16 +166,51 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		constraint.setKind(ConstraintKind.DEF);
 		constraint.setContextClassifier(classifier);
 
-		// def name? : attrName : type = expr
-		// or def name? : opName ( params ) : type = expr
-		// The first IDENTIFIER(0) is the optional def name (after 'def' keyword)
-		// IDENTIFIER(1) is the attribute/operation name
-		if (ctx.IDENTIFIER().size() > 0) {
-			constraint.setName(ctx.IDENTIFIER(0).getText());
+		// static def: ... — check for 'static' keyword (OCL v2.4 §12.12.6)
+		if (ctx.getChild(0) != null && "static".equals(ctx.getChild(0).getText())) {
+			constraint.setIsStatic(true);
+		}
+
+		// def label? : featureName : type = expr        (attribute def)
+		// def label? : featureName ( params ) : type = expr  (operation def)
+		// The feature name is always the LAST IDENTIFIER in the list.
+		// If there are 2 IDENTIFIERs, the first is the optional label (ignored).
+		List<org.antlr.v4.runtime.tree.TerminalNode> ids = ctx.IDENTIFIER();
+		if (!ids.isEmpty()) {
+			constraint.setName(ids.get(ids.size() - 1).getText());
+		}
+
+		// Operation def: parameterList presence indicates operation definition.
+		// Store parameter names in a synthetic EOperation on contextOperation.
+		OclParser.ParameterListContext paramList = ctx.parameterList();
+		if (paramList != null || isOperationDef(ctx)) {
+			EOperation syntheticOp = EcoreFactory.eINSTANCE.createEOperation();
+			syntheticOp.setName(constraint.getName());
+			if (paramList != null) {
+				for (OclParser.ParameterContext param : paramList.parameter()) {
+					EParameter eParam = EcoreFactory.eINSTANCE.createEParameter();
+					eParam.setName(param.IDENTIFIER().getText());
+					syntheticOp.getEParameters().add(eParam);
+				}
+			}
+			constraint.setContextOperation(syntheticOp);
 		}
 
 		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
 		constraints.add(constraint);
+	}
+
+	/**
+	 * Detects operation def syntax by scanning for '(' token in the parse tree children.
+	 * Handles the case of zero-parameter operation defs: {@code def: foo() : Type = expr}
+	 */
+	private boolean isOperationDef(OclParser.DefinitionConstraintContext ctx) {
+		for (int i = 0; i < ctx.getChildCount(); i++) {
+			if ("(".equals(ctx.getChild(i).getText())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ==================== Operation Context ====================

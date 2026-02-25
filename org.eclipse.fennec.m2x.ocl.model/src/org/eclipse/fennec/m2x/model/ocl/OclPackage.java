@@ -995,6 +995,179 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int PROPERTY_CALL_EXP_OPERATION_COUNT = FEATURE_CALL_EXP_OPERATION_COUNT + 0;
 
 	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.NavigationCallExpImpl <em>Navigation Call Exp</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2x.model.ocl.impl.NavigationCallExpImpl
+	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getNavigationCallExp()
+	 * @generated
+	 */
+	int NAVIGATION_CALL_EXP = 18;
+
+	/**
+	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP__TYPE = FEATURE_CALL_EXP__TYPE;
+
+	/**
+	 * The feature id for the '<em><b>Owned Source</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP__OWNED_SOURCE = FEATURE_CALL_EXP__OWNED_SOURCE;
+
+	/**
+	 * The feature id for the '<em><b>Is Implicit</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP__IS_IMPLICIT = FEATURE_CALL_EXP__IS_IMPLICIT;
+
+	/**
+	 * The feature id for the '<em><b>Is Safe</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP__IS_SAFE = FEATURE_CALL_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP__IS_PRE = FEATURE_CALL_EXP__IS_PRE;
+
+	/**
+	 * The feature id for the '<em><b>Qualifiers</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP__QUALIFIERS = FEATURE_CALL_EXP_FEATURE_COUNT + 0;
+
+	/**
+	 * The number of structural features of the '<em>Navigation Call Exp</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP_FEATURE_COUNT = FEATURE_CALL_EXP_FEATURE_COUNT + 1;
+
+	/**
+	 * The number of operations of the '<em>Navigation Call Exp</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP_OPERATION_COUNT = FEATURE_CALL_EXP_OPERATION_COUNT + 0;
+
+	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.AssociationClassCallExpImpl <em>Association Class Call Exp</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2x.model.ocl.impl.AssociationClassCallExpImpl
+	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getAssociationClassCallExp()
+	 * @generated
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP = 19;
+
+	/**
+	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP__TYPE = NAVIGATION_CALL_EXP__TYPE;
+
+	/**
+	 * The feature id for the '<em><b>Owned Source</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP__OWNED_SOURCE = NAVIGATION_CALL_EXP__OWNED_SOURCE;
+
+	/**
+	 * The feature id for the '<em><b>Is Implicit</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP__IS_IMPLICIT = NAVIGATION_CALL_EXP__IS_IMPLICIT;
+
+	/**
+	 * The feature id for the '<em><b>Is Safe</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP__IS_SAFE = NAVIGATION_CALL_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP__IS_PRE = NAVIGATION_CALL_EXP__IS_PRE;
+
+	/**
+	 * The feature id for the '<em><b>Qualifiers</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP__QUALIFIERS = NAVIGATION_CALL_EXP__QUALIFIERS;
+
+	/**
+	 * The feature id for the '<em><b>Referred Association Class</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP__REFERRED_ASSOCIATION_CLASS = NAVIGATION_CALL_EXP_FEATURE_COUNT + 0;
+
+	/**
+	 * The number of structural features of the '<em>Association Class Call Exp</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP_FEATURE_COUNT = NAVIGATION_CALL_EXP_FEATURE_COUNT + 1;
+
+	/**
+	 * The number of operations of the '<em>Association Class Call Exp</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP_OPERATION_COUNT = NAVIGATION_CALL_EXP_OPERATION_COUNT + 0;
+
+	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.OperationCallExpImpl <em>Operation Call Exp</em>}' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -1002,7 +1175,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getOperationCallExp()
 	 * @generated
 	 */
-	int OPERATION_CALL_EXP = 18;
+	int OPERATION_CALL_EXP = 20;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1102,7 +1275,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getLoopExp()
 	 * @generated
 	 */
-	int LOOP_EXP = 19;
+	int LOOP_EXP = 21;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1184,7 +1357,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getIteratorExp()
 	 * @generated
 	 */
-	int ITERATOR_EXP = 20;
+	int ITERATOR_EXP = 22;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1275,7 +1448,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getIterateExp()
 	 * @generated
 	 */
-	int ITERATE_EXP = 21;
+	int ITERATE_EXP = 23;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1366,7 +1539,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getLiteralExp()
 	 * @generated
 	 */
-	int LITERAL_EXP = 22;
+	int LITERAL_EXP = 24;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1403,7 +1576,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getPrimitiveLiteralExp()
 	 * @generated
 	 */
-	int PRIMITIVE_LITERAL_EXP = 23;
+	int PRIMITIVE_LITERAL_EXP = 25;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1440,7 +1613,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getIntegerLiteralExp()
 	 * @generated
 	 */
-	int INTEGER_LITERAL_EXP = 24;
+	int INTEGER_LITERAL_EXP = 26;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1486,7 +1659,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getRealLiteralExp()
 	 * @generated
 	 */
-	int REAL_LITERAL_EXP = 25;
+	int REAL_LITERAL_EXP = 27;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1532,7 +1705,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getUnlimitedNaturalLiteralExp()
 	 * @generated
 	 */
-	int UNLIMITED_NATURAL_LITERAL_EXP = 26;
+	int UNLIMITED_NATURAL_LITERAL_EXP = 28;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1578,7 +1751,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getStringLiteralExp()
 	 * @generated
 	 */
-	int STRING_LITERAL_EXP = 27;
+	int STRING_LITERAL_EXP = 29;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1624,7 +1797,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getBooleanLiteralExp()
 	 * @generated
 	 */
-	int BOOLEAN_LITERAL_EXP = 28;
+	int BOOLEAN_LITERAL_EXP = 30;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1670,7 +1843,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getNullLiteralExp()
 	 * @generated
 	 */
-	int NULL_LITERAL_EXP = 29;
+	int NULL_LITERAL_EXP = 31;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1707,7 +1880,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getInvalidLiteralExp()
 	 * @generated
 	 */
-	int INVALID_LITERAL_EXP = 30;
+	int INVALID_LITERAL_EXP = 32;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1744,7 +1917,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getEnumLiteralExp()
 	 * @generated
 	 */
-	int ENUM_LITERAL_EXP = 31;
+	int ENUM_LITERAL_EXP = 33;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1790,7 +1963,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getCollectionLiteralExp()
 	 * @generated
 	 */
-	int COLLECTION_LITERAL_EXP = 32;
+	int COLLECTION_LITERAL_EXP = 34;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1845,7 +2018,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getTupleLiteralExp()
 	 * @generated
 	 */
-	int TUPLE_LITERAL_EXP = 33;
+	int TUPLE_LITERAL_EXP = 35;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1891,7 +2064,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getMapLiteralExp()
 	 * @generated
 	 */
-	int MAP_LITERAL_EXP = 34;
+	int MAP_LITERAL_EXP = 36;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1937,7 +2110,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getIfExp()
 	 * @generated
 	 */
-	int IF_EXP = 35;
+	int IF_EXP = 37;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -2001,7 +2174,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getLetExp()
 	 * @generated
 	 */
-	int LET_EXP = 36;
+	int LET_EXP = 38;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -2056,7 +2229,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getVariableExp()
 	 * @generated
 	 */
-	int VARIABLE_EXP = 37;
+	int VARIABLE_EXP = 39;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -2102,7 +2275,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getTypeExp()
 	 * @generated
 	 */
-	int TYPE_EXP = 38;
+	int TYPE_EXP = 40;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -2148,7 +2321,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getMessageExp()
 	 * @generated
 	 */
-	int MESSAGE_EXP = 39;
+	int MESSAGE_EXP = 41;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -2221,7 +2394,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getVariable()
 	 * @generated
 	 */
-	int VARIABLE = 40;
+	int VARIABLE = 42;
 
 	/**
 	 * The feature id for the '<em><b>Name</b></em>' attribute.
@@ -2276,7 +2449,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getConstraint()
 	 * @generated
 	 */
-	int CONSTRAINT = 41;
+	int CONSTRAINT = 43;
 
 	/**
 	 * The feature id for the '<em><b>Name</b></em>' attribute.
@@ -2333,13 +2506,22 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int CONSTRAINT__CONTEXT_PROPERTY = 5;
 
 	/**
+	 * The feature id for the '<em><b>Is Static</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int CONSTRAINT__IS_STATIC = 6;
+
+	/**
 	 * The number of structural features of the '<em>Constraint</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int CONSTRAINT_FEATURE_COUNT = 6;
+	int CONSTRAINT_FEATURE_COUNT = 7;
 
 	/**
 	 * The number of operations of the '<em>Constraint</em>' class.
@@ -2358,7 +2540,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getCollectionLiteralPart()
 	 * @generated
 	 */
-	int COLLECTION_LITERAL_PART = 42;
+	int COLLECTION_LITERAL_PART = 44;
 
 	/**
 	 * The number of structural features of the '<em>Collection Literal Part</em>' class.
@@ -2386,7 +2568,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getCollectionItem()
 	 * @generated
 	 */
-	int COLLECTION_ITEM = 43;
+	int COLLECTION_ITEM = 45;
 
 	/**
 	 * The feature id for the '<em><b>Owned Item</b></em>' containment reference.
@@ -2423,7 +2605,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getCollectionRange()
 	 * @generated
 	 */
-	int COLLECTION_RANGE = 44;
+	int COLLECTION_RANGE = 46;
 
 	/**
 	 * The feature id for the '<em><b>Owned First</b></em>' containment reference.
@@ -2469,7 +2651,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getTupleLiteralPart()
 	 * @generated
 	 */
-	int TUPLE_LITERAL_PART = 45;
+	int TUPLE_LITERAL_PART = 47;
 
 	/**
 	 * The feature id for the '<em><b>Name</b></em>' attribute.
@@ -2524,7 +2706,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getMapLiteralPart()
 	 * @generated
 	 */
-	int MAP_LITERAL_PART = 46;
+	int MAP_LITERAL_PART = 48;
 
 	/**
 	 * The feature id for the '<em><b>Owned Key</b></em>' containment reference.
@@ -2570,7 +2752,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getTuplePart()
 	 * @generated
 	 */
-	int TUPLE_PART = 47;
+	int TUPLE_PART = 49;
 
 	/**
 	 * The feature id for the '<em><b>Name</b></em>' attribute.
@@ -2609,6 +2791,52 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int TUPLE_PART_OPERATION_COUNT = 0;
 
 	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.StateExpImpl <em>State Exp</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2x.model.ocl.impl.StateExpImpl
+	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getStateExp()
+	 * @generated
+	 */
+	int STATE_EXP = 50;
+
+	/**
+	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATE_EXP__TYPE = OCL_EXPRESSION__TYPE;
+
+	/**
+	 * The feature id for the '<em><b>Referred State</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATE_EXP__REFERRED_STATE = OCL_EXPRESSION_FEATURE_COUNT + 0;
+
+	/**
+	 * The number of structural features of the '<em>State Exp</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATE_EXP_FEATURE_COUNT = OCL_EXPRESSION_FEATURE_COUNT + 1;
+
+	/**
+	 * The number of operations of the '<em>State Exp</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATE_EXP_OPERATION_COUNT = OCL_EXPRESSION_OPERATION_COUNT + 0;
+
+	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.CollectionKind <em>Collection Kind</em>}' enum.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2616,7 +2844,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getCollectionKind()
 	 * @generated
 	 */
-	int COLLECTION_KIND = 48;
+	int COLLECTION_KIND = 51;
 
 	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.ConstraintKind <em>Constraint Kind</em>}' enum.
@@ -2626,7 +2854,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getConstraintKind()
 	 * @generated
 	 */
-	int CONSTRAINT_KIND = 49;
+	int CONSTRAINT_KIND = 52;
 
 
 	/**
@@ -2973,6 +3201,48 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EReference getPropertyCallExp_ReferredProperty();
+
+	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.ocl.NavigationCallExp <em>Navigation Call Exp</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>Navigation Call Exp</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.NavigationCallExp
+	 * @generated
+	 */
+	EClass getNavigationCallExp();
+
+	/**
+	 * Returns the meta object for the containment reference list '{@link org.eclipse.fennec.m2x.model.ocl.NavigationCallExp#getQualifiers <em>Qualifiers</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the containment reference list '<em>Qualifiers</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.NavigationCallExp#getQualifiers()
+	 * @see #getNavigationCallExp()
+	 * @generated
+	 */
+	EReference getNavigationCallExp_Qualifiers();
+
+	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.ocl.AssociationClassCallExp <em>Association Class Call Exp</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>Association Class Call Exp</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.AssociationClassCallExp
+	 * @generated
+	 */
+	EClass getAssociationClassCallExp();
+
+	/**
+	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.AssociationClassCallExp#getReferredAssociationClass <em>Referred Association Class</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the reference '<em>Referred Association Class</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.AssociationClassCallExp#getReferredAssociationClass()
+	 * @see #getAssociationClassCallExp()
+	 * @generated
+	 */
+	EReference getAssociationClassCallExp_ReferredAssociationClass();
 
 	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.ocl.OperationCallExp <em>Operation Call Exp</em>}'.
@@ -3622,6 +3892,17 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getConstraint_ContextProperty();
 
 	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.ocl.Constraint#isIsStatic <em>Is Static</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Is Static</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.Constraint#isIsStatic()
+	 * @see #getConstraint()
+	 * @generated
+	 */
+	EAttribute getConstraint_IsStatic();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.ocl.CollectionLiteralPart <em>Collection Literal Part</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -3790,6 +4071,27 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EReference getTuplePart_Type();
+
+	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.ocl.StateExp <em>State Exp</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>State Exp</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.StateExp
+	 * @generated
+	 */
+	EClass getStateExp();
+
+	/**
+	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.StateExp#getReferredState <em>Referred State</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the reference '<em>Referred State</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.StateExp#getReferredState()
+	 * @see #getStateExp()
+	 * @generated
+	 */
+	EReference getStateExp_ReferredState();
 
 	/**
 	 * Returns the meta object for enum '{@link org.eclipse.fennec.m2x.model.ocl.CollectionKind <em>Collection Kind</em>}'.
@@ -4133,6 +4435,42 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference PROPERTY_CALL_EXP__REFERRED_PROPERTY = eINSTANCE.getPropertyCallExp_ReferredProperty();
+
+		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.NavigationCallExpImpl <em>Navigation Call Exp</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2x.model.ocl.impl.NavigationCallExpImpl
+		 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getNavigationCallExp()
+		 * @generated
+		 */
+		EClass NAVIGATION_CALL_EXP = eINSTANCE.getNavigationCallExp();
+
+		/**
+		 * The meta object literal for the '<em><b>Qualifiers</b></em>' containment reference list feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference NAVIGATION_CALL_EXP__QUALIFIERS = eINSTANCE.getNavigationCallExp_Qualifiers();
+
+		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.AssociationClassCallExpImpl <em>Association Class Call Exp</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2x.model.ocl.impl.AssociationClassCallExpImpl
+		 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getAssociationClassCallExp()
+		 * @generated
+		 */
+		EClass ASSOCIATION_CLASS_CALL_EXP = eINSTANCE.getAssociationClassCallExp();
+
+		/**
+		 * The meta object literal for the '<em><b>Referred Association Class</b></em>' reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference ASSOCIATION_CLASS_CALL_EXP__REFERRED_ASSOCIATION_CLASS = eINSTANCE.getAssociationClassCallExp_ReferredAssociationClass();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.OperationCallExpImpl <em>Operation Call Exp</em>}' class.
@@ -4671,6 +5009,14 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference CONSTRAINT__CONTEXT_PROPERTY = eINSTANCE.getConstraint_ContextProperty();
 
 		/**
+		 * The meta object literal for the '<em><b>Is Static</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute CONSTRAINT__IS_STATIC = eINSTANCE.getConstraint_IsStatic();
+
+		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.CollectionLiteralPartImpl <em>Collection Literal Part</em>}' class.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
@@ -4809,6 +5155,24 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference TUPLE_PART__TYPE = eINSTANCE.getTuplePart_Type();
+
+		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.StateExpImpl <em>State Exp</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2x.model.ocl.impl.StateExpImpl
+		 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getStateExp()
+		 * @generated
+		 */
+		EClass STATE_EXP = eINSTANCE.getStateExp();
+
+		/**
+		 * The meta object literal for the '<em><b>Referred State</b></em>' reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference STATE_EXP__REFERRED_STATE = eINSTANCE.getStateExp_ReferredState();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.CollectionKind <em>Collection Kind</em>}' enum.

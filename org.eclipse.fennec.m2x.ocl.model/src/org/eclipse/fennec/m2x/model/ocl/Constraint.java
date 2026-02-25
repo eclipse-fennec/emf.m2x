@@ -40,6 +40,7 @@ import org.osgi.annotation.versioning.ProviderType;
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getContextClassifier <em>Context Classifier</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getContextOperation <em>Context Operation</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getContextProperty <em>Context Property</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#isIsStatic <em>Is Static</em>}</li>
  * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getConstraint()
@@ -194,5 +195,30 @@ public interface Constraint extends EObject {
 	 * @generated
 	 */
 	void setContextProperty(EStructuralFeature value);
+
+	/**
+	 * Returns the value of the '<em><b>Is Static</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * True if declared with 'static' keyword (OCL v2.4 §12.12.6). Static defs are classifier-level rather than instance-level.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Is Static</em>' attribute.
+	 * @see #setIsStatic(boolean)
+	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getConstraint_IsStatic()
+	 * @model
+	 * @generated
+	 */
+	boolean isIsStatic();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.Constraint#isIsStatic <em>Is Static</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Is Static</em>' attribute.
+	 * @see #isIsStatic()
+	 * @generated
+	 */
+	void setIsStatic(boolean value);
 
 } // Constraint

@@ -23,6 +23,7 @@ import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.impl.EPackageImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
+import org.eclipse.fennec.m2x.model.ocl.AssociationClassCallExp;
 import org.eclipse.fennec.m2x.model.ocl.BagType;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CallExp;
@@ -51,6 +52,7 @@ import org.eclipse.fennec.m2x.model.ocl.MapLiteralPart;
 import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.MessageExp;
 import org.eclipse.fennec.m2x.model.ocl.MessageType;
+import org.eclipse.fennec.m2x.model.ocl.NavigationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.NullLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
@@ -64,6 +66,7 @@ import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.RealLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.SequenceType;
 import org.eclipse.fennec.m2x.model.ocl.SetType;
+import org.eclipse.fennec.m2x.model.ocl.StateExp;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.TupleLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart;
@@ -207,6 +210,20 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	private EClass propertyCallExpEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EClass navigationCallExpEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EClass associationClassCallExpEClass = null;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -417,6 +434,13 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	private EClass tuplePartEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EClass stateExpEClass = null;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -820,6 +844,46 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	@Override
 	public EReference getPropertyCallExp_ReferredProperty() {
 		return (EReference)propertyCallExpEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EClass getNavigationCallExp() {
+		return navigationCallExpEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getNavigationCallExp_Qualifiers() {
+		return (EReference)navigationCallExpEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EClass getAssociationClassCallExp() {
+		return associationClassCallExpEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getAssociationClassCallExp_ReferredAssociationClass() {
+		return (EReference)associationClassCallExpEClass.getEStructuralFeatures().get(0);
 	}
 
 	/**
@@ -1438,6 +1502,16 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
+	public EAttribute getConstraint_IsStatic() {
+		return (EAttribute)constraintEClass.getEStructuralFeatures().get(6);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getCollectionLiteralPart() {
 		return collectionLiteralPartEClass;
 	}
@@ -1598,6 +1672,26 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
+	public EClass getStateExp() {
+		return stateExpEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getStateExp_ReferredState() {
+		return (EReference)stateExpEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EEnum getCollectionKind() {
 		return collectionKindEEnum;
 	}
@@ -1692,6 +1786,12 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		propertyCallExpEClass = createEClass(PROPERTY_CALL_EXP);
 		createEReference(propertyCallExpEClass, PROPERTY_CALL_EXP__REFERRED_PROPERTY);
 
+		navigationCallExpEClass = createEClass(NAVIGATION_CALL_EXP);
+		createEReference(navigationCallExpEClass, NAVIGATION_CALL_EXP__QUALIFIERS);
+
+		associationClassCallExpEClass = createEClass(ASSOCIATION_CLASS_CALL_EXP);
+		createEReference(associationClassCallExpEClass, ASSOCIATION_CLASS_CALL_EXP__REFERRED_ASSOCIATION_CLASS);
+
 		operationCallExpEClass = createEClass(OPERATION_CALL_EXP);
 		createEAttribute(operationCallExpEClass, OPERATION_CALL_EXP__NAME);
 		createEReference(operationCallExpEClass, OPERATION_CALL_EXP__OWNED_ARGUMENTS);
@@ -1776,6 +1876,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		createEReference(constraintEClass, CONSTRAINT__CONTEXT_CLASSIFIER);
 		createEReference(constraintEClass, CONSTRAINT__CONTEXT_OPERATION);
 		createEReference(constraintEClass, CONSTRAINT__CONTEXT_PROPERTY);
+		createEAttribute(constraintEClass, CONSTRAINT__IS_STATIC);
 
 		collectionLiteralPartEClass = createEClass(COLLECTION_LITERAL_PART);
 
@@ -1798,6 +1899,9 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		tuplePartEClass = createEClass(TUPLE_PART);
 		createEAttribute(tuplePartEClass, TUPLE_PART__NAME);
 		createEReference(tuplePartEClass, TUPLE_PART__TYPE);
+
+		stateExpEClass = createEClass(STATE_EXP);
+		createEReference(stateExpEClass, STATE_EXP__REFERRED_STATE);
 
 		// Create enums
 		collectionKindEEnum = createEEnum(COLLECTION_KIND);
@@ -1848,6 +1952,8 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		callExpEClass.getESuperTypes().add(this.getOclExpression());
 		featureCallExpEClass.getESuperTypes().add(this.getCallExp());
 		propertyCallExpEClass.getESuperTypes().add(this.getFeatureCallExp());
+		navigationCallExpEClass.getESuperTypes().add(this.getFeatureCallExp());
+		associationClassCallExpEClass.getESuperTypes().add(this.getNavigationCallExp());
 		operationCallExpEClass.getESuperTypes().add(this.getFeatureCallExp());
 		loopExpEClass.getESuperTypes().add(this.getCallExp());
 		iteratorExpEClass.getESuperTypes().add(this.getLoopExp());
@@ -1872,6 +1978,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		messageExpEClass.getESuperTypes().add(this.getOclExpression());
 		collectionItemEClass.getESuperTypes().add(this.getCollectionLiteralPart());
 		collectionRangeEClass.getESuperTypes().add(this.getCollectionLiteralPart());
+		stateExpEClass.getESuperTypes().add(this.getOclExpression());
 
 		// Initialize classes, features, and operations; add parameters
 		initEClass(oclTypeEClass, OclType.class, "OclType", IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
@@ -1924,6 +2031,12 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 
 		initEClass(propertyCallExpEClass, PropertyCallExp.class, "PropertyCallExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getPropertyCallExp_ReferredProperty(), ecorePackage.getEStructuralFeature(), null, "referredProperty", null, 0, 1, PropertyCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
+		initEClass(navigationCallExpEClass, NavigationCallExp.class, "NavigationCallExp", IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEReference(getNavigationCallExp_Qualifiers(), this.getOclExpression(), null, "qualifiers", null, 0, -1, NavigationCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
+		initEClass(associationClassCallExpEClass, AssociationClassCallExp.class, "AssociationClassCallExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEReference(getAssociationClassCallExp_ReferredAssociationClass(), ecorePackage.getEClassifier(), null, "referredAssociationClass", null, 0, 1, AssociationClassCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(operationCallExpEClass, OperationCallExp.class, "OperationCallExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getOperationCallExp_Name(), ecorePackage.getEString(), "name", null, 0, 1, OperationCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
@@ -2009,6 +2122,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		initEReference(getConstraint_ContextClassifier(), ecorePackage.getEClassifier(), null, "contextClassifier", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getConstraint_ContextOperation(), ecorePackage.getEOperation(), null, "contextOperation", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getConstraint_ContextProperty(), ecorePackage.getEStructuralFeature(), null, "contextProperty", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getConstraint_IsStatic(), ecorePackage.getEBoolean(), "isStatic", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(collectionLiteralPartEClass, CollectionLiteralPart.class, "CollectionLiteralPart", IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 
@@ -2031,6 +2145,9 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		initEClass(tuplePartEClass, TuplePart.class, "TuplePart", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getTuplePart_Name(), ecorePackage.getEString(), "name", null, 0, 1, TuplePart.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getTuplePart_Type(), this.getOclType(), null, "type", null, 0, 1, TuplePart.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
+		initEClass(stateExpEClass, StateExp.class, "StateExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEReference(getStateExp_ReferredState(), ecorePackage.getEObject(), null, "referredState", null, 0, 1, StateExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		// Initialize enums and add enum literals
 		initEEnum(collectionKindEEnum, CollectionKind.class, "CollectionKind");

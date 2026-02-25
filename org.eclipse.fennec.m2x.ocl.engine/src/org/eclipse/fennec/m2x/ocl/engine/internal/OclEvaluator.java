@@ -18,6 +18,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -112,6 +113,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
 	private OclEvalEnvironment env;
 	private PreStateSnapshot preStateSnapshot = PreStateSnapshot.EMPTY;
+	private Map<DefRegistry.DefKey, DefRegistry.DefEntry> defProperties = Map.of();
 	private int depth;
 
 	/*
@@ -153,6 +155,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 */
 	public void setPreStateSnapshot(PreStateSnapshot snapshot) {
 		this.preStateSnapshot = Objects.requireNonNull(snapshot, "snapshot must not be null");
+	}
+
+	/**
+	 * Sets the def-property registry for Complete OCL {@code def:} expressions.
+	 * Must be called before {@link #evaluate(OclExpression)}.
+	 */
+	public void setDefProperties(Map<DefRegistry.DefKey, DefRegistry.DefEntry> defProperties) {
+		this.defProperties = Objects.requireNonNull(defProperties, "defProperties must not be null");
 	}
 
 	/**
@@ -325,6 +335,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 			return nullCheck;
 		}
 
+		// oclLocale: OclAny property (OCL v2.4 §11.2.1)
+		if ("oclLocale".equals(sf.getName())) {
+			Object localeValue = env.lookup("oclLocale");
+			return localeValue == null ? OclEvalEnvironment.DEFAULT_OCL_LOCALE : localeValue;
+		}
+
 		// Tuple part access (tuples are represented as Map<String, Object>)
 		if (source instanceof Map<?, ?> map) {
 			Object value = map.get(sf.getName());
@@ -340,6 +356,16 @@ public class OclEvaluator extends OclSwitch<Object> {
 					if (intercepted != OclContext.PROPERTY_NOT_HANDLED) {
 						result.add(intercepted == null ? OCL_NULL : widenInteger(intercepted));
 					} else {
+						// Check for def-property if real feature doesn't exist
+						EStructuralFeature realFeat = elemObj.eClass().getEStructuralFeature(sf.getName());
+						if (realFeat == null && !defProperties.isEmpty()) {
+							DefRegistry.DefEntry defEntry = lookupDefProperty(elemObj.eClass(), sf.getName());
+							if (defEntry != null && !defEntry.isOperation()) {
+								Object defResult = evaluateDefBody(defEntry.body(), elemObj);
+								result.add(defResult == null ? OCL_NULL : widenInteger(defResult));
+								continue;
+							}
+						}
 						EStructuralFeature actual = resolveFeature(elemObj, sf);
 						Object value = getProperty(elemObj, actual);
 						result.add(value == null ? OCL_NULL : widenInteger(value));
@@ -367,6 +393,25 @@ public class OclEvaluator extends OclSwitch<Object> {
 			return intercepted == null ? OCL_NULL : widenInteger(intercepted);
 		}
 
+		// Check if the feature actually exists on the runtime EClass
+		// Real features have priority over def-properties
+		EStructuralFeature realFeature = eo.eClass().getEStructuralFeature(sf.getName());
+		if (realFeature != null) {
+			sf = resolveFeature(eo, sf);
+			Object value = getProperty(eo, sf);
+			return value == null ? OCL_NULL : widenInteger(value);
+		}
+
+		// Def-property evaluation (Complete OCL def: constraints)
+		if (!defProperties.isEmpty()) {
+			DefRegistry.DefEntry defEntry = lookupDefProperty(eo.eClass(), sf.getName());
+			if (defEntry != null && !defEntry.isOperation()) {
+				Object defResult = evaluateDefBody(defEntry.body(), eo);
+				return defResult == null ? OCL_NULL : widenInteger(defResult);
+			}
+		}
+
+		// Fallback: try resolveFeature (may work for cross-type features)
 		sf = resolveFeature(eo, sf);
 		Object value = getProperty(eo, sf);
 		return value == null ? OCL_NULL : widenInteger(value);
@@ -419,7 +464,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// OclAny null/invalid-safe operations (must work on null/invalid source)
 		if (isNullSafeOperation(opName)) {
 			Object[] args = evaluateArguments(exp.getOwnedArguments());
-			return wrapNull(OclStdlib.dispatch(opName, source, args, options));
+			return wrapNull(OclStdlib.dispatch(opName, source, args, options, resolveOclLocale()));
 		}
 
 		// Three-valued boolean logic (OCL v2.4 §11.3.1)
@@ -469,7 +514,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 
 		// 2. Try standard library
-		Object result = OclStdlib.dispatch(opName, source, args, options);
+		Object result = OclStdlib.dispatch(opName, source, args, options, resolveOclLocale());
 		if (result != OclStdlib.NOT_FOUND) {
 			return wrapNull(result);
 		}
@@ -1309,5 +1354,67 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private static boolean isArrowCall(EObject exp) {
 		return exp.eAdapters().stream()
 				.anyMatch(a -> a.getClass().getSimpleName().equals("ArrowCallMarker"));
+	}
+
+	// --- oclLocale Support (OCL v2.4 §11.2.1) ---
+
+	/**
+	 * Resolves the prevailing OCL locale from the environment.
+	 * Parses the {@code oclLocale} variable (format: {@code "language_country"})
+	 * into a {@link Locale}. Falls back to {@link Locale#US} if not set or malformed.
+	 */
+	private Locale resolveOclLocale() {
+		Object localeValue = env.lookup("oclLocale");
+		if (localeValue instanceof String localeStr && !localeStr.isEmpty()) {
+			return parseOclLocale(localeStr);
+		}
+		return Locale.US;
+	}
+
+	/**
+	 * Parses an OCL locale string (e.g. {@code "en_us"}, {@code "fr_CA"}, {@code "de"})
+	 * into a {@link Locale}.
+	 */
+	static Locale parseOclLocale(String localeStr) {
+		String[] parts = localeStr.split("_");
+		return switch (parts.length) {
+			case 1 -> Locale.of(parts[0]);
+			case 2 -> Locale.of(parts[0], parts[1]);
+			default -> Locale.of(parts[0], parts[1], parts[2]);
+		};
+	}
+
+	// --- Def-Property Support (Complete OCL def: constraints) ---
+
+	/**
+	 * Looks up a def-property entry for the given EClass and feature name,
+	 * including supertypes.
+	 */
+	private DefRegistry.DefEntry lookupDefProperty(EClass eClass, String featureName) {
+		DefRegistry.DefEntry entry = defProperties.get(new DefRegistry.DefKey(eClass, featureName));
+		if (entry != null) {
+			return entry;
+		}
+		for (EClass superType : eClass.getEAllSuperTypes()) {
+			entry = defProperties.get(new DefRegistry.DefKey(superType, featureName));
+			if (entry != null) {
+				return entry;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Evaluates a def-property body expression with {@code self} bound to the target object.
+	 */
+	private Object evaluateDefBody(OclExpression body, EObject target) {
+		OclEvalEnvironment previousEnv = env;
+		OclContext defContext = OclContext.of(target);
+		env = OclEvalEnvironment.root(defContext);
+		try {
+			return eval(body);
+		} finally {
+			env = previousEnv;
+		}
 	}
 }

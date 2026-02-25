@@ -163,6 +163,15 @@ public interface OclFactory extends EFactory {
 	PropertyCallExp createPropertyCallExp();
 
 	/**
+	 * Returns a new object of class '<em>Association Class Call Exp</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>Association Class Call Exp</em>'.
+	 * @generated
+	 */
+	AssociationClassCallExp createAssociationClassCallExp();
+
+	/**
 	 * Returns a new object of class '<em>Operation Call Exp</em>'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -395,6 +404,15 @@ public interface OclFactory extends EFactory {
 	 * @generated
 	 */
 	TuplePart createTuplePart();
+
+	/**
+	 * Returns a new object of class '<em>State Exp</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>State Exp</em>'.
+	 * @generated
+	 */
+	StateExp createStateExp();
 
 	/**
 	 * Returns the package supported by this factory.

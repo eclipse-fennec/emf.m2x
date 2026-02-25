@@ -1,5 +1,5 @@
 Bundle-Name: Fennec OCL Model
-Bundle-Description: OCL v2.5 EMF metamodel (48 EClasses + 2 EEnums)
+Bundle-Description: OCL v2.5 EMF metamodel (51 EClasses + 2 EEnums)
 
 -library: enableEMF
 

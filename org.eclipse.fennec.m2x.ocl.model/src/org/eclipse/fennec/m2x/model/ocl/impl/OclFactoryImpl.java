@@ -83,6 +83,7 @@ public class OclFactoryImpl extends EFactoryImpl implements OclFactory {
 			case OclPackage.MESSAGE_TYPE: return createMessageType();
 			case OclPackage.CLASSIFIER_TYPE: return createClassifierType();
 			case OclPackage.PROPERTY_CALL_EXP: return createPropertyCallExp();
+			case OclPackage.ASSOCIATION_CLASS_CALL_EXP: return createAssociationClassCallExp();
 			case OclPackage.OPERATION_CALL_EXP: return createOperationCallExp();
 			case OclPackage.ITERATOR_EXP: return createIteratorExp();
 			case OclPackage.ITERATE_EXP: return createIterateExp();
@@ -109,6 +110,7 @@ public class OclFactoryImpl extends EFactoryImpl implements OclFactory {
 			case OclPackage.TUPLE_LITERAL_PART: return createTupleLiteralPart();
 			case OclPackage.MAP_LITERAL_PART: return createMapLiteralPart();
 			case OclPackage.TUPLE_PART: return createTuplePart();
+			case OclPackage.STATE_EXP: return createStateExp();
 			default:
 				throw new IllegalArgumentException("The class '" + eClass.getName() + "' is not a valid classifier");
 		}
@@ -300,6 +302,17 @@ public class OclFactoryImpl extends EFactoryImpl implements OclFactory {
 	public PropertyCallExp createPropertyCallExp() {
 		PropertyCallExpImpl propertyCallExp = new PropertyCallExpImpl();
 		return propertyCallExp;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public AssociationClassCallExp createAssociationClassCallExp() {
+		AssociationClassCallExpImpl associationClassCallExp = new AssociationClassCallExpImpl();
+		return associationClassCallExp;
 	}
 
 	/**
@@ -586,6 +599,17 @@ public class OclFactoryImpl extends EFactoryImpl implements OclFactory {
 	public TuplePart createTuplePart() {
 		TuplePartImpl tuplePart = new TuplePartImpl();
 		return tuplePart;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public StateExp createStateExp() {
+		StateExpImpl stateExp = new StateExpImpl();
+		return stateExp;
 	}
 
 	/**

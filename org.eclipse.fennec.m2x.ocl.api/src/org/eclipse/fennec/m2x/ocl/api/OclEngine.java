@@ -80,6 +80,30 @@ public interface OclEngine {
 	 */
 	List<Constraint> parseDocument(String oclDocument, ResourceSet resourceSet) throws OclParseException;
 
+	/**
+	 * Parses a Complete OCL document and registers any {@code def:} constraints
+	 * so that the defined properties and operations are available during evaluation.
+	 *
+	 * <p>This method combines {@link #parseDocument(String)} with runtime registration:
+	 * after parsing, all {@code def:} constraints are stored internally. Subsequent
+	 * calls to {@link #evaluate(OclExpression, OclContext)} will resolve references
+	 * to def-properties and def-operations defined in the loaded document.
+	 *
+	 * <p>Example:
+	 * <pre>
+	 * engine.loadDocument("""
+	 *     context Person
+	 *       def: isAdult : Boolean = self.age >= 18
+	 *       inv adultCheck: self.isAdult
+	 *     """);
+	 * </pre>
+	 *
+	 * @param oclDocument the Complete OCL document text
+	 * @return the list of parsed constraints
+	 * @throws OclParseException if the document contains syntax or type errors
+	 */
+	List<Constraint> loadDocument(String oclDocument) throws OclParseException;
+
 	// --- Evaluation ---
 
 	/**

@@ -67,6 +67,12 @@
     <genClasses ecoreClass="ocl.ecore#//PropertyCallExp">
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//PropertyCallExp/referredProperty"/>
     </genClasses>
+    <genClasses image="false" ecoreClass="ocl.ecore#//NavigationCallExp">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference ocl.ecore#//NavigationCallExp/qualifiers"/>
+    </genClasses>
+    <genClasses ecoreClass="ocl.ecore#//AssociationClassCallExp">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//AssociationClassCallExp/referredAssociationClass"/>
+    </genClasses>
     <genClasses ecoreClass="ocl.ecore#//OperationCallExp">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//OperationCallExp/name"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference ocl.ecore#//OperationCallExp/ownedArguments"/>
@@ -147,6 +153,7 @@
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//Constraint/contextClassifier"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//Constraint/contextOperation"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//Constraint/contextProperty"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//Constraint/isStatic"/>
     </genClasses>
     <genClasses image="false" ecoreClass="ocl.ecore#//CollectionLiteralPart"/>
     <genClasses ecoreClass="ocl.ecore#//CollectionItem">
@@ -168,6 +175,9 @@
     <genClasses ecoreClass="ocl.ecore#//TuplePart">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//TuplePart/name"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//TuplePart/type"/>
+    </genClasses>
+    <genClasses ecoreClass="ocl.ecore#//StateExp">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//StateExp/referredState"/>
     </genClasses>
   </genPackages>
 </genmodel:GenModel>

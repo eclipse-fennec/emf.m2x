@@ -152,6 +152,14 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 				return createPropertyCallExpAdapter();
 			}
 			@Override
+			public Adapter caseNavigationCallExp(NavigationCallExp object) {
+				return createNavigationCallExpAdapter();
+			}
+			@Override
+			public Adapter caseAssociationClassCallExp(AssociationClassCallExp object) {
+				return createAssociationClassCallExpAdapter();
+			}
+			@Override
 			public Adapter caseOperationCallExp(OperationCallExp object) {
 				return createOperationCallExpAdapter();
 			}
@@ -270,6 +278,10 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 			@Override
 			public Adapter caseTuplePart(TuplePart object) {
 				return createTuplePartAdapter();
+			}
+			@Override
+			public Adapter caseStateExp(StateExp object) {
+				return createStateExpAdapter();
 			}
 			@Override
 			public Adapter defaultCase(EObject object) {
@@ -540,6 +552,34 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createPropertyCallExpAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2x.model.ocl.NavigationCallExp <em>Navigation Call Exp</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2x.model.ocl.NavigationCallExp
+	 * @generated
+	 */
+	public Adapter createNavigationCallExpAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2x.model.ocl.AssociationClassCallExp <em>Association Class Call Exp</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2x.model.ocl.AssociationClassCallExp
+	 * @generated
+	 */
+	public Adapter createAssociationClassCallExpAdapter() {
 		return null;
 	}
 
@@ -960,6 +1000,20 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createTuplePartAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2x.model.ocl.StateExp <em>State Exp</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2x.model.ocl.StateExp
+	 * @generated
+	 */
+	public Adapter createStateExpAdapter() {
 		return null;
 	}
 

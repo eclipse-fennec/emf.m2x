@@ -20,7 +20,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiFunction;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EAnnotation;
@@ -29,11 +31,16 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.fennec.m2x.model.ocl.AnyType;
+import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
+import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
@@ -41,21 +48,24 @@ import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
+import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
-import org.eclipse.fennec.m2x.ocl.engine.internal.PropertyAccessorCache;
+import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefEntry;
+import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefKey;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclBag;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclDelegateUtil;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclEvaluator;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclInvocationDelegateFactory;
-import org.eclipse.fennec.m2x.ocl.engine.internal.PreStateSnapshot;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclOrderedSet;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclSet;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclSettingDelegateFactory;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclUnlimitedNatural;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclValidationDelegateFactory;
+import org.eclipse.fennec.m2x.ocl.engine.internal.PreStateSnapshot;
+import org.eclipse.fennec.m2x.ocl.engine.internal.PropertyAccessorCache;
 
 /**
  * Plain Java implementation of the {@link OclEngine} facade.
@@ -84,6 +94,7 @@ public class OclEngineImpl implements OclEngine {
 	private final PropertyAccessorCache accessorCache;
 	private final List<OclOperationProvider> operationProviders = new CopyOnWriteArrayList<>();
 	private final List<CompleteOclContribution> oclContributions = new CopyOnWriteArrayList<>();
+	private final Map<DefKey, DefEntry> defProperties = new ConcurrentHashMap<>();
 	private volatile OclEvaluationOptions delegateOptions = OclEvaluationOptions.strict();
 
 	/**
@@ -154,6 +165,60 @@ public class OclEngineImpl implements OclEngine {
 		return parser.parseDocument(oclDocument, resourceSet);
 	}
 
+	@Override
+	public List<Constraint> loadDocument(String oclDocument) throws OclParseException {
+		List<Constraint> constraints = parseDocument(oclDocument);
+		for (Constraint c : constraints) {
+			if (c.getKind() == ConstraintKind.DEF && c.getContextClassifier() != null
+					&& c.getName() != null && c.getSpecification() != null) {
+				EClassifier ctx = c.getContextClassifier();
+				String featureName = c.getName();
+				boolean isStatic = c.isIsStatic();
+
+				if (c.getContextOperation() != null) {
+					// Operation def: extract parameter names and register as custom operation
+					EOperation syntheticOp = c.getContextOperation();
+					List<String> paramNames = new ArrayList<>();
+					for (EParameter p : syntheticOp.getEParameters()) {
+						paramNames.add(p.getName());
+					}
+					defProperties.put(new DefKey(ctx, featureName),
+							new DefEntry(c.getSpecification(), paramNames, isStatic));
+					registerDefOperation(ctx, featureName, c.getSpecification(), paramNames);
+				} else {
+					// Attribute def: register for property lookup
+					defProperties.put(new DefKey(ctx, featureName),
+							new DefEntry(c.getSpecification(), List.of(), isStatic));
+				}
+			}
+		}
+		return constraints;
+	}
+
+	private void registerDefOperation(EClassifier ctx, String opName,
+			OclExpression body, List<String> paramNames) {
+		ClassifierType ownerType = OclFactory.eINSTANCE.createClassifierType();
+		ownerType.setReferredClassifier(ctx);
+
+		BiFunction<Object, Object[], Object> impl = (self, args) -> {
+			if (!(self instanceof EObject eo)) {
+				return null;
+			}
+			Map<String, Object> vars = new LinkedHashMap<>();
+			for (int i = 0; i < paramNames.size() && i < args.length; i++) {
+				vars.put(paramNames.get(i), args[i]);
+			}
+			OclContext evalCtx = OclContext.of(eo, vars);
+			return evaluate(body, evalCtx);
+		};
+
+		// Use AnyType as return type placeholder — actual type is determined at runtime
+		AnyType returnType = OclFactory.eINSTANCE.createAnyType();
+
+		OclOperation op = new OclOperation(opName, ownerType, List.of(), returnType, impl);
+		registerOperations(() -> List.of(op));
+	}
+
 	// --- Evaluation ---
 
 	@Override
@@ -184,6 +249,7 @@ public class OclEngineImpl implements OclEngine {
 
 		OclEvalEnvironment env = OclEvalEnvironment.root(context);
 		OclEvaluator evaluator = new OclEvaluator(env, options, getOperationProviders(), accessorCache);
+		evaluator.setDefProperties(defProperties);
 		return evaluator.evaluate(expression);
 	}
 
@@ -237,6 +303,7 @@ public class OclEngineImpl implements OclEngine {
 			PreStateSnapshot snapshot) {
 		OclEvalEnvironment env = OclEvalEnvironment.root(context);
 		OclEvaluator evaluator = new OclEvaluator(env, delegateOptions, getOperationProviders(), accessorCache);
+		evaluator.setDefProperties(defProperties);
 		evaluator.setPreStateSnapshot(snapshot);
 		OclResult result = evaluator.evaluate(expression);
 		return narrowResult(result.value());

@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -73,9 +74,11 @@ class OclStdlib {
 	 * @param source the evaluated source (may be null for OclVoid)
 	 * @param args the evaluated arguments
 	 * @param options evaluation options with security limits
+	 * @param locale the prevailing OCL locale for locale-sensitive operations
 	 * @return the result, or {@link #NOT_FOUND} if the operation is not a stdlib operation
 	 */
-	static Object dispatch(String name, Object source, Object[] args, OclEvaluationOptions options) {
+	static Object dispatch(String name, Object source, Object[] args,
+			OclEvaluationOptions options, Locale locale) {
 		// OclAny operations apply to all types (including null/invalid)
 		Object result = dispatchOclAny(name, source, args);
 		if (result != NOT_FOUND) {
@@ -102,7 +105,7 @@ class OclStdlib {
 			return dispatchReal(name, (double) f, args);
 		}
 		if (source instanceof String s) {
-			return dispatchString(name, s, args, options);
+			return dispatchString(name, s, args, options, locale);
 		}
 		if (source instanceof Map<?, ?> m) {
 			return dispatchMap(name, m, args);
@@ -151,6 +154,8 @@ class OclStdlib {
 				yield set;
 			}
 			case "oclType" -> oclType(source);
+			case "oclContainer" -> oclContainer(source);
+			case "oclContents" -> oclContents(source);
 			case "toString" -> source == null ? OclInvalid.INSTANCE : String.valueOf(source);
 			// QVT-O §8.3.3.1: Object::repr() — textual representation of any object
 			case "repr" -> String.valueOf(source);
@@ -195,6 +200,39 @@ class OclStdlib {
 		CollectionType ct = OclFactory.eINSTANCE.createCollectionType();
 		ct.setKind(kind);
 		return ct;
+	}
+
+	/**
+	 * OCL §11.3.1 oclContainer() : OclElement[?]
+	 *
+	 * <p>Returns the object for which self is a composed content,
+	 * or null if there is no such object (root element).
+	 * For non-EObject values, returns OclInvalid.
+	 */
+	private static Object oclContainer(Object source) {
+		if (source == null || source == OclInvalid.INSTANCE) {
+			return OclInvalid.INSTANCE;
+		}
+		if (source instanceof EObject eo) {
+			return eo.eContainer(); // null for root elements
+		}
+		return OclInvalid.INSTANCE;
+	}
+
+	/**
+	 * OCL §11.3.1 oclContents() : Set(OclElement)
+	 *
+	 * <p>Returns the composed contents of self as a Set.
+	 * For non-EObject values, returns OclInvalid.
+	 */
+	private static Object oclContents(Object source) {
+		if (source == null || source == OclInvalid.INSTANCE) {
+			return OclInvalid.INSTANCE;
+		}
+		if (source instanceof EObject eo) {
+			return new OclSet<>(eo.eContents());
+		}
+		return OclInvalid.INSTANCE;
 	}
 
 	private static Object oclEquals(Object left, Object right) {
@@ -385,9 +423,9 @@ class OclStdlib {
 		if (typeArg instanceof PrimitiveType pt) {
 			return matchesPrimitiveType(source, pt.getName()) ? source : OclInvalid.INSTANCE;
 		}
-		// Handle collection types
-		if (typeArg instanceof CollectionType) {
-			return source instanceof Collection<?> ? source : OclInvalid.INSTANCE;
+		// Handle collection types — check kind and element type conformance
+		if (typeArg instanceof CollectionType ct) {
+			return oclAsTypeCollection(source, ct);
 		}
 		// Handle map types
 		if (typeArg instanceof MapType) {
@@ -405,6 +443,77 @@ class OclStdlib {
 			return source;
 		}
 		return OclInvalid.INSTANCE;
+	}
+
+	/**
+	 * Handles {@code oclAsType()} for collection types (OCL v2.4 §11.7).
+	 * Checks that (1) the source is a collection, (2) the collection kind matches,
+	 * and (3) all elements conform to the target element type.
+	 */
+	private static Object oclAsTypeCollection(Object source, CollectionType targetType) {
+		if (!(source instanceof Collection<?> coll)) {
+			return OclInvalid.INSTANCE;
+		}
+		// Check collection kind conformance
+		CollectionKind targetKind = targetType.getKind();
+		if (!collectionKindConforms(coll, targetKind)) {
+			return OclInvalid.INSTANCE;
+		}
+		// Check element type conformance (if element type is specified)
+		OclType elementType = targetType.getElementType();
+		if (elementType != null && !allElementsConform(coll, elementType)) {
+			return OclInvalid.INSTANCE;
+		}
+		return source;
+	}
+
+	/**
+	 * Checks whether the runtime collection kind conforms to the target kind.
+	 * {@code COLLECTION} (unqualified) accepts any collection kind.
+	 */
+	private static boolean collectionKindConforms(Collection<?> coll, CollectionKind targetKind) {
+		return switch (targetKind) {
+			case COLLECTION -> true; // Collection(T) accepts any collection kind
+			case SET -> coll instanceof OclSet<?>;
+			case BAG -> coll instanceof OclBag<?>;
+			case ORDERED_SET -> coll instanceof OclOrderedSet<?>;
+			case SEQUENCE -> coll instanceof List<?> && !(coll instanceof OclBag<?>)
+					&& !(coll instanceof OclOrderedSet<?>);
+		};
+	}
+
+	/**
+	 * Checks whether all elements in the collection conform to the given element type.
+	 */
+	private static boolean allElementsConform(Collection<?> coll, OclType elementType) {
+		// AnyType: all elements conform
+		if (elementType instanceof AnyType) {
+			return true;
+		}
+		// PrimitiveType check
+		if (elementType instanceof PrimitiveType pt) {
+			String typeName = pt.getName();
+			if ("OclAny".equals(typeName)) {
+				return true;
+			}
+			for (Object elem : coll) {
+				if (elem != null && !matchesPrimitiveType(elem, typeName)) {
+					return false;
+				}
+			}
+			return true;
+		}
+		// ClassifierType check via EClassifier.isInstance()
+		EClassifier classifier = extractClassifier(elementType);
+		if (classifier == null) {
+			return true; // Cannot verify — assume conformant
+		}
+		for (Object elem : coll) {
+			if (elem != null && !classifier.isInstance(elem)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private static EClassifier extractClassifier(Object typeArg) {
@@ -580,7 +689,7 @@ class OclStdlib {
 	// --- String (OCL v2.4 Section 11.7) ---
 
 	private static Object dispatchString(String name, String source, Object[] args,
-			OclEvaluationOptions options) {
+			OclEvaluationOptions options, Locale locale) {
 		return switch (name) {
 			case "size" -> (long) source.length();
 			case "+" , "concat" -> source + asString(args[0]);
@@ -593,8 +702,8 @@ class OclStdlib {
 				}
 				yield source.substring(lower - 1, upper);
 			}
-			case "toUpperCase", "toUpper" -> source.toUpperCase();
-			case "toLowerCase", "toLower" -> source.toLowerCase();
+			case "toUpperCase", "toUpper" -> source.toUpperCase(locale);
+			case "toLowerCase", "toLower" -> source.toLowerCase(locale);
 			case "trim" -> source.trim();
 			case "indexOf" -> {
 				// OCL v2.4 §11.5.3: "or zero if s is not a substring of self"

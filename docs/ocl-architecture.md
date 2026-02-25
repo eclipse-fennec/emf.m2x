@@ -359,7 +359,7 @@ lookup overhead.
 
 | Type | Key Operations |
 |------|---------------|
-| OclAny | `=`, `<>`, `oclIsTypeOf()`, `oclIsKindOf()`, `oclAsType()`, `oclIsUndefined()`, `oclIsInvalid()`, `oclContainer()`, `oclContents()` |
+| OclAny | `=`, `<>`, `oclIsTypeOf()`, `oclIsKindOf()`, `oclAsType()`, `oclIsUndefined()`, `oclIsInvalid()`, `oclIsNew()`, `oclType()`, `oclContainer()`, `oclContents()`, `toString()` |
 | Boolean | `and`, `or`, `xor`, `not`, `implies` |
 | Integer | `+`, `-`, `*`, `/`, `mod`, `div`, `abs`, `max`, `min`, `floor`, `ceiling`, `round` |
 | Real | `+`, `-`, `*`, `/`, `abs`, `floor`, `round`, `max`, `min` |
@@ -1037,9 +1037,9 @@ Static well-formedness checking visitor over entire AST.
 | # | Gap | Severity | Status |
 |---|-----|----------|--------|
 | GAP-1 | Complete OCL document parsing | Critical | Done |
-| GAP-2 | `@pre` parsed but never evaluated | Critical | Open |
-| GAP-3 | `validate()` no-op stub | Critical | Open |
-| GAP-6 | MessageExp has no evaluator case | Medium | Deferred (depends on GAP-2) |
-| GAP-7 | `oclIsNew` absent | Medium | Deferred (depends on GAP-2) |
+| GAP-2 | `@pre` parsed but never evaluated | Critical | **Done** ✅ (PreStateSnapshot) |
+| GAP-3 | `validate()` no-op stub | Critical | Open (= S-10 in spec-compliance) |
+| GAP-6 | MessageExp has no evaluator case | Medium | Deferred (Eclipse also doesn't implement) |
+| GAP-7 | `oclIsNew` absent | Medium | **Done** ✅ (compares against PreStateSnapshot) |
 
 All other gaps (GAP-4, 5, 8–20) have been fixed. See [archive/ocl-engine-gaps.md](archive/ocl-engine-gaps.md) for details.
