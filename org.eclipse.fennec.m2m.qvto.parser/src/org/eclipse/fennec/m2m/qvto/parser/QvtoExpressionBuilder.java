@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2m.qvto.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EAttribute;
@@ -38,6 +39,7 @@ import org.eclipse.fennec.m2m.model.imperativeocl.ForExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ImperativeOclFactory;
 import org.eclipse.fennec.m2m.model.imperativeocl.InstantiationExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.LogExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.RaiseExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ReturnExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.SeverityKind;
@@ -80,7 +82,9 @@ import org.eclipse.fennec.m2m.model.ocl.Variable;
 import org.eclipse.fennec.m2m.model.ocl.VariableExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingCallExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.MappingOperation;
+import org.eclipse.fennec.m2m.model.qvtoperational.Module;
 import org.eclipse.fennec.m2m.model.qvtoperational.ObjectExp;
+import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveInExp;
@@ -106,12 +110,19 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private static final QvtOperationalFactory QVTO = QvtOperationalFactory.eINSTANCE;
 
 	private final EPackage.Registry packageRegistry;
+	private final Map<String, Module> importedModuleStubs;
 	private QvtoEnvironment environment;
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
+		this(environment, packageRegistry, Map.of());
+	}
+
+	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
+			Map<String, Module> importedModuleStubs) {
 		this.environment = Objects.requireNonNull(environment,
 				"environment must not be null");
 		this.packageRegistry = packageRegistry;
+		this.importedModuleStubs = Objects.requireNonNull(importedModuleStubs);
 	}
 
 	// ==================== OCL Literals ====================
@@ -1031,9 +1042,29 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public InstantiationExp visitNewExp(QvtOParser.NewExpContext ctx) {
-		InstantiationExp exp = IMP.createInstantiationExp();
-
 		List<String> segments = pathNameSegments(ctx.pathName());
+		String typeName = String.join("::", segments);
+
+		// §8.1.13: Check if the type name refers to an imported transformation
+		Module importedStub = importedModuleStubs.get(typeName);
+		if (importedStub != null) {
+			TransformationInstantiationExp exp = IMP.createTransformationInstantiationExp();
+			// Set the stub as instantiated class (linker will resolve the real module)
+			if (importedStub instanceof OperationalTransformation ot) {
+				exp.setImportedTransformation(ot);
+			}
+			// instantiatedClass is set to a placeholder EClass (the stub's module class)
+			// The linker will replace the stub, and the evaluator will use importedTransformation
+			if (ctx.argumentList() != null) {
+				for (QvtOParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+					exp.getArgument().add((OclExpression) visit(argCtx));
+				}
+			}
+			return exp;
+		}
+
+		// Regular class instantiation
+		InstantiationExp exp = IMP.createInstantiationExp();
 		EClassifier classifier = resolveClassifier(segments);
 		if (classifier instanceof EClass ec) {
 			exp.setInstantiatedClass(ec);
