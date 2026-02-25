@@ -50,6 +50,7 @@ header:
     - 'Jenkinsfile'
     - 'NOTICE'
     - 'cnf/**'
+    - '**/src-gen/**'
     - '**/generated/**'
     - '.gitattributes'
     - '.github/**'
