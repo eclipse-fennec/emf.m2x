@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2m.model.qvtoperational;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -3384,6 +3385,79 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int CONTEXTUAL_PROPERTY_OPERATION_COUNT = EcorePackage.ESTRUCTURAL_FEATURE_OPERATION_COUNT + 0;
 
 	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2m.model.qvtoperational.impl.StatusImpl <em>Status</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.StatusImpl
+	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getStatus()
+	 * @generated
+	 */
+	int STATUS = 17;
+
+	/**
+	 * The feature id for the '<em><b>EAnnotations</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATUS__EANNOTATIONS = EcorePackage.EMODEL_ELEMENT__EANNOTATIONS;
+
+	/**
+	 * The feature id for the '<em><b>Succeeded</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATUS__SUCCEEDED = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 0;
+
+	/**
+	 * The feature id for the '<em><b>Failed</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATUS__FAILED = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 1;
+
+	/**
+	 * The feature id for the '<em><b>Raised Exception</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATUS__RAISED_EXCEPTION = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 2;
+
+	/**
+	 * The number of structural features of the '<em>Status</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATUS_FEATURE_COUNT = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 3;
+
+	/**
+	 * The operation id for the '<em>Get EAnnotation</em>' operation.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATUS___GET_EANNOTATION__STRING = EcorePackage.EMODEL_ELEMENT___GET_EANNOTATION__STRING;
+
+	/**
+	 * The number of operations of the '<em>Status</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int STATUS_OPERATION_COUNT = EcorePackage.EMODEL_ELEMENT_OPERATION_COUNT + 0;
+
+	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2m.model.qvtoperational.impl.ImperativeCallExpImpl <em>Imperative Call Exp</em>}' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -3391,7 +3465,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getImperativeCallExp()
 	 * @generated
 	 */
-	int IMPERATIVE_CALL_EXP = 17;
+	int IMPERATIVE_CALL_EXP = 18;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3500,7 +3574,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getMappingCallExp()
 	 * @generated
 	 */
-	int MAPPING_CALL_EXP = 18;
+	int MAPPING_CALL_EXP = 19;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3618,7 +3692,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getObjectExp()
 	 * @generated
 	 */
-	int OBJECT_EXP = 19;
+	int OBJECT_EXP = 20;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3700,7 +3774,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getResolveExp()
 	 * @generated
 	 */
-	int RESOLVE_EXP = 20;
+	int RESOLVE_EXP = 21;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3809,7 +3883,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getResolveInExp()
 	 * @generated
 	 */
-	int RESOLVE_IN_EXP = 21;
+	int RESOLVE_IN_EXP = 22;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3927,7 +4001,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getDirectionKind()
 	 * @generated
 	 */
-	int DIRECTION_KIND = 22;
+	int DIRECTION_KIND = 23;
 
 	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2m.model.qvtoperational.ImportKind <em>Import Kind</em>}' enum.
@@ -3937,7 +4011,17 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getImportKind()
 	 * @generated
 	 */
-	int IMPORT_KIND = 23;
+	int IMPORT_KIND = 24;
+
+	/**
+	 * The meta object id for the '<em>Java Exception</em>' data type.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see java.lang.Exception
+	 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getJavaException()
+	 * @generated
+	 */
+	int JAVA_EXCEPTION = 25;
 
 
 	/**
@@ -4573,6 +4657,49 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getContextualProperty_Overridden();
 
 	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2m.model.qvtoperational.Status <em>Status</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>Status</em>'.
+	 * @see org.eclipse.fennec.m2m.model.qvtoperational.Status
+	 * @generated
+	 */
+	EClass getStatus();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2m.model.qvtoperational.Status#isSucceeded <em>Succeeded</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Succeeded</em>'.
+	 * @see org.eclipse.fennec.m2m.model.qvtoperational.Status#isSucceeded()
+	 * @see #getStatus()
+	 * @generated
+	 */
+	EAttribute getStatus_Succeeded();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2m.model.qvtoperational.Status#isFailed <em>Failed</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Failed</em>'.
+	 * @see org.eclipse.fennec.m2m.model.qvtoperational.Status#isFailed()
+	 * @see #getStatus()
+	 * @generated
+	 */
+	EAttribute getStatus_Failed();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2m.model.qvtoperational.Status#getRaisedException <em>Raised Exception</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Raised Exception</em>'.
+	 * @see org.eclipse.fennec.m2m.model.qvtoperational.Status#getRaisedException()
+	 * @see #getStatus()
+	 * @generated
+	 */
+	EAttribute getStatus_RaisedException();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2m.model.qvtoperational.ImperativeCallExp <em>Imperative Call Exp</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -4751,6 +4878,17 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EEnum getImportKind();
+
+	/**
+	 * Returns the meta object for data type '{@link java.lang.Exception <em>Java Exception</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for data type '<em>Java Exception</em>'.
+	 * @see java.lang.Exception
+	 * @model instanceClass="java.lang.Exception" serializeable="false"
+	 * @generated
+	 */
+	EDataType getJavaException();
 
 	/**
 	 * Returns the factory that creates the instances of the model.
@@ -5282,6 +5420,40 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference CONTEXTUAL_PROPERTY__OVERRIDDEN = eINSTANCE.getContextualProperty_Overridden();
 
 		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2m.model.qvtoperational.impl.StatusImpl <em>Status</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.StatusImpl
+		 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getStatus()
+		 * @generated
+		 */
+		EClass STATUS = eINSTANCE.getStatus();
+
+		/**
+		 * The meta object literal for the '<em><b>Succeeded</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute STATUS__SUCCEEDED = eINSTANCE.getStatus_Succeeded();
+
+		/**
+		 * The meta object literal for the '<em><b>Failed</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute STATUS__FAILED = eINSTANCE.getStatus_Failed();
+
+		/**
+		 * The meta object literal for the '<em><b>Raised Exception</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute STATUS__RAISED_EXCEPTION = eINSTANCE.getStatus_RaisedException();
+
+		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2m.model.qvtoperational.impl.ImperativeCallExpImpl <em>Imperative Call Exp</em>}' class.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
@@ -5430,6 +5602,16 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EEnum IMPORT_KIND = eINSTANCE.getImportKind();
+
+		/**
+		 * The meta object literal for the '<em>Java Exception</em>' data type.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see java.lang.Exception
+		 * @see org.eclipse.fennec.m2m.model.qvtoperational.impl.QvtOperationalPackageImpl#getJavaException()
+		 * @generated
+		 */
+		EDataType JAVA_EXCEPTION = eINSTANCE.getJavaException();
 
 	}
 

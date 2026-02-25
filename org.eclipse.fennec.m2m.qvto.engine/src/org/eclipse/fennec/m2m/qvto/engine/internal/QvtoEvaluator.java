@@ -39,6 +39,7 @@ import org.eclipse.fennec.m2m.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ComputeExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ForExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.ImperativeExpression;
 import org.eclipse.fennec.m2m.model.imperativeocl.ImperativeIterateExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.InstantiationExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.LogExp;
@@ -46,6 +47,7 @@ import org.eclipse.fennec.m2m.model.imperativeocl.RaiseExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ReturnExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.SeverityKind;
 import org.eclipse.fennec.m2m.model.imperativeocl.SwitchExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.WhileExp;
@@ -75,13 +77,14 @@ import org.eclipse.fennec.m2m.model.qvtoperational.ResolveInExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2m.model.qvtoperational.util.QvtOperationalSwitch;
 import org.eclipse.fennec.m2m.model.trace.Trace;
-import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclContext;
 import org.eclipse.fennec.m2m.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2m.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2m.ocl.api.OclResult;
 import org.eclipse.fennec.m2m.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2m.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2m.qvto.api.QvtoModelExtent;
+import org.eclipse.fennec.m2m.qvto.engine.QvtoEngineImpl;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.BreakException;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.ContinueException;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoControlFlowException.FatalAssertionException;
@@ -131,6 +134,7 @@ public class QvtoEvaluator {
 	private final QvtoAliasRegistry aliasRegistry;
 	private final QvtoOperationResolver operationResolver;
 	private final QvtoModelOperations modelOperations;
+	private final QvtoEngineImpl engine;
 
 	// Late resolve support
 	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
@@ -145,12 +149,13 @@ public class QvtoEvaluator {
 	 */
 	public QvtoEvaluator(OclEngineImpl oclEngine, QvtoEvalEnvironment env,
 			QvtoEvaluationOptions options, OperationalTransformation transformation,
-			QvtoExtentManager extentManager) {
+			QvtoExtentManager extentManager, QvtoEngineImpl engine) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.options = Objects.requireNonNull(options, "options must not be null");
 		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
 		this.extentManager = Objects.requireNonNull(extentManager, "extentManager must not be null");
+		this.engine = engine; // nullable for backward compatibility in tests
 		this.intermediateStore = new QvtoIntermediatePropertyStore(transformation, this::eval);
 		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager);
 		this.operationResolver = new QvtoOperationResolver(transformation);
@@ -284,6 +289,30 @@ public class QvtoEvaluator {
 				String left = source != null ? source.toString() : "";
 				String right = arg != null ? arg.toString() : "";
 				return left + right;
+			}
+		}
+
+		// 6.6. §8.1.13: OperationCallExp with imperative source expression
+		// (e.g. "new T(m).transform()") — OCL engine cannot evaluate imperative
+		// sub-expressions, so we evaluate the source through QVT-O dispatch and
+		// delegate the operation call to the registered OCL custom operations.
+		if (expr instanceof OperationCallExp opCall
+				&& opCall.getOwnedSource() instanceof ImperativeExpression) {
+			Object source = eval(opCall.getOwnedSource());
+			Object[] args = new Object[opCall.getOwnedArguments().size()];
+			for (int i = 0; i < args.length; i++) {
+				args[i] = eval(opCall.getOwnedArguments().get(i));
+			}
+			String opName = opCall.getName();
+			for (var provider : oclEngine.getOperationProviders()) {
+				for (var op : provider.getOperations()) {
+					if (op.name().equals(opName)) {
+						Object opResult = op.implementation().apply(source, args);
+						if (opResult != null) {
+							return opResult;
+						}
+					}
+				}
 			}
 		}
 
@@ -776,6 +805,13 @@ public class QvtoEvaluator {
 	}
 
 	/**
+	 * Returns the engine that created this evaluator (for nested transformation execution).
+	 */
+	QvtoEngineImpl getEngine() {
+		return engine;
+	}
+
+	/**
 	 * Returns the operation resolver for use by {@link QvtoOperationProvider}.
 	 */
 	public QvtoOperationResolver getOperationResolver() {
@@ -1167,6 +1203,11 @@ public class QvtoEvaluator {
 					if (actualSf == null) {
 						actualSf = sf;
 					}
+					// §8.4: Static intermediate class feature → shared store
+					if (QvtoIntermediatePropertyStore.isStatic(actualSf)) {
+						intermediateStore.setStaticValue(actualSf, value);
+						return wrapNull(value);
+					}
 					// Eclipse bug449445: invalid → null for EObject property assignment
 					Object coerced = coerceForFeature(actualSf,
 							value == OclInvalid.INSTANCE ? null : value);
@@ -1464,6 +1505,7 @@ public class QvtoEvaluator {
 			if (exp instanceof ObjectExp) {
 				return UNHANDLED;
 			}
+
 			EClass eClass = exp.getInstantiatedClass();
 			if (eClass == null || eClass.isAbstract()) {
 				addError("Cannot instantiate: " + (eClass == null ? "null" : eClass.getName()));
@@ -1492,6 +1534,45 @@ public class QvtoEvaluator {
 			// else: no args, implicit default constructor → no-op (object already created)
 
 			return wrapNull(created);
+		}
+
+		@Override
+		public Object caseTransformationInstantiationExp(TransformationInstantiationExp exp) {
+			OperationalTransformation importedTransf = exp.getImportedTransformation();
+			if (importedTransf == null) {
+				addError("TransformationInstantiationExp: importedTransformation is null");
+				return WRAPPED_NULL;
+			}
+			if (engine == null) {
+				addError("TransformationInstantiationExp: no engine available for nested execution");
+				return WRAPPED_NULL;
+			}
+
+			// Evaluate arguments — each argument is a model extent (variable reference)
+			List<Object> argValues = new ArrayList<>();
+			for (OclExpression arg : exp.getArgument()) {
+				argValues.add(eval(arg));
+			}
+
+			// Bind ModelParameter ↔ Argument-Extents
+			Map<ModelParameter, QvtoModelExtent> bindings = new LinkedHashMap<>();
+			List<ModelParameter> params = importedTransf.getModelParameter();
+			for (int i = 0; i < params.size() && i < argValues.size(); i++) {
+				Object argVal = argValues.get(i);
+				if (argVal instanceof QvtoModelExtent extent) {
+					bindings.put(params.get(i), extent);
+				}
+			}
+
+			// Find the module EClass for the transformation instance
+			EClass moduleClass = QvtoOperationResolver.findModuleClassIn(importedTransf);
+			if (moduleClass == null) {
+				// Create a minimal EClass so DynamicEObjectImpl has something
+				moduleClass = org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEClass();
+				moduleClass.setName(importedTransf.getName());
+			}
+
+			return new QvtoTransformationInstance(importedTransf, moduleClass, bindings, engine);
 		}
 
 		@Override

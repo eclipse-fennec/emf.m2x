@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2m.model.qvtoperational.impl;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
@@ -52,6 +53,7 @@ import org.eclipse.fennec.m2m.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2m.model.qvtoperational.QvtOperationalPackage;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveInExp;
+import org.eclipse.fennec.m2m.model.qvtoperational.Status;
 import org.eclipse.fennec.m2m.model.qvtoperational.VarParameter;
 
 import org.eclipse.fennec.m2m.model.trace.TracePackage;
@@ -189,6 +191,13 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
+	private EClass statusEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
 	private EClass imperativeCallExpEClass = null;
 
 	/**
@@ -232,6 +241,13 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	 * @generated
 	 */
 	private EEnum importKindEEnum = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EDataType javaExceptionEDataType = null;
 
 	/**
 	 * Creates an instance of the model <b>Package</b>, registered with
@@ -902,6 +918,46 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	 * @generated
 	 */
 	@Override
+	public EClass getStatus() {
+		return statusEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getStatus_Succeeded() {
+		return (EAttribute)statusEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getStatus_Failed() {
+		return (EAttribute)statusEClass.getEStructuralFeatures().get(1);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getStatus_RaisedException() {
+		return (EAttribute)statusEClass.getEStructuralFeatures().get(2);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getImperativeCallExp() {
 		return imperativeCallExpEClass;
 	}
@@ -1072,6 +1128,16 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	 * @generated
 	 */
 	@Override
+	public EDataType getJavaException() {
+		return javaExceptionEDataType;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public QvtOperationalFactory getQvtOperationalFactory() {
 		return (QvtOperationalFactory)getEFactoryInstance();
 	}
@@ -1171,6 +1237,11 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		createEReference(contextualPropertyEClass, CONTEXTUAL_PROPERTY__CONTEXT);
 		createEReference(contextualPropertyEClass, CONTEXTUAL_PROPERTY__OVERRIDDEN);
 
+		statusEClass = createEClass(STATUS);
+		createEAttribute(statusEClass, STATUS__SUCCEEDED);
+		createEAttribute(statusEClass, STATUS__FAILED);
+		createEAttribute(statusEClass, STATUS__RAISED_EXCEPTION);
+
 		imperativeCallExpEClass = createEClass(IMPERATIVE_CALL_EXP);
 		createEAttribute(imperativeCallExpEClass, IMPERATIVE_CALL_EXP__IS_VIRTUAL);
 
@@ -1194,6 +1265,9 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		// Create enums
 		directionKindEEnum = createEEnum(DIRECTION_KIND);
 		importKindEEnum = createEEnum(IMPORT_KIND);
+
+		// Create data types
+		javaExceptionEDataType = createEDataType(JAVA_EXCEPTION);
 	}
 
 	/**
@@ -1245,6 +1319,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		modelTypeEClass.getESuperTypes().add(ecorePackage.getEClass());
 		moduleImportEClass.getESuperTypes().add(ecorePackage.getEModelElement());
 		contextualPropertyEClass.getESuperTypes().add(ecorePackage.getEStructuralFeature());
+		statusEClass.getESuperTypes().add(ecorePackage.getEModelElement());
 		imperativeCallExpEClass.getESuperTypes().add(theOclPackage.getOperationCallExp());
 		imperativeCallExpEClass.getESuperTypes().add(theImperativeOclPackage.getImperativeExpression());
 		mappingCallExpEClass.getESuperTypes().add(this.getImperativeCallExp());
@@ -1329,6 +1404,11 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		initEReference(getContextualProperty_Context(), ecorePackage.getEClass(), null, "context", null, 1, 1, ContextualProperty.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getContextualProperty_Overridden(), ecorePackage.getEStructuralFeature(), null, "overridden", null, 0, 1, ContextualProperty.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
+		initEClass(statusEClass, Status.class, "Status", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEAttribute(getStatus_Succeeded(), ecorePackage.getEBoolean(), "succeeded", null, 0, 1, Status.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getStatus_Failed(), ecorePackage.getEBoolean(), "failed", null, 0, 1, Status.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getStatus_RaisedException(), this.getJavaException(), "raisedException", null, 0, 1, Status.class, IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
 		initEClass(imperativeCallExpEClass, ImperativeCallExp.class, "ImperativeCallExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getImperativeCallExp_IsVirtual(), ecorePackage.getEBoolean(), "isVirtual", "true", 0, 1, ImperativeCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
@@ -1358,6 +1438,9 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		initEEnum(importKindEEnum, ImportKind.class, "ImportKind");
 		addEEnumLiteral(importKindEEnum, ImportKind.EXTENSION);
 		addEEnumLiteral(importKindEEnum, ImportKind.ACCESS);
+
+		// Initialize data types
+		initEDataType(javaExceptionEDataType, Exception.class, "JavaException", !IS_SERIALIZABLE, !IS_GENERATED_INSTANCE_CLASS);
 
 		// Create resource
 		createResource(eNS_URI);

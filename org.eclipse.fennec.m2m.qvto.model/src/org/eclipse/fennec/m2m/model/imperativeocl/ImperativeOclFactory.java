@@ -190,6 +190,15 @@ public interface ImperativeOclFactory extends EFactory {
 	InstantiationExp createInstantiationExp();
 
 	/**
+	 * Returns a new object of class '<em>Transformation Instantiation Exp</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>Transformation Instantiation Exp</em>'.
+	 * @generated
+	 */
+	TransformationInstantiationExp createTransformationInstantiationExp();
+
+	/**
 	 * Returns a new object of class '<em>Variable Init Exp</em>'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->

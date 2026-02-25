@@ -19,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.common.util.Diagnostic;
-
 import org.eclipse.fennec.m2m.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2m.qvto.tests.AbstractQvtoEngineTest;
 import org.junit.jupiter.api.Test;

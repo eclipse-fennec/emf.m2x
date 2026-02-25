@@ -14,7 +14,6 @@
  */
 package org.eclipse.fennec.m2m.qvto.tests.transformation;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 

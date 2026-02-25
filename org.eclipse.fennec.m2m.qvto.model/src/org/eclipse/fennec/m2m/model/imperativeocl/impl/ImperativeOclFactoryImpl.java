@@ -86,6 +86,7 @@ public class ImperativeOclFactoryImpl extends EFactoryImpl implements Imperative
 			case ImperativeOclPackage.TRY_EXP: return createTryExp();
 			case ImperativeOclPackage.CATCH_EXP: return createCatchExp();
 			case ImperativeOclPackage.INSTANTIATION_EXP: return createInstantiationExp();
+			case ImperativeOclPackage.TRANSFORMATION_INSTANTIATION_EXP: return createTransformationInstantiationExp();
 			case ImperativeOclPackage.VARIABLE_INIT_EXP: return createVariableInitExp();
 			case ImperativeOclPackage.UNLINK_EXP: return createUnlinkExp();
 			case ImperativeOclPackage.TYPEDEF: return createTypedef();
@@ -309,6 +310,17 @@ public class ImperativeOclFactoryImpl extends EFactoryImpl implements Imperative
 	public InstantiationExp createInstantiationExp() {
 		InstantiationExpImpl instantiationExp = new InstantiationExpImpl();
 		return instantiationExp;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public TransformationInstantiationExp createTransformationInstantiationExp() {
+		TransformationInstantiationExpImpl transformationInstantiationExp = new TransformationInstantiationExpImpl();
+		return transformationInstantiationExp;
 	}
 
 	/**

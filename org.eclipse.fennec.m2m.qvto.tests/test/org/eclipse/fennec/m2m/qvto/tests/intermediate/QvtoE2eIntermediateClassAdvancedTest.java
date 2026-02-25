@@ -193,11 +193,6 @@ class QvtoE2eIntermediateClassAdvancedTest extends AbstractQvtoEngineTest {
 	// ---- Static property (shared across all instances) ----
 
 	@Test
-	@org.junit.jupiter.api.Disabled("Implementation gap: static property sharing requires cross-instance "
-			+ "interception at both read and write paths (parser type propagation + evaluator). "
-			+ "Grammar parses 'static' modifier correctly, but the evaluator doesn't yet redirect "
-			+ "reads/writes through a shared static store. See QVT-O v1.3 §8.1.10, "
-			+ "Eclipse ref: intermProperties.qvto 'static staticData'.")
 	void intermediateClass_staticProperty() throws Exception {
 		// Eclipse: static staticData : String = '1'; — shared across all instances
 		QvtoExecutionResult result = execute("""

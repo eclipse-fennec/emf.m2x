@@ -56,6 +56,7 @@ import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.model.qvtoperational.QvtOperationalPackage;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveInExp;
+import org.eclipse.fennec.m2m.model.qvtoperational.Status;
 import org.eclipse.fennec.m2m.model.qvtoperational.VarParameter;
 
 /**
@@ -277,6 +278,13 @@ public class QvtOperationalSwitch<T> extends Switch<T> {
 				if (result == null) result = caseETypedElement(contextualProperty);
 				if (result == null) result = caseENamedElement(contextualProperty);
 				if (result == null) result = caseEModelElement(contextualProperty);
+				if (result == null) result = defaultCase(theEObject);
+				return result;
+			}
+			case QvtOperationalPackage.STATUS: {
+				Status status = (Status)theEObject;
+				T result = caseStatus(status);
+				if (result == null) result = caseEModelElement(status);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -585,6 +593,21 @@ public class QvtOperationalSwitch<T> extends Switch<T> {
 	 * @generated
 	 */
 	public T caseContextualProperty(ContextualProperty object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>Status</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>Status</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseStatus(Status object) {
 		return null;
 	}
 

@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executor;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EPackage;
@@ -39,6 +40,7 @@ import org.eclipse.fennec.m2m.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoEvalEnvironment;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoEvaluator;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoExtentManager;
+import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoLinker;
 import org.eclipse.fennec.m2m.qvto.engine.internal.QvtoOperationProvider;
 import org.eclipse.fennec.m2m.qvto.parser.QvtoParserSupport;
 
@@ -61,6 +63,7 @@ public class QvtoEngineImpl implements QvtoEngine {
 	private final OclEngineImpl oclEngine;
 	private final List<QvtoBlackboxLibrary> blackboxLibraries = new CopyOnWriteArrayList<>();
 	private final List<QvtoUnitResolver> unitResolvers = new CopyOnWriteArrayList<>();
+	private final Executor parallelExecutor;
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -74,6 +77,7 @@ public class QvtoEngineImpl implements QvtoEngine {
 		this.oclEngine = new OclEngineImpl(oclConfig);
 		this.blackboxLibraries.addAll(config.blackboxLibraries());
 		this.unitResolvers.addAll(config.unitResolvers());
+		this.parallelExecutor = config.parallelExecutor();
 	}
 
 	// --- Parsing ---
@@ -111,11 +115,26 @@ public class QvtoEngineImpl implements QvtoEngine {
 		Objects.requireNonNull(context, "context must not be null");
 		Objects.requireNonNull(options, "options must not be null");
 
+		// §8.1.13: Link phase — resolve stub imports via unit resolvers
+		if (!unitResolvers.isEmpty()) {
+			try {
+				QvtoLinker linker = new QvtoLinker(parserSupport, unitResolvers,
+						EPackage.Registry.INSTANCE);
+				linker.link(transformation);
+			} catch (QvtoParseException e) {
+				return new QvtoExecutionResult(
+						List.of(new org.eclipse.emf.common.util.BasicDiagnostic(
+								Diagnostic.ERROR, "org.eclipse.fennec.m2m.qvto.engine",
+								0, "Link error: " + e.getMessage(), null)),
+						null);
+			}
+		}
+
 		QvtoEvalEnvironment env = QvtoEvalEnvironment.forTransformation(context.configProperties());
 		QvtoExtentManager extentManager = new QvtoExtentManager(transformation, context);
 
 		QvtoEvaluator evaluator = new QvtoEvaluator(
-				oclEngine, env, options, transformation, extentManager);
+				oclEngine, env, options, transformation, extentManager, this);
 
 		// Register QVT-O operations as OCL custom provider for mutual recursion
 		QvtoOperationProvider qvtoProvider = new QvtoOperationProvider(
@@ -161,5 +180,12 @@ public class QvtoEngineImpl implements QvtoEngine {
 	 */
 	public OclEngineImpl getOclEngine() {
 		return oclEngine;
+	}
+
+	/**
+	 * Returns the executor used for {@code parallelTransform()} (§8.3.6.2).
+	 */
+	public Executor getParallelExecutor() {
+		return parallelExecutor;
 	}
 }

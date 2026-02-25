@@ -166,6 +166,10 @@ public class ImperativeOclAdapterFactory extends AdapterFactoryImpl {
 				return createInstantiationExpAdapter();
 			}
 			@Override
+			public Adapter caseTransformationInstantiationExp(TransformationInstantiationExp object) {
+				return createTransformationInstantiationExpAdapter();
+			}
+			@Override
 			public Adapter caseVariableInitExp(VariableInitExp object) {
 				return createVariableInitExpAdapter();
 			}
@@ -496,6 +500,20 @@ public class ImperativeOclAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createInstantiationExpAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp <em>Transformation Instantiation Exp</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp
+	 * @generated
+	 */
+	public Adapter createTransformationInstantiationExpAdapter() {
 		return null;
 	}
 

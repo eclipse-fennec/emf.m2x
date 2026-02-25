@@ -18,7 +18,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2m.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2m.qvto.api.QvtoModelExtent;

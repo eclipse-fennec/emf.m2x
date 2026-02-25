@@ -35,6 +35,7 @@ import org.eclipse.fennec.m2m.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2m.model.qvtoperational.Module;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2m.model.qvtoperational.Status;
 import org.eclipse.fennec.m2m.ocl.api.OclOperation;
 import org.eclipse.fennec.m2m.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2m.qvto.api.BasicQvtoModelExtent;
@@ -343,7 +344,74 @@ public class QvtoOperationProvider implements OclOperationProvider {
 			}
 		}
 
+		// §8.3.6: Transformation instance operations
+		addTransformationInstanceOperations(ops);
+
+		// §8.3.6: Status property operations
+		addStatusOperations(ops);
+
 		return ops;
+	}
+
+	/**
+	 * §8.3.6: Operations on transformation instances (transform, parallelTransform).
+	 */
+	private void addTransformationInstanceOperations(List<OclOperation> ops) {
+		// transform() : Status
+		ops.add(new OclOperation("transform", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoTransformationInstance instance) {
+						return QvtoTransformationOperations.handleTransform(instance);
+					}
+					return null;
+				}));
+
+		// parallelTransform() : Status
+		ops.add(new OclOperation("parallelTransform", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoTransformationInstance instance) {
+						return QvtoTransformationOperations.handleParallelTransform(instance);
+					}
+					return null;
+				}));
+
+		// wait(statuses : Set(Status)) : Void
+		ops.add(new OclOperation("wait", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (args.length > 0) {
+						QvtoTransformationOperations.handleWait(args[0]);
+					}
+					return null;
+				}));
+	}
+
+	/**
+	 * §8.3.6: Property access on Status objects (succeeded(), failed(), raisedException()).
+	 */
+	private void addStatusOperations(List<OclOperation> ops) {
+		ops.add(new OclOperation("succeeded", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof Status s) {
+						return s.isSucceeded();
+					}
+					return null;
+				}));
+
+		ops.add(new OclOperation("failed", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof Status s) {
+						return s.isFailed();
+					}
+					return null;
+				}));
+
+		ops.add(new OclOperation("raisedException", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof Status s) {
+						return s.getRaisedException();
+					}
+					return null;
+				}));
 	}
 
 	private void addModuleOperations(List<OclOperation> ops, EClass moduleClass) {

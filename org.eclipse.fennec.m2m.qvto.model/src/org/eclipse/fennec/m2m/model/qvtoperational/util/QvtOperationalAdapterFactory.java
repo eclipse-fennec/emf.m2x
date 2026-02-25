@@ -59,6 +59,7 @@ import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2m.model.qvtoperational.QvtOperationalPackage;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveInExp;
+import org.eclipse.fennec.m2m.model.qvtoperational.Status;
 import org.eclipse.fennec.m2m.model.qvtoperational.VarParameter;
 
 /**
@@ -184,6 +185,10 @@ public class QvtOperationalAdapterFactory extends AdapterFactoryImpl {
 			@Override
 			public Adapter caseContextualProperty(ContextualProperty object) {
 				return createContextualPropertyAdapter();
+			}
+			@Override
+			public Adapter caseStatus(Status object) {
+				return createStatusAdapter();
 			}
 			@Override
 			public Adapter caseImperativeCallExp(ImperativeCallExp object) {
@@ -520,6 +525,20 @@ public class QvtOperationalAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createContextualPropertyAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2m.model.qvtoperational.Status <em>Status</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2m.model.qvtoperational.Status
+	 * @generated
+	 */
+	public Adapter createStatusAdapter() {
 		return null;
 	}
 

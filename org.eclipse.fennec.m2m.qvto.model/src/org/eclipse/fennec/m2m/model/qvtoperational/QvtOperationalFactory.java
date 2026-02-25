@@ -190,6 +190,15 @@ public interface QvtOperationalFactory extends EFactory {
 	ContextualProperty createContextualProperty();
 
 	/**
+	 * Returns a new object of class '<em>Status</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>Status</em>'.
+	 * @generated
+	 */
+	Status createStatus();
+
+	/**
 	 * Returns a new object of class '<em>Imperative Call Exp</em>'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->

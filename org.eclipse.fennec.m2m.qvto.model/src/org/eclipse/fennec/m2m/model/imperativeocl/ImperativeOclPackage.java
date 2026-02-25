@@ -1269,6 +1269,79 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int INSTANTIATION_EXP_OPERATION_COUNT = IMPERATIVE_EXPRESSION_OPERATION_COUNT + 0;
 
 	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2m.model.imperativeocl.impl.TransformationInstantiationExpImpl <em>Transformation Instantiation Exp</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2m.model.imperativeocl.impl.TransformationInstantiationExpImpl
+	 * @see org.eclipse.fennec.m2m.model.imperativeocl.impl.ImperativeOclPackageImpl#getTransformationInstantiationExp()
+	 * @generated
+	 */
+	int TRANSFORMATION_INSTANTIATION_EXP = 19;
+
+	/**
+	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int TRANSFORMATION_INSTANTIATION_EXP__TYPE = INSTANTIATION_EXP__TYPE;
+
+	/**
+	 * The feature id for the '<em><b>Argument</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int TRANSFORMATION_INSTANTIATION_EXP__ARGUMENT = INSTANTIATION_EXP__ARGUMENT;
+
+	/**
+	 * The feature id for the '<em><b>Instantiated Class</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int TRANSFORMATION_INSTANTIATION_EXP__INSTANTIATED_CLASS = INSTANTIATION_EXP__INSTANTIATED_CLASS;
+
+	/**
+	 * The feature id for the '<em><b>Extent</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int TRANSFORMATION_INSTANTIATION_EXP__EXTENT = INSTANTIATION_EXP__EXTENT;
+
+	/**
+	 * The feature id for the '<em><b>Imported Transformation</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int TRANSFORMATION_INSTANTIATION_EXP__IMPORTED_TRANSFORMATION = INSTANTIATION_EXP_FEATURE_COUNT + 0;
+
+	/**
+	 * The number of structural features of the '<em>Transformation Instantiation Exp</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int TRANSFORMATION_INSTANTIATION_EXP_FEATURE_COUNT = INSTANTIATION_EXP_FEATURE_COUNT + 1;
+
+	/**
+	 * The number of operations of the '<em>Transformation Instantiation Exp</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int TRANSFORMATION_INSTANTIATION_EXP_OPERATION_COUNT = INSTANTIATION_EXP_OPERATION_COUNT + 0;
+
+	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2m.model.imperativeocl.impl.VariableInitExpImpl <em>Variable Init Exp</em>}' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -1276,7 +1349,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.imperativeocl.impl.ImperativeOclPackageImpl#getVariableInitExp()
 	 * @generated
 	 */
-	int VARIABLE_INIT_EXP = 19;
+	int VARIABLE_INIT_EXP = 20;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1331,7 +1404,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.imperativeocl.impl.ImperativeOclPackageImpl#getUnlinkExp()
 	 * @generated
 	 */
-	int UNLINK_EXP = 20;
+	int UNLINK_EXP = 21;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1386,7 +1459,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.imperativeocl.impl.ImperativeOclPackageImpl#getTypedef()
 	 * @generated
 	 */
-	int TYPEDEF = 21;
+	int TYPEDEF = 22;
 
 	/**
 	 * The feature id for the '<em><b>EAnnotations</b></em>' containment reference list.
@@ -1765,7 +1838,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2m.model.imperativeocl.impl.ImperativeOclPackageImpl#getSeverityKind()
 	 * @generated
 	 */
-	int SEVERITY_KIND = 22;
+	int SEVERITY_KIND = 23;
 
 
 	/**
@@ -2287,6 +2360,27 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EReference getInstantiationExp_Extent();
+
+	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp <em>Transformation Instantiation Exp</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>Transformation Instantiation Exp</em>'.
+	 * @see org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp
+	 * @generated
+	 */
+	EClass getTransformationInstantiationExp();
+
+	/**
+	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp#getImportedTransformation <em>Imported Transformation</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the reference '<em>Imported Transformation</em>'.
+	 * @see org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp#getImportedTransformation()
+	 * @see #getTransformationInstantiationExp()
+	 * @generated
+	 */
+	EReference getTransformationInstantiationExp_ImportedTransformation();
 
 	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2m.model.imperativeocl.VariableInitExp <em>Variable Init Exp</em>}'.
@@ -2846,6 +2940,24 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference INSTANTIATION_EXP__EXTENT = eINSTANCE.getInstantiationExp_Extent();
+
+		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2m.model.imperativeocl.impl.TransformationInstantiationExpImpl <em>Transformation Instantiation Exp</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2m.model.imperativeocl.impl.TransformationInstantiationExpImpl
+		 * @see org.eclipse.fennec.m2m.model.imperativeocl.impl.ImperativeOclPackageImpl#getTransformationInstantiationExp()
+		 * @generated
+		 */
+		EClass TRANSFORMATION_INSTANTIATION_EXP = eINSTANCE.getTransformationInstantiationExp();
+
+		/**
+		 * The meta object literal for the '<em><b>Imported Transformation</b></em>' reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference TRANSFORMATION_INSTANTIATION_EXP__IMPORTED_TRANSFORMATION = eINSTANCE.getTransformationInstantiationExp_ImportedTransformation();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2m.model.imperativeocl.impl.VariableInitExpImpl <em>Variable Init Exp</em>}' class.

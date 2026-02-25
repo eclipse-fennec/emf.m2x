@@ -188,6 +188,13 @@
         eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClass"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="extent" eType="ecore:EClass ../../org.eclipse.fennec.m2m.ocl.model/model/ocl.ecore#//Variable"/>
   </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="TransformationInstantiationExp" eSuperTypes="#//InstantiationExp">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="Instantiation of an imported transformation via new T(args) (QVT v1.3 Section 8.1.13)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="importedTransformation"
+        eType="ecore:EClass qvtoperational.ecore#//OperationalTransformation"/>
+  </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="VariableInitExp" eSuperTypes="#//ImperativeExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Variable initialization expression: var x := value (QVT v1.3 Section 8.2.1.10)."/>

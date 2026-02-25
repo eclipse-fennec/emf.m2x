@@ -15,15 +15,16 @@
 package org.eclipse.fennec.m2m.qvto.parser;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.eclipse.emf.ecore.EAnnotation;
-import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -83,12 +84,14 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoEnvironment environment;
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
+	private final Map<String, Module> importedModuleStubs = new HashMap<>();
 	private String intermediatePackageUri;
 
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
-		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry);
+		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry,
+				importedModuleStubs);
 	}
 
 	// ==================== Entry Point ====================
@@ -974,12 +977,21 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.QualifiedNameContext nameCtx : ctx.moduleRefList().qualifiedName()) {
 			ModuleImport imp = QVTO.createModuleImport();
 			imp.setKind("extends".equals(kind) ? ImportKind.EXTENSION : ImportKind.ACCESS);
-			// Store qualified name as stub library for link-time resolution
+			// Store qualified name as stub for link-time resolution
 			String qualifiedName = qualifiedNameText(nameCtx);
-			Library stub = QVTO.createLibrary();
+			// Create OperationalTransformation stub so TransformationInstantiationExp
+			// can reference it (Library would fail the instanceof check in visitNewExp)
+			OperationalTransformation stub = QVTO.createOperationalTransformation();
 			stub.setName(qualifiedName);
 			imp.setImportedModule(stub);
 			module.getModuleImport().add(imp);
+			// Track for TransformationInstantiationExp detection in visitNewExp
+			importedModuleStubs.put(qualifiedName, stub);
+			// Also track simple name (last segment) for unqualified references
+			int dotIdx = qualifiedName.lastIndexOf('.');
+			if (dotIdx >= 0) {
+				importedModuleStubs.put(qualifiedName.substring(dotIdx + 1), stub);
+			}
 		}
 	}
 
@@ -1088,7 +1100,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void updateExpressionBuilder() {
-		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry);
+		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry,
+				this.importedModuleStubs);
 	}
 
 	private String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {

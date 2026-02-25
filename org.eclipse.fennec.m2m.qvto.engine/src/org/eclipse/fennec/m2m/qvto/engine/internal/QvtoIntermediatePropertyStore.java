@@ -47,10 +47,28 @@ class QvtoIntermediatePropertyStore {
 	/** Per-instance intermediate property values. */
 	private final IdentityHashMap<EObject, Map<String, Object>> intermediatePropertyValues = new IdentityHashMap<>();
 
+	/** §8.4: Static intermediate property values — shared across all instances, keyed by context class name. */
+	private final Map<String, Map<String, Object>> staticPropertyValues = new HashMap<>();
+
+	/** Cached flag: true if any intermediate class has a static feature. */
+	private final boolean hasStaticIntermediateClassFeatures;
+
 	QvtoIntermediatePropertyStore(OperationalTransformation transformation,
 			Function<OclExpression, Object> evalFn) {
 		this.transformation = Objects.requireNonNull(transformation);
 		this.evalFn = Objects.requireNonNull(evalFn);
+		this.hasStaticIntermediateClassFeatures = checkStaticIntermediateClassFeatures();
+	}
+
+	private boolean checkStaticIntermediateClassFeatures() {
+		for (EClass ic : transformation.getIntermediateClass()) {
+			for (EStructuralFeature sf : ic.getEStructuralFeatures()) {
+				if (isStatic(sf)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -119,8 +137,14 @@ class QvtoIntermediatePropertyStore {
 	 * §8.1.10: Property interceptor for OCL delegated evaluation.
 	 * Returns the intermediate property value if the property is an intermediate property,
 	 * otherwise returns {@link OclContext#PROPERTY_NOT_HANDLED}.
+	 * §8.4: Also intercepts static intermediate class features to read from shared store.
 	 */
 	Object interceptIntermediateProperty(EObject target, String propName) {
+		// §8.4: Check for static intermediate class feature
+		EStructuralFeature sf = target.eClass().getEStructuralFeature(propName);
+		if (sf != null && isStatic(sf)) {
+			return getStaticValue(sf);
+		}
 		ContextualProperty cp = findIntermediateProperty(target, propName);
 		if (cp != null) {
 			return getIntermediatePropertyValue(target, propName);
@@ -129,10 +153,53 @@ class QvtoIntermediatePropertyStore {
 	}
 
 	/**
-	 * @return {@code true} if the transformation has any intermediate properties declared
+	 * @return {@code true} if the transformation has any intermediate properties or
+	 *         intermediate classes with static features that require interception
 	 */
 	boolean hasIntermediateProperties() {
-		return !transformation.getIntermediateProperty().isEmpty();
+		return !transformation.getIntermediateProperty().isEmpty()
+				|| hasStaticIntermediateClassFeatures;
+	}
+
+	/**
+	 * §8.4: Checks if a structural feature has the 'static' modifier.
+	 * The parser stores this as EAnnotation("fennec:intermediate:modifier", {"static": "true"})
+	 * on the EAttribute of an intermediate class.
+	 */
+	static boolean isStatic(EStructuralFeature feature) {
+		EAnnotation ann = feature.getEAnnotation("fennec:intermediate:modifier");
+		return ann != null && "true".equals(ann.getDetails().get("static"));
+	}
+
+	/**
+	 * §8.4: Reads a static property value from the class-level shared store.
+	 * Falls back to the feature's init expression on first access.
+	 */
+	Object getStaticValue(EStructuralFeature feature) {
+		String classKey = feature.getEContainingClass().getName();
+		String propName = feature.getName();
+		Map<String, Object> props = staticPropertyValues.get(classKey);
+		if (props != null && props.containsKey(propName)) {
+			return props.get(propName);
+		}
+		// Lazy init from default expression
+		EAnnotation ann = feature.getEAnnotation("fennec:intermediate:default");
+		if (ann != null && !ann.getReferences().isEmpty()
+				&& ann.getReferences().get(0) instanceof OclExpression defaultExpr) {
+			Object initValue = evalFn.apply(defaultExpr);
+			setStaticValue(feature, initValue);
+			return initValue;
+		}
+		return null;
+	}
+
+	/**
+	 * §8.4: Writes a static property value to the class-level shared store.
+	 */
+	void setStaticValue(EStructuralFeature feature, Object value) {
+		String classKey = feature.getEContainingClass().getName();
+		staticPropertyValues.computeIfAbsent(classKey, k -> new HashMap<>())
+				.put(feature.getName(), value);
 	}
 
 	/**

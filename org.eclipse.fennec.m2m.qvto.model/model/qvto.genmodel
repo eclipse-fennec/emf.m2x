@@ -81,6 +81,9 @@
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//InstantiationExp/instantiatedClass"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//InstantiationExp/extent"/>
     </genClasses>
+    <genClasses ecoreClass="imperativeocl.ecore#//TransformationInstantiationExp">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//TransformationInstantiationExp/importedTransformation"/>
+    </genClasses>
     <genClasses ecoreClass="imperativeocl.ecore#//VariableInitExp">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute imperativeocl.ecore#//VariableInitExp/withResult"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//VariableInitExp/referredVariable"/>
@@ -175,6 +178,12 @@
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ContextualProperty/initExpression"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ContextualProperty/context"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ContextualProperty/overridden"/>
+    </genClasses>
+    <genDataTypes ecoreDataType="qvtoperational.ecore#//JavaException"/>
+    <genClasses ecoreClass="qvtoperational.ecore#//Status">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//Status/succeeded"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//Status/failed"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//Status/raisedException"/>
     </genClasses>
     <genClasses ecoreClass="qvtoperational.ecore#//ImperativeCallExp">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ImperativeCallExp/isVirtual"/>

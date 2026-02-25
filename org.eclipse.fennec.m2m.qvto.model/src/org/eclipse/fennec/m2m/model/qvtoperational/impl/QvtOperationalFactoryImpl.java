@@ -47,6 +47,7 @@ import org.eclipse.fennec.m2m.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2m.model.qvtoperational.QvtOperationalPackage;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2m.model.qvtoperational.ResolveInExp;
+import org.eclipse.fennec.m2m.model.qvtoperational.Status;
 import org.eclipse.fennec.m2m.model.qvtoperational.VarParameter;
 
 /**
@@ -110,6 +111,7 @@ public class QvtOperationalFactoryImpl extends EFactoryImpl implements QvtOperat
 			case QvtOperationalPackage.MODEL_TYPE: return createModelType();
 			case QvtOperationalPackage.MODULE_IMPORT: return createModuleImport();
 			case QvtOperationalPackage.CONTEXTUAL_PROPERTY: return createContextualProperty();
+			case QvtOperationalPackage.STATUS: return createStatus();
 			case QvtOperationalPackage.IMPERATIVE_CALL_EXP: return createImperativeCallExp();
 			case QvtOperationalPackage.MAPPING_CALL_EXP: return createMappingCallExp();
 			case QvtOperationalPackage.OBJECT_EXP: return createObjectExp();
@@ -339,6 +341,17 @@ public class QvtOperationalFactoryImpl extends EFactoryImpl implements QvtOperat
 	public ContextualProperty createContextualProperty() {
 		ContextualPropertyImpl contextualProperty = new ContextualPropertyImpl();
 		return contextualProperty;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public Status createStatus() {
+		StatusImpl status = new StatusImpl();
+		return status;
 	}
 
 	/**

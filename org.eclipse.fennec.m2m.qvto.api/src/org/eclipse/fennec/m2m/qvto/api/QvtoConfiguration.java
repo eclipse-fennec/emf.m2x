@@ -18,6 +18,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import org.eclipse.fennec.m2m.ocl.api.OclConfiguration;
 
@@ -42,11 +44,13 @@ public final class QvtoConfiguration {
 	private final OclConfiguration oclConfiguration;
 	private final List<QvtoBlackboxLibrary> blackboxLibraries;
 	private final List<QvtoUnitResolver> unitResolvers;
+	private final Executor parallelExecutor;
 
 	private QvtoConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
 		this.blackboxLibraries = Collections.unmodifiableList(new ArrayList<>(builder.blackboxLibraries));
 		this.unitResolvers = Collections.unmodifiableList(new ArrayList<>(builder.unitResolvers));
+		this.parallelExecutor = builder.parallelExecutor;
 	}
 
 	public OclConfiguration oclConfiguration() {
@@ -61,6 +65,14 @@ public final class QvtoConfiguration {
 		return unitResolvers;
 	}
 
+	/**
+	 * Returns the {@link Executor} used for {@code parallelTransform()} (§8.3.6.2).
+	 * Defaults to {@link Executors#newVirtualThreadPerTaskExecutor()}.
+	 */
+	public Executor parallelExecutor() {
+		return parallelExecutor;
+	}
+
 	public static Builder builder(OclConfiguration oclConfiguration) {
 		return new Builder(oclConfiguration);
 	}
@@ -70,6 +82,7 @@ public final class QvtoConfiguration {
 		private final OclConfiguration oclConfiguration;
 		private final List<QvtoBlackboxLibrary> blackboxLibraries = new ArrayList<>();
 		private final List<QvtoUnitResolver> unitResolvers = new ArrayList<>();
+		private Executor parallelExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
@@ -94,6 +107,18 @@ public final class QvtoConfiguration {
 		public Builder unitResolvers(List<QvtoUnitResolver> resolvers) {
 			this.unitResolvers.clear();
 			this.unitResolvers.addAll(Objects.requireNonNull(resolvers, "resolvers must not be null"));
+			return this;
+		}
+
+		/**
+		 * Sets the {@link Executor} for {@code parallelTransform()} (§8.3.6.2).
+		 * Defaults to {@link Executors#newVirtualThreadPerTaskExecutor()}.
+		 *
+		 * @param executor the executor to use for parallel transformation execution
+		 * @return this builder
+		 */
+		public Builder parallelExecutor(Executor executor) {
+			this.parallelExecutor = Objects.requireNonNull(executor, "executor must not be null");
 			return this;
 		}
 

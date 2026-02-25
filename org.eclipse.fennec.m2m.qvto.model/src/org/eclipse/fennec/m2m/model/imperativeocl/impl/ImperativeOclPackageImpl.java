@@ -42,6 +42,7 @@ import org.eclipse.fennec.m2m.model.imperativeocl.RaiseExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.ReturnExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.SeverityKind;
 import org.eclipse.fennec.m2m.model.imperativeocl.SwitchExp;
+import org.eclipse.fennec.m2m.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2m.model.imperativeocl.Typedef;
 import org.eclipse.fennec.m2m.model.imperativeocl.UnlinkExp;
@@ -197,6 +198,13 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 	 * @generated
 	 */
 	private EClass instantiationExpEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EClass transformationInstantiationExpEClass = null;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -795,6 +803,26 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 	 * @generated
 	 */
 	@Override
+	public EClass getTransformationInstantiationExp() {
+		return transformationInstantiationExpEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getTransformationInstantiationExp_ImportedTransformation() {
+		return (EReference)transformationInstantiationExpEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getVariableInitExp() {
 		return variableInitExpEClass;
 	}
@@ -986,6 +1014,9 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 		createEReference(instantiationExpEClass, INSTANTIATION_EXP__INSTANTIATED_CLASS);
 		createEReference(instantiationExpEClass, INSTANTIATION_EXP__EXTENT);
 
+		transformationInstantiationExpEClass = createEClass(TRANSFORMATION_INSTANTIATION_EXP);
+		createEReference(transformationInstantiationExpEClass, TRANSFORMATION_INSTANTIATION_EXP__IMPORTED_TRANSFORMATION);
+
 		variableInitExpEClass = createEClass(VARIABLE_INIT_EXP);
 		createEAttribute(variableInitExpEClass, VARIABLE_INIT_EXP__WITH_RESULT);
 		createEReference(variableInitExpEClass, VARIABLE_INIT_EXP__REFERRED_VARIABLE);
@@ -1027,6 +1058,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 
 		// Obtain other dependent packages
 		OclPackage theOclPackage = (OclPackage)EPackage.Registry.INSTANCE.getEPackage(OclPackage.eNS_URI);
+		QvtOperationalPackage theQvtOperationalPackage = (QvtOperationalPackage)EPackage.Registry.INSTANCE.getEPackage(QvtOperationalPackage.eNS_URI);
 
 		// Create type parameters
 
@@ -1054,6 +1086,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 		tryExpEClass.getESuperTypes().add(this.getImperativeExpression());
 		catchExpEClass.getESuperTypes().add(this.getImperativeExpression());
 		instantiationExpEClass.getESuperTypes().add(this.getImperativeExpression());
+		transformationInstantiationExpEClass.getESuperTypes().add(this.getInstantiationExp());
 		variableInitExpEClass.getESuperTypes().add(this.getImperativeExpression());
 		unlinkExpEClass.getESuperTypes().add(this.getImperativeExpression());
 		typedefEClass.getESuperTypes().add(ecorePackage.getEClass());
@@ -1126,6 +1159,9 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 		initEReference(getInstantiationExp_Argument(), theOclPackage.getOclExpression(), null, "argument", null, 0, -1, InstantiationExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getInstantiationExp_InstantiatedClass(), ecorePackage.getEClass(), null, "instantiatedClass", null, 1, 1, InstantiationExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getInstantiationExp_Extent(), theOclPackage.getVariable(), null, "extent", null, 0, 1, InstantiationExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
+		initEClass(transformationInstantiationExpEClass, TransformationInstantiationExp.class, "TransformationInstantiationExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEReference(getTransformationInstantiationExp_ImportedTransformation(), theQvtOperationalPackage.getOperationalTransformation(), null, "importedTransformation", null, 0, 1, TransformationInstantiationExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(variableInitExpEClass, VariableInitExp.class, "VariableInitExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getVariableInitExp_WithResult(), ecorePackage.getEBoolean(), "withResult", "false", 0, 1, VariableInitExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
