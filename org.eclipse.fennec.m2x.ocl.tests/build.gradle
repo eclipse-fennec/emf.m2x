@@ -1,0 +1,10 @@
+jacocoTestReport {
+    additionalClassDirs(files(
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.ocl.engine/bin",
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.ocl.parser/bin"
+    ))
+    additionalSourceDirs(files(
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.ocl.engine/src",
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.ocl.parser/src"
+    ))
+}

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<genmodel:GenModel xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+    xmlns:genmodel="http://www.eclipse.org/emf/2002/GenModel" copyrightText="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"
+    modelDirectory="/org.eclipse.fennec.m2x.ocl.tests/src" modelPluginID="org.eclipse.fennec.m2x.ocl.tests"
+    modelName="Company" rootExtendsClass="org.eclipse.emf.ecore.impl.MinimalEObjectImpl$Container"
+    importerID="org.eclipse.emf.importer.ecore" complianceLevel="21.0" copyrightFields="false"
+    operationReflection="true" importOrganizing="true" oSGiCompatible="true">
+  <foreignModel>company.ecore</foreignModel>
+  <genPackages prefix="Company" basePackage="org.eclipse.fennec.m2x.ocl.tests" resource="XMI"
+      disposableProviderFactory="true" ecorePackage="company.ecore#/">
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="company.ecore#//Status">
+      <genEnumLiterals ecoreEnumLiteral="company.ecore#//Status/JUNIOR"/>
+      <genEnumLiterals ecoreEnumLiteral="company.ecore#//Status/SENIOR"/>
+      <genEnumLiterals ecoreEnumLiteral="company.ecore#//Status/MANAGER"/>
+    </genEnums>
+    <genClasses ecoreClass="company.ecore#//Company">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute company.ecore#//Company/name"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference company.ecore#//Company/employees"/>
+    </genClasses>
+    <genClasses ecoreClass="company.ecore#//Person">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute company.ecore#//Person/name"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute company.ecore#//Person/age"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute company.ecore#//Person/salary"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute company.ecore#//Person/isMarried"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute company.ecore#//Person/status"/>
+      <genFeatures property="None" notify="false" createChild="false" ecoreFeature="ecore:EReference company.ecore#//Person/employer"/>
+    </genClasses>
+  </genPackages>
+</genmodel:GenModel>

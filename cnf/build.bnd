@@ -12,7 +12,7 @@
 # Activate baselining
 #fennec-baselining: true
 github-orga: eclipse-fennec
-github-project: emf.m2m
+github-project: emf.m2x
 base-version: 0.1.0
 Bundle-Version: ${base-version}.SNAPSHOT
 

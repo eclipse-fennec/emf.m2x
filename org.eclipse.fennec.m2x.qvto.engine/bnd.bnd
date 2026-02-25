@@ -1,0 +1,15 @@
+Bundle-Name: Fennec QVT-O Engine
+Bundle-Description: QVT-Operational v1.3 execution engine
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.fennec.m2x.ocl.api;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.engine;version=latest,\
+	org.eclipse.fennec.m2x.qvto.api;version=latest,\
+	org.eclipse.fennec.m2x.qvto.model;version=latest,\
+	org.eclipse.fennec.m2x.qvto.parser;version=latest,\
+	org.eclipse.fennec.m2x;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.condition;version=latest
