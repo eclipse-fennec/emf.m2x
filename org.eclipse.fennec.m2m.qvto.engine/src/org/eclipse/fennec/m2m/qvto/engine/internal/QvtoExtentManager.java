@@ -20,11 +20,14 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2m.model.qvtoperational.DirectionKind;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2m.model.qvtoperational.ModelType;
 import org.eclipse.fennec.m2m.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2m.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2m.qvto.api.QvtoModelExtent;
 
@@ -54,6 +57,11 @@ public class QvtoExtentManager {
 		this.modelParams = List.copyOf(params.subList(0, bound));
 		for (int i = 0; i < bound; i++) {
 			byName.put(params.get(i).getName(), extents.get(i));
+			// §8.1.3.2: in-parameter extents are read-only
+			if (params.get(i).getKind() == DirectionKind.IN
+					&& extents.get(i) instanceof BasicQvtoModelExtent basic) {
+				basic.setReadOnly(true);
+			}
 		}
 	}
 
@@ -104,6 +112,26 @@ public class QvtoExtentManager {
 			}
 		}
 		return extents.isEmpty() ? null : extents.get(extents.size() - 1);
+	}
+
+	/**
+	 * §8.1.3.2: Checks whether the given EObject belongs to a read-only ({@code in}) extent.
+	 *
+	 * @param eObject the object to check
+	 * @return {@code true} if the object's root container is in a read-only extent
+	 */
+	boolean isReadOnly(EObject eObject) {
+		if (eObject == null) {
+			return false;
+		}
+		EObject root = EcoreUtil.getRootContainer(eObject);
+		for (int i = 0; i < modelParams.size() && i < extents.size(); i++) {
+			QvtoModelExtent extent = extents.get(i);
+			if (extent.isReadOnly() && extent.getContents().contains(root)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

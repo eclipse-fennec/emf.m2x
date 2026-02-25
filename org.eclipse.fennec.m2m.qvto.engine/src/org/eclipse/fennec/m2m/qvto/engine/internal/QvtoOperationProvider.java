@@ -137,6 +137,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
+						checkExtentWritable(extent);
 						extent.add(eo);
 					}
 					return null;
@@ -146,6 +147,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
+						checkExtentWritable(extent);
 						extent.add(eo);
 					}
 					return null;
@@ -155,6 +157,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
+						checkExtentWritable(extent);
 						extent.getContents().remove(eo);
 					}
 					return null;
@@ -494,6 +497,17 @@ public class QvtoOperationProvider implements OclOperationProvider {
 			return pt;
 		}
 		return ANY_TYPE;
+	}
+
+	/**
+	 * §8.1.3.2: Guards mutation operations on read-only extents.
+	 */
+	private static void checkExtentWritable(QvtoModelExtent extent) {
+		if (extent.isReadOnly()) {
+			throw new QvtoControlFlowException.RaiseException(
+					"InvalidModelMutation",
+					"Cannot modify read-only model extent (in-parameter)");
+		}
 	}
 
 	private static EClass resolveEClassArg(Object arg) {

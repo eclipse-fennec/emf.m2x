@@ -102,6 +102,7 @@ class QvtoModelOperations {
 		}
 		// §8.3.5.5: addElement — add element to extent
 		if ("addElement".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			checkExtentWritable(extent);
 			Object arg = evalFn.apply(opCall.getOwnedArguments().get(0));
 			if (arg instanceof EObject eo) {
 				extent.add(eo);
@@ -110,6 +111,7 @@ class QvtoModelOperations {
 		}
 		// §8.3.5.6: removeElement — remove element from extent
 		if ("removeElement".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
+			checkExtentWritable(extent);
 			Object arg = evalFn.apply(opCall.getOwnedArguments().get(0));
 			if (arg instanceof EObject eo) {
 				extent.getContents().remove(eo);
@@ -245,6 +247,17 @@ class QvtoModelOperations {
 			return wrapNull(eObj.eContainer());
 		}
 		return UNHANDLED;
+	}
+
+	/**
+	 * §8.1.3.2: Guards mutation operations on read-only extents.
+	 */
+	private static void checkExtentWritable(QvtoModelExtent extent) {
+		if (extent.isReadOnly()) {
+			throw new QvtoControlFlowException.RaiseException(
+					"InvalidModelMutation",
+					"Cannot modify read-only model extent (in-parameter)");
+		}
 	}
 
 	static EClass resolveEClassArg(Object arg) {

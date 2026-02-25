@@ -1018,6 +1018,16 @@ public class QvtoEvaluator {
 
 
 	/**
+	 * §8.1.3.2: Guards property assignment on EObjects belonging to read-only (in) extents.
+	 */
+	private void checkNotReadOnly(EObject target) {
+		if (extentManager.isReadOnly(target)) {
+			throw new RaiseException("InvalidModelMutation",
+					"Cannot modify object in read-only model extent (in-parameter)");
+		}
+	}
+
+	/**
 	 * Coerces a value to match the expected EMF structural feature type.
 	 * OCL evaluates integer literals as Long, but EMF EInt expects Integer.
 	 */
@@ -1109,13 +1119,28 @@ public class QvtoEvaluator {
 				if (!env.contains(varName)) {
 					EObject target = resolveImplicitPropertyTarget(varName);
 					if (target != null) {
+						checkNotReadOnly(target);
 						// §8.3.19: Resolve alias to real feature name
 						String realName = resolveAlias(varName, target);
 						EStructuralFeature sf = target.eClass().getEStructuralFeature(
 								realName != null ? realName : varName);
-						Object coerced = coerceForFeature(sf, value);
+						// Eclipse bug449445: invalid → null for property assignment
+						Object coerced = coerceForFeature(sf,
+								value == OclInvalid.INSTANCE ? null : value);
 						if (exp.isIsReset()) {
-							target.eSet(sf, coerced);
+							if (value == OclInvalid.INSTANCE) {
+								// Clear collection or set null
+								Object current = target.eGet(sf);
+								if (current instanceof Collection<?>) {
+									@SuppressWarnings("unchecked")
+									Collection<Object> col = (Collection<Object>) current;
+									col.clear();
+								} else {
+									target.eSet(sf, null);
+								}
+							} else {
+								target.eSet(sf, coerced);
+							}
 						} else {
 							Object current = target.eGet(sf);
 							if (current instanceof Collection<?>) {
@@ -1176,7 +1201,8 @@ public class QvtoEvaluator {
 						}
 					}
 				} else if (source instanceof EObject eo && sf != null) {
-					// §8.1.10: Check intermediate property first
+					// §8.1.10: Check intermediate property first — intermediate properties
+					// are stored externally, so they ARE allowed on in-model objects.
 					ContextualProperty icp = intermediateStore.findIntermediateProperty(eo, sf.getName());
 					if (icp != null) {
 						// Eclipse bug449445: invalid → null for property assignment,
@@ -1197,6 +1223,8 @@ public class QvtoEvaluator {
 						}
 						return wrapNull(value);
 					}
+					// §8.1.3.2: Guard non-intermediate property assignment on in-model objects
+					checkNotReadOnly(eo);
 					// Resolve the feature from the actual EClass to handle
 					// cross-package identity (dynamic Ecore models)
 					EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());

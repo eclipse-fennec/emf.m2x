@@ -54,4 +54,17 @@ public interface QvtoModelExtent {
 	 * @param object the object to add
 	 */
 	void add(EObject object);
+
+	/**
+	 * Returns whether this extent is read-only.
+	 *
+	 * <p>§8.1.3.2: {@code in} model parameters are immutable. Mutation
+	 * operations ({@link #add}, {@link #setContents}) on a read-only extent
+	 * must be rejected at runtime.
+	 *
+	 * @return {@code true} if this extent is read-only
+	 */
+	default boolean isReadOnly() {
+		return false;
+	}
 }

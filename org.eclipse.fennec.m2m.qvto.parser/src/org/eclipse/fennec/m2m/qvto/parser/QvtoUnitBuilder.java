@@ -158,6 +158,27 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			transformation.getModuleImport().add(imp);
 		}
 
+		// §8.4: For declaration form (transformation T(...);) module elements follow at unit level.
+		// Set up model parameter environment so top-level elements can reference model params.
+		boolean hasTopLevelModuleElements = false;
+		for (QvtOParser.UnitElementContext elemCtx : ctx.unitElement()) {
+			if (elemCtx.moduleElement() != null) {
+				hasTopLevelModuleElements = true;
+				break;
+			}
+		}
+
+		QvtoEnvironment savedEnv = null;
+		if (hasTopLevelModuleElements && transformation != null) {
+			savedEnv = this.environment;
+			for (ModelParameter mp : transformation.getModelParameter()) {
+				Variable var = OCL.createVariable();
+				var.setName(mp.getName());
+				this.environment = this.environment.nested(var);
+			}
+			updateExpressionBuilder();
+		}
+
 		// Second pass: imports and top-level module elements
 		for (QvtOParser.UnitElementContext elemCtx : ctx.unitElement()) {
 			if (elemCtx.qvtoImportDecl() != null) {
@@ -166,6 +187,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			} else if (elemCtx.moduleElement() != null) {
 				processModuleElement(elemCtx.moduleElement(), transformation);
 			}
+		}
+
+		// Resolve deferred mapping extensions for top-level module elements
+		if (hasTopLevelModuleElements && transformation != null) {
+			resolvePendingExtensions(transformation);
+		}
+
+		if (savedEnv != null) {
+			this.environment = savedEnv;
+			updateExpressionBuilder();
 		}
 
 		// Clean up intermediate package from global registry (no longer needed after parse)
@@ -664,9 +695,18 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			module.getConfigProperty().add(configProp);
 		} else {
 			// §8.1.18: module-level property (non-configuration, non-intermediate)
+			// Supports typed (property x : T = expr;) and untyped (property x = expr;) forms
 			// Store as Variable in module.ownedVariable for evaluation at startup
 			Variable moduleProp = OCL.createVariable();
 			moduleProp.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
+
+			// Set type if explicitly declared (typed form)
+			if (ctx.typeExpression() != null) {
+				OclType type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+				if (type != null) {
+					moduleProp.setType(type);
+				}
+			}
 
 			if (ctx.expression() != null) {
 				moduleProp.setOwnedInit(
@@ -709,13 +749,18 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			attr.setName(QvtoExpressionBuilder.qvtoIdentifierText(featureCtx.qvtoIdentifier()));
 			attr.setEType(EcorePackage.Literals.EJAVA_OBJECT);
 
-			// Process modifiers: static, readonly, references, composes
+			// Process modifiers: static, readonly, references, composes, <<id>>
 			for (QvtOParser.ClassifierFeatureModifierContext modCtx : featureCtx.classifierFeatureModifier()) {
-				String modText = modCtx.getText();
-				EAnnotation modAnn = EcoreFactory.eINSTANCE.createEAnnotation();
-				modAnn.setSource("fennec:intermediate:modifier");
-				modAnn.getDetails().put(modText, "true");
-				attr.getEAnnotations().add(modAnn);
+				if (modCtx.STEREOTYPE_ID() != null) {
+					// §8.2.1.3: <<id>> stereotype — marks attribute as EClass ID
+					attr.setID(true);
+				} else {
+					String modText = modCtx.getText();
+					EAnnotation modAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+					modAnn.setSource("fennec:intermediate:modifier");
+					modAnn.getDetails().put(modText, "true");
+					attr.getEAnnotations().add(modAnn);
+				}
 			}
 
 			// Store default value expression if present
@@ -819,8 +864,17 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private ModelParameter buildModelParameter(QvtOParser.ModelParamContext ctx) {
 		ModelParameter param = QVTO.createModelParameter();
-		param.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 		param.setKind(resolveDirection(ctx.directionKind().getText()));
+
+		// §8.4: Named param (directionKind name ':' typeSpec) vs unnamed (directionKind typeSpec)
+		if (ctx.qvtoIdentifier() != null) {
+			param.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
+		} else {
+			// Unnamed: derive name from type (e.g., 'out ecore' → name 'ecore')
+			String typeName = ctx.typeSpec().typeExpression().getText();
+			param.setName(typeName);
+		}
+
 		// Store the type name from typeSpec for later linking to ModelType
 		if (ctx.typeSpec() != null && ctx.typeSpec().typeExpression() != null) {
 			String typeName = ctx.typeSpec().typeExpression().getText();
@@ -891,30 +945,44 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private void setupOperationEnvironment(
 			ImperativeOperation operation) {
-		// self (context parameter)
+		// self (context parameter) — set type so self.property resolves during parsing
 		if (operation.getContext() != null) {
 			Variable selfVar = OCL.createVariable();
 			selfVar.setName("self");
+			EClassifier ctxType = operation.getContext().getEType();
+			if (ctxType != null) {
+				selfVar.setType(expressionBuilder.createClassifierType(ctxType));
+			}
 			this.environment = this.environment.nested(selfVar);
 		}
 
-		// Parameters
+		// Parameters — set type for property resolution
 		for (var param : operation.getEParameters()) {
 			Variable paramVar = OCL.createVariable();
 			paramVar.setName(param.getName());
+			if (param.getEType() != null) {
+				paramVar.setType(expressionBuilder.createClassifierType(param.getEType()));
+			}
 			this.environment = this.environment.nested(paramVar);
 		}
 
-		// Result variables
+		// Result variables — set type for property resolution
 		for (var resultParam : operation.getResult()) {
 			Variable resultVar = OCL.createVariable();
 			resultVar.setName(resultParam.getName());
+			if (resultParam.getEType() != null) {
+				resultVar.setType(expressionBuilder.createClassifierType(resultParam.getEType()));
+			}
 			this.environment = this.environment.nested(resultVar);
 		}
 
-		// Implicit 'result' variable
+		// Implicit 'result' variable — use first result param type if available
 		Variable resultVar = OCL.createVariable();
 		resultVar.setName("result");
+		if (!operation.getResult().isEmpty() && operation.getResult().get(0).getEType() != null) {
+			resultVar.setType(expressionBuilder.createClassifierType(
+					operation.getResult().get(0).getEType()));
+		}
 		this.environment = this.environment.nested(resultVar);
 
 		updateExpressionBuilder();

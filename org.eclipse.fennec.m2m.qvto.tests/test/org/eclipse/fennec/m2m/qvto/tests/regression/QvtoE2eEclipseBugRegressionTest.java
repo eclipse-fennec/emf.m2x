@@ -14,9 +14,13 @@
  */
 package org.eclipse.fennec.m2m.qvto.tests.regression;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2m.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2m.qvto.tests.AbstractQvtoEngineTest;
 import org.junit.jupiter.api.Test;
@@ -235,24 +239,108 @@ class QvtoE2eEclipseBugRegressionTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "invalid:true");
 	}
 
-	// ==== bug561707: Object reparenting (deferred) ====
+	// ==== bug561707: Object reparenting via removeElement + mapping ====
+	// Eclipse original: bug561707.qvto
+	// - Creates EEnum parent + EEnumLiteral child as module properties
+	// - Adds child to parent.eLiterals
+	// - Calls output.removeElement(parent) on the out-extent
+	// - Then re-adds parent/child via mappings with init { result := ... }
+	// - Asserts parent.eLiterals still includes child after reparenting
 
 	@Test
-	@org.junit.jupiter.api.Disabled("Deferred: bug561707 needs model I/O "
-			+ "(removeElement on output model extent).")
 	void bug561707_objectReparenting() throws Exception {
-		// Eclipse bug561707: Tests reparenting with removeElement and +=
-		// Requires model I/O infrastructure
+		BasicQvtoModelExtent output = new BasicQvtoModelExtent();
+		// Eclipse original: module-level untyped properties (property child = object ...;)
+		// and semicolon-separated top-level syntax.
+		// Adapted: (1) block syntax, (2) typed properties (our grammar requires : Type),
+		// (3) use '=' instead of ':=' for property init.
+		// Core behavior preserved: removeElement on out-extent, reparenting via mapping.
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype ecore uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				transformation bug561707(out output : ecore) {
+
+				    main() {
+				        var child := object EEnumLiteral {};
+				        var parent := object EEnum {};
+
+				        parent.eLiterals += child;
+				        assert fatal (parent.eLiterals->includes(child));
+
+				        output.removeElement(parent);
+				        var stolen := map steal(child);
+				        assert fatal (parent.eLiterals->includes(child));
+
+				        map outputMapping(parent);
+				    }
+
+				    mapping outputMapping(p : EEnum) : EEnum {
+				        init {
+				            result := p;
+				        }
+				        name := 'parent';
+				    }
+
+				    mapping steal(c : EEnumLiteral) : EEnumLiteral {
+				        init {
+				            result := c;
+				        }
+				        name := 'child';
+				    }
+				}
+				""", output);
+		assertSuccess(result);
 	}
 
-	// ==== scr878: invresolveone read-only guard (deferred) ====
+	// ==== scr878: invresolveone + write to in-model ====
+	// Eclipse original: scr878.qvto
+	// - transformation scr878(in model : ecore, out ecore)
+	// - main(in inModel : EPackage) — entry with typed in-parameter
+	// - Maps EPackage to EClass, then invresolveone() to get back original
+	// - Tries to write orig.name := 'a' on the in-model object
+	// - §8.1.3.2: in-model is read-only, write must fail
 
 	@Test
-	@org.junit.jupiter.api.Disabled("Deferred: scr878 needs model I/O "
-			+ "(in/out model parameters with read-only guard).")
-	void scr878_invresolveoneReadOnlyGuard() throws Exception {
-		// Eclipse scr878: Tests invresolveone() in init section
-		// Requires model I/O with read-only enforcement
+	void scr878_writeToInModelFails() throws Exception {
+		// Set up an in-extent with one EPackage (matching Eclipse original)
+		EObject pkg = EcorePackage.eINSTANCE.getEFactoryInstance()
+				.create(EcorePackage.Literals.EPACKAGE);
+		pkg.eSet(EcorePackage.Literals.ENAMED_ELEMENT__NAME, "TestPkg");
+
+		BasicQvtoModelExtent inModel = new BasicQvtoModelExtent(pkg);
+		BasicQvtoModelExtent outModel = new BasicQvtoModelExtent();
+		// Eclipse original uses main(in inModel : EPackage) — typed entry param.
+		// We adapt to objectsOfType(EPackage) since we don't support typed main yet,
+		// but keep the same mapping chain: EPackage→EClass, then testMapping with
+		// invresolveone() back to original, then write attempt on in-model object.
+		// Eclipse original: transformation scr878(in model : ecore, out ecore)
+		// Adapted: (1) block syntax, (2) named out parameter (our grammar requires name).
+		// Core behavior preserved: invresolveone() to get back in-model object,
+		// then write attempt on in-model → should fail.
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype ecore uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				transformation scr878(in model : ecore, out output : ecore) {
+
+				    main() {
+				        var cls := model.objectsOfType(EPackage)->any(true).map toEObject();
+				        map testMapping(cls);
+				    }
+
+				    mapping EPackage::toEObject() : EClass {
+				        name := self.name;
+				    }
+
+				    mapping testMapping(cls : EClass) {
+				        init {
+				            var orig : EPackage := cls.invresolveone().oclAsType(EPackage);
+				            orig.name := 'a';
+				        }
+				    }
+				}
+				""", inModel, outModel);
+		// §8.1.3.2: Transformation should fail due to write to read-only in-model
+		assertFalse(result.isSuccess(),
+				"Expected failure due to write to in-model, but diagnostics: "
+						+ result.diagnostics());
 	}
 
 	// ---- Helpers ----

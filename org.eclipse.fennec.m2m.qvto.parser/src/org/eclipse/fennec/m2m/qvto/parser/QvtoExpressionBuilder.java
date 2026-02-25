@@ -1322,7 +1322,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return type;
 	}
 
-	private ClassifierType createClassifierType(EClassifier classifier) {
+	ClassifierType createClassifierType(EClassifier classifier) {
 		ClassifierType type = OCL.createClassifierType();
 		type.setReferredClassifier(classifier);
 		if (classifier != null) {

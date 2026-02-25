@@ -318,7 +318,6 @@ class QvtoE2eIntermediateClassAdvancedTest extends AbstractQvtoEngineTest {
 	// ---- Intermediate class with <<id>> stereotype ----
 
 	@Test
-	@org.junit.jupiter.api.Disabled("Parser gap: <<id>> stereotype syntax not yet supported")
 	void intermediateClass_idStereotype() throws Exception {
 		// Eclipse: <<id>> uuid:String [1]; — a mandatory qualifying uuid attribute
 		QvtoExecutionResult result = execute("""

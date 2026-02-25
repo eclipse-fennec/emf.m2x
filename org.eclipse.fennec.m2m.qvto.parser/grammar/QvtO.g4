@@ -66,8 +66,11 @@ modeltypeWhere
 
 // ==================== Transformation + Library ====================
 
+// §8.4: <transformation> ::= <transformation_decl> | <transformation_def>
+// Declaration form: transformation T(...); — module elements follow at unit level
+// Definition form:  transformation T(...) { moduleElement* } ;?
 transformationDef
-    : qualifier* 'transformation' qualifiedName '(' modelParamList? ')' moduleUsage* '{' moduleElement* '}' ';'?
+    : qualifier* 'transformation' qualifiedName '(' modelParamList? ')' moduleUsage* ('{' moduleElement* '}' ';'? | ';')
     ;
 
 libraryDef
@@ -78,8 +81,11 @@ modelParamList
     : modelParam (',' modelParam)*
     ;
 
+// §8.4: <model_param> ::= <direction>? <param_name>? ':' <typespec>
+// Named: out output : ecore — Unnamed: out ecore (name derived from type)
 modelParam
     : directionKind qvtoIdentifier ':' typeSpec
+    | directionKind typeSpec
     ;
 
 directionKind
@@ -209,8 +215,10 @@ constructorDef
     : 'constructor' scopedName simpleSignature block ';'?
     ;
 
+// §8.4: <entry> ::= 'main' <simple_signature> <expression_block>
+// Supports main() and main(in param : Type) forms
 entryDef
-    : 'main' '(' ')' block ';'?
+    : 'main' simpleSignature block ';'?
     | 'entry' simpleSignature? block ';'?
     ;
 
@@ -220,10 +228,13 @@ simpleSignature
 
 // ==================== Property + Intermediate Class + Tag + Typedef ====================
 
+// §8.4: <property> ::= 'intermediate'? <property_key>+ <declarator> ';'
+// <declarator> ::= <typespec> <init_part>? | <scoped_identifier> ':' <typespec> <init_part>?
 propertyDecl
     : 'intermediate' 'property' scopedName ':' typeExpression ('=' expression)? ';'
     | 'configuration' 'property' qvtoIdentifier ':' typeExpression ('=' expression)? ';'
     | 'property' qvtoIdentifier ':' typeExpression ('=' expression)? ';'
+    | 'property' qvtoIdentifier '=' expression ';'                                       // untyped module property
     ;
 
 intermediateClassDef
@@ -243,6 +254,7 @@ classifierFeatureModifier
     | 'readonly'
     | 'references'
     | 'composes'
+    | STEREOTYPE_ID
     ;
 
 tagDecl
@@ -709,6 +721,12 @@ ADD_ASSIGN
 
 ORDERED_COPY
     : '::='
+    ;
+
+// §8.4: <<id>> stereotype for intermediate class properties (§8.2.1.3)
+// Matched as a single 6-char token — no conflict with < / > comparison operators.
+STEREOTYPE_ID
+    : '<<' 'id' '>>'
     ;
 
 // §8.4: double-quoted string literals (used in tags, expressions, and adjacent concatenation)

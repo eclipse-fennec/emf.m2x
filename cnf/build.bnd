@@ -18,7 +18,7 @@ Bundle-Version: ${base-version}.SNAPSHOT
 
 # Maven Central Group-Id
 # For Eclipse Fennec the groupid must start with org.eclipse.fennec
--groupid: org.eclipse.fennec.m2m
+-groupid: org.eclipse.fennec.m2x
 
 javac.source: 21
 javac.target: 21
@@ -58,4 +58,5 @@ javac.target: 21
  	name = EMFCompare
 
 -fixupmessages: \
-	No translation;is:=ignore
+	"No translation";is:=ignore,\
+	"The .classpath contains";is:=ignore
