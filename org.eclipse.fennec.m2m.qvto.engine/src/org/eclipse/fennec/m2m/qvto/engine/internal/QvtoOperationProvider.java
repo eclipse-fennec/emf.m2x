@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2m.qvto.engine.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EClass;
@@ -178,6 +179,30 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent) {
 						return new BasicQvtoModelExtent();
+					}
+					return null;
+				}));
+
+		// §8.3.5.7: asTransformation() — cast a QVT-conformant model to a Transformation instance
+		ops.add(new OclOperation("asTransformation", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof QvtoModelExtent extent) {
+						for (EObject root : extent.getContents()) {
+							if (root instanceof OperationalTransformation ot) {
+								return new QvtoTransformationInstance(ot,
+										QvtoOperationResolver.findModuleClassIn(ot),
+										Map.of(), evaluator.getEngine());
+							}
+							// Also search nested contents
+							for (var it = root.eAllContents(); it.hasNext(); ) {
+								EObject child = it.next();
+								if (child instanceof OperationalTransformation ot) {
+									return new QvtoTransformationInstance(ot,
+											QvtoOperationResolver.findModuleClassIn(ot),
+											Map.of(), evaluator.getEngine());
+								}
+							}
+						}
 					}
 					return null;
 				}));
@@ -357,19 +382,26 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	 * §8.3.6: Operations on transformation instances (transform, parallelTransform).
 	 */
 	private void addTransformationInstanceOperations(List<OclOperation> ops) {
-		// transform() : Status
+		// transform(...) : Status — no-arg (pre-bound) or with model extent arguments (§8.1.21)
 		ops.add(new OclOperation("transform", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof QvtoTransformationInstance instance) {
+						if (args.length > 0 && instance.getModelBindings().isEmpty()) {
+							// §8.1.21: transform(model1, model2, ...) — bind at call time
+							instance = QvtoTransformationOperations.bindModels(instance, args);
+						}
 						return QvtoTransformationOperations.handleTransform(instance);
 					}
 					return null;
 				}));
 
-		// parallelTransform() : Status
+		// parallelTransform(...) : Status — no-arg or with model extent arguments
 		ops.add(new OclOperation("parallelTransform", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof QvtoTransformationInstance instance) {
+						if (args.length > 0 && instance.getModelBindings().isEmpty()) {
+							instance = QvtoTransformationOperations.bindModels(instance, args);
+						}
 						return QvtoTransformationOperations.handleParallelTransform(instance);
 					}
 					return null;

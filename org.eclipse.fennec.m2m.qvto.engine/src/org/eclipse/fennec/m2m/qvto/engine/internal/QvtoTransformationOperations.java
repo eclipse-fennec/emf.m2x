@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2m.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -94,6 +95,25 @@ final class QvtoTransformationOperations {
 		} else if (arg instanceof Status status) {
 			QvtoStatusHelper.await(status);
 		}
+	}
+
+	/**
+	 * §8.1.21: Bind model arguments to a transformation instance at call time.
+	 * Used when {@code asTransformation()} creates an unbound instance and
+	 * {@code transform(model1, model2, ...)} provides the model extents.
+	 */
+	static QvtoTransformationInstance bindModels(QvtoTransformationInstance instance, Object[] args) {
+		OperationalTransformation transformation = instance.getTransformation();
+		List<ModelParameter> params = transformation.getModelParameter();
+		Map<ModelParameter, QvtoModelExtent> bindings = new LinkedHashMap<>();
+		for (int i = 0; i < params.size() && i < args.length; i++) {
+			if (args[i] instanceof QvtoModelExtent extent) {
+				bindings.put(params.get(i), extent);
+			}
+		}
+		return new QvtoTransformationInstance(transformation,
+				QvtoOperationResolver.findModuleClassIn(transformation),
+				bindings, instance.getEngine());
 	}
 
 	/**

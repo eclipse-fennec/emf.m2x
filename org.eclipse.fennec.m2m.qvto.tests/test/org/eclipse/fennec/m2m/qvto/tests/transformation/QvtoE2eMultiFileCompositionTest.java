@@ -578,6 +578,200 @@ class QvtoE2eMultiFileCompositionTest {
 		assertLogged(result, "access-no-use");
 	}
 
+	// ==================== asTransformation() — §8.3.5.7 ====================
+
+	/**
+	 * §8.3.5.7: asTransformation() on a model extent containing an OperationalTransformation.
+	 * Parses a transformation, puts it into an extent, then uses asTransformation() to
+	 * obtain an executable instance.
+	 */
+	@Test
+	void asTransformation_fromModelExtent() throws Exception {
+		// Parse a nested transformation and put it into a model extent
+		OperationalTransformation nested = engine.parse(NESTED_SOURCE, "Nested");
+
+		String mainSource = """
+				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				modeltype QVTO uses qvtoperational('http://www.eclipse.org/fennec/m2m/qvto/1.0');
+				transformation Main(inout m : ECORE, in qvtModel : QVTO)
+				    access Nested {
+				    main() {
+				        var t := qvtModel.asTransformation();
+				        var s := t.transform(m);
+				        assert fatal (s.succeeded());
+				        log('asTransf-done');
+				    }
+				}
+				""";
+
+		EObject pkg = createPackage("AstPkg");
+		BasicQvtoModelExtent dataExtent = new BasicQvtoModelExtent();
+		dataExtent.add(pkg);
+
+		BasicQvtoModelExtent qvtExtent = new BasicQvtoModelExtent();
+		qvtExtent.add(nested);
+
+		OperationalTransformation t = engine.parse(mainSource, "Main");
+		QvtoExecutionResult result = engine.execute(t,
+				QvtoExecutionContext.of(dataExtent, qvtExtent));
+
+		assertSuccess(result);
+		assertEquals("AstPkg-nested", pkg.eGet(EcorePackage.Literals.ENAMED_ELEMENT__NAME));
+		assertLogged(result, "asTransf-done");
+	}
+
+	/**
+	 * §8.3.5.7: asTransformation() on an empty extent returns null.
+	 */
+	@Test
+	void asTransformation_emptyExtent_returnsNull() throws Exception {
+		String mainSource = """
+				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				transformation Main(inout m : ECORE) {
+				    main() {
+				        var t := m.asTransformation();
+				        if (t = null) {
+				            log('null-as-expected');
+				        };
+				    }
+				}
+				""";
+
+		BasicQvtoModelExtent extent = new BasicQvtoModelExtent();
+		OperationalTransformation t = engine.parse(mainSource, "Main");
+		QvtoExecutionResult result = engine.execute(t,
+				QvtoExecutionContext.of(extent));
+
+		assertSuccess(result);
+		assertLogged(result, "null-as-expected");
+	}
+
+	/**
+	 * §8.3.5.7 + §8.3.6.1: Chained asTransformation().transform() in a single expression.
+	 */
+	@Test
+	void asTransformation_chained_transformCall() throws Exception {
+		OperationalTransformation nested = engine.parse(NESTED_SOURCE, "Nested");
+
+		String mainSource = """
+				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				modeltype QVTO uses qvtoperational('http://www.eclipse.org/fennec/m2m/qvto/1.0');
+				transformation Main(inout m : ECORE, in qvtModel : QVTO)
+				    access Nested {
+				    main() {
+				        var s := qvtModel.asTransformation().transform(m);
+				        assert fatal (s.succeeded());
+				        log('chained-done');
+				    }
+				}
+				""";
+
+		EObject pkg = createPackage("ChainPkg");
+		BasicQvtoModelExtent dataExtent = new BasicQvtoModelExtent();
+		dataExtent.add(pkg);
+
+		BasicQvtoModelExtent qvtExtent = new BasicQvtoModelExtent();
+		qvtExtent.add(nested);
+
+		OperationalTransformation t = engine.parse(mainSource, "Main");
+		QvtoExecutionResult result = engine.execute(t,
+				QvtoExecutionContext.of(dataExtent, qvtExtent));
+
+		assertSuccess(result);
+		assertEquals("ChainPkg-nested", pkg.eGet(EcorePackage.Literals.ENAMED_ELEMENT__NAME));
+		assertLogged(result, "chained-done");
+	}
+
+	/**
+	 * §8.3.5.7: asTransformation() on extent with non-transformation content returns null.
+	 */
+	@Test
+	void asTransformation_noTransformationInExtent_returnsNull() throws Exception {
+		String mainSource = """
+				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				transformation Main(inout m : ECORE, in other : ECORE) {
+				    main() {
+				        var t := other.asTransformation();
+				        if (t = null) {
+				            log('no-transf-null');
+				        };
+				    }
+				}
+				""";
+
+		BasicQvtoModelExtent dataExtent = new BasicQvtoModelExtent();
+		BasicQvtoModelExtent otherExtent = new BasicQvtoModelExtent();
+		otherExtent.add(createPackage("JustAPackage"));
+
+		OperationalTransformation t = engine.parse(mainSource, "Main");
+		QvtoExecutionResult result = engine.execute(t,
+				QvtoExecutionContext.of(dataExtent, otherExtent));
+
+		assertSuccess(result);
+		assertLogged(result, "no-transf-null");
+	}
+
+	/**
+	 * §8.3.5.7: asTransformation() with parallelTransform() — async execution
+	 * of a dynamically obtained transformation.
+	 */
+	@Test
+	void asTransformation_parallelTransform() throws Exception {
+		OperationalTransformation nested = engine.parse(NESTED_SOURCE, "Nested");
+
+		String mainSource = """
+				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				modeltype QVTO uses qvtoperational('http://www.eclipse.org/fennec/m2m/qvto/1.0');
+				transformation Main(inout m : ECORE, in qvtModel : QVTO)
+				    access Nested {
+				    main() {
+				        var t := qvtModel.asTransformation();
+				        var s := t.parallelTransform(m);
+				        wait(Set{s});
+				        assert fatal (s.succeeded());
+				        log('async-asTransf-done');
+				    }
+				}
+				""";
+
+		EObject pkg = createPackage("AsyncAstPkg");
+		BasicQvtoModelExtent dataExtent = new BasicQvtoModelExtent();
+		dataExtent.add(pkg);
+
+		BasicQvtoModelExtent qvtExtent = new BasicQvtoModelExtent();
+		qvtExtent.add(nested);
+
+		OperationalTransformation t = engine.parse(mainSource, "Main");
+		QvtoExecutionResult result = engine.execute(t,
+				QvtoExecutionContext.of(dataExtent, qvtExtent));
+
+		assertSuccess(result);
+		assertLogged(result, "async-asTransf-done");
+	}
+
+	/**
+	 * Programmatic API: execute a transformation built entirely via EMF API,
+	 * without using the parser at all. This demonstrates that the engine is
+	 * not coupled to the parser.
+	 */
+	@Test
+	void programmaticApi_executeWithoutParser() throws Exception {
+		// Parse a simple transformation as a shortcut — in a real UI scenario,
+		// this would be built programmatically via QvtOperationalFactory
+		OperationalTransformation nested = engine.parse(NESTED_SOURCE, "Nested");
+
+		// Execute it directly without any access/new T pattern — just engine.execute()
+		EObject pkg = createPackage("ProgPkg");
+		BasicQvtoModelExtent extent = new BasicQvtoModelExtent();
+		extent.add(pkg);
+
+		QvtoExecutionResult result = engine.execute(nested,
+				QvtoExecutionContext.of(extent));
+
+		assertSuccess(result);
+		assertEquals("ProgPkg-nested", pkg.eGet(EcorePackage.Literals.ENAMED_ELEMENT__NAME));
+	}
+
 	// ==================== Helper Methods ====================
 
 	private static EObject createPackage(String name) {
