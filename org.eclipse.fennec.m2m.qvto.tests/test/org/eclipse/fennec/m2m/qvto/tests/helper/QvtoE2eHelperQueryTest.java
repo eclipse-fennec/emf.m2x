@@ -23,6 +23,7 @@ import org.eclipse.fennec.m2m.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2m.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2m.qvto.tests.AbstractQvtoEngineTest;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -163,6 +164,7 @@ class QvtoE2eHelperQueryTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "120");
 	}
 
+	@Tag("perf")
 	@Test
 	void helper_recursive_fibonacci() throws Exception {
 		QvtoExecutionResult result = execute("""

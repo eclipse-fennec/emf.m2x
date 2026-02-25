@@ -1128,7 +1128,7 @@ public class QvtoEvaluator {
 						Object coerced = coerceForFeature(sf,
 								value == OclInvalid.INSTANCE ? null : value);
 						if (exp.isIsReset()) {
-							if (value == OclInvalid.INSTANCE) {
+							if (value == OclInvalid.INSTANCE || value == null) {
 								// Clear collection or set null
 								Object current = target.eGet(sf);
 								if (current instanceof Collection<?>) {
@@ -1139,7 +1139,12 @@ public class QvtoEvaluator {
 									target.eSet(sf, null);
 								}
 							} else {
-								target.eSet(sf, coerced);
+								// §8.2.1: Collection assignment uses value-copy semantics
+								if (coerced instanceof Collection<?> srcCol) {
+									target.eSet(sf, new java.util.ArrayList<>(srcCol));
+								} else {
+									target.eSet(sf, coerced);
+								}
 							}
 						} else {
 							Object current = target.eGet(sf);
@@ -1159,7 +1164,12 @@ public class QvtoEvaluator {
 				}
 				// Variable assignment
 				if (exp.isIsReset()) {
+				Object current = env.lookup(varName);
+				if (value == null && current instanceof Collection<?>) {
+					((Collection<?>) current).clear();
+				} else {
 					env.assign(varName, value);
+				}
 				} else {
 					// += (append): add to collection
 					Object current = env.lookup(varName);
@@ -1207,7 +1217,7 @@ public class QvtoEvaluator {
 					if (icp != null) {
 						// Eclipse bug449445: invalid → null for property assignment,
 						// or clear if current value is a collection
-						if (value == OclInvalid.INSTANCE && exp.isIsReset()) {
+						if ((value == OclInvalid.INSTANCE || value == null) && exp.isIsReset()) {
 							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
 							if (current instanceof Collection<?>) {
 								@SuppressWarnings("unchecked")
@@ -1218,8 +1228,23 @@ public class QvtoEvaluator {
 							}
 						} else if (value == OclInvalid.INSTANCE) {
 							// += invalid: silently ignored
+						} else if (exp.isIsReset()) {
+							// §8.2.1: Collection assignment uses value-copy semantics
+							if (value instanceof Collection<?> srcCol) {
+								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), new java.util.ArrayList<>(srcCol));
+							} else {
+								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
+							}
 						} else {
-							intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
+							// += on intermediate property: add to collection or set value
+							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
+							if (current instanceof Collection<?>) {
+								@SuppressWarnings("unchecked")
+								Collection<Object> col = (Collection<Object>) current;
+								col.add(value);
+							} else {
+								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
+							}
 						}
 						return wrapNull(value);
 					}
@@ -1240,7 +1265,7 @@ public class QvtoEvaluator {
 					Object coerced = coerceForFeature(actualSf,
 							value == OclInvalid.INSTANCE ? null : value);
 					if (exp.isIsReset()) {
-						if (value == OclInvalid.INSTANCE) {
+						if (value == OclInvalid.INSTANCE || value == null) {
 							// Clear collection or set null
 							Object current = eo.eGet(actualSf);
 							if (current instanceof Collection<?>) {
@@ -1251,7 +1276,12 @@ public class QvtoEvaluator {
 								eo.eSet(actualSf, null);
 							}
 						} else {
-							eo.eSet(actualSf, coerced);
+							// §8.2.1: Collection assignment uses value-copy semantics
+							if (coerced instanceof Collection<?> srcCol) {
+								eo.eSet(actualSf, new java.util.ArrayList<>(srcCol));
+							} else {
+								eo.eSet(actualSf, coerced);
+							}
 						}
 					} else {
 						// += on EReference/EAttribute list
