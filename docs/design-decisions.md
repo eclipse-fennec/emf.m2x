@@ -1,6 +1,6 @@
 # Fennec M2M Design Decisions
 
-> Part of the [Development Guideline](development-guideline.md). See also: [Architecture](architecture.md), [Implementation Plan](implementation-plan.md), [OCL Architecture](ocl-architecture.md)
+> Part of the [Development Guideline](development-guideline.md). See also: [OCL Architecture](ocl-architecture.md), [QVT-O Architecture](qvto-architecture.md)
 
 ---
 

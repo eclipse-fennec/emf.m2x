@@ -1,8 +1,7 @@
 # OCL Implementation Architecture — Fennec M2M (Phase 1)
 
 > Consolidated reference for the OCL implementation. Cross-cutting conventions remain in:
-> [Development Guideline](development-guideline.md), [Architecture](architecture.md),
-> [Implementation Plan](implementation-plan.md), [Design Decisions](design-decisions.md)
+> [Development Guideline](development-guideline.md), [Design Decisions](design-decisions.md)
 
 ---
 
@@ -643,7 +642,7 @@ no manual `installDelegates()` call needed.
 
 For the full emf.osgi delegate registry architecture (whiteboard populator components,
 missing registries for SettingDelegate/ValidationDelegate), see
-[emf-delegate-registries.md](emf-delegate-registries.md).
+[emf-delegate-registries.md (archived)](../../docs/archive/emf-delegate-registries.md).
 
 ---
 

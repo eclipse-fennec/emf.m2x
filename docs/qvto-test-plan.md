@@ -1,6 +1,6 @@
 # QVT-O Test Plan & Fortschrittstracking
 
-> Part of the [Implementation Plan](implementation-plan.md) §15.8. See also: [QVT-O Syntax Reference](qvto-syntax-reference.md), [Design Decisions](design-decisions.md)
+> Part of the [Development Guideline](development-guideline.md). See also: [QVT-O Architecture](qvto-architecture.md), [Design Decisions](design-decisions.md)
 
 ---
 

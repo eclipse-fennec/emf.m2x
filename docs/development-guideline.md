@@ -1,7 +1,9 @@
 # Fennec M2M Development Guideline
 
-> This document covers core conventions and coding standards (sections 1-9).
-> See also: [Architecture](architecture.md) (sections 10-13), [Implementation Plan](implementation-plan.md) (sections 14-15), [Design Decisions](design-decisions.md) (sections 16-20), [OCL Architecture](ocl-architecture.md)
+> This document covers core conventions, coding standards, testing strategy, architecture,
+> and roadmap (sections 1-14).
+> See also: [OCL Architecture](ocl-architecture.md), [QVT-O Architecture](qvto-architecture.md),
+> [Design Decisions](design-decisions.md) (sections 16-20), [QVT-O Test Plan](qvto-test-plan.md)
 
 ## 1. Project Overview
 
@@ -488,23 +490,351 @@ The M2T engine uses the OCL engine internally with `OclEvaluationOptions.lenient
 
 ---
 
-*Continues in:*
+*See also:*
 - [OCL Architecture](ocl-architecture.md) - consolidated OCL implementation reference (Phase 1)
-- [Architecture](architecture.md) - OSGi-optional design, extension points, EMF delegates, LSP (sections 10-13)
-- [Implementation Plan](implementation-plan.md) - phases, testing strategy, performance benchmarks (sections 14-15)
+- [QVT-O Architecture](qvto-architecture.md) - consolidated QVT-O implementation reference (Phase 2)
 - [Design Decisions](design-decisions.md) - decision table, forbidden list, reference projects, review process, decision records (sections 16-20)
+- [QVT-O Test Plan](qvto-test-plan.md) - QVT-O spec-conformance test plan & progress tracking
 
 ---
 
-## 10. Test Coverage Policy
+## 10. Testing Strategy
 
-For OCL-specific coverage targets, thread-safety testing, and performance regression policy, see
-[OCL Architecture §12](ocl-architecture.md#12-testing).
+> **SPEC-FIRST WORKFLOW** — bei JEDEM Task befolgen:
+> 1. ZUERST die OMG-Spec lesen (OCL v2.4/v2.5, QVT-O v1.3, QVT-D v1.3, MOFM2T v1.0)
+> 2. Tests gegen die Spec schreiben — das erwartete Ergebnis kommt aus der Spec
+> 3. Tests laufen lassen — Failures sind Implementierungslücken, NICHT Testfehler
+> 4. Implementierung fixen — bis die Tests grün sind
+> 5. NIEMALS Tests an die Implementierung anpassen, um sie grün zu machen
+> 6. Bei Unklarheit: Rückfrage an den User
+
+### 10.1 Plain JUnit 5 First
+
+**All tests that can run without OSGi must be plain JUnit 5 tests.** This includes:
+
+- Parser tests (grammar correctness, error reporting)
+- Evaluator tests (expression evaluation, standard library)
+- EMF delegate tests (validation/setting/invocation delegates)
+- Spec compliance tests
+- Integration tests (parse -> evaluate pipeline)
+
+Only create a **separate OSGi test project** (`*.itest`) when the test **requires an OSGi container**:
+- DS component wiring tests
+- Whiteboard extension discovery tests
+- emf.osgi EPackageConfigurator integration tests
+
+### 10.2 Test Project Structure
+
+```
+workspace/
+├── org.eclipse.fennec.m2x.ocl.tests/       # Plain JUnit 5 tests (parser, engine, delegates)
+├── org.eclipse.fennec.m2x.ocl.itest/       # OSGi integration tests (DS, whiteboard) - only if needed
+├── org.eclipse.fennec.m2x.qvto.tests/      # Plain JUnit 5 tests (QVT-O)
+├── org.eclipse.fennec.m2x.qvto.itest/      # OSGi integration tests - only if needed
+├── org.eclipse.fennec.m2x.qvtd.tests/      # Plain JUnit 5 tests (QVT-R/QVT-C)
+├── org.eclipse.fennec.m2x.qvtd.itest/      # OSGi integration tests - only if needed
+├── org.eclipse.fennec.m2x.m2t.tests/       # Plain JUnit 5 tests
+└── org.eclipse.fennec.m2x.m2t.itest/       # OSGi integration tests - only if needed
+```
+
+### 10.3 Test Categories
+
+| Category | Type | Runner | Tag |
+|----------|------|--------|-----|
+| **Unit** | Individual classes/methods | JUnit 5 | - |
+| **Integration** | Parse -> evaluate pipeline | JUnit 5 | - |
+| **Spec compliance** | Examples from OCL/QVT/MOFM2T specs | JUnit 5 | `@Tag("spec")` |
+| **Edge cases** | Error handling, boundary conditions | JUnit 5 | - |
+| **Eclipse spec tests** | Migrated from Eclipse OCL/QVTo/Acceleo test suites | JUnit 5 (adapted) | `@Tag("spec")` |
+| **Performance** | Benchmarks comparing Fennec vs Eclipse implementations | JUnit 5 + JMH | `@Tag("perf")` |
+| **OSGi integration** | DS wiring, whiteboard, emf.osgi | OSGi test (separate `*.itest` project) | - |
+
+### 10.4 Migrating Eclipse Spec Tests
+
+Existing spec-related tests from Eclipse OCL, QVTo, and Acceleo repositories should be:
+
+1. Identified and extracted from the Eclipse test projects
+2. Migrated to **JUnit 5** (from JUnit 3/4)
+3. Adapted to use our API instead of Eclipse's
+4. Placed in the corresponding `*.tests` project
+5. Tagged with `@Tag("spec")` for filtering
+
+### 10.5 Test Naming
+
+```java
+@Test
+void integerLiteral_parsesCorrectly() { ... }
+
+@Test
+@Tag("spec")
+void specExample_7_3_3_invariant() { ... }  // Reference to spec section
+```
+
+### 10.6 Performance Testing
+
+Both engines under identical conditions (standalone, no OSGi), shared test models,
+System.nanoTime() loops with warmup (JMH for rigorous benchmarks later).
+
+For OCL-specific benchmark results, see [OCL Architecture §11](ocl-architecture.md#11-performance).
+
+#### Test Project Dependencies
+
+Performance test projects need the Eclipse implementations on their buildpath:
+
+```bnd
+# In org.eclipse.fennec.m2x.ocl.tests/bnd.bnd
+-buildpath: \
+    org.eclipse.fennec.m2x.ocl.engine;version=latest,\
+    org.eclipse.fennec.m2x.ocl.parser;version=latest,\
+    org.eclipse.ocl.pivot;version=latest,\
+    org.eclipse.ocl.xtext.essentialocl;version=latest,\
+    ...
+```
+
+The Eclipse OCL/QVTo/Acceleo jars must be available in the bnd repository (indexed from the `repositories/` folder or Maven Central).
 
 ---
 
-## 11. Security Considerations
+## 11. OSGi-Optional Architecture
+
+### 11.1 Core Principle: Works Without OSGi, Enhanced With OSGi
+
+All engines and services must be **usable as plain Java libraries** without any OSGi container. OSGi is an optional enhancement that provides service discovery, whiteboard patterns, and lifecycle management.
+
+**Pattern: Pure Java core + OSGi adapter layer**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  .engine (pure Java, no OSGi imports)                       │
+│                                                             │
+│  OclEngineImpl implements OclEngine                         │
+│    - constructor injection: new OclEngineImpl(config)        │
+│    - works standalone as plain Java library                  │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+┌──────────────────────────┴──────────────────────────────────┐
+│  .engine (OSGi DS adapter, same bundle)                     │
+│                                                             │
+│  @Component(service = OclEngine.class)                      │
+│  OclEngineComponent extends OclEngineImpl                   │
+│    - @Reference injection for extensions                    │
+│    - DS whiteboard for dynamic extension discovery          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 11.2 API vs Implementation Packages
+
+- `.api` and `.model` bundles **export** their packages (public API)
+- `.parser` and `.engine` bundles export only their top-level service package
+- Internal implementation packages use `*.internal` naming
+
+For OCL-specific standalone/OSGi usage examples, see
+[OCL Architecture §9](ocl-architecture.md#9-osgi-integration).
+
+---
+
+## 12. Extension Points
+
+The Eclipse implementations use `plugin.xml` extension points for registration. We replace these with **programmatic registration** (plain Java) and **OSGi DS whiteboard** (OSGi).
+
+### 12.1 EMF Infrastructure Registrations
+
+These are mandatory baseline registrations that Eclipse handles via `plugin.xml` → `org.eclipse.emf.ecore.generated_package` etc. We must handle them explicitly.
+
+| Registration | Eclipse mechanism | Our approach (plain Java) | Our approach (OSGi) |
+|---|---|---|---|
+| **EPackage registration** | `org.eclipse.emf.ecore.generated_package` | `EPackage.Registry.INSTANCE.put(uri, pkg)` | fennec emf.osgi `EPackageConfigurator` (automatic) |
+| **Resource.Factory for file extensions** | `org.eclipse.emf.ecore.extension_parser` | `Resource.Factory.Registry.INSTANCE.getExtensionToFactoryMap().put(ext, factory)` | DS component |
+| **Resource.Factory for protocols** | `org.eclipse.emf.ecore.protocol_parser` | `Resource.Factory.Registry.INSTANCE.getProtocolToFactoryMap().put(proto, factory)` | DS component |
+| **URI mapping** (e.g. stdlib location) | `org.eclipse.emf.ecore.uri_mapping` | `URIConverter.URI_MAP.put(logicalUri, physicalUri)` | DS component |
+
+Each of our `.model` bundles must register its EPackages. Each `.parser` bundle must register resource factories for its file extensions.
+
+### 12.2 Language-Specific Extension Points
+
+#### OCL Extensions
+
+| Extension | Eclipse extension point | Without OSGi | With OSGi |
+|---|---|---|---|
+| **OCL Custom Operations** | `org.eclipse.ocl.pivot.standard_library` | `OclEngine.registerOperations(...)` | DS whiteboard: `@Component(service = OclOperationProvider.class)` |
+| **OCL Standard Library** | `org.eclipse.ocl.pivot.standard_library` | Built-in, loaded at startup | DS whiteboard: `@Component(service = OclStandardLibraryContribution.class)` |
+| **Complete OCL Documents** | `org.eclipse.ocl.pivot.complete_ocl_registry` | `OclEngine.registerCompleteOclDocument(contribution)` / `unregisterCompleteOclDocument(contribution)` | DS whiteboard: `@Component(service = CompleteOclContribution.class)` |
+| **Model Extents / Resource Providers** | N/A (programmatic in Eclipse too) | Pass `Resource` / `ResourceSet` directly | DS `@Reference` |
+
+#### QVT-O Extensions
+
+| Extension | Eclipse extension point | Without OSGi | With OSGi |
+|---|---|---|---|
+| **Blackbox Libraries** | `org.eclipse.m2m.qvt.oml.javaBlackboxUnits` / `blackboxProvider` | `QvtoEngine.registerBlackbox(...)` | DS whiteboard: `@Component(service = QvtoBlackboxLibrary.class)` |
+| **Unit Resolver** (finds .qvto files) | `org.eclipse.m2m.qvt.oml.unitResolverFactory` | `QvtoEngine.registerUnitResolver(...)` (classpath/filesystem-based) | DS whiteboard: `@Component(service = QvtoUnitResolver.class)` |
+| **Deployed Transformations** | `org.eclipse.m2m.qvt.oml.runtime.qvtTransformation` | Load by URI/path directly | DS whiteboard: `@Component(service = QvtoTransformationContribution.class)` |
+
+#### QVT-D Extensions
+
+| Extension | Eclipse extension point | Without OSGi | With OSGi |
+|---|---|---|---|
+| **QVT-D Key Definitions** | N/A (in metamodel) | `QvtdEngine.registerKeys(...)` | DS whiteboard: `@Component(service = QvtdKeyProvider.class)` |
+| **QVT Runtime Library** | `org.eclipse.ocl.pivot.standard_library` | Built-in, loaded at startup | DS whiteboard |
+
+#### M2T Extensions
+
+| Extension | Eclipse extension point | Without OSGi | With OSGi |
+|---|---|---|---|
+| **Custom Java Services** | `org.eclipse.acceleo.query.ide.servicesConfigurator` | `M2tEngine.registerService(...)` | DS whiteboard: `@Component(service = M2tService.class)` |
+| **Module/Name Resolver** | `org.eclipse.acceleo.query.ide.resolverfactory` | `M2tEngine.registerResolver(...)` (classpath-based) | DS whiteboard: `@Component(service = M2tModuleResolver.class)` |
+| **ResourceSet Configurator** | `org.eclipse.acceleo.query.ide.resourceSetConfigurator` | Pass configured `ResourceSet` directly | DS whiteboard: `@Component(service = M2tResourceSetConfigurator.class)` |
+
+### 12.3 EMF Delegate Integration
+
+EMF delegate registries allow OCL expressions in Ecore models via `EAnnotation` — for
+validation constraints, derived features, and operation bodies. See
+[OCL Architecture §8](ocl-architecture.md#8-emf-delegate-integration) for full details.
+
+### 12.4 Whiteboard Pattern (OSGi)
+
+Extensions register themselves as OSGi services. The engine discovers them dynamically:
+
+```java
+// Extension provider (user code)
+@Component(service = QvtoBlackboxLibrary.class)
+public class MyBlackbox implements QvtoBlackboxLibrary {
+    @Override
+    public String getName() { return "mylib"; }
+
+    @Override
+    public Map<String, Method> getOperations() { ... }
+}
+
+// Engine (consumer) - discovers all blackbox libraries
+@Component(service = QvtoEngine.class)
+public class QvtoEngineComponent extends QvtoEngineImpl {
+
+    @Reference(cardinality = ReferenceCardinality.MULTIPLE,
+               policy = ReferencePolicy.DYNAMIC)
+    volatile List<QvtoBlackboxLibrary> blackboxLibraries;
+}
+```
+
+### 12.5 Extension Interfaces (in `.api` bundles)
+
+For OCL extension interfaces (`OclOperationProvider`, `CompleteOclContribution`,
+`OclStandardLibraryContribution`), see [OCL Architecture §4.6](ocl-architecture.md#46-extension-interfaces).
+
+For QVT-O extension interfaces (`QvtoBlackboxLibrary`, `QvtoUnitResolver`), see
+[QVT-O Architecture §4](qvto-architecture.md#4-api-design-qvtoapi).
+
+```java
+// In org.eclipse.fennec.m2x.m2t.api (planned)
+public interface M2tService {
+    String getName();
+    Object invoke(String operationName, Object... args);
+}
+
+public interface M2tModuleResolver {
+    Optional<M2tModule> resolveModule(String qualifiedName);
+}
+```
+
+---
+
+## 13. Language Server Protocol (LSP) — Future Phase
+
+### 13.1 Overview
+
+As a **later phase** (after core engines are stable), provide LSP implementations for all languages. This enables IDE support in VS Code, Eclipse, IntelliJ, and any LSP-capable editor.
+
+### 13.2 Planned Modules
+
+```
+workspace/
+├── org.eclipse.fennec.m2x.ocl.lsp/     # OCL Language Server
+├── org.eclipse.fennec.m2x.qvto.lsp/    # QVT-O Language Server
+├── org.eclipse.fennec.m2x.qvtd.lsp/   # QVT-R Language Server
+└── org.eclipse.fennec.m2x.m2t.lsp/     # MOFM2T Language Server
+```
+
+### 13.3 LSP Features Per Language
+
+| Feature | OCL | QVT-O | QVT-R | MOFM2T |
+|---------|-----|-------|-------|--------|
+| Syntax highlighting | Yes | Yes | Yes | Yes |
+| Error diagnostics | Yes (ANTLR4 errors) | Yes | Yes | Yes |
+| Completion | Types, properties, operations, iterators | Mappings, helpers, model types | Relations, domains, patterns | Templates, OCL expressions |
+| Hover | Type information, documentation | Mapping signatures | Relation signatures | Template parameters |
+| Go to definition | Variable/type definitions | Mapping/helper definitions | Relation/key definitions | Template definitions |
+| Find references | Variable/type usage | Mapping calls | Relation invocations | Template calls |
+| Formatting | Yes | Yes | Yes | Yes |
+| Validation | OCL well-formedness rules | QVT-O type checking | QVT-R domain/pattern rules | Template parameter types |
+
+### 13.4 Implementation Approach
+
+- Use [Eclipse LSP4J](https://github.com/eclipse-lsp4j/lsp4j) as the LSP protocol library (Java, lightweight)
+- Reuse ANTLR4 parsers for incremental parsing and error recovery
+- Reuse EMF metamodels for type information and completion
+- Each LSP server is a standalone Java process (no Eclipse platform required)
+- Can also run embedded in OSGi for Eclipse IDE integration
+
+### 13.5 Dependencies on Core
+
+LSP modules depend on the parser and engine modules being stable. They are **not part of the initial implementation phases**.
+
+---
+
+## 14. Roadmap
+
+### Phase 1: OCL (Foundation) — ✅ Complete
+
+**Status:** ✅ Complete — 4108 tests, 0 failures, spec-verified against OCL v2.4/v2.5.
+
+**Deferred to Phase 5 (LSP):** GAP-2 (@pre/postconditions), GAP-3 (validate type-checker).
+
+See [OCL Architecture](ocl-architecture.md) for full details.
+
+### Phase 2: QVT-Operational — ✅ Complete
+
+**Status:** ✅ Complete — 862 tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10.
+
+See [QVT-O Architecture](qvto-architecture.md) for full details and [QVT-O Test Plan](qvto-test-plan.md) for spec-conformance tracking.
+
+### Phase 3: Acceleo/MOFM2T (with OCL expressions + cherry-picked extensions)
+
+| Step | Module | Description |
+|------|--------|-------------|
+| 3.1 | `m2t.model` | Template model: Module, Template, Query, ForBlock, IfBlock (+ elseif), LetBlock, FileBlock, ProtectedAreaBlock. OCL expressions embedded via `ocl.model` types. |
+| 3.2 | `m2t.api` | `M2tEngine` interface, `M2tService` extension interface, `M2tModuleResolver`, `M2tGenerationOptions`, public API |
+| 3.3 | `m2t.parser` | ANTLR4 grammar (`Mofm2t.g4`, imports `Ocl.g4` for embedded OCL expressions) |
+| 3.4 | `m2t.engine` | Template evaluator (uses OCL engine with lenient mode by default), file writer with encoding, protected area preservation, post() support, Java service integration, DS component |
+| 3.5 | `m2t.tests` | Template generation tests, MOFM2T spec compliance tests |
+
+### Phase 4: QVT-Declarative (Relations + Core)
+
+| Step | Module | Description |
+|------|--------|-------------|
+| 4.1 | `qvtd.model` | QVT-R metamodel (Relation, RelationDomain, DomainPattern, Key, Template) + QVT-C metamodel (CoreModel, Area, Mapping, Guard, Assignment) |
+| 4.2 | `qvtd.api` | `QvtdEngine` interface, `QvtdKeyProvider` extension interface, public API |
+| 4.3 | `qvtd.parser` | ANTLR4 grammar (`QvtRelations.g4`, imports `Ocl.g4`). QVT-Core is primarily a compilation target, no separate parser unless needed. |
+| 4.4 | `qvtd.engine` | Declarative transformation engine: relation matching, pattern matching, domain enforcement, `checkonly`/`enforce` semantics, optional QVTr→QVTc compilation |
+| 4.5 | `qvtd.tests` | Relation tests, domain tests, pattern matching tests |
+
+### Phase 5: Language Servers (Future)
+
+| Step | Module | Description |
+|------|--------|-------------|
+| 5.1 | `ocl.lsp` | OCL Language Server (LSP4J) |
+| 5.2 | `qvto.lsp` | QVT-O Language Server |
+| 5.3 | `qvtd.lsp` | QVT-R Language Server |
+| 5.4 | `m2t.lsp` | MOFM2T Language Server |
+| 5.5 | OCL GAP-2 | `@pre` postcondition support (pre-state snapshot mechanism, MessageExp, oclIsNew) |
+| 5.6 | OCL GAP-3 | `validate()` implementation (static type-checking visitor over AST) |
+
+---
+
+## 15. Security & Performance
 
 When evaluating OCL expressions from untrusted sources, configure appropriate resource limits
 via `OclEvaluationOptions`. See [OCL Architecture §10](ocl-architecture.md#10-security-hardening)
 for the full threat model, attack vector catalogue, and embedder guidance.
+
+For OCL performance details (thread-safety, caching, benchmarks), see
+[OCL Architecture §7](ocl-architecture.md#7-caching-architecture) and
+[OCL Architecture §11](ocl-architecture.md#11-performance).
