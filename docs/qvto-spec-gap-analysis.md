@@ -121,10 +121,10 @@
 
 | Bereich | Regeln gesamt | Implementiert | Gaps |
 |---------|:------------:|:------------:|------|
-| Top-Level | ~12 | ~11 | ~~GAP-12~~ ✅, GAP-13, N1 |
-| Deklarationen | ~20 | ~17 | GAP-14, GAP-15, N2, N4 |
+| Top-Level | ~12 | ~12 | ~~GAP-12~~ ✅, GAP-13, ~~N1~~ ✅ |
+| Deklarationen | ~20 | ~19 | GAP-14, GAP-15, ~~N2~~ ✅, ~~N4~~ ✅ |
 | Operationen | ~15 | ~15 | ~~GAP-16~~ ✅, N8 |
-| Expressions | ~30 | ~28 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, ~~GAP-19~~ ✅, ~~GAP-20~~ ✅, ~~GAP-21~~ ✅, ~~GAP-22~~ ✅, N3, N5–N7 |
+| Expressions | ~30 | ~30 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, ~~GAP-19~~ ✅, ~~GAP-20~~ ✅, ~~GAP-21~~ ✅, ~~GAP-22~~ ✅, ~~N3~~ ✅, ~~N5~~ ✅, N6, N7 |
 | Kommentare | 3 | 2 | ~~GAP-23~~ ✅ |
 
 ---
@@ -500,11 +500,11 @@ Systematischer Abgleich aller ~120 EBNF-Produktionen aus §8.4.7 (S. 164–171) 
 
 | # | Finding | Spec-Stelle | Schwere | Beschreibung |
 |---|---------|-------------|---------|--------------|
-| N1 | Standalone `access` Deklaration | §8.4.7 S. 165–166 | Gering | `access lib;` als eigenständiges `<unit_element>` und `<module_element>` fehlt. In Fennec nur im Transformation-Header (`moduleUsage`). |
-| N2 | `<moduleref>` mit Signatur | §8.4.7 S. 166 | Gering | Spec erlaubt `<moduleref> <simple_signature>?` (parametrisierte Module). Fennec hat nur den Namen. Eclipse ignoriert das auch. |
-| N3 | `'unlimited'` Keyword | §8.4.7 S. 169 | Gering | Spec hat `'unlimited'` als Literal-Alternative. Fennec hat `'*'` (OCL-kanonisch). Trivial zu ergänzen. |
-| N4 | `'derived'` Feature-Key | §8.4.7 S. 167 | Gering | `'derived'` fehlt als `<feature_key>` in `classifierFeatureModifier`. |
-| N5 | `object` mit Iterator | §8.4.7 S. 170 | Gering | `object ('(' <iter_declarator> ')')` Form (forEach-over-Object) fehlt. Selten genutzt. |
+| ~~N1~~ | ~~Standalone `access` Deklaration~~ | ~~§8.4.7 S. 165–166~~ | ~~Gering~~ | ✅ DONE — `accessDecl` als `<unit_element>` und `<module_element>`, Grammar + Visitor + 4 Tests. |
+| ~~N2~~ | ~~`<moduleref>` mit Signatur~~ | ~~§8.4.7 S. 166~~ | ~~Gering~~ | ✅ DONE — `moduleRef` Regel mit optionaler `simpleSignature`, Parser akzeptiert es (Signatur wird semantisch ignoriert, wie Eclipse). 4 Tests. |
+| ~~N3~~ | ~~`'unlimited'` Keyword~~ | ~~§8.4.7 S. 169~~ | ~~Gering~~ | ✅ DONE — `'unlimited'` als Alternative in `literalExpression` + Soft-Keyword in `qvtoIdentifier`. Erzeugt denselben AST wie `'*'`. 2 Tests. |
+| ~~N4~~ | ~~`'derived'` Feature-Key~~ | ~~§8.4.7 S. 167~~ | ~~Gering~~ | ✅ DONE — War bereits in `classifierFeatureModifier` + `qvtoIdentifier` implementiert. E2E-Test existiert in `QvtoE2eIntermediateClassFeaturesTest`. |
+| ~~N5~~ | ~~`object` mit Iterator~~ | ~~§8.4.7 S. 170~~ | ~~Gering~~ | ✅ DONE — `objectIterator` Regel in `objectExp`, Grammar akzeptiert `object (x : Type) ...`. Iterator wird semantisch ignoriert (wie Eclipse). 4 Tests. |
 | N6 | `switch` mit Iterator-Deklarator | §8.4.7 S. 170 | Gering | Spec hat `<iter_declarator>`, Fennec hat nur Expression als Switch-Wert. |
 | N7 | `var` mit Klammern | §8.4.7 S. 171 | Gering | `'var' '(' <declarator_list> ')'` Form fehlt. Selten genutzt. |
 | N8 | Qualifier vor `constructor` | §8.4.7 S. 168 | Gering | `<qualifier>*` vor `constructor` fehlt. Kein `blackbox constructor` möglich. |

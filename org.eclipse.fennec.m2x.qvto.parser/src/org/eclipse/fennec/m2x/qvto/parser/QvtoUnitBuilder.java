@@ -198,6 +198,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			if (elemCtx.qvtoImportDecl() != null) {
 				ModuleImport imp = visitQvtoImportDecl(elemCtx.qvtoImportDecl());
 				transformation.getModuleImport().add(imp);
+			} else if (elemCtx.accessDecl() != null) {
+				processAccessDecl(elemCtx.accessDecl(), transformation);
 			} else if (elemCtx.moduleElement() != null) {
 				processModuleElement(elemCtx.moduleElement(), transformation);
 			}
@@ -394,6 +396,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		} else if (ctx.typedefDecl() != null) {
 			// Typedef: store as owned variable or classifier on module
 			visitTypedefDecl(ctx.typedefDecl());
+		} else if (ctx.accessDecl() != null) {
+			processAccessDecl(ctx.accessDecl(), module);
 		}
 	}
 
@@ -1339,11 +1343,11 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private void processModuleUsage(Module module, QvtOParser.ModuleUsageContext ctx) {
 		String kind = ctx.moduleUsageKind().getText();
-		for (QvtOParser.QualifiedNameContext nameCtx : ctx.moduleRefList().qualifiedName()) {
+		for (QvtOParser.ModuleRefContext refCtx : ctx.moduleRefList().moduleRef()) {
 			ModuleImport imp = QVTO.createModuleImport();
 			imp.setKind("extends".equals(kind) ? ImportKind.EXTENSION : ImportKind.ACCESS);
 			// Store qualified name as stub for link-time resolution
-			String qualifiedName = qualifiedNameText(nameCtx);
+			String qualifiedName = qualifiedNameText(refCtx.qualifiedName());
 			// Create OperationalTransformation stub so TransformationInstantiationExp
 			// can reference it (Library would fail the instanceof check in visitNewExp)
 			OperationalTransformation stub = QVTO.createOperationalTransformation();
@@ -1353,6 +1357,26 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			// Track for TransformationInstantiationExp detection in visitNewExp
 			importedModuleStubs.put(qualifiedName, stub);
 			// Also track simple name (last segment) for unqualified references
+			int dotIdx = qualifiedName.lastIndexOf('.');
+			if (dotIdx >= 0) {
+				importedModuleStubs.put(qualifiedName.substring(dotIdx + 1), stub);
+			}
+		}
+	}
+
+	/**
+	 * §8.4.7: Standalone access declaration — unit-level or module-level.
+	 */
+	private void processAccessDecl(QvtOParser.AccessDeclContext ctx, Module module) {
+		for (QvtOParser.ModuleRefContext refCtx : ctx.moduleRefList().moduleRef()) {
+			ModuleImport imp = QVTO.createModuleImport();
+			imp.setKind(ImportKind.ACCESS);
+			String qualifiedName = qualifiedNameText(refCtx.qualifiedName());
+			OperationalTransformation stub = QVTO.createOperationalTransformation();
+			stub.setName(qualifiedName);
+			imp.setImportedModule(stub);
+			module.getModuleImport().add(imp);
+			importedModuleStubs.put(qualifiedName, stub);
 			int dotIdx = qualifiedName.lastIndexOf('.');
 			if (dotIdx >= 0) {
 				importedModuleStubs.put(qualifiedName.substring(dotIdx + 1), stub);

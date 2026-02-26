@@ -38,6 +38,7 @@ unitElement
     | modeltypeDecl
     | transformationDef
     | libraryDef
+    | accessDecl
     | moduleElement
     ;
 
@@ -114,7 +115,17 @@ moduleUsageKind
     ;
 
 moduleRefList
-    : qualifiedName (',' qualifiedName)*
+    : moduleRef (',' moduleRef)*
+    ;
+
+// §8.4.7: <moduleref> ::= <scoped_identifier> <simple_signature>?
+moduleRef
+    : qualifiedName simpleSignature?
+    ;
+
+// §8.4.7: standalone access declaration (unit-level or module-level)
+accessDecl
+    : 'access' ('transformation' | 'library')? moduleRefList ';'
     ;
 
 qualifier
@@ -135,6 +146,7 @@ moduleElement
     | intermediateClassDef
     | tagDecl ';'
     | typedefDecl ';'
+    | accessDecl
     ;
 
 // ==================== Mapping ====================
@@ -447,7 +459,7 @@ literalExpression
     | 'false'                                                                            # FalseLiteral
     | 'null'                                                                             # NullLiteral
     | 'invalid'                                                                          # InvalidLiteral
-    | '*'                                                                                # UnlimitedNaturalLiteral
+    | ('*' | 'unlimited')                                                                # UnlimitedNaturalLiteral
     | collectionLiteral                                                                  # CollectionLit
     | tupleLiteral                                                                       # TupleLit
     | mapLiteral                                                                         # MapLit
@@ -512,8 +524,13 @@ computeExp
     : 'compute' '(' varDeclarator ')' block
     ;
 
+// §8.4.7: <object_exp> ::= 'object' ('(' <iter_declarator> ')')? <object_declarator> <expression_block>
 objectExp
-    : 'object' (varName=qvtoIdentifier ':')? typeExpression? ('@' extentName=qvtoIdentifier)? block
+    : 'object' objectIterator? (varName=qvtoIdentifier ':')? typeExpression? ('@' extentName=qvtoIdentifier)? block
+    ;
+
+objectIterator
+    : '(' qvtoIdentifier ':' typeExpression (varInitOp expression)? ')'
     ;
 
 newExp
@@ -750,6 +767,7 @@ qvtoIdentifier
     | 'readonly'
     | 'composes'
     | 'references'
+    | 'unlimited'
     ;
 
 // ==================== Comment Override ====================

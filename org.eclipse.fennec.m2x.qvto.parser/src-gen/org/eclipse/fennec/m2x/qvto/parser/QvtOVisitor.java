@@ -119,6 +119,18 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitModuleRefList(QvtOParser.ModuleRefListContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#moduleRef}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitModuleRef(QvtOParser.ModuleRefContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#accessDecl}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitAccessDecl(QvtOParser.AccessDeclContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#qualifier}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -900,6 +912,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitObjectExp(QvtOParser.ObjectExpContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#objectIterator}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitObjectIterator(QvtOParser.ObjectIteratorContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#newExp}.
 	 * @param ctx the parse tree
