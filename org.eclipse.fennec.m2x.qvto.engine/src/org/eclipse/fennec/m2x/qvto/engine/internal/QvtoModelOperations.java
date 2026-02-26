@@ -93,7 +93,7 @@ class QvtoModelOperations {
 			if (filterType != null) {
 				List<EObject> result = new ArrayList<>();
 				for (EObject eo : extent.getContents()) {
-					if (eo.eClass() == filterType) {
+					if (isExactType(eo, filterType)) {
 						result.add(eo);
 					}
 				}
@@ -196,7 +196,7 @@ class QvtoModelOperations {
 			if (filterType != null) {
 				List<EObject> result = new ArrayList<>();
 				for (EObject child : eObj.eContents()) {
-					if (child.eClass() == filterType) {
+					if (isExactType(child, filterType)) {
 						result.add(child);
 					}
 				}
@@ -225,7 +225,7 @@ class QvtoModelOperations {
 				List<EObject> result = new ArrayList<>();
 				for (var iter = eObj.eAllContents(); iter.hasNext(); ) {
 					EObject desc = iter.next();
-					if (desc.eClass() == filterType) {
+					if (isExactType(desc, filterType)) {
 						result.add(desc);
 					}
 				}
@@ -281,6 +281,22 @@ class QvtoModelOperations {
 					"InvalidModelMutation",
 					"Cannot modify read-only model extent (in-parameter)");
 		}
+	}
+
+	/**
+	 * §8.3.5.3 / §8.3.4.6: Exact type check that is robust across EPackage instances.
+	 * <p>Unlike {@code eo.eClass() == filterType} (which fails when EClasses come from
+	 * different EPackage instances in dynamic EMF), this compares by nsURI + name.
+	 */
+	static boolean isExactType(EObject eo, EClass filterType) {
+		EClass actual = eo.eClass();
+		if (actual == filterType) {
+			return true;
+		}
+		return actual.getName().equals(filterType.getName())
+				&& Objects.equals(
+						actual.getEPackage().getNsURI(),
+						filterType.getEPackage().getNsURI());
 	}
 
 	static EClass resolveEClassArg(Object arg) {

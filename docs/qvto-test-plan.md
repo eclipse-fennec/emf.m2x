@@ -38,10 +38,10 @@
 | 7 | this/self/result, Null, Invalid, Tag/Typedef (6 Tasks: P7-01…P7-06) | ~35 | 34 | 0 | ✅ DONE |
 | 8 | Standard Library (Dict, List, String, Model, Element) | ~195 | 111 | 0 | ✅ DONE (P8-06–07 ⏸️ DEFERRED) |
 | 9 | Spec-Conformance, Eclipse-Referenztests & Edge Cases (9 Tasks: P9-01…P9-09) | ~100 | 88 | 0 | ✅ DONE |
-| 10 | Deferred Features & Offene Gaps (8 Tasks: P10-01…P10-08) | 59 | 59 | 0 | P10-01–08 ✅ |
-| **Σ** | | **~987** | **922** | **0** | |
+| 10 | Deferred Features & Offene Gaps (9 Tasks: P10-01…P10-09) | 78 | 78 | 0 | P10-01–09 ✅ |
+| **Σ** | | **~1012** | **947** | **0** | |
 
-**Bestandstests:** 922 total (921 pass, 0 fail, 0 @Disabled, 1 @Tag("perf")) — Phase 0–10 ✅ DONE
+**Bestandstests:** 947 total (946 pass, 0 fail, 0 @Disabled, 1 @Tag("perf")) — Phase 0–10 ✅ DONE + GAP-10
 
 ---
 
@@ -2528,6 +2528,38 @@ These tests verify the source evaluation invariant: intermediate dispatch steps 
 
 ---
 
+### P10-09: Shorthand-Operatoren (§8.4.4) — ✅ DONE
+
+> 🛑 **STOP — Spec lesen:** §8.4.4 (S. 162), §8.4 EBNF S. 169 (`<access_op>`, `<mult_op>`, `<unary_op>`)
+
+**Implementiert:** GAP-19, GAP-20, GAP-21 — alle §8.4.4 Shorthand-Operatoren.
+
+**Änderungen:**
+
+| Datei | Änderung |
+|-------|----------|
+| `qvto.parser/grammar/QvtO.g4` | `%` in MultExp, `HASH`/`DOUBLE_HASH` Lexer-Tokens, `HashExp`/`DoubleHashExp`/`UnaryStarExp` Regeln, `NOT_ARROW` Token + `!->` in ArrowExp |
+| `qvto.parser/.../QvtoExpressionBuilder.java` | `visitHashExp`, `visitDoubleHashExp`, `visitUnaryStarExp`, `desugarShorthandIterator` (für `->select(#Type)`), `!->` Not-Wrapper in `visitArrowExp` |
+| `ocl.engine/.../OclStdlib.java` | `%` als Alias für `format` in `dispatchString()`, `stereotypedBy` → `OclInvalid` in `dispatchOclAny()` |
+| `qvto.engine/.../QvtoModelOperations.java` | `isExactType()` — robuster Vergleich (nsURI+Name statt `==` Identity) für `objectsOfType`/`subobjectsOfType`/`allSubobjectsOfType` (§8.3.5.3, §8.3.4.6–7) |
+
+**Tests:** 15 neue Tests in 2 Testklassen:
+
+| Testklasse | Tests | Scope |
+|-----------|------:|-------|
+| `QvtoShorthandParseTest` | 5 | Parse: format `%`, `#`, `##`, `*`, `!->` |
+| `QvtoE2eShorthandTest` | 10 | E2E: format (3), hash mit primitiven + Ecore-Typen (2), doubleHash mit primitiven + Ecore-Typen (2), unaryStar (1), notArrow (2) |
+
+**Spec-Validierung:**
+- §8.4.4 item 1: `#Type` → `oclIsKindOf(Type)` ✅
+- §8.4.4 item 2: `##Type` → `oclIsTypeOf(Type)` ✅
+- §8.4.4 item 3: `*"stereo"` → `stereotypedBy("stereo")` ✅ (UML → OclInvalid, P10-07)
+- §8.4.4 item 4: `"str" % arg` → `format(arg)` ✅
+- §8.4 EBNF: `!->` als `<access_op>` → negated arrow ✅
+- §8.3.5.3: `objectsOfType` exact type match — Bugfix: `==` durch `isExactType()` ersetzt ✅
+
+---
+
 ### Zusammenfassung offene Punkte
 
 | ID | Bereich | Blocker | Priorität | Status |
@@ -2540,8 +2572,9 @@ These tests verify the source evaluation invariant: intermediate dispatch steps 
 | P10-06 | Model I/O (removeElement, read-only) | — | — | ✅ DONE |
 | P10-07 | UML-spezifische Ops | — | — | ⏭️ Nicht geplant |
 | P10-08 | Blackbox Libraries & `from...import` | — | Hoch | ✅ DONE (28 Tests) |
+| P10-09 | Shorthand-Operatoren (§8.4.4) | — | Mittel | ✅ DONE (15 Tests) |
 
-**Status:** Phase 10 abgeschlossen. Alle Gaps (außer P10-07 bewusst übersprungen) implementiert. 922 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf").
+**Status:** Phase 10 abgeschlossen. Alle Gaps (außer P10-07 bewusst übersprungen) implementiert. 947 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf"). GAP-10 (Integer::range) nachträglich implementiert (+6 Tests).
 
 ---
 

@@ -12,7 +12,7 @@ The QVT-O engine implements **QVT-Operational v1.3** as a pure Java library,
 fully decoupled from the Eclipse platform. It reuses the OCL engine (Phase 1) for
 expression evaluation via composition (D25).
 
-**Status:** Phase 2 complete. 922 QVT-O tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10 spec-conformance complete, incl. blackbox libraries (§8.1.4), `from ... import` (§8.4), and String Counter API (§8.3.16.31–35).
+**Status:** Phase 2 complete. 941 QVT-O tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10 spec-conformance complete, incl. blackbox libraries (§8.1.4), `from ... import` (§8.4), String Counter API (§8.3.16.31–35), and §8.4.4 shorthand operators (`%`, `#`, `##`, `*`, `!->`).
 
 **Key properties:**
 - Hybrid evaluator — QvtoEvaluator delegates OCL sub-expressions to OclEvaluator (D25)
@@ -31,7 +31,7 @@ workspace/
 ├── org.eclipse.fennec.m2x.qvto.api/     # Public API interfaces
 ├── org.eclipse.fennec.m2x.qvto.parser/  # ANTLR4 parser (imports Ocl.g4)
 ├── org.eclipse.fennec.m2x.qvto.engine/  # Imperative transformation engine
-└── org.eclipse.fennec.m2x.qvto.tests/   # Tests (plain JUnit 5, 922 tests)
+└── org.eclipse.fennec.m2x.qvto.tests/   # Tests (plain JUnit 5, 941 tests)
 ```
 
 ### 2.1 Dependency Graph

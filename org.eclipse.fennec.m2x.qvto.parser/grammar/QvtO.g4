@@ -310,13 +310,17 @@ block
 // Assignment must be lowest precedence so x := y + 1 means x := (y + 1).
 expression
     : expression ('.' | '?.') propertyOrCallSuffix                                       # NavigationExp
-    | expression ('->' | '?->') iteratorOrOperationCall                                  # ArrowExp
+    | expression ('->' | '?->' | '!->') iteratorOrOperationCall                           # ArrowExp
     // §8.2.2.7: xselect — list[condition], xselectOne — list![condition]
     | expression '[' (xselectIter=qvtoIdentifier '|')? xselectCondition=expression ']'  # XselectExp
     | expression '!' '[' (xselectOneIter=qvtoIdentifier '|')? xselectOneCondition=expression ']'  # XselectOneExp
+    // §8.4.4: shorthand operators — #Type → oclIsKindOf, ##Type → oclIsTypeOf, *"stereo" → stereotypedBy
+    | HASH expression                                                                    # HashExp
+    | DOUBLE_HASH expression                                                             # DoubleHashExp
+    | '*' expression                                                                     # UnaryStarExp
     | 'not' expression                                                                   # NotExp
     | '-' expression                                                                     # UnaryMinusExp
-    | expression op=('*' | '/') expression                                               # MultExp
+    | expression op=('*' | '/' | '%') expression                                          # MultExp
     | expression op=('+' | '-') expression                                               # AddExp
     | expression op=('<' | '>' | '<=' | '>=') expression                                 # CompareExp
     // §8.4.4: '!=' is a synonym for '<>' (like Eclipse QVT-O)
@@ -746,9 +750,23 @@ SUBTRACT_ASSIGN
     : '-='
     ;
 
+// §8.4.4: '##' before '#' — longest match first (ANTLR4 lexer rule ordering)
+DOUBLE_HASH
+    : '##'
+    ;
+
+HASH
+    : '#'
+    ;
+
 // §8.4.4: '!=' as synonym for '<>' — explicit token to disambiguate from '!' '[' (XselectOne)
 NOT_EQUAL_EXEQ
     : '!='
+    ;
+
+// §8.4.4: '!->' as not-arrow — explicit token to disambiguate from '!' '->' sequence
+NOT_ARROW
+    : '!->'
     ;
 
 // §8.4: <<id>> stereotype for intermediate class properties (§8.2.1.3)

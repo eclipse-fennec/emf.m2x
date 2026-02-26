@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -318,6 +319,54 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return createUnaryOperation("-", (OclExpression) visit(ctx.expression()));
 	}
 
+	// §8.4.4 item 1: #Type → oclIsKindOf(Type) shorthand
+	// The operand (type) becomes the argument; source is implicit (iterator variable / self).
+	@Override
+	public OperationCallExp visitHashExp(QvtOParser.HashExpContext ctx) {
+		OclExpression typeArg = buildTypeArgument(ctx.expression());
+		return createShorthandTypeCheck("oclIsKindOf", typeArg);
+	}
+
+	// §8.4.4 item 2: ##Type → oclIsTypeOf(Type) shorthand
+	@Override
+	public OperationCallExp visitDoubleHashExp(QvtOParser.DoubleHashExpContext ctx) {
+		OclExpression typeArg = buildTypeArgument(ctx.expression());
+		return createShorthandTypeCheck("oclIsTypeOf", typeArg);
+	}
+
+	// §8.4.4 item 3: *"stereotype" → stereotypedBy("stereotype") shorthand (UML-specific)
+	@Override
+	public OperationCallExp visitUnaryStarExp(QvtOParser.UnaryStarExpContext ctx) {
+		OclExpression operand = (OclExpression) visit(ctx.expression());
+		return createShorthandTypeCheck("stereotypedBy", operand);
+	}
+
+	/**
+	 * Creates an OperationCallExp with no explicit source and the operand as argument.
+	 * Used for §8.4.4 shorthand operators (#, ##, *) where the source is implicit
+	 * (iterator variable in select/reject context, or self).
+	 */
+	private OperationCallExp createShorthandTypeCheck(String opName, OclExpression argument) {
+		OperationCallExp exp = OCL.createOperationCallExp();
+		exp.setName(opName);
+		exp.getOwnedArguments().add(argument);
+		// No explicit source — evaluator will use iterator variable or self
+		return exp;
+	}
+
+	/**
+	 * Resolves the expression after # or ## as a type reference.
+	 * If the expression is a path name that resolves to a known EClassifier, returns a TypeExp.
+	 * Otherwise falls back to visiting the expression normally.
+	 */
+	private OclExpression buildTypeArgument(QvtOParser.ExpressionContext exprCtx) {
+		TypeExp typeExp = tryBuildTypeCondition(exprCtx);
+		if (typeExp != null) {
+			return typeExp;
+		}
+		return (OclExpression) visit(exprCtx);
+	}
+
 	// ==================== Binary Expressions ====================
 
 	@Override
@@ -428,29 +477,39 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	@Override
 	public OclExpression visitArrowExp(QvtOParser.ArrowExpContext ctx) {
 		OclExpression source = (OclExpression) visit(ctx.expression());
-		boolean isSafe = ctx.getChild(1).getText().equals("?->");
+		String arrowText = ctx.getChild(1).getText();
+		boolean isSafe = "?->".equals(arrowText);
+		boolean isNot = "!->".equals(arrowText);
 
 		QvtOParser.IteratorOrOperationCallContext call = ctx.iteratorOrOperationCall();
+		OclExpression result;
 		if (call instanceof QvtOParser.ForEachCallContext forCtx) {
-			return createForEachArrowCall(source, forCtx);
+			result = createForEachArrowCall(source, forCtx);
 		} else if (call instanceof QvtOParser.IteratorCallContext iterCtx) {
-			return createIteratorExp(source, iterCtx, isSafe);
+			result = createIteratorExp(source, iterCtx, isSafe);
 		} else if (call instanceof QvtOParser.IterateCallContext iterateCtx) {
-			return createIterateExp(source, iterateCtx, isSafe);
+			result = createIterateExp(source, iterateCtx, isSafe);
 		} else if (call instanceof QvtOParser.CollectionOperationCallContext opCtx) {
-			return createCollectionOperation(source, opCtx, isSafe);
+			result = createCollectionOperation(source, opCtx, isSafe);
 		} else if (call instanceof QvtOParser.ArrowResolveCallContext resCtx) {
-			return createArrowResolveCall(source, resCtx);
+			result = createArrowResolveCall(source, resCtx);
 		} else if (call instanceof QvtOParser.ArrowResolveInCallContext resInCtx) {
-			return createArrowResolveInCall(source, resInCtx);
+			result = createArrowResolveInCall(source, resInCtx);
 		} else if (call instanceof QvtOParser.ArrowPropertyCallContext propCtx) {
 			// §8.2.2.7: list->prop = list->xcollect(i | i.prop) — collect shorthand
-			return createXcollectPropertyCall(source, propCtx);
+			result = createXcollectPropertyCall(source, propCtx);
 		} else if (call instanceof QvtOParser.ArrowMappingCallContext mapCtx) {
 			// §8.2.2.7: list->map f() — mapping call on collection
-			return createArrowMappingCallOnCollection(source, mapCtx);
+			result = createArrowMappingCallOnCollection(source, mapCtx);
+		} else {
+			result = source;
 		}
-		return source;
+
+		// §8.4.4: !-> negates the result of the arrow operation
+		if (isNot) {
+			return createUnaryOperation("not", result);
+		}
+		return result;
 	}
 
 	// ==================== Xselect [Type] (§8.2.2.7) ====================
@@ -1787,8 +1846,28 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return exp;
 	}
 
-	private OperationCallExp createCollectionOperation(OclExpression source,
+	private static final Set<String> ITERATOR_NAMES = Set.of(
+			"select", "reject", "collect", "collectNested", "forAll", "exists",
+			"any", "one", "isUnique", "sortedBy", "closure");
+
+	private OclExpression createCollectionOperation(OclExpression source,
 			QvtOParser.CollectionOperationCallContext ctx, boolean isSafe) {
+		String opName = qvtoIdentifierText(ctx.qvtoIdentifier());
+
+		// §8.4.4: ->select(#Type) / ->select(##Type) — shorthand type check as iterator predicate
+		// When a known iterator receives a single #/## shorthand argument (sourceless oclIsKindOf/oclIsTypeOf),
+		// desugar to IteratorExp with the type check as body and iterator variable as source.
+		if (ITERATOR_NAMES.contains(opName) && ctx.argumentList() != null
+				&& ctx.argumentList().expression().size() == 1) {
+			OclExpression arg = (OclExpression) visit(ctx.argumentList().expression(0));
+			if (arg instanceof OperationCallExp shorthand
+					&& shorthand.getOwnedSource() == null
+					&& ("oclIsKindOf".equals(shorthand.getName())
+						|| "oclIsTypeOf".equals(shorthand.getName()))) {
+				return desugarShorthandIterator(source, opName, shorthand, isSafe);
+			}
+		}
+
 		OperationCallExp exp = OCL.createOperationCallExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
@@ -1799,9 +1878,35 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		String opName = qvtoIdentifierText(ctx.qvtoIdentifier());
 		resolveOperation(exp, opName);
 		return exp;
+	}
+
+	/**
+	 * Desugars {@code ->select(#Type)} into {@code ->select(_it | _it.oclIsKindOf(Type))}.
+	 */
+	private IteratorExp desugarShorthandIterator(OclExpression source, String iterName,
+			OperationCallExp shorthand, boolean isSafe) {
+		IteratorExp iterExp = OCL.createIteratorExp();
+		iterExp.setOwnedSource(source);
+		iterExp.setName(iterName);
+		iterExp.setIsSafe(isSafe);
+
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName("_hash_it");
+		OclType elementType = inferElementType(source);
+		if (elementType != null) {
+			iterVar.setType(elementType);
+		}
+		iterExp.getOwnedIterators().add(iterVar);
+
+		// Set iterator variable as source of the type check
+		VariableExp iterRef = OCL.createVariableExp();
+		iterRef.setReferredVariable(iterVar);
+		shorthand.setOwnedSource(iterRef);
+
+		iterExp.setOwnedBody(shorthand);
+		return iterExp;
 	}
 
 	private VariableExp createVariableExp(Variable variable) {

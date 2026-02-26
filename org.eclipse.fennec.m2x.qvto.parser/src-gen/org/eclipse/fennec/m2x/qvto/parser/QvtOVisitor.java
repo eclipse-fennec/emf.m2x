@@ -360,12 +360,33 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitCompareExp(QvtOParser.CompareExpContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code UnaryStarExp}
+	 * labeled alternative in {@link QvtOParser#expression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitUnaryStarExp(QvtOParser.UnaryStarExpContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code MultExp}
 	 * labeled alternative in {@link QvtOParser#expression}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitMultExp(QvtOParser.MultExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code HashExp}
+	 * labeled alternative in {@link QvtOParser#expression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitHashExp(QvtOParser.HashExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code DoubleHashExp}
+	 * labeled alternative in {@link QvtOParser#expression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDoubleHashExp(QvtOParser.DoubleHashExpContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code AddExp}
 	 * labeled alternative in {@link QvtOParser#expression}.

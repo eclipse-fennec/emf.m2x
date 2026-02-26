@@ -8,11 +8,10 @@
 
 ## Übersicht
 
-**Fennec QVT-O Status:** 926 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf") — Phase 0–10 ✅
+**Fennec QVT-O Status:** 941 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf") — Phase 0–10 ✅
 
-**Gesamtabdeckung:** ~96% der QVT-O v1.3 Spec. Die verbleibenden Gaps betreffen überwiegend:
+**Gesamtabdeckung:** ~97% der QVT-O v1.3 Spec. Die verbleibenden Gaps betreffen überwiegend:
 - UML/MOF-spezifische Features (bewusst übersprungen, wie Eclipse)
-- Selten genutzte Syntax-Varianten und Shorthand-Operatoren
 - QVT-R Hybrid-Kopplung (Phase 4)
 
 ---
@@ -111,7 +110,7 @@
 | §8.3.10 | List Iterations | 11 | 11 | — |
 | §8.3.11–15 | Collection/Bag/OrderedSet/Seq/Set | 15 | 15 | — |
 | §8.3.16 | String | 35 | 35 | — |
-| §8.3.17 | Numeric | 1 | 0 | GAP-10 (Integer::range) |
+| §8.3.17 | Numeric | 1 | 1 | ~~GAP-10~~ ✅ |
 | §8.3.18 | Classifier | 1 | 1 | — |
 | §8.3.19 | Predefined Tags | 4 | 1 | GAP-11 (3 Tags) |
 
@@ -125,7 +124,7 @@
 | Top-Level | ~12 | ~11 | ~~GAP-12~~ ✅, GAP-13, N1 |
 | Deklarationen | ~20 | ~17 | GAP-14, GAP-15, N2, N4 |
 | Operationen | ~15 | ~15 | ~~GAP-16~~ ✅, N8 |
-| Expressions | ~30 | ~25 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, GAP-19–22, N3, N5–N7 |
+| Expressions | ~30 | ~28 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, ~~GAP-19~~ ✅, ~~GAP-20~~ ✅, ~~GAP-21~~ ✅, GAP-22, N3, N5–N7 |
 | Kommentare | 3 | 2 | ~~GAP-23~~ ✅ |
 
 ---
@@ -251,14 +250,14 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | S (klein) — 5 Methoden im QvtoOperationProvider |
 | **Priorität** | Niedrig — sehr selten genutzt |
 
-### GAP-10: Integer::range(start, end) als benannte Operation
+### ~~GAP-10: Integer::range(start, end) als benannte Operation~~ ✅ DONE
 
 | | |
 |---|---|
 | **Spec-Referenz** | §8.3.17 |
 | **Was die Spec fordert** | `Integer::range(start, end) : List(Element)` als Methoden-Call |
-| **Aktueller Stand** | Range-Syntax `Sequence{1..5}` funktioniert. Benannte Operation fehlt. |
-| **Eclipse QVT-O** | Implementiert |
+| **Aktueller Stand** | ✅ Implementiert in `OclStdlib.dispatchInteger()`. Beide Varianten: `source.range(end)` (1 arg) und `source.range(start, end)` (2 args). 6 E2E-Tests. |
+| **Eclipse QVT-O** | Deklariert als UNSUPPORTED_OPER — Fennec geht über Eclipse hinaus (Spec hat Vorrang) |
 | **Aufwand** | S (klein) |
 | **Priorität** | Niedrig |
 
@@ -349,38 +348,36 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Eclipse QVT-O** | Nur `!=`, kein `==`, keine Directive |
 | **Tests** | `QvtoE2eLexerNotEqualTest` (5 Tests: basic, equal values, mixed with `<>`, null, xselectOne-Koexistenz) |
 
-### GAP-19: `%` Binary Format Operator
+### GAP-19: `%` Binary Format Operator — ✅ DONE
 
 | | |
 |---|---|
-| **Spec-Referenz** | §8.4.4 |
+| **Spec-Referenz** | §8.4.4 item 4 |
 | **Was die Spec fordert** | `"blabla %s" % myvar` als Shorthand für `String::format()` |
-| **Aktueller Stand** | Nicht implementiert |
+| **Aktueller Stand** | ✅ Implementiert. `%` als MultExp in Grammar, `format`/`%` in OclStdlib.dispatchString(). Einzelwert und Collection-Argumente unterstützt. |
 | **Eclipse QVT-O** | Implementiert |
-| **Aufwand** | S (klein) |
-| **Priorität** | Niedrig |
+| **Tests** | `QvtoShorthandParseTest.formatOperator_parsesCorrectly`, `QvtoE2eShorthandTest.formatOperator_formatsString/multipleArgs/calledAsMethod` (4 Tests) |
 
-### GAP-20: `#`, `##`, unary `*` Shorthand-Operatoren
+### GAP-20: `#`, `##`, unary `*` Shorthand-Operatoren — ✅ DONE
 
 | | |
 |---|---|
-| **Spec-Referenz** | §8.4.4 |
+| **Spec-Referenz** | §8.4.4 items 1–3 |
 | **Was die Spec fordert** | `#MyClass` → `oclIsKindOf(MyClass)`, `##MyClass` → `oclIsTypeOf(MyClass)`, `*"stereo"` → `stereotypedBy("stereo")` |
-| **Aktueller Stand** | Nicht implementiert |
+| **Aktueller Stand** | ✅ Implementiert. `HASH`/`DOUBLE_HASH` Lexer-Tokens, `HashExp`/`DoubleHashExp`/`UnaryStarExp` Grammar-Regeln. Im Iterator-Kontext (`->select(#Type)`) automatische Desugaring zu IteratorExp mit Iterator-Variable als Source. `*"stereo"` → `OclInvalid` (UML-spezifisch, P10-07). |
 | **Eclipse QVT-O** | Implementiert |
-| **Aufwand** | M (mittel) |
-| **Priorität** | Niedrig — selten benutzt |
+| **Tests** | `QvtoShorthandParseTest` (3 Tests: hash, doubleHash, unaryStar), `QvtoE2eShorthandTest` (5 Tests: hash/doubleHash mit primitiven + Ecore-Typen, unaryStar) |
+| **Bugfix** | `objectsOfType`/`subobjectsOfType`/`allSubobjectsOfType` — `==` Identity-Check durch `isExactType()` ersetzt (nsURI+Name-Vergleich, robust über EPackage-Instanzen hinweg, §8.3.5.3) |
 
-### GAP-21: `!->` (not-arrow) Operator
+### GAP-21: `!->` (not-arrow) Operator — ✅ DONE
 
 | | |
 |---|---|
-| **Spec-Referenz** | §8.4, S. 169 |
-| **Was die Spec fordert** | `!->` als Access-Operator (negated arrow) |
-| **Aktueller Stand** | Nicht implementiert |
+| **Spec-Referenz** | §8.4, S. 169: `<access_op> ::= '.' | '->' | '!->'` |
+| **Was die Spec fordert** | `!->` als Access-Operator: `list!->isEmpty()` → `not(list->isEmpty())` |
+| **Aktueller Stand** | ✅ Implementiert. `NOT_ARROW` Lexer-Token, `!->` in ArrowExp. Semantik: Ergebnis wird mit `OperationCallExp("not")` gewrappt. |
 | **Eclipse QVT-O** | Implementiert |
-| **Aufwand** | S (klein) |
-| **Priorität** | Niedrig |
+| **Tests** | `QvtoShorthandParseTest.notArrowOperator_parsesCorrectly`, `QvtoE2eShorthandTest.notArrow_negatesBoolean/emptyCollection` (3 Tests) |
 
 ### GAP-22: Intermediate Class Features (Multiplicity, Opposites, Operations, generische Stereotypen)
 
@@ -458,15 +455,15 @@ Wie Eclipse QVT-O werden folgende UML/MOF-spezifische Operationen **bewusst nich
 | GAP-7 | UnlinkExp | §8.2.2.12 | S | ✅ |
 | GAP-8 | List::deepclone mit EObject-Elementen | §8.3.9.13 | S | ✅ |
 | ~~GAP-9~~ | ~~String Counter API (5 Ops)~~ | ~~§8.3.16.31–35~~ | ~~S~~ | ✅ DONE |
-| GAP-10 | Integer::range als Operation | §8.3.17 | S | ✅ |
+| ~~GAP-10~~ | ~~Integer::range als Operation~~ | ~~§8.3.17~~ | ~~S~~ | ✅ DONE |
 | GAP-11 | Predefined Tags (topclasses etc.) | §8.3.19 | S | Teilw. |
 | GAP-13 | `refines` Keyword | §8.4 | S/L | Teilw. |
 | GAP-14 | Inline metamodel/package Syntax | §8.4 | L | Teilw. |
 | GAP-15 | datatype/primitive/exception Classifier | §8.4 | M | Teilw. |
 | ~~GAP-16~~ | ~~Mapping-Deklaration ohne Body~~ | ~~§8.4~~ | ~~S~~ | ✅ DONE |
-| GAP-19 | `%` Format-Operator | §8.4.4 | S | ✅ |
-| GAP-20 | `#`, `##`, `*` Shorthand-Operatoren | §8.4.4 | M | ✅ |
-| GAP-21 | `!->` Not-Arrow Operator | §8.4 | S | ✅ |
+| ~~GAP-19~~ | ~~`%` Format-Operator~~ | ~~§8.4.4~~ | ~~S~~ | ✅ DONE |
+| ~~GAP-20~~ | ~~`#`, `##`, `*` Shorthand-Operatoren~~ | ~~§8.4.4~~ | ~~M~~ | ✅ DONE |
+| ~~GAP-21~~ | ~~`!->` Not-Arrow Operator~~ | ~~§8.4~~ | ~~S~~ | ✅ DONE |
 | GAP-22 | IC: Multiplicity, Opposites, Operations | §8.4 | M | Teilw. |
 
 ### Priorität: Phase 4 (QVT-R/QVT-D)
@@ -553,6 +550,6 @@ Folgende Gaps können mit geringem Aufwand (S) geschlossen werden und verbessern
 2. ~~**GAP-18** — `!=` Vergleichs-Alternative (Lexer + Parser)~~ ✅ DONE
 3. ~~**GAP-17** — `-=` Assign-Operator (Grammar + Evaluator)~~ ✅ DONE
 4. ~~**GAP-9** — String Counter API (5 Methoden in QvtoOperationProvider)~~ ✅ DONE
-5. **GAP-10** — Integer::range als Operation (1 Methode)
+5. ~~**GAP-10** — Integer::range als Operation (1 Methode)~~ ✅ DONE
 6. **GAP-7** — UnlinkExp (Operation-Dispatch)
 7. **N3** — `'unlimited'` Keyword (1 Lexer-Alternative)

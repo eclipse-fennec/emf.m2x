@@ -159,6 +159,8 @@ class OclStdlib {
 			case "toString" -> source == null ? OclInvalid.INSTANCE : String.valueOf(source);
 			// QVT-O §8.3.3.1: Object::repr() — textual representation of any object
 			case "repr" -> String.valueOf(source);
+			// §8.4.4: stereotypedBy — UML-specific, not supported (P10-07)
+			case "stereotypedBy" -> OclInvalid.INSTANCE;
 			default -> NOT_FOUND;
 		};
 	}
@@ -636,6 +638,25 @@ class OclStdlib {
 			case "ceiling" -> source;
 			case "round" -> source;
 			case "toString" -> source.toString();
+			case "range" -> {
+				long start, end;
+				if (args.length == 1 && args[0] instanceof Long e) {
+					// source.range(end) — source is start
+					start = source;
+					end = e;
+				} else if (args.length >= 2 && args[0] instanceof Long s && args[1] instanceof Long e) {
+					// source.range(start, end) — source ignored (§8.3.17 static-style)
+					start = s;
+					end = e;
+				} else {
+					yield OclInvalid.INSTANCE;
+				}
+				List<Object> result = new ArrayList<>();
+				for (long i = start; i <= end; i++) {
+					result.add(i);
+				}
+				yield result;
+			}
 			default -> NOT_FOUND;
 		};
 	}
@@ -943,10 +964,15 @@ class OclStdlib {
 					yield null;
 				}
 			}
-			// QVT-O §8.3.16.1: format — %s/%d/%f placeholder substitution
-			case "format" -> {
+			// QVT-O §8.3.16.1 + §8.4.4: format / % — placeholder substitution
+			case "format", "%" -> {
 				try {
-					yield String.format(source, args[0]);
+					Object arg = args[0];
+					if (arg instanceof Collection<?> c) {
+						yield String.format(source, c.toArray());
+					} else {
+						yield String.format(source, arg);
+					}
 				} catch (Exception e) {
 					yield OclInvalid.INSTANCE;
 				}
