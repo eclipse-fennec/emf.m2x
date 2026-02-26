@@ -289,6 +289,30 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitClassifierFeatureModifier(QvtOParser.ClassifierFeatureModifierContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#stereotypeQualifier}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStereotypeQualifier(QvtOParser.StereotypeQualifierContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#multiplicity}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMultiplicity(QvtOParser.MultiplicityContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#multiplicityRange}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMultiplicityRange(QvtOParser.MultiplicityRangeContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#oppositeProperty}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitOppositeProperty(QvtOParser.OppositePropertyContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#tagDecl}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

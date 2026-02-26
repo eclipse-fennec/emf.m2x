@@ -27,6 +27,8 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EReference;
+import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
@@ -180,6 +182,17 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			updateExpressionBuilder();
 		}
 
+		// §8.2.1.3: Pre-pass for top-level IC shells (forward-references)
+		if (hasTopLevelModuleElements) {
+			List<QvtOParser.ModuleElementContext> topLevelElements = new ArrayList<>();
+			for (QvtOParser.UnitElementContext elemCtx : ctx.unitElement()) {
+				if (elemCtx.moduleElement() != null) {
+					topLevelElements.add(elemCtx.moduleElement());
+				}
+			}
+			preCreateIntermediateClassShells(topLevelElements, transformation);
+		}
+
 		// Second pass: imports and top-level module elements
 		for (QvtOParser.UnitElementContext elemCtx : ctx.unitElement()) {
 			if (elemCtx.qvtoImportDecl() != null) {
@@ -193,6 +206,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Resolve deferred mapping extensions for top-level module elements
 		if (hasTopLevelModuleElements && transformation != null) {
 			resolvePendingExtensions(transformation);
+			// §8.4: Resolve opposite properties
+			resolveOppositeProperties(transformation);
 		}
 
 		if (savedEnv != null) {
@@ -245,6 +260,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 		updateExpressionBuilder();
 
+		// §8.2.1.3: Pre-pass — create IC shells so forward-references resolve
+		preCreateIntermediateClassShells(ctx.moduleElement(), transformation);
+
 		// Module elements
 		for (QvtOParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
 			processModuleElement(elemCtx, transformation);
@@ -252,6 +270,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Resolve deferred mapping extensions (disjuncts, inherits, merges)
 		resolvePendingExtensions(transformation);
+
+		// §8.4: Resolve opposite properties across all intermediate classes
+		resolveOppositeProperties(transformation);
 
 		this.environment = savedEnv;
 		updateExpressionBuilder();
@@ -267,6 +288,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ModuleUsageContext usageCtx : ctx.moduleUsage()) {
 			processModuleUsage(library, usageCtx);
 		}
+
+		// §8.2.1.3: Pre-pass — create IC shells so forward-references resolve
+		preCreateIntermediateClassShells(ctx.moduleElement(), library);
 
 		// Module elements
 		for (QvtOParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
@@ -732,18 +756,43 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	// ==================== Intermediate Class ====================
 
+	/**
+	 * §8.2.1.3: Pre-pass — creates empty EClass shells for all intermediate classes
+	 * in the given module elements, so that forward-references between ICs resolve.
+	 */
+	private void preCreateIntermediateClassShells(
+			List<QvtOParser.ModuleElementContext> elements, Module module) {
+		EPackage intermPkg = null;
+		for (QvtOParser.ModuleElementContext elemCtx : elements) {
+			if (elemCtx.intermediateClassDef() != null) {
+				QvtOParser.IntermediateClassDefContext icCtx = elemCtx.intermediateClassDef();
+				String name = QvtoExpressionBuilder.qvtoIdentifierText(icCtx.qvtoIdentifier());
+				if (intermPkg == null) {
+					intermPkg = getOrCreateIntermediatePackage(module);
+				}
+				// Only create if not already present (idempotent)
+				if (intermPkg.getEClassifier(name) == null) {
+					EClass shell = EcoreFactory.eINSTANCE.createEClass();
+					shell.setName(name);
+					intermPkg.getEClassifiers().add(shell);
+				}
+			}
+		}
+	}
+
 	private void processIntermediateClass(QvtOParser.IntermediateClassDefContext ctx,
 			Module module) {
-		EClass intermediateClass = EcoreFactory.eINSTANCE.createEClass();
-		intermediateClass.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
-
-		// §8.2.1.3: Register in _INTERMEDIATE package so resolveClassifier finds it
-		// and EcoreUtil.create() can instantiate it via the package's EFactory.
-		// MUST be added to intermPkg LAST since EMF containment moves the EClass.
+		String className = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
 		EPackage intermPkg = getOrCreateIntermediatePackage(module);
 
-		// Temporarily add to intermPkg so supertype resolution can find it
-		intermPkg.getEClassifiers().add(intermediateClass);
+		// Retrieve existing shell created in pre-pass
+		EClass intermediateClass = (EClass) intermPkg.getEClassifier(className);
+		if (intermediateClass == null) {
+			// Fallback: create if pre-pass was not run (defensive)
+			intermediateClass = EcoreFactory.eINSTANCE.createEClass();
+			intermediateClass.setName(className);
+			intermPkg.getEClassifiers().add(intermediateClass);
+		}
 
 		// Resolve intermediate class supertypes (extends clause)
 		if (ctx.typeList() != null) {
@@ -756,47 +805,282 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		// Features (with optional modifiers and default value expressions)
+		// Features: properties and operations (§8.4 <classifier_feature>)
 		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
-			EAttribute attr = EcoreFactory.eINSTANCE.createEAttribute();
-			attr.setName(QvtoExpressionBuilder.qvtoIdentifierText(featureCtx.qvtoIdentifier()));
-			attr.setEType(EcorePackage.Literals.EJAVA_OBJECT);
-
-			// Process modifiers: static, readonly, references, composes, <<id>>
-			for (QvtOParser.ClassifierFeatureModifierContext modCtx : featureCtx.classifierFeatureModifier()) {
-				if (modCtx.STEREOTYPE_ID() != null) {
-					// §8.2.1.3: <<id>> stereotype — marks attribute as EClass ID
-					attr.setID(true);
-				} else {
-					String modText = modCtx.getText();
-					EAnnotation modAnn = EcoreFactory.eINSTANCE.createEAnnotation();
-					modAnn.setSource("fennec:intermediate:modifier");
-					modAnn.getDetails().put(modText, "true");
-					attr.getEAnnotations().add(modAnn);
-				}
+			if (featureCtx.simpleSignature() != null) {
+				processClassifierOperation(featureCtx, intermediateClass);
+			} else {
+				processClassifierFeature(featureCtx, intermediateClass);
 			}
-
-			// Store default value expression if present
-			if (featureCtx.expression() != null) {
-				OclExpression defaultExpr = (OclExpression) expressionBuilder.visit(featureCtx.expression());
-				if (defaultExpr != null) {
-					EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
-					ann.setSource("fennec:intermediate:default");
-					ann.getReferences().add(defaultExpr);
-					attr.getEAnnotations().add(ann);
-				}
-			}
-
-			intermediateClass.getEStructuralFeatures().add(attr);
 		}
 
 		if (module instanceof OperationalTransformation ot) {
 			ot.getIntermediateClass().add(intermediateClass);
 		}
+	}
 
-		// Ensure the EClass ends up in intermPkg (not module) for EcoreUtil.create()
-		// The add to intermPkg above already placed it there; module.getEClassifiers
-		// would move it (EMF containment). So we do NOT add to module.eClassifiers.
+	/**
+	 * §8.4: Processes a single classifier feature (attribute or reference) of an IC.
+	 */
+	private void processClassifierFeature(QvtOParser.ClassifierFeatureContext featureCtx,
+			EClass intermediateClass) {
+		String featureName = QvtoExpressionBuilder.qvtoIdentifierText(featureCtx.qvtoIdentifier());
+
+		// Collect modifiers
+		boolean isReferences = false;
+		boolean isComposes = false;
+		boolean isId = false;
+		boolean isStatic = false;
+		boolean isReadonly = false;
+		boolean isDerived = false;
+		List<String> stereotypes = new ArrayList<>();
+
+		for (QvtOParser.ClassifierFeatureModifierContext modCtx : featureCtx.classifierFeatureModifier()) {
+			if (modCtx.stereotypeQualifier() != null) {
+				for (QvtOParser.QvtoIdentifierContext idCtx :
+						modCtx.stereotypeQualifier().qvtoIdentifier()) {
+					stereotypes.add(QvtoExpressionBuilder.qvtoIdentifierText(idCtx));
+				}
+			} else {
+				String modText = modCtx.getText();
+				switch (modText) {
+				case "references" -> isReferences = true;
+				case "composes" -> isComposes = true;
+				case "static" -> isStatic = true;
+				case "readonly" -> isReadonly = true;
+				case "derived" -> isDerived = true;
+				}
+			}
+		}
+
+		// Determine whether this is an EReference or EAttribute
+		EStructuralFeature feature;
+		if (isReferences || isComposes) {
+			// EReference: type must resolve to an EClass
+			EReference ref = EcoreFactory.eINSTANCE.createEReference();
+			ref.setName(featureName);
+			ref.setContainment(isComposes);
+
+			// Resolve referenced type
+			OclType resolved = expressionBuilder.resolveTypeExpression(featureCtx.typeExpression());
+			if (resolved instanceof ClassifierType ct
+					&& ct.getReferredClassifier() instanceof EClass targetClass) {
+				ref.setEType(targetClass);
+			} else {
+				ref.setEType(EcorePackage.Literals.EJAVA_OBJECT);
+			}
+
+			feature = ref;
+		} else {
+			// EAttribute: default to EJAVA_OBJECT (as before)
+			EAttribute attr = EcoreFactory.eINSTANCE.createEAttribute();
+			attr.setName(featureName);
+			attr.setEType(EcorePackage.Literals.EJAVA_OBJECT);
+			feature = attr;
+		}
+
+		// Multiplicity
+		if (featureCtx.multiplicity() != null) {
+			applyMultiplicity(feature, featureCtx.multiplicity());
+		}
+
+		// Stereotypes: <<id>> sets EAttribute.isID, others stored as annotations
+		for (String stereotype : stereotypes) {
+			if ("id".equals(stereotype) && feature instanceof EAttribute attr) {
+				attr.setID(true);
+				isId = true;
+			}
+		}
+		// Store non-id stereotypes as annotation
+		List<String> otherStereotypes = stereotypes.stream()
+				.filter(s -> !"id".equals(s) || !(feature instanceof EAttribute))
+				.toList();
+		if (!otherStereotypes.isEmpty()) {
+			EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
+			ann.setSource("fennec:intermediate:stereotype");
+			for (String s : otherStereotypes) {
+				ann.getDetails().put(s, "true");
+			}
+			feature.getEAnnotations().add(ann);
+		}
+
+		// Modifier annotations (static, readonly, derived)
+		if (isStatic) {
+			addModifierAnnotation(feature, "static");
+		}
+		if (isReadonly) {
+			addModifierAnnotation(feature, "readonly");
+		}
+		if (isDerived) {
+			feature.setDerived(true);
+			addModifierAnnotation(feature, "derived");
+		}
+
+		// Opposite property: store as annotation for post-pass resolution
+		if (featureCtx.oppositeProperty() != null) {
+			QvtOParser.OppositePropertyContext oppCtx = featureCtx.oppositeProperty();
+			String oppName = QvtoExpressionBuilder.qvtoIdentifierText(oppCtx.qvtoIdentifier());
+			EAnnotation oppAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+			oppAnn.setSource("fennec:intermediate:opposite");
+			oppAnn.getDetails().put("name", oppName);
+			if (oppCtx.multiplicity() != null) {
+				oppAnn.getDetails().put("multiplicity",
+						oppCtx.multiplicity().multiplicityRange().getText());
+			}
+			feature.getEAnnotations().add(oppAnn);
+		}
+
+		// Default value expression
+		if (featureCtx.expression() != null) {
+			OclExpression defaultExpr = (OclExpression) expressionBuilder.visit(
+					featureCtx.expression());
+			if (defaultExpr != null) {
+				EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
+				ann.setSource("fennec:intermediate:default");
+				ann.getReferences().add(defaultExpr);
+				feature.getEAnnotations().add(ann);
+			}
+		}
+
+		intermediateClass.getEStructuralFeatures().add(feature);
+	}
+
+	/**
+	 * §8.4: Processes a classifier_operation (method declaration) inside an intermediate class.
+	 * Creates an EOperation on the EClass. Declaration only — no body execution (like Eclipse).
+	 */
+	private void processClassifierOperation(QvtOParser.ClassifierFeatureContext featureCtx,
+			EClass intermediateClass) {
+		String opName = QvtoExpressionBuilder.qvtoIdentifierText(featureCtx.qvtoIdentifier());
+
+		EOperation op = EcoreFactory.eINSTANCE.createEOperation();
+		op.setName(opName);
+
+		// Return type
+		OclType returnType = expressionBuilder.resolveTypeExpression(featureCtx.typeExpression());
+		if (returnType instanceof ClassifierType ct && ct.getReferredClassifier() != null) {
+			op.setEType(ct.getReferredClassifier());
+		} else if (returnType instanceof PrimitiveType pt) {
+			EDataType dt = EcoreFactory.eINSTANCE.createEDataType();
+			dt.setName(pt.getName());
+			op.setEType(dt);
+		}
+
+		// Parameters from simpleSignature
+		if (featureCtx.simpleSignature().paramList() != null) {
+			for (QvtOParser.ParamContext paramCtx :
+					featureCtx.simpleSignature().paramList().param()) {
+				org.eclipse.emf.ecore.EParameter eParam =
+						EcoreFactory.eINSTANCE.createEParameter();
+				eParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
+						paramCtx.qvtoIdentifier()));
+
+				OclType paramType = expressionBuilder.resolveTypeExpression(
+						paramCtx.typeExpression());
+				if (paramType instanceof ClassifierType ct
+						&& ct.getReferredClassifier() != null) {
+					eParam.setEType(ct.getReferredClassifier());
+				} else if (paramType instanceof PrimitiveType pt) {
+					EDataType dt = EcoreFactory.eINSTANCE.createEDataType();
+					dt.setName(pt.getName());
+					eParam.setEType(dt);
+				}
+				op.getEParameters().add(eParam);
+			}
+		}
+
+		intermediateClass.getEOperations().add(op);
+	}
+
+	/**
+	 * §8.4: Applies multiplicity bounds from grammar context to a structural feature.
+	 */
+	private void applyMultiplicity(EStructuralFeature feature,
+			QvtOParser.MultiplicityContext multCtx) {
+		QvtOParser.MultiplicityRangeContext range = multCtx.multiplicityRange();
+		String text = range.getText();
+
+		if ("*".equals(text)) {
+			feature.setLowerBound(0);
+			feature.setUpperBound(-1);
+		} else if (text.contains("..")) {
+			// e.g. "0..1", "1..*", "0..*"
+			String[] parts = text.split("\\.\\.");
+			feature.setLowerBound(Integer.parseInt(parts[0]));
+			feature.setUpperBound("*".equals(parts[1]) ? -1 : Integer.parseInt(parts[1]));
+		} else {
+			// Single integer, e.g. "1", "3"
+			int val = Integer.parseInt(text);
+			feature.setLowerBound(val);
+			feature.setUpperBound(val);
+		}
+	}
+
+	private void addModifierAnnotation(EStructuralFeature feature, String modifier) {
+		EAnnotation ann = feature.getEAnnotation("fennec:intermediate:modifier");
+		if (ann == null) {
+			ann = EcoreFactory.eINSTANCE.createEAnnotation();
+			ann.setSource("fennec:intermediate:modifier");
+			feature.getEAnnotations().add(ann);
+		}
+		ann.getDetails().put(modifier, "true");
+	}
+
+	/**
+	 * §8.4: Post-pass — resolves opposite properties across all intermediate classes.
+	 * For each feature with a "fennec:intermediate:opposite" annotation, creates the
+	 * implicit opposite EReference on the target class and links both directions.
+	 */
+	private void resolveOppositeProperties(Module module) {
+		if (!(module instanceof OperationalTransformation ot)) {
+			return;
+		}
+		for (EClass ic : ot.getIntermediateClass()) {
+			for (EStructuralFeature sf : new ArrayList<>(ic.getEStructuralFeatures())) {
+				EAnnotation oppAnn = sf.getEAnnotation("fennec:intermediate:opposite");
+				if (oppAnn == null || !(sf instanceof EReference ref)) {
+					continue;
+				}
+				String oppName = oppAnn.getDetails().get("name");
+				String oppMult = oppAnn.getDetails().get("multiplicity");
+
+				// Target class is the EReference's type
+				if (!(ref.getEType() instanceof EClass targetClass)) {
+					continue;
+				}
+
+				// Check if the opposite already exists on the target class
+				EStructuralFeature existingOpp = targetClass.getEStructuralFeature(oppName);
+				if (existingOpp instanceof EReference existingRef) {
+					ref.setEOpposite(existingRef);
+					existingRef.setEOpposite(ref);
+				} else if (existingOpp == null) {
+					// Create implicit opposite reference on the target class
+					EReference implicitOpp = EcoreFactory.eINSTANCE.createEReference();
+					implicitOpp.setName(oppName);
+					implicitOpp.setEType(ic);
+					// Apply opposite multiplicity if specified
+					if (oppMult != null) {
+						if ("*".equals(oppMult)) {
+							implicitOpp.setLowerBound(0);
+							implicitOpp.setUpperBound(-1);
+						} else if (oppMult.contains("..")) {
+							String[] parts = oppMult.split("\\.\\.");
+							implicitOpp.setLowerBound(Integer.parseInt(parts[0]));
+							implicitOpp.setUpperBound(
+									"*".equals(parts[1]) ? -1 : Integer.parseInt(parts[1]));
+						} else {
+							int val = Integer.parseInt(oppMult);
+							implicitOpp.setLowerBound(val);
+							implicitOpp.setUpperBound(val);
+						}
+					}
+					targetClass.getEStructuralFeatures().add(implicitOpp);
+					ref.setEOpposite(implicitOpp);
+					implicitOpp.setEOpposite(ref);
+				}
+			}
+		}
 	}
 
 	/**

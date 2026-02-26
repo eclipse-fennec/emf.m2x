@@ -124,7 +124,7 @@
 | Top-Level | ~12 | ~11 | ~~GAP-12~~ ✅, GAP-13, N1 |
 | Deklarationen | ~20 | ~17 | GAP-14, GAP-15, N2, N4 |
 | Operationen | ~15 | ~15 | ~~GAP-16~~ ✅, N8 |
-| Expressions | ~30 | ~28 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, ~~GAP-19~~ ✅, ~~GAP-20~~ ✅, ~~GAP-21~~ ✅, GAP-22, N3, N5–N7 |
+| Expressions | ~30 | ~28 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, ~~GAP-19~~ ✅, ~~GAP-20~~ ✅, ~~GAP-21~~ ✅, ~~GAP-22~~ ✅, N3, N5–N7 |
 | Kommentare | 3 | 2 | ~~GAP-23~~ ✅ |
 
 ---
@@ -379,17 +379,16 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Eclipse QVT-O** | Implementiert |
 | **Tests** | `QvtoShorthandParseTest.notArrowOperator_parsesCorrectly`, `QvtoE2eShorthandTest.notArrow_negatesBoolean/emptyCollection` (3 Tests) |
 
-### GAP-22: Intermediate Class Features (Multiplicity, Opposites, Operations, generische Stereotypen)
+### GAP-22: Intermediate Class Features (Multiplicity, Opposites, Operations, generische Stereotypen) — ✅ DONE
 
 | | |
 |---|---|
 | **Spec-Referenz** | §8.4, S. 166–167 |
 | **Was die Spec fordert** | `[0..1]`, `[*]`, `ordered`, `opposites ~refName`, Methoden in Intermediate Classes, `<<name1, name2>>` generisch |
-| **Aktueller Stand** | Multiplicity, opposites, classifier_operation fehlen. Stereotyp nur hardcoded `<<id>>`. `'derived'` als Feature-Key fehlt (N4). |
-| **EBNF-Quercheck** | N4 (`'derived'` Feature-Key), N9 (`<classifier_operation>` in ICs — mittlere Relevanz) bestätigen diesen Gap |
-| **Eclipse QVT-O** | Teilweise |
-| **Aufwand** | M (mittel) |
-| **Priorität** | Niedrig |
+| **Aktueller Stand** | ✅ Implementiert — Multiplicity (`[*]`, `[0..1]`, `[1..*]`, `[n]`), `opposites ~refName`, `references`/`composes` → EReference, `derived` Feature-Key, generische Stereotypen (`<<id, readonly>>`), Forward-References (Two-Pass IC), `classifier_operation` (N9, Deklaration → EOperation, kein Body). |
+| **EBNF-Quercheck** | N4 (`'derived'` Feature-Key) ✅, N9 (`<classifier_operation>`) ✅ |
+| **Eclipse QVT-O** | Teilweise (ohne classifier_operation) |
+| **Tests** | `QvtoE2eIntermediateClassFeaturesTest` (10 Tests) |
 
 ### GAP-23: `//` als Zeilenkommentar — ✅ DONE
 
@@ -464,7 +463,7 @@ Wie Eclipse QVT-O werden folgende UML/MOF-spezifische Operationen **bewusst nich
 | ~~GAP-19~~ | ~~`%` Format-Operator~~ | ~~§8.4.4~~ | ~~S~~ | ✅ DONE |
 | ~~GAP-20~~ | ~~`#`, `##`, `*` Shorthand-Operatoren~~ | ~~§8.4.4~~ | ~~M~~ | ✅ DONE |
 | ~~GAP-21~~ | ~~`!->` Not-Arrow Operator~~ | ~~§8.4~~ | ~~S~~ | ✅ DONE |
-| GAP-22 | IC: Multiplicity, Opposites, Operations | §8.4 | M | Teilw. |
+| ~~GAP-22~~ | ~~IC: Multiplicity, Opposites, Operations~~ | ~~§8.4~~ | ~~M~~ | ✅ DONE |
 
 ### Priorität: Phase 4 (QVT-R/QVT-D)
 
@@ -509,7 +508,7 @@ Systematischer Abgleich aller ~120 EBNF-Produktionen aus §8.4.7 (S. 164–171) 
 | N6 | `switch` mit Iterator-Deklarator | §8.4.7 S. 170 | Gering | Spec hat `<iter_declarator>`, Fennec hat nur Expression als Switch-Wert. |
 | N7 | `var` mit Klammern | §8.4.7 S. 171 | Gering | `'var' '(' <declarator_list> ')'` Form fehlt. Selten genutzt. |
 | N8 | Qualifier vor `constructor` | §8.4.7 S. 168 | Gering | `<qualifier>*` vor `constructor` fehlt. Kein `blackbox constructor` möglich. |
-| N9 | Operations in Intermediate Classes | §8.4.7 S. 167 | Mittel | `<classifier_operation>` (Methoden-Deklarationen in ICs) fehlt. → GAP-22 erweitern. |
+| ~~N9~~ | ~~Operations in Intermediate Classes~~ | ~~§8.4.7 S. 167~~ | ~~Mittel~~ | ✅ DONE — `<classifier_operation>` → EOperation (Deklaration, kein Body, wie Eclipse). |
 | N10 | Dict-Key Typ | §8.4.7 S. 170 | — | Fennec ist **permissiver** (beliebige Expression als Key, Spec nur `<literal_simple>`). Kein Bug. |
 
 ### Bewusste EXTRA-Erweiterungen (nicht in Spec)

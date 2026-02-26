@@ -39,9 +39,9 @@
 | 8 | Standard Library (Dict, List, String, Model, Element) | ~195 | 111 | 0 | ✅ DONE (P8-06–07 ⏸️ DEFERRED) |
 | 9 | Spec-Conformance, Eclipse-Referenztests & Edge Cases (9 Tasks: P9-01…P9-09) | ~100 | 88 | 0 | ✅ DONE |
 | 10 | Deferred Features & Offene Gaps (9 Tasks: P10-01…P10-09) | 78 | 78 | 0 | P10-01–09 ✅ |
-| **Σ** | | **~1027** | **962** | **0** | |
+| **Σ** | | **~1039** | **974** | **0** | |
 
-**Bestandstests:** 962 total (961 pass, 0 fail, 0 @Disabled, 1 @Tag("perf")) — Phase 0–10 ✅ DONE + GAP-10 + GAP-7 + GAP-8 + GAP-11
+**Bestandstests:** 974 total (973 pass, 0 fail, 0 @Disabled, 1 @Tag("perf")) — Phase 0–10 ✅ DONE + GAP-10 + GAP-7 + GAP-8 + GAP-11 + GAP-22 + N9
 
 ---
 
@@ -2574,7 +2574,7 @@ These tests verify the source evaluation invariant: intermediate dispatch steps 
 | P10-08 | Blackbox Libraries & `from...import` | — | Hoch | ✅ DONE (28 Tests) |
 | P10-09 | Shorthand-Operatoren (§8.4.4) | — | Mittel | ✅ DONE (15 Tests) |
 
-**Status:** Phase 10 abgeschlossen. Alle Gaps (außer P10-07 bewusst übersprungen) implementiert. 962 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf"). GAP-10 (+6), GAP-7 (+5), GAP-8 (+4), GAP-11 (+6 predefined tags proxy/topclasses) nachträglich implementiert.
+**Status:** Phase 10 abgeschlossen. Alle Gaps (außer P10-07 bewusst übersprungen) implementiert. 974 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf"). GAP-10 (+6), GAP-7 (+5), GAP-8 (+4), GAP-11 (+6 predefined tags proxy/topclasses), GAP-22 (+10 IC Features), N9 (+2 classifier_operation) nachträglich implementiert.
 
 ---
 

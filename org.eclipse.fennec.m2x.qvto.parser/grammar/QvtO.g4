@@ -254,7 +254,10 @@ typeList
     ;
 
 classifierFeature
-    : classifierFeatureModifier* qvtoIdentifier ':' typeExpression ('=' expression)? ';'
+    : classifierFeatureModifier* qvtoIdentifier ':' typeExpression
+      simpleSignature ';'                                                     // §8.4: <classifier_operation>
+    | classifierFeatureModifier* qvtoIdentifier ':' typeExpression
+      multiplicity? ('ordered')? oppositeProperty? ('=' expression)? ';'     // §8.4: <classifier_property>
     ;
 
 classifierFeatureModifier
@@ -262,7 +265,26 @@ classifierFeatureModifier
     | 'readonly'
     | 'references'
     | 'composes'
-    | STEREOTYPE_ID
+    | 'derived'
+    | stereotypeQualifier
+    ;
+
+stereotypeQualifier
+    : '<<' qvtoIdentifier (',' qvtoIdentifier)* '>>'
+    ;
+
+multiplicity
+    : '[' multiplicityRange ']'
+    ;
+
+multiplicityRange
+    : INTEGER_LITERAL '..' (INTEGER_LITERAL | '*')
+    | INTEGER_LITERAL
+    | '*'
+    ;
+
+oppositeProperty
+    : 'opposites' '~'? qvtoIdentifier multiplicity?
     ;
 
 tagDecl
@@ -722,6 +744,12 @@ qvtoIdentifier
     | 'return'
     | 'while'
     | 'from'
+    | 'opposites'
+    | 'derived'
+    | 'ordered'
+    | 'readonly'
+    | 'composes'
+    | 'references'
     ;
 
 // ==================== Comment Override ====================
@@ -769,11 +797,10 @@ NOT_ARROW
     : '!->'
     ;
 
-// §8.4: <<id>> stereotype for intermediate class properties (§8.2.1.3)
-// Matched as a single 6-char token — no conflict with < / > comparison operators.
-STEREOTYPE_ID
-    : '<<' 'id' '>>'
-    ;
+// §8.4: Chevron tokens for stereotype qualifiers on intermediate class features (§8.2.1.3)
+// ANTLR4 longest-match: '<<' wins over '<' in lexer. No shift operators in QVT-O.
+LCHEVRON2 : '<<' ;
+RCHEVRON2 : '>>' ;
 
 // §8.4: double-quoted string literals (used in tags, expressions, and adjacent concatenation)
 DOUBLE_QUOTED_STRING

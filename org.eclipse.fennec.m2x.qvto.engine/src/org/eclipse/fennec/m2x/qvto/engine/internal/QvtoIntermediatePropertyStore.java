@@ -120,6 +120,7 @@ class QvtoIntermediatePropertyStore {
 	 * Default expressions are stored in EAnnotations with source "fennec:intermediate:default"
 	 * by the parser's QvtoUnitBuilder.
 	 */
+	@SuppressWarnings("unchecked")
 	void initIntermediateClassDefaults(EObject target, EClass eClass) {
 		for (EStructuralFeature feature : eClass.getEAllStructuralFeatures()) {
 			EAnnotation ann = feature.getEAnnotation("fennec:intermediate:default");
@@ -127,7 +128,18 @@ class QvtoIntermediatePropertyStore {
 					&& ann.getReferences().get(0) instanceof OclExpression defaultExpr) {
 				Object defaultValue = evalFn.apply(defaultExpr);
 				if (defaultValue != null) {
-					target.eSet(feature, defaultValue);
+					if (feature.isMany()) {
+						// Multi-valued features (EList): addAll instead of eSet
+						java.util.Collection<Object> list =
+								(java.util.Collection<Object>) target.eGet(feature);
+						if (defaultValue instanceof java.util.Collection<?> coll) {
+							list.addAll((java.util.Collection<Object>) coll);
+						} else {
+							list.add(defaultValue);
+						}
+					} else {
+						target.eSet(feature, defaultValue);
+					}
 				}
 			}
 		}
