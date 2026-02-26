@@ -35,6 +35,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitQvtoImportDecl(QvtOParser.QvtoImportDeclContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#importedNameList}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitImportedNameList(QvtOParser.ImportedNameListContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#modeltypeDecl}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

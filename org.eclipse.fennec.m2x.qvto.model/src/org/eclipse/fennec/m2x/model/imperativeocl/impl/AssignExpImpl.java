@@ -43,6 +43,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
  * </p>
  * <ul>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.AssignExpImpl#isIsReset <em>Is Reset</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.AssignExpImpl#isIsSubtract <em>Is Subtract</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.AssignExpImpl#getLeft <em>Left</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.AssignExpImpl#getValue <em>Value</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.AssignExpImpl#getDefaultValue <em>Default Value</em>}</li>
@@ -70,6 +71,26 @@ public class AssignExpImpl extends ImperativeExpressionImpl implements AssignExp
 	 * @ordered
 	 */
 	protected boolean isReset = IS_RESET_EDEFAULT;
+
+	/**
+	 * The default value of the '{@link #isIsSubtract() <em>Is Subtract</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #isIsSubtract()
+	 * @generated
+	 * @ordered
+	 */
+	protected static final boolean IS_SUBTRACT_EDEFAULT = false;
+
+	/**
+	 * The cached value of the '{@link #isIsSubtract() <em>Is Subtract</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #isIsSubtract()
+	 * @generated
+	 * @ordered
+	 */
+	protected boolean isSubtract = IS_SUBTRACT_EDEFAULT;
 
 	/**
 	 * The cached value of the '{@link #getLeft() <em>Left</em>}' containment reference.
@@ -141,6 +162,29 @@ public class AssignExpImpl extends ImperativeExpressionImpl implements AssignExp
 		isReset = newIsReset;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, ImperativeOclPackage.ASSIGN_EXP__IS_RESET, oldIsReset, isReset));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public boolean isIsSubtract() {
+		return isSubtract;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setIsSubtract(boolean newIsSubtract) {
+		boolean oldIsSubtract = isSubtract;
+		isSubtract = newIsSubtract;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, ImperativeOclPackage.ASSIGN_EXP__IS_SUBTRACT, oldIsSubtract, isSubtract));
 	}
 
 	/**
@@ -274,6 +318,8 @@ public class AssignExpImpl extends ImperativeExpressionImpl implements AssignExp
 		switch (featureID) {
 			case ImperativeOclPackage.ASSIGN_EXP__IS_RESET:
 				return isIsReset();
+			case ImperativeOclPackage.ASSIGN_EXP__IS_SUBTRACT:
+				return isIsSubtract();
 			case ImperativeOclPackage.ASSIGN_EXP__LEFT:
 				return getLeft();
 			case ImperativeOclPackage.ASSIGN_EXP__VALUE:
@@ -295,6 +341,9 @@ public class AssignExpImpl extends ImperativeExpressionImpl implements AssignExp
 		switch (featureID) {
 			case ImperativeOclPackage.ASSIGN_EXP__IS_RESET:
 				setIsReset((Boolean)newValue);
+				return;
+			case ImperativeOclPackage.ASSIGN_EXP__IS_SUBTRACT:
+				setIsSubtract((Boolean)newValue);
 				return;
 			case ImperativeOclPackage.ASSIGN_EXP__LEFT:
 				setLeft((OclExpression)newValue);
@@ -321,6 +370,9 @@ public class AssignExpImpl extends ImperativeExpressionImpl implements AssignExp
 			case ImperativeOclPackage.ASSIGN_EXP__IS_RESET:
 				setIsReset(IS_RESET_EDEFAULT);
 				return;
+			case ImperativeOclPackage.ASSIGN_EXP__IS_SUBTRACT:
+				setIsSubtract(IS_SUBTRACT_EDEFAULT);
+				return;
 			case ImperativeOclPackage.ASSIGN_EXP__LEFT:
 				setLeft((OclExpression)null);
 				return;
@@ -344,6 +396,8 @@ public class AssignExpImpl extends ImperativeExpressionImpl implements AssignExp
 		switch (featureID) {
 			case ImperativeOclPackage.ASSIGN_EXP__IS_RESET:
 				return isReset != IS_RESET_EDEFAULT;
+			case ImperativeOclPackage.ASSIGN_EXP__IS_SUBTRACT:
+				return isSubtract != IS_SUBTRACT_EDEFAULT;
 			case ImperativeOclPackage.ASSIGN_EXP__LEFT:
 				return left != null;
 			case ImperativeOclPackage.ASSIGN_EXP__VALUE:
@@ -366,6 +420,8 @@ public class AssignExpImpl extends ImperativeExpressionImpl implements AssignExp
 		StringBuilder result = new StringBuilder(super.toString());
 		result.append(" (isReset: ");
 		result.append(isReset);
+		result.append(", isSubtract: ");
+		result.append(isSubtract);
 		result.append(')');
 		return result.toString();
 	}

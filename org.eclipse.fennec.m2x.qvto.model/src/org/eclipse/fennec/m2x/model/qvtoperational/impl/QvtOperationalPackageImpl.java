@@ -29,6 +29,7 @@ import org.eclipse.fennec.m2x.model.imperativeocl.impl.ImperativeOclPackageImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 
+import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
@@ -178,6 +179,13 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	 * @generated
 	 */
 	private EClass moduleImportEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EClass blackboxOperationDescriptorEClass = null;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -878,6 +886,66 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	 * @generated
 	 */
 	@Override
+	public EAttribute getModuleImport_ImportedNames() {
+		return (EAttribute)moduleImportEClass.getEStructuralFeatures().get(4);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EClass getBlackboxOperationDescriptor() {
+		return blackboxOperationDescriptorEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getBlackboxOperationDescriptor_Name() {
+		return (EAttribute)blackboxOperationDescriptorEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getBlackboxOperationDescriptor_ContextType() {
+		return (EReference)blackboxOperationDescriptorEClass.getEStructuralFeatures().get(1);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getBlackboxOperationDescriptor_ParameterTypes() {
+		return (EReference)blackboxOperationDescriptorEClass.getEStructuralFeatures().get(2);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getBlackboxOperationDescriptor_ReturnType() {
+		return (EReference)blackboxOperationDescriptorEClass.getEStructuralFeatures().get(3);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getContextualProperty() {
 		return contextualPropertyEClass;
 	}
@@ -1231,6 +1299,13 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		createEReference(moduleImportEClass, MODULE_IMPORT__IMPORTED_MODULE);
 		createEReference(moduleImportEClass, MODULE_IMPORT__MODULE);
 		createEReference(moduleImportEClass, MODULE_IMPORT__BINDING);
+		createEAttribute(moduleImportEClass, MODULE_IMPORT__IMPORTED_NAMES);
+
+		blackboxOperationDescriptorEClass = createEClass(BLACKBOX_OPERATION_DESCRIPTOR);
+		createEAttribute(blackboxOperationDescriptorEClass, BLACKBOX_OPERATION_DESCRIPTOR__NAME);
+		createEReference(blackboxOperationDescriptorEClass, BLACKBOX_OPERATION_DESCRIPTOR__CONTEXT_TYPE);
+		createEReference(blackboxOperationDescriptorEClass, BLACKBOX_OPERATION_DESCRIPTOR__PARAMETER_TYPES);
+		createEReference(blackboxOperationDescriptorEClass, BLACKBOX_OPERATION_DESCRIPTOR__RETURN_TYPE);
 
 		contextualPropertyEClass = createEClass(CONTEXTUAL_PROPERTY);
 		createEReference(contextualPropertyEClass, CONTEXTUAL_PROPERTY__INIT_EXPRESSION);
@@ -1318,6 +1393,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		libraryEClass.getESuperTypes().add(this.getModule());
 		modelTypeEClass.getESuperTypes().add(ecorePackage.getEClass());
 		moduleImportEClass.getESuperTypes().add(ecorePackage.getEModelElement());
+		blackboxOperationDescriptorEClass.getESuperTypes().add(ecorePackage.getEModelElement());
 		contextualPropertyEClass.getESuperTypes().add(ecorePackage.getEStructuralFeature());
 		statusEClass.getESuperTypes().add(ecorePackage.getEModelElement());
 		imperativeCallExpEClass.getESuperTypes().add(theOclPackage.getOperationCallExp());
@@ -1398,6 +1474,13 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		initEReference(getModuleImport_ImportedModule(), this.getModule(), null, "importedModule", null, 1, 1, ModuleImport.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getModuleImport_Module(), this.getModule(), this.getModule_ModuleImport(), "module", null, 0, 1, ModuleImport.class, IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getModuleImport_Binding(), this.getModelType(), null, "binding", null, 0, -1, ModuleImport.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getModuleImport_ImportedNames(), ecorePackage.getEString(), "importedNames", null, 0, -1, ModuleImport.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
+		initEClass(blackboxOperationDescriptorEClass, BlackboxOperationDescriptor.class, "BlackboxOperationDescriptor", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEAttribute(getBlackboxOperationDescriptor_Name(), ecorePackage.getEString(), "name", null, 1, 1, BlackboxOperationDescriptor.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getBlackboxOperationDescriptor_ContextType(), ecorePackage.getEClassifier(), null, "contextType", null, 0, 1, BlackboxOperationDescriptor.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getBlackboxOperationDescriptor_ParameterTypes(), ecorePackage.getEClassifier(), null, "parameterTypes", null, 0, -1, BlackboxOperationDescriptor.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getBlackboxOperationDescriptor_ReturnType(), ecorePackage.getEClassifier(), null, "returnType", null, 1, 1, BlackboxOperationDescriptor.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(contextualPropertyEClass, ContextualProperty.class, "ContextualProperty", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getContextualProperty_InitExpression(), theOclPackage.getOclExpression(), null, "initExpression", null, 0, 1, ContextualProperty.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

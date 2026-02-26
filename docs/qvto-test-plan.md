@@ -38,10 +38,10 @@
 | 7 | this/self/result, Null, Invalid, Tag/Typedef (6 Tasks: P7-01…P7-06) | ~35 | 34 | 0 | ✅ DONE |
 | 8 | Standard Library (Dict, List, String, Model, Element) | ~195 | 111 | 0 | ✅ DONE (P8-06–07 ⏸️ DEFERRED) |
 | 9 | Spec-Conformance, Eclipse-Referenztests & Edge Cases (9 Tasks: P9-01…P9-09) | ~100 | 88 | 0 | ✅ DONE |
-| 10 | Deferred Features & Offene Gaps (7 Tasks: P10-01…P10-07) | 18 | 18 | 0 | P10-01 ✅, P10-02 ✅, P10-03 ✅, Rest ⏸️ |
-| **Σ** | | **~928** | **862** | **0** | |
+| 10 | Deferred Features & Offene Gaps (8 Tasks: P10-01…P10-08) | 59 | 59 | 0 | P10-01–08 ✅ |
+| **Σ** | | **~987** | **922** | **0** | |
 
-**Bestandstests:** 862 total (862 pass, 0 fail, 0 @Disabled, 1 @Tag("perf")) — Phase 0–10 ✅ DONE
+**Bestandstests:** 922 total (921 pass, 0 fail, 0 @Disabled, 1 @Tag("perf")) — Phase 0–10 ✅ DONE
 
 ---
 
@@ -1436,7 +1436,7 @@ Für jede Testklasse systematisch:
 >    - Mehrere Deklarationen: `var x:= "", i:=0;`
 >    - `=` als Alternative zu `:=`
 > 2. **Spec lesen — §8.2.2.11 AssignExp (p129–130):**
->    - `:=` (isReset=true) vs. `+=` (isReset=false, append)
+>    - `:=` (isReset=true) vs. `+=` (isReset=false, append) vs. `-=` (isSubtract=true, remove from collection)
 >    - Single-valued: `left := value` — ersetzt
 >    - Multi-valued: `left := value` — Reset + Assign
 >    - Multi-valued: `left += value` — Append
@@ -1444,7 +1444,7 @@ Für jede Testklasse systematisch:
 >    - Deferred assignment bei `late resolve`
 >    - Composite assignment: `feature := { expr1; expr2; }`
 > 3. **Eclipse-Referenztests:** `assignaliases_source.qvto`, `bug400089_source.qvto`
-> 4. **Bestand prüfen:** 10 Parse-Tests + 6 Engine-Tests vorhanden
+> 4. **Bestand prüfen:** 11 Parse-Tests (inkl. `-=`) + 8 Engine-Tests vorhanden
 > 5. **Neue Tests schreiben → laufen lassen → Failures = SOFORT fixen!**
 
 **Neue Tests (~10):**
@@ -1457,6 +1457,8 @@ Für jede Testklasse systematisch:
 | E2E: var — multiple declarations | `var x := "", i := 0` — Gruppierte Deklaration | §8.2.2.10 |
 | E2E: assign — single-valued reset | `x := "new"` ersetzt alten Wert | §8.2.2.11 |
 | E2E: assign — multi-valued append (+=) | `list += element` hängt an | §8.2.2.11 |
+| E2E: assign — multi-valued subtract (-=) | `list -= element` entfernt aus Collection | §8.2.2.11 |
+| E2E: assign — property subtract (-=) | `eo.refs -= element` entfernt aus multi-valued EReference | §8.2.2.11 |
 | E2E: assign — multi-valued reset (:=) | `list := Sequence{1,2}` ersetzt komplett | §8.2.2.11 |
 | E2E: assign — property on EObject | `result.name := "test"` — Feature-Assign | §8.2.2.11 |
 | E2E: assign — default keyword | `x := expr default "fallback"` bei null → fallback | §8.2.2.11 |
@@ -2006,7 +2008,7 @@ Für jede Testklasse systematisch:
 |-------------|----------|--------------|:----------------:|--------|
 | Dict (MutableMap) | §8.3.8 | `Dict(K,V)`, `get()`, `put()`, `keys()`, `values()`, `hasKey()`, `size()`, `clear()`, `defaultget()`, `isEmpty()`, Dict literal, `repr()` | 26 | ✅ |
 | List (MutableList) | §8.3.9 | `List(T)`, `add()`, `remove()`, `removeAt()`, `removeFirst()`, `removeLast()`, `removeAll()`, `joinfields()`, List literal, Sequence-inherited ops | 23 | ✅ |
-| String Extensions | §8.3.16 | `substringBefore/After`, `firstToUpper`, `lastToUpper`, `normalizeSpace`, `find`, `rfind`, `match`, `replace`, `isQuoted`, `quotify`, `unquotify`, `asBoolean/Integer/Real`, `matchBoolean/Integer/Real/Identifier`, `length`, `format` | 27 | ✅ |
+| String Extensions | §8.3.16 | `substringBefore/After`, `firstToUpper`, `lastToUpper`, `normalizeSpace`, `find`, `rfind`, `match`, `replace`, `isQuoted`, `quotify`, `unquotify`, `asBoolean/Integer/Real`, `matchBoolean/Integer/Real/Identifier`, `length`, `format`, `startStrCounter`, `getStrCounter`, `incrStrCounter`, `restartAllStrCounter`, `addSuffixNumber` (GAP-9) | 34 | ✅ |
 | Model Operations | §8.3.5 | `objects()`, `objectsOfKind()`, `objectsOfType()`, `rootObjects()`, `addElement()`, `removeElement()`, `copy()` | 10 | ✅ |
 | Element Operations | §8.3.4 | `metaClassName()`, `subobjects()`, `allSubobjects()`, `subobjectsOfType/Kind()`, `allSubobjectsOfType/Kind()`, `clone()`, `deepclone()`, `container()` — 5 UML-spezifische ops (`_localId`, `_globalId`, `markedAs`, `markValue`, `stereotypedBy`) übersprungen (wie Eclipse) | 12 | ✅ |
 | Transformation Operations | §8.3.6 | `transform()`, `parallelTransform()`, `wait()` | 12 | ✅ P10-01 |
@@ -2372,7 +2374,7 @@ Transformation ops (§8.3.6) und Status ops (§8.3.7) sind seit P10-01/P10-02 im
 > **Zweck:** Alle offenen Punkte aus Phase 0–9 konsolidiert an einem Ort.
 > Diese Phase wird implementiert, sobald die jeweilige Infrastruktur bereitsteht.
 
-### Gesamtstatus: 862 Tests (862 pass, 0 fail, 0 @Disabled, 1 @Tag("perf"))
+### Gesamtstatus: 922 Tests (921 pass, 0 fail, 0 @Disabled, 1 @Tag("perf"))
 
 ---
 
@@ -2487,6 +2489,45 @@ Transformation ops (§8.3.6) und Status ops (§8.3.7) sind seit P10-01/P10-02 im
 
 ---
 
+### P10-08: Blackbox Libraries (§8.1.4) & `from ... import` (§8.4) ✅ DONE
+
+> **Spec:** §8.1.4 (Blackbox Library Integration), §8.4 (`from ... import` Selective Import)
+> **Status:** ✅ DONE — 28 Tests (9 E2E + 12 Registry Unit + 7 Parser AST)
+
+**Implementiert:**
+- `QvtoBlackboxLibrary` API mit `BlackboxOperationDescriptor` + `invoke()`
+- `QvtoBlackboxInvocationContext` (self, diagnostics, config properties, extents, package registry)
+- `QvtoBlackboxRegistry` Interface + `BasicQvtoBlackboxRegistry` (thread-safe, ConcurrentHashMap)
+- `QvtoLinker`: Synthetische Library-Module aus Blackbox-Deskriptoren (Helper mit `isBlackbox=true`)
+- `QvtoOperationProvider`: Blackbox-Dispatch via `library.invoke()`
+- Parser: `from <unit> import <names>;` / `from <unit> import *;` Syntax
+- `ModuleImport.importedNames` für selektive Sichtbarkeit
+- `QvtoOperationResolver` + `QvtoOperationProvider`: Filtering nach `importedNames`
+
+**Tests:**
+
+| Testklasse | Tests | Scope |
+|-----------|------:|-------|
+| `QvtoE2eBlackboxTest` | 5 | E2E: module-level op, contextual op, logging, config property, not-imported |
+| `QvtoE2eFromImportTest` | 4 | E2E: selective/blackbox, wildcard, selective/regular, visibility filtering |
+| `BasicQvtoBlackboxRegistryTest` | 12 | Unit: register, unregister, lookup, null, duplicate, immutable copy, multi-lib |
+| `QvtoFromImportParseTest` | 7 | Parser AST: single name, multiple names, wildcard, classic, qualified, coexist, soft keyword |
+
+---
+
+### Regression Tests: Chaining-vs-Variable Bug Fix
+
+6 new regression tests were added to prevent regression of the chaining-vs-variable bug fix (string counter chaining operations evaluated multiple times per operation call). Tests split across:
+
+| Testklasse | Tests | Scope |
+|-----------|------:|-------|
+| `QvtoE2eModelOpsTest` | 3 | E2E: chaining with `incrStrCounter()`, `repr()`, `clone()` |
+| `QvtoE2eElementOpsTest` | 3 | E2E: chaining with `metaClassName()`, `clone()` operations |
+
+These tests verify the source evaluation invariant: intermediate dispatch steps (model extent/element operation checks, imperative source handling) must not eagerly evaluate the source expression unless the operation name actually matches a known operation in that category.
+
+---
+
 ### Zusammenfassung offene Punkte
 
 | ID | Bereich | Blocker | Priorität | Status |
@@ -2498,8 +2539,9 @@ Transformation ops (§8.3.6) und Status ops (§8.3.7) sind seit P10-01/P10-02 im
 | P10-05 | `<<id>>` Stereotyp | — | — | ✅ DONE |
 | P10-06 | Model I/O (removeElement, read-only) | — | — | ✅ DONE |
 | P10-07 | UML-spezifische Ops | — | — | ⏭️ Nicht geplant |
+| P10-08 | Blackbox Libraries & `from...import` | — | Hoch | ✅ DONE (28 Tests) |
 
-**Status:** Phase 10 abgeschlossen. Alle Gaps (außer P10-07 bewusst übersprungen) implementiert. 862 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf").
+**Status:** Phase 10 abgeschlossen. Alle Gaps (außer P10-07 bewusst übersprungen) implementiert. 922 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf").
 
 ---
 

@@ -65,21 +65,6 @@ public interface QvtoEngine {
 	/**
 	 * Executes a transformation with the given context.
 	 *
-	 * <p>The transformation can originate from different sources:
-	 * <ul>
-	 *   <li>{@link #parse(URI)} or {@link #parse(String, String)} — parsed from QVT-O syntax</li>
-	 *   <li>Programmatically built via the EMF API against the QVT-O metamodel
-	 *       ({@code qvtoperational.ecore}), e.g. from a UI editor or model transformation</li>
-	 * </ul>
-	 *
-	 * <p>Example (programmatic, no parser required):
-	 * <pre>
-	 * OperationalTransformation t = QVTOFactory.eINSTANCE.createOperationalTransformation();
-	 * t.setName("MyTransformation");
-	 * // ... build AST programmatically ...
-	 * QvtoExecutionResult result = engine.execute(t, context);
-	 * </pre>
-	 *
 	 * @param transformation the transformation (parsed or programmatically built)
 	 * @param context the execution context with model extents and properties
 	 * @return the execution result with diagnostics and optional trace
@@ -99,20 +84,6 @@ public interface QvtoEngine {
 			QvtoExecutionContext context, QvtoEvaluationOptions options);
 
 	// --- Extension Registration (standalone mode) ---
-
-	/**
-	 * Registers a blackbox library for use in transformations.
-	 *
-	 * @param library the blackbox library to register
-	 */
-	void registerBlackbox(QvtoBlackboxLibrary library);
-
-	/**
-	 * Unregisters a previously registered blackbox library.
-	 *
-	 * @param library the blackbox library to unregister
-	 */
-	void unregisterBlackbox(QvtoBlackboxLibrary library);
 
 	/**
 	 * Registers a unit resolver for resolving imported units.

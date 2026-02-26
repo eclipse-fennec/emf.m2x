@@ -3114,13 +3114,22 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int MODULE_IMPORT__BINDING = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 3;
 
 	/**
+	 * The feature id for the '<em><b>Imported Names</b></em>' attribute list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int MODULE_IMPORT__IMPORTED_NAMES = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 4;
+
+	/**
 	 * The number of structural features of the '<em>Module Import</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int MODULE_IMPORT_FEATURE_COUNT = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 4;
+	int MODULE_IMPORT_FEATURE_COUNT = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 5;
 
 	/**
 	 * The operation id for the '<em>Get EAnnotation</em>' operation.
@@ -3141,6 +3150,88 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int MODULE_IMPORT_OPERATION_COUNT = EcorePackage.EMODEL_ELEMENT_OPERATION_COUNT + 0;
 
 	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.BlackboxOperationDescriptorImpl <em>Blackbox Operation Descriptor</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.BlackboxOperationDescriptorImpl
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getBlackboxOperationDescriptor()
+	 * @generated
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR = 16;
+
+	/**
+	 * The feature id for the '<em><b>EAnnotations</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR__EANNOTATIONS = EcorePackage.EMODEL_ELEMENT__EANNOTATIONS;
+
+	/**
+	 * The feature id for the '<em><b>Name</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR__NAME = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 0;
+
+	/**
+	 * The feature id for the '<em><b>Context Type</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR__CONTEXT_TYPE = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 1;
+
+	/**
+	 * The feature id for the '<em><b>Parameter Types</b></em>' reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR__PARAMETER_TYPES = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 2;
+
+	/**
+	 * The feature id for the '<em><b>Return Type</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR__RETURN_TYPE = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 3;
+
+	/**
+	 * The number of structural features of the '<em>Blackbox Operation Descriptor</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR_FEATURE_COUNT = EcorePackage.EMODEL_ELEMENT_FEATURE_COUNT + 4;
+
+	/**
+	 * The operation id for the '<em>Get EAnnotation</em>' operation.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR___GET_EANNOTATION__STRING = EcorePackage.EMODEL_ELEMENT___GET_EANNOTATION__STRING;
+
+	/**
+	 * The number of operations of the '<em>Blackbox Operation Descriptor</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int BLACKBOX_OPERATION_DESCRIPTOR_OPERATION_COUNT = EcorePackage.EMODEL_ELEMENT_OPERATION_COUNT + 0;
+
+	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.ContextualPropertyImpl <em>Contextual Property</em>}' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -3148,7 +3239,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getContextualProperty()
 	 * @generated
 	 */
-	int CONTEXTUAL_PROPERTY = 16;
+	int CONTEXTUAL_PROPERTY = 17;
 
 	/**
 	 * The feature id for the '<em><b>EAnnotations</b></em>' containment reference list.
@@ -3392,7 +3483,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getStatus()
 	 * @generated
 	 */
-	int STATUS = 17;
+	int STATUS = 18;
 
 	/**
 	 * The feature id for the '<em><b>EAnnotations</b></em>' containment reference list.
@@ -3465,7 +3556,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getImperativeCallExp()
 	 * @generated
 	 */
-	int IMPERATIVE_CALL_EXP = 18;
+	int IMPERATIVE_CALL_EXP = 19;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3574,7 +3665,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getMappingCallExp()
 	 * @generated
 	 */
-	int MAPPING_CALL_EXP = 19;
+	int MAPPING_CALL_EXP = 20;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3692,7 +3783,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getObjectExp()
 	 * @generated
 	 */
-	int OBJECT_EXP = 20;
+	int OBJECT_EXP = 21;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3774,7 +3865,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getResolveExp()
 	 * @generated
 	 */
-	int RESOLVE_EXP = 21;
+	int RESOLVE_EXP = 22;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -3883,7 +3974,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getResolveInExp()
 	 * @generated
 	 */
-	int RESOLVE_IN_EXP = 22;
+	int RESOLVE_IN_EXP = 23;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -4001,7 +4092,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getDirectionKind()
 	 * @generated
 	 */
-	int DIRECTION_KIND = 23;
+	int DIRECTION_KIND = 24;
 
 	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.qvtoperational.ImportKind <em>Import Kind</em>}' enum.
@@ -4011,7 +4102,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getImportKind()
 	 * @generated
 	 */
-	int IMPORT_KIND = 24;
+	int IMPORT_KIND = 25;
 
 	/**
 	 * The meta object id for the '<em>Java Exception</em>' data type.
@@ -4021,7 +4112,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getJavaException()
 	 * @generated
 	 */
-	int JAVA_EXCEPTION = 25;
+	int JAVA_EXCEPTION = 26;
 
 
 	/**
@@ -4612,6 +4703,71 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EReference getModuleImport_Binding();
+
+	/**
+	 * Returns the meta object for the attribute list '{@link org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport#getImportedNames <em>Imported Names</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute list '<em>Imported Names</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport#getImportedNames()
+	 * @see #getModuleImport()
+	 * @generated
+	 */
+	EAttribute getModuleImport_ImportedNames();
+
+	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor <em>Blackbox Operation Descriptor</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>Blackbox Operation Descriptor</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor
+	 * @generated
+	 */
+	EClass getBlackboxOperationDescriptor();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor#getName <em>Name</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Name</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor#getName()
+	 * @see #getBlackboxOperationDescriptor()
+	 * @generated
+	 */
+	EAttribute getBlackboxOperationDescriptor_Name();
+
+	/**
+	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor#getContextType <em>Context Type</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the reference '<em>Context Type</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor#getContextType()
+	 * @see #getBlackboxOperationDescriptor()
+	 * @generated
+	 */
+	EReference getBlackboxOperationDescriptor_ContextType();
+
+	/**
+	 * Returns the meta object for the reference list '{@link org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor#getParameterTypes <em>Parameter Types</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the reference list '<em>Parameter Types</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor#getParameterTypes()
+	 * @see #getBlackboxOperationDescriptor()
+	 * @generated
+	 */
+	EReference getBlackboxOperationDescriptor_ParameterTypes();
+
+	/**
+	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor#getReturnType <em>Return Type</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the reference '<em>Return Type</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor#getReturnType()
+	 * @see #getBlackboxOperationDescriptor()
+	 * @generated
+	 */
+	EReference getBlackboxOperationDescriptor_ReturnType();
 
 	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty <em>Contextual Property</em>}'.
@@ -5384,6 +5540,56 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference MODULE_IMPORT__BINDING = eINSTANCE.getModuleImport_Binding();
+
+		/**
+		 * The meta object literal for the '<em><b>Imported Names</b></em>' attribute list feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute MODULE_IMPORT__IMPORTED_NAMES = eINSTANCE.getModuleImport_ImportedNames();
+
+		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.BlackboxOperationDescriptorImpl <em>Blackbox Operation Descriptor</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.BlackboxOperationDescriptorImpl
+		 * @see org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl#getBlackboxOperationDescriptor()
+		 * @generated
+		 */
+		EClass BLACKBOX_OPERATION_DESCRIPTOR = eINSTANCE.getBlackboxOperationDescriptor();
+
+		/**
+		 * The meta object literal for the '<em><b>Name</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute BLACKBOX_OPERATION_DESCRIPTOR__NAME = eINSTANCE.getBlackboxOperationDescriptor_Name();
+
+		/**
+		 * The meta object literal for the '<em><b>Context Type</b></em>' reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference BLACKBOX_OPERATION_DESCRIPTOR__CONTEXT_TYPE = eINSTANCE.getBlackboxOperationDescriptor_ContextType();
+
+		/**
+		 * The meta object literal for the '<em><b>Parameter Types</b></em>' reference list feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference BLACKBOX_OPERATION_DESCRIPTOR__PARAMETER_TYPES = eINSTANCE.getBlackboxOperationDescriptor_ParameterTypes();
+
+		/**
+		 * The meta object literal for the '<em><b>Return Type</b></em>' reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference BLACKBOX_OPERATION_DESCRIPTOR__RETURN_TYPE = eINSTANCE.getBlackboxOperationDescriptor_ReturnType();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.ContextualPropertyImpl <em>Contextual Property</em>}' class.

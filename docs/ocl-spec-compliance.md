@@ -3,7 +3,7 @@
 > Systematic comparison of our Fennec OCL implementation against the **OMG OCL v2.4 specification** (formal/2014-02-03), with Eclipse OCL as reference implementation.
 >
 > **Date:** 2026-02-25
-> **OCL Tests:** 4177 Tests, 0 Failures
+> **OCL Tests:** 4202 Tests, 0 Failures
 > **Overall:** ~97% of standard library operations implemented, all core language features covered
 
 **Related documents:**
@@ -432,11 +432,12 @@ The spec defines how OCL integrates with UML metamodel features that have no dir
 **Description:** Complete OCL `def:` declarations define additional properties and operations on existing types. Available during evaluation via `OclEngine.loadDocument()`.
 
 **Implementation:**
-- `OclDocumentBuilder.buildDefinition()` — extracts feature name (last IDENTIFIER), detects operation defs via `(` token, stores parameter names in synthetic `EOperation`
+- `OclDocumentBuilder.buildDefinition()` — extracts feature name (last IDENTIFIER), detects operation defs via `(` token, stores parameter names in synthetic `EOperation`, detects `static` keyword and sets `isStatic` flag
 - `OclEngineImpl.loadDocument()` — parses document, populates `ConcurrentHashMap<DefKey, DefEntry>` for properties, registers `OclOperationProvider` for operations
 - `OclEvaluator` — `lookupDefProperty()` with supertype search, `evaluateDefBody()` with nested environment. Real EAttributes take precedence over def-properties.
-- `DefRegistry.java` — `DefKey` and `DefEntry` records
-- `OclDefExpressionTest` — 12 tests (properties, operations, chaining, precedence, multiple contexts)
+- `DefRegistry.java` — `DefKey` and `DefEntry` records (DefEntry carries `isStatic` flag)
+- `Constraint.isStatic` — metamodel attribute (OCL v2.4 §12.12.6), `static def:` syntax in grammar
+- `OclDefExpressionTest` — 17 tests (properties, operations, chaining, precedence, multiple contexts, static def parsing + evaluation)
 
 ---
 
@@ -567,7 +568,7 @@ The spec defines how OCL integrates with UML metamodel features that have no dir
 
 | Metric | Value |
 |--------|-------|
-| Tests | 4177 (0 failures) |
+| Tests | 4202 (0 failures) |
 | Metamodel classifiers | 53 |
 | Stdlib operations | 195 / 201 (97%) |
 | Iterators | 12 / 12 (100%) |

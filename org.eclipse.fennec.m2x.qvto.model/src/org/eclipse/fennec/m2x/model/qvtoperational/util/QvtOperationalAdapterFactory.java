@@ -38,6 +38,7 @@ import org.eclipse.fennec.m2x.model.ocl.FeatureCallExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 
+import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
@@ -181,6 +182,10 @@ public class QvtOperationalAdapterFactory extends AdapterFactoryImpl {
 			@Override
 			public Adapter caseModuleImport(ModuleImport object) {
 				return createModuleImportAdapter();
+			}
+			@Override
+			public Adapter caseBlackboxOperationDescriptor(BlackboxOperationDescriptor object) {
+				return createBlackboxOperationDescriptorAdapter();
 			}
 			@Override
 			public Adapter caseContextualProperty(ContextualProperty object) {
@@ -511,6 +516,20 @@ public class QvtOperationalAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createModuleImportAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor <em>Blackbox Operation Descriptor</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor
+	 * @generated
+	 */
+	public Adapter createBlackboxOperationDescriptorAdapter() {
 		return null;
 	}
 

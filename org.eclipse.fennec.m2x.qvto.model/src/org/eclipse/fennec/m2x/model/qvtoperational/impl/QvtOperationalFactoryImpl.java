@@ -23,6 +23,7 @@ import org.eclipse.emf.ecore.impl.EFactoryImpl;
 
 import org.eclipse.emf.ecore.plugin.EcorePlugin;
 
+import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
@@ -110,6 +111,7 @@ public class QvtOperationalFactoryImpl extends EFactoryImpl implements QvtOperat
 			case QvtOperationalPackage.LIBRARY: return createLibrary();
 			case QvtOperationalPackage.MODEL_TYPE: return createModelType();
 			case QvtOperationalPackage.MODULE_IMPORT: return createModuleImport();
+			case QvtOperationalPackage.BLACKBOX_OPERATION_DESCRIPTOR: return createBlackboxOperationDescriptor();
 			case QvtOperationalPackage.CONTEXTUAL_PROPERTY: return createContextualProperty();
 			case QvtOperationalPackage.STATUS: return createStatus();
 			case QvtOperationalPackage.IMPERATIVE_CALL_EXP: return createImperativeCallExp();
@@ -330,6 +332,17 @@ public class QvtOperationalFactoryImpl extends EFactoryImpl implements QvtOperat
 	public ModuleImport createModuleImport() {
 		ModuleImportImpl moduleImport = new ModuleImportImpl();
 		return moduleImport;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public BlackboxOperationDescriptor createBlackboxOperationDescriptor() {
+		BlackboxOperationDescriptorImpl blackboxOperationDescriptor = new BlackboxOperationDescriptorImpl();
+		return blackboxOperationDescriptor;
 	}
 
 	/**

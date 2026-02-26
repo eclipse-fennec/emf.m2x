@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EOperation;
@@ -374,6 +375,46 @@ class QvtoMappingParseTest extends AbstractQvtoParserTest {
 		assertFalse(body.getInitSection().isEmpty(), "Init section should be present");
 		assertFalse(body.getContent().isEmpty(), "Population section should be present");
 		assertFalse(body.getEndSection().isEmpty(), "End section should be present");
+	}
+
+	// §8.4 S.168: mapping declaration without body (abstract)
+	@Test
+	void mappingDecl_bodyless() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    abstract mapping createElem() : SourceElement;
+				}
+				""");
+		MappingOperation mapping = (MappingOperation) getOperation(t, "createElem");
+		assertNull(mapping.getBody(), "Bodyless mapping should have no body");
+	}
+
+	// §8.4 S.168: blackbox mapping declaration without body
+	@Test
+	void mappingDecl_blackbox_bodyless() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    blackbox mapping createElem() : SourceElement;
+				}
+				""");
+		MappingOperation mapping = (MappingOperation) getOperation(t, "createElem");
+		assertTrue(mapping.isIsBlackbox());
+		assertNull(mapping.getBody(), "Bodyless mapping should have no body");
+	}
+
+	// §8.4 S.168: bodyless mapping with extension
+	@Test
+	void mappingDecl_bodyless_with_extensions() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    mapping base() {}
+				    abstract mapping derived() inherits base;
+				}
+				""");
+		MappingOperation derived = (MappingOperation) getOperation(t, "derived");
+		assertNull(derived.getBody(), "Bodyless mapping should have no body");
+		assertEquals(1, derived.getInherited().size());
+		assertEquals("base", derived.getInherited().get(0).getName());
 	}
 
 	// §8.1.15: mapping inherits with 2 bases

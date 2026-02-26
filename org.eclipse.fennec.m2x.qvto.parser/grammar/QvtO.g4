@@ -44,7 +44,13 @@ unitElement
 // ==================== Import + Modeltype ====================
 
 qvtoImportDecl
-    : 'import' qualifiedName ';'
+    : 'import' qualifiedName ';'                                          // import all
+    | 'from' qualifiedName 'import' importedNameList ';'                  // selective import (§8.4)
+    ;
+
+importedNameList
+    : '*'                                                                  // import all
+    | qvtoIdentifier (',' qvtoIdentifier)*                                // selective
     ;
 
 modeltypeDecl
@@ -136,6 +142,8 @@ moduleElement
 mappingDef
     : qualifier* 'mapping' directionKind? scopedName mappingSignature
       mappingExtension* whenClause? whereClause? mappingBody ';'?
+    | qualifier* 'mapping' directionKind? scopedName mappingSignature
+      mappingExtension* ';'
     ;
 
 mappingSignature
@@ -285,6 +293,7 @@ assignOp
     : ':='
     | '+='
     | '::='
+    | '-='
     ;
 
 // ==================== Block ====================
@@ -310,7 +319,8 @@ expression
     | expression op=('*' | '/') expression                                               # MultExp
     | expression op=('+' | '-') expression                                               # AddExp
     | expression op=('<' | '>' | '<=' | '>=') expression                                 # CompareExp
-    | expression op=('=' | '<>') expression                                              # EqualityExp
+    // §8.4.4: '!=' is a synonym for '<>' (like Eclipse QVT-O)
+    | expression op=('=' | '<>' | '!=') expression                                        # EqualityExp
     | expression 'and' expression                                                        # AndExp
     | expression 'or' expression                                                         # OrExp
     | expression 'xor' expression                                                        # XorExp
@@ -477,11 +487,11 @@ computeExp
     ;
 
 objectExp
-    : 'object' (qvtoIdentifier ':')? typeExpression? block
+    : 'object' (varName=qvtoIdentifier ':')? typeExpression? ('@' extentName=qvtoIdentifier)? block
     ;
 
 newExp
-    : 'new' pathName '(' argumentList? ')'
+    : 'new' pathName ('@' extentName=qvtoIdentifier)? '(' argumentList? ')'
     ;
 
 mappingCallExp
@@ -707,6 +717,15 @@ qvtoIdentifier
     | 'continue'
     | 'return'
     | 'while'
+    | 'from'
+    ;
+
+// ==================== Comment Override ====================
+
+// §8.4.2: QVT-O supports '//' as line comment in addition to '--' (from OCL) and '/* ... */' (block).
+// Override OCL's LINE_COMMENT to accept both styles.
+LINE_COMMENT
+    : ('--' | '//') ~[\r\n]* -> skip
     ;
 
 // ==================== Additional Lexer Tokens ====================
@@ -721,6 +740,15 @@ ADD_ASSIGN
 
 ORDERED_COPY
     : '::='
+    ;
+
+SUBTRACT_ASSIGN
+    : '-='
+    ;
+
+// §8.4.4: '!=' as synonym for '<>' — explicit token to disambiguate from '!' '[' (XselectOne)
+NOT_EQUAL_EXEQ
+    : '!='
     ;
 
 // §8.4: <<id>> stereotype for intermediate class properties (§8.2.1.3)

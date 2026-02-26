@@ -343,7 +343,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public OperationCallExp visitEqualityExp(QvtOParser.EqualityExpContext ctx) {
-		return createBinaryOperation(ctx.op.getText(),
+		// §8.4.4: '!=' is a synonym for '<>' — normalize for OCL engine
+		String op = "!=".equals(ctx.op.getText()) ? "<>" : ctx.op.getText();
+		return createBinaryOperation(op,
 				(OclExpression) visit(ctx.expression(0)),
 				(OclExpression) visit(ctx.expression(1)));
 	}
@@ -1006,8 +1008,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		// optional variable name: object (varName :) Type { ... }
 		Variable refVar = OCL.createVariable();
-		if (ctx.qvtoIdentifier() != null) {
-			refVar.setName(qvtoIdentifierText(ctx.qvtoIdentifier()));
+		if (ctx.varName != null) {
+			refVar.setName(qvtoIdentifierText(ctx.varName));
 		} else {
 			refVar.setName("result");
 		}
@@ -1021,6 +1023,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				objectExp.setType(type);
 				refVar.setType(type);
 			}
+		}
+
+		// §8.1.6: @extentName → explicit extent routing
+		if (ctx.extentName != null) {
+			Variable extentVar = OCL.createVariable();
+			extentVar.setName(qvtoIdentifierText(ctx.extentName));
+			objectExp.setExtent(extentVar);
 		}
 
 		QvtoEnvironment savedEnv = this.environment;
@@ -1068,6 +1077,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		EClassifier classifier = resolveClassifier(segments);
 		if (classifier instanceof EClass ec) {
 			exp.setInstantiatedClass(ec);
+		}
+
+		// §8.1.3: @extentName → explicit extent routing
+		if (ctx.extentName != null) {
+			Variable extentVar = OCL.createVariable();
+			extentVar.setName(qvtoIdentifierText(ctx.extentName));
+			exp.setExtent(extentVar);
 		}
 
 		if (ctx.argumentList() != null) {
@@ -1283,6 +1299,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		assign.setLeft(left);
 		assign.getValue().add(right);
 		assign.setIsReset(":=".equals(op) || "::=".equals(op));
+		assign.setIsSubtract("-=".equals(op));
 		if (defaultValue != null) {
 			assign.setDefaultValue(defaultValue);
 		}

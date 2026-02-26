@@ -27,11 +27,11 @@ import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
  * Immutable configuration for creating {@link QvtoEngine} instances.
  *
  * <p>Bundles the mandatory {@link OclConfiguration} for the underlying OCL
- * evaluator, plus optional blackbox libraries and unit resolvers. Use the
+ * evaluator, plus optional blackbox registry and unit resolvers. Use the
  * {@link Builder} to construct instances:
  * <pre>
  * QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
- *     .addBlackboxLibrary(myLibrary)
+ *     .blackboxRegistry(myRegistry)
  *     .addUnitResolver(myResolver)
  *     .build();
  * </pre>
@@ -42,13 +42,13 @@ import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 public final class QvtoConfiguration {
 
 	private final OclConfiguration oclConfiguration;
-	private final List<QvtoBlackboxLibrary> blackboxLibraries;
+	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final List<QvtoUnitResolver> unitResolvers;
 	private final Executor parallelExecutor;
 
 	private QvtoConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
-		this.blackboxLibraries = Collections.unmodifiableList(new ArrayList<>(builder.blackboxLibraries));
+		this.blackboxRegistry = builder.blackboxRegistry;
 		this.unitResolvers = Collections.unmodifiableList(new ArrayList<>(builder.unitResolvers));
 		this.parallelExecutor = builder.parallelExecutor;
 	}
@@ -57,8 +57,11 @@ public final class QvtoConfiguration {
 		return oclConfiguration;
 	}
 
-	public List<QvtoBlackboxLibrary> blackboxLibraries() {
-		return blackboxLibraries;
+	/**
+	 * Returns the blackbox registry, or {@code null} if none configured.
+	 */
+	public QvtoBlackboxRegistry blackboxRegistry() {
+		return blackboxRegistry;
 	}
 
 	public List<QvtoUnitResolver> unitResolvers() {
@@ -80,7 +83,7 @@ public final class QvtoConfiguration {
 	public static final class Builder {
 
 		private final OclConfiguration oclConfiguration;
-		private final List<QvtoBlackboxLibrary> blackboxLibraries = new ArrayList<>();
+		private QvtoBlackboxRegistry blackboxRegistry;
 		private final List<QvtoUnitResolver> unitResolvers = new ArrayList<>();
 		private Executor parallelExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -88,14 +91,14 @@ public final class QvtoConfiguration {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
 		}
 
-		public Builder addBlackboxLibrary(QvtoBlackboxLibrary library) {
-			this.blackboxLibraries.add(Objects.requireNonNull(library, "library must not be null"));
-			return this;
-		}
-
-		public Builder blackboxLibraries(List<QvtoBlackboxLibrary> libraries) {
-			this.blackboxLibraries.clear();
-			this.blackboxLibraries.addAll(Objects.requireNonNull(libraries, "libraries must not be null"));
+		/**
+		 * Sets the blackbox registry for resolving blackbox libraries.
+		 *
+		 * @param registry the blackbox registry
+		 * @return this builder
+		 */
+		public Builder blackboxRegistry(QvtoBlackboxRegistry registry) {
+			this.blackboxRegistry = Objects.requireNonNull(registry, "registry must not be null");
 			return this;
 		}
 

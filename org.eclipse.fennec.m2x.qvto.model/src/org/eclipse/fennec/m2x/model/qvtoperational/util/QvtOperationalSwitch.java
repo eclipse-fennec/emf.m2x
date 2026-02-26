@@ -35,6 +35,7 @@ import org.eclipse.fennec.m2x.model.ocl.FeatureCallExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 
+import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
@@ -268,6 +269,13 @@ public class QvtOperationalSwitch<T> extends Switch<T> {
 				ModuleImport moduleImport = (ModuleImport)theEObject;
 				T result = caseModuleImport(moduleImport);
 				if (result == null) result = caseEModelElement(moduleImport);
+				if (result == null) result = defaultCase(theEObject);
+				return result;
+			}
+			case QvtOperationalPackage.BLACKBOX_OPERATION_DESCRIPTOR: {
+				BlackboxOperationDescriptor blackboxOperationDescriptor = (BlackboxOperationDescriptor)theEObject;
+				T result = caseBlackboxOperationDescriptor(blackboxOperationDescriptor);
+				if (result == null) result = caseEModelElement(blackboxOperationDescriptor);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -578,6 +586,21 @@ public class QvtOperationalSwitch<T> extends Switch<T> {
 	 * @generated
 	 */
 	public T caseModuleImport(ModuleImport object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>Blackbox Operation Descriptor</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>Blackbox Operation Descriptor</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseBlackboxOperationDescriptor(BlackboxOperationDescriptor object) {
 		return null;
 	}
 

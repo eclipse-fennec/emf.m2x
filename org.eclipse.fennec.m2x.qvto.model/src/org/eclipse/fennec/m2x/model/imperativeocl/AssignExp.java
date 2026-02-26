@@ -34,6 +34,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * </p>
  * <ul>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#isIsReset <em>Is Reset</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#isIsSubtract <em>Is Subtract</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#getLeft <em>Left</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#getValue <em>Value</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#getDefaultValue <em>Default Value</em>}</li>
@@ -69,6 +70,31 @@ public interface AssignExp extends ImperativeExpression {
 	 * @generated
 	 */
 	void setIsReset(boolean value);
+
+	/**
+	 * Returns the value of the '<em><b>Is Subtract</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * If true, removes the value from the target collection (-= operator).
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Is Subtract</em>' attribute.
+	 * @see #setIsSubtract(boolean)
+	 * @see org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclPackage#getAssignExp_IsSubtract()
+	 * @model
+	 * @generated
+	 */
+	boolean isIsSubtract();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#isIsSubtract <em>Is Subtract</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Is Subtract</em>' attribute.
+	 * @see #isIsSubtract()
+	 * @generated
+	 */
+	void setIsSubtract(boolean value);
 
 	/**
 	 * Returns the value of the '<em><b>Left</b></em>' containment reference.

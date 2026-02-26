@@ -12,7 +12,7 @@ The QVT-O engine implements **QVT-Operational v1.3** as a pure Java library,
 fully decoupled from the Eclipse platform. It reuses the OCL engine (Phase 1) for
 expression evaluation via composition (D25).
 
-**Status:** Phase 2 complete. 862 QVT-O tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10 spec-conformance complete.
+**Status:** Phase 2 complete. 922 QVT-O tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10 spec-conformance complete, incl. blackbox libraries (§8.1.4), `from ... import` (§8.4), and String Counter API (§8.3.16.31–35).
 
 **Key properties:**
 - Hybrid evaluator — QvtoEvaluator delegates OCL sub-expressions to OclEvaluator (D25)
@@ -31,7 +31,7 @@ workspace/
 ├── org.eclipse.fennec.m2x.qvto.api/     # Public API interfaces
 ├── org.eclipse.fennec.m2x.qvto.parser/  # ANTLR4 parser (imports Ocl.g4)
 ├── org.eclipse.fennec.m2x.qvto.engine/  # Imperative transformation engine
-└── org.eclipse.fennec.m2x.qvto.tests/   # Tests (plain JUnit 5, 862 tests)
+└── org.eclipse.fennec.m2x.qvto.tests/   # Tests (plain JUnit 5, 922 tests)
 ```
 
 ### 2.1 Dependency Graph
@@ -105,8 +105,9 @@ Transformation structure and QVT-O-specific constructs:
 
 | Category | EClasses/EEnums |
 |----------|-----------------|
-| Module structure | `Module`, `OperationalTransformation`, `Library`, `ModuleImport` |
+| Module structure | `Module`, `OperationalTransformation`, `Library`, `ModuleImport` (+`importedNames`) |
 | Operations | `ImperativeOperation`, `MappingOperation`, `Helper`, `Constructor`, `EntryOperation` |
+| Blackbox | `BlackboxOperationDescriptor` (name, contextType, parameterTypes, returnType) |
 | Parameters | `VarParameter`, `MappingParameter`, `ModelParameter` |
 | Bodies | `MappingBody`, `OperationBody`, `ConstructorBody` |
 | Expressions | `ObjectExp`, `MappingCallExp`, `ResolveExp`, `ResolveInExp` |
@@ -155,13 +156,12 @@ public interface QvtoEngine {
 
 ### 4.2 QvtoConfiguration
 
-Immutable engine configuration bundling OCL config, blackbox libraries, unit resolvers:
+Immutable engine configuration bundling OCL config, blackbox registry, unit resolvers:
 
 ```java
-QvtoConfiguration config = QvtoConfiguration.builder()
-    .oclConfiguration(oclConfig)
-    .blackboxLibrary(myBlackbox)
-    .unitResolver(myResolver)
+QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
+    .blackboxRegistry(registry)
+    .addUnitResolver(myResolver)
     .build();
 QvtoEngine engine = new QvtoEngineImpl(config);
 ```
@@ -203,11 +203,12 @@ public interface QvtoModelExtent {
 
 ```java
 @ConsumerType
-public interface QvtoBlackboxLibrary {          // D24
+public interface QvtoBlackboxLibrary {          // D24 — see §4.7 for full details
     String getModuleName();
     String getUnitQualifiedName();
-    List<QvtoBlackboxOperation> getOperations();
     List<String> getUsedPackageURIs();
+    List<BlackboxOperationDescriptor> getOperationDescriptors();
+    Object invoke(String operationName, QvtoBlackboxInvocationContext context, Object[] args);
 }
 
 @ConsumerType
@@ -216,13 +217,167 @@ public interface QvtoUnitResolver {             // D27
 }
 
 public sealed interface QvtoUnit {              // Sealed union
-    record SourceUnit(String source, String name) implements QvtoUnit {}
-    record CompiledUnit(OperationalTransformation transformation) implements QvtoUnit {}
+    record SourceUnit(String qualifiedName, URI uri, String source) implements QvtoUnit {}
+    record CompiledUnit(String qualifiedName, OperationalTransformation ot) implements QvtoUnit {}
 }
 ```
 
 **OSGi registration:** `@Reference(cardinality = MULTIPLE, policy = DYNAMIC)` whiteboard.
 **Standalone:** `ServiceLoader<QvtoUnitResolver>` + programmatic `QvtoEngine.registerUnitResolver()`.
+
+### 4.7 Blackbox Libraries (§8.1.4)
+
+Blackbox libraries are the extension mechanism for calling native Java operations from QVT-O
+transformations. They are registered programmatically via a `QvtoBlackboxRegistry` and resolved
+at link-time into synthetic EMF modules.
+
+#### 4.7.1 End-to-End Flow
+
+```
+QVT-O source:  import mylib;  ... trimAll('  hello  ')
+                   │
+                   ▼
+Parser:        Creates stub Library (name="mylib", no classifiers)
+                   │
+                   ▼
+Linker:        QvtoBlackboxRegistry.getLibrary("mylib")
+               → Creates synthetic Library module with Helper EOperations
+                   │
+                   ▼
+OpResolver:    findAllOperations("trimAll") finds synthetic Helper
+                   │
+                   ▼
+OpProvider:    Detects isBlackbox flag → delegates to QvtoBlackboxLibrary.invoke()
+                   │
+                   ▼
+Java impl:    invoke("trimAll", context, args) → returns result
+```
+
+#### 4.7.2 QvtoBlackboxLibrary Interface
+
+```java
+@ConsumerType
+public interface QvtoBlackboxLibrary {
+    String getModuleName();                          // Simple name for 'uses'
+    String getUnitQualifiedName();                   // Qualified name for 'import'
+    List<String> getUsedPackageURIs();               // EPackage nsURIs
+    List<BlackboxOperationDescriptor> getOperationDescriptors();
+    Object invoke(String operationName,
+                  QvtoBlackboxInvocationContext context, Object[] args);
+}
+```
+
+Operations can be **module-level** (no context type) or **contextual** (bound to an EClassifier,
+called via `self.operation()`). The `invoke()` method receives the operation name, an invocation
+context with the current evaluation state, and the arguments.
+
+#### 4.7.3 BlackboxOperationDescriptor (EMF EClass)
+
+Defined in `qvtoperational.ecore`, describes a single blackbox operation:
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `name` | `EString` | Operation name |
+| `contextType` | `EClassifier [0..1]` | Context type — `null` for module-level operations |
+| `parameterTypes` | `EClassifier [0..*]` | Parameter types (positional) |
+| `returnType` | `EClassifier [1..1]` | Return type (required) |
+
+#### 4.7.4 QvtoBlackboxInvocationContext
+
+Bridges blackbox operations to the current evaluation state:
+
+```java
+@ProviderType
+public interface QvtoBlackboxInvocationContext {
+    Object self();                         // Context object (null for module-level)
+    void addInfo(String message);          // Informational diagnostic
+    void addWarning(String message);       // Warning diagnostic
+    void addError(String message);         // Error diagnostic
+    Map<String, Object> getConfigProperties();
+    QvtoModelExtent getExtent(String name);
+    EPackage.Registry getPackageRegistry();
+}
+```
+
+Implemented internally by `QvtoBlackboxInvocationContextImpl`, which delegates to
+`QvtoEvaluator` for diagnostics and `QvtoExtentManager` for extent access.
+
+#### 4.7.5 QvtoBlackboxRegistry
+
+Lookup interface for blackbox libraries. A `QvtoConfiguration` holds at most one registry.
+
+```java
+@ProviderType
+public interface QvtoBlackboxRegistry {
+    Optional<QvtoBlackboxLibrary> getLibrary(String qualifiedName);
+    List<QvtoBlackboxLibrary> getLibraries();
+}
+```
+
+`BasicQvtoBlackboxRegistry` is the thread-safe standalone implementation using
+`ConcurrentHashMap`. It provides `register(library)` and `unregister(library)` methods.
+
+**Configuration:**
+
+```java
+BasicQvtoBlackboxRegistry registry = new BasicQvtoBlackboxRegistry();
+registry.register(myLibrary);
+
+QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
+    .blackboxRegistry(registry)
+    .build();
+```
+
+**OSGi:** The registry is a DS Component with `@Reference(MULTIPLE, DYNAMIC)` whiteboard
+for `QvtoBlackboxLibrary` services.
+
+#### 4.7.6 Synthetic Module Creation (QvtoLinker)
+
+When the parser encounters `import mylib;`, it creates a stub `Library` module with only the
+qualified name set and no classifiers. During linking, `QvtoLinker` resolves these stubs:
+
+1. Try `QvtoUnitResolver` instances (regular QVT-O modules)
+2. Fallback: consult `QvtoBlackboxRegistry.getLibrary(qualifiedName)`
+3. If found, create a **synthetic Library module**:
+   - `Library.isBlackbox = true`
+   - One `EClass` (module class) with the library name
+   - For each `BlackboxOperationDescriptor`: a synthetic `Helper` EOperation
+     - `Helper.isBlackbox = true`, `Helper.isQuery = true`
+     - Context parameter (`self`) if `contextType != null`
+     - Named parameters (`arg0`, `arg1`, ...)
+
+This synthetic module integrates seamlessly with the existing `QvtoOperationResolver` —
+blackbox operations are found the same way as regular helpers.
+
+#### 4.7.7 Runtime Dispatch (QvtoOperationProvider)
+
+In `QvtoOperationProvider.addModuleOperations()`, blackbox operations are detected by the
+`isBlackbox` flag on `Helper`. Instead of delegating to `QvtoEvaluator.callOperation()`,
+the provider:
+
+1. Finds the owning `QvtoBlackboxLibrary` via module name → registry lookup
+2. Creates a `QvtoBlackboxInvocationContextImpl` with the current evaluation state
+3. Calls `library.invoke(operationName, context, args)`
+
+#### 4.7.8 Selective Import — `from ... import` (§8.4)
+
+QVT-O supports selective imports via `from ... import` syntax:
+
+```qvto
+from mylib import trimAll;              -- only trimAll visible
+from mylib import greet, farewell;      -- multiple names
+from mylib import *;                    -- wildcard: all operations visible
+import mylib;                           -- classic: all operations visible
+```
+
+**Metamodel:** `ModuleImport.importedNames : EString [0..*]`
+- Empty list → all operations visible (wildcard or classic import)
+- Non-empty list → only named operations are visible
+
+**Visibility enforcement:** Both `QvtoOperationResolver.findAllOperations()` and
+`QvtoOperationProvider.addModuleOperations()` filter operations by `importedNames`.
+Operations not in the list are excluded from resolution, producing an "Unknown operation"
+error at runtime if called.
 
 ---
 
@@ -311,6 +466,13 @@ QvtoEvaluator
 **Dispatch flow:** `eval(OclExpression)` tries ImperativeDispatch first, then QvtOpDispatch,
 then delegates to OclEngineImpl for standard OCL expressions.
 
+**Source evaluation invariant:** For `OperationCallExp`, intermediate dispatch steps
+(model extent/element operation checks, imperative source handling) must not eagerly
+evaluate the source expression unless the operation name actually matches a known
+operation in that category. This prevents duplicate side effects when chaining operations
+(e.g. `String.incrStrCounter('X').repr()` must evaluate `incrStrCounter` exactly once).
+Name guards (`QvtoModelOperations.isExtentOperation`/`isElementOperation`) enforce this.
+
 ### 6.3 QvtoEvalEnvironment — Mutable Scope Stack
 
 Unlike OCL's immutable chain-of-scopes, the QVT-O environment supports imperative assignment:
@@ -336,11 +498,16 @@ QvtoEvaluator
   └── delegates OCL sub-expressions → OclEngineImpl
 
 QvtoOperationProvider implements OclOperationProvider
-  └── recognizes QVT-O helpers/mappings → re-enters QvtoEvaluator
+  ├── recognizes QVT-O helpers/mappings → re-enters QvtoEvaluator
+  └── recognizes blackbox operations → delegates to QvtoBlackboxLibrary.invoke()
 ```
 
 Uses `QvtoOperationResolver` to find named operations (helpers, mappings, main) in the
-transformation AST.
+transformation AST. For blackbox operations (detected via `Helper.isBlackbox`), dispatches
+to the owning `QvtoBlackboxLibrary` instead of the evaluator — see §4.7.7.
+
+Respects selective import visibility: operations from modules imported via
+`from ... import name1, name2` are filtered by `ModuleImport.importedNames` — see §4.7.8.
 
 ### 6.5 QvtoExtentManager — Model Extent Binding
 
@@ -348,7 +515,8 @@ Binds `ModelParameter` declarations to `QvtoModelExtent` instances:
 
 - Positional mapping: ModelParameter → QvtoModelExtent
 - Enforces read-only constraint on `in` parameters (§8.1.3.2)
-- Accessed via `getExtent(ModelParameter)` or `getExtent(int index)`
+- Accessed via `getExtent(ModelParameter)`, `getExtent(int index)`, or `getExtent(String name)`
+- **Explicit extent routing (§8.1.3/§8.1.6):** `object T@extentName { ... }` and `new T@extentName()` route created objects to the named extent via `addToExtent(EObject, Variable)`
 
 ### 6.6 QvtoControlFlowException — Imperative Control Flow
 
@@ -364,10 +532,12 @@ public sealed class QvtoControlFlowException extends RuntimeException
 
 | Class | Purpose |
 |-------|---------|
-| `QvtoOperationResolver` | Resolves named operations (helpers, mappings, main()) from transformation AST |
+| `QvtoLinker` | Resolves stub modules (imports) into parsed modules or synthetic blackbox modules — see §4.7.6 |
+| `QvtoOperationResolver` | Resolves named operations (helpers, mappings, main()) from transformation AST, respects `importedNames` |
 | `QvtoIntermediatePropertyStore` | Per-instance storage for `ContextualProperty` values (§8.1.10) |
 | `QvtoAliasRegistry` | Tag alias resolution from EAnnotations (§8.3.19) |
 | `QvtoModelOperations` | Built-in operations: `objectsOfType`, `rootObjects`, `metaClassName`, `clone`, etc. |
+| `QvtoBlackboxInvocationContextImpl` | Bridges `QvtoBlackboxInvocationContext` to evaluator state — see §4.7.4 |
 
 ---
 
@@ -529,7 +699,17 @@ late resolveone(Type)
 late resolveIn(ClassName::mappingName, Type)
 ```
 
-### 10.5 Imperative if (with Block)
+### 10.5 Import Declarations
+
+```qvto
+import mylib;                           -- classic: all operations visible
+from mylib import trimAll;              -- selective: only trimAll
+from mylib import greet, farewell;      -- selective: multiple names
+from mylib import *;                    -- wildcard: all operations visible
+access transformation T(in s : SRC, out t : TGT);  -- access declaration
+```
+
+### 10.6 Imperative if (with Block)
 
 QVT-O has BOTH:
 - OCL-Expression: `if cond then expr else expr endif`

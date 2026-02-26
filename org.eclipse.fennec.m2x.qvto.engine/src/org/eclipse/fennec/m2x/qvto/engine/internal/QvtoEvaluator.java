@@ -52,6 +52,7 @@ import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.util.ImperativeOclSwitch;
+import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
@@ -78,6 +79,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.util.QvtOperationalSwitch;
 import org.eclipse.fennec.m2x.model.trace.Trace;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
@@ -135,6 +137,7 @@ public class QvtoEvaluator {
 	private final QvtoOperationResolver operationResolver;
 	private final QvtoModelOperations modelOperations;
 	private final QvtoEngineImpl engine;
+	private Map<String, Object> configProps = Map.of();
 
 	// Late resolve support
 	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
@@ -143,6 +146,7 @@ public class QvtoEvaluator {
 	private EObject pendingLvalueOwner;
 	private EStructuralFeature pendingLvalueFeature;
 	private boolean pendingLvalueIsReset;
+	private boolean pendingLvalueIsSubtract;
 
 	/**
 	 * Creates a new evaluator for a single transformation execution.
@@ -247,15 +251,23 @@ public class QvtoEvaluator {
 		}
 
 		// 3. QVT-O model extent operations (objectsOfType, objects)
-		if (expr instanceof OperationCallExp opCall) {
-			result = modelOperations.handleExtentOperation(opCall);
-			if (result != QvtoModelOperations.UNHANDLED) {
-				return QvtoModelOperations.unwrapNull(result);
+		// Check operation name BEFORE evaluating source to avoid unnecessary
+		// side effects (e.g. String.incrStrCounter('Foo').repr() — repr is not
+		// an extent/element op, so don't evaluate the incrStrCounter source here)
+		if (expr instanceof OperationCallExp opCall && opCall.getOwnedSource() != null) {
+			String opName = opCall.getName();
+			if (QvtoModelOperations.isExtentOperation(opName)) {
+				result = modelOperations.handleExtentOperation(opCall);
+				if (result != QvtoModelOperations.UNHANDLED) {
+					return QvtoModelOperations.unwrapNull(result);
+				}
 			}
-			// §8.3.4: Element operations (metaClassName, subobjects, clone, etc.)
-			result = modelOperations.handleElementOperation(opCall);
-			if (result != QvtoModelOperations.UNHANDLED) {
-				return QvtoModelOperations.unwrapNull(result);
+			if (QvtoModelOperations.isElementOperation(opName)) {
+				// §8.3.4: Element operations (metaClassName, subobjects, clone, etc.)
+				result = modelOperations.handleElementOperation(opCall);
+				if (result != QvtoModelOperations.UNHANDLED) {
+					return QvtoModelOperations.unwrapNull(result);
+				}
 			}
 		}
 
@@ -296,6 +308,7 @@ public class QvtoEvaluator {
 		// (e.g. "new T(m).transform()") — OCL engine cannot evaluate imperative
 		// sub-expressions, so we evaluate the source through QVT-O dispatch and
 		// delegate the operation call to the registered OCL custom operations.
+		// IMPORTANT: Must return here to avoid evalOcl re-evaluating the source.
 		if (expr instanceof OperationCallExp opCall
 				&& opCall.getOwnedSource() instanceof ImperativeExpression) {
 			Object source = eval(opCall.getOwnedSource());
@@ -304,16 +317,32 @@ public class QvtoEvaluator {
 				args[i] = eval(opCall.getOwnedArguments().get(i));
 			}
 			String opName = opCall.getName();
+			// Try custom operation providers — use fallback pattern (AnyType catch-all)
+			// to avoid invoking multiple matching ops with side effects
+			OclOperation fallback = null;
 			for (var provider : oclEngine.getOperationProviders()) {
 				for (var op : provider.getOperations()) {
-					if (op.name().equals(opName)) {
-						Object opResult = op.implementation().apply(source, args);
-						if (opResult != null) {
-							return opResult;
-						}
+					if (!op.name().equals(opName)) {
+						continue;
+					}
+					OclType ownerType = op.ownerType();
+					if (ownerType instanceof AnyType) {
+						fallback = op;
+					} else {
+						// Non-AnyType: exact match — invoke immediately
+						return op.implementation().apply(source, args);
 					}
 				}
 			}
+			if (fallback != null) {
+				Object opResult = fallback.implementation().apply(source, args);
+				if (opResult != null) {
+					return opResult;
+				}
+			}
+			// No custom provider matched — fall through to evalOcl for stdlib ops
+			// (e.g. repr, size). Re-evaluation of ImperativeExpression source is
+			// acceptable here since stdlib ops have no side effects.
 		}
 
 		// 7. OCL delegation
@@ -673,6 +702,14 @@ public class QvtoEvaluator {
 				for (OclExpression expr : body.getContent()) {
 					eval(expr);
 				}
+			} else {
+				// §8.4 S.168: bodyless mapping declaration — still execute inherited/merged
+				for (MappingOperation inherited : mappingOp.getInherited()) {
+					executePopulationOnly(inherited, self, args);
+				}
+				for (MappingOperation merged : mappingOp.getMerged()) {
+					executePopulationOnly(merged, self, args);
+				}
 			}
 
 			// where-postcondition
@@ -781,6 +818,17 @@ public class QvtoEvaluator {
 	 * by metamodel (EPackage), then falls back to the default output extent.
 	 */
 	private void addToDefaultExtent(EObject eObject) {
+		addToExtent(eObject, null);
+	}
+
+	private void addToExtent(EObject eObject, Variable extentRef) {
+		if (extentRef != null && extentRef.getName() != null) {
+			QvtoModelExtent extent = extentManager.getExtent(extentRef.getName());
+			if (extent != null) {
+				extent.add(eObject);
+				return;
+			}
+		}
 		QvtoModelExtent extent = extentManager.getExtentForClassifier(eObject.eClass());
 		if (extent == null) {
 			extent = extentManager.getDefaultOutputExtent();
@@ -816,6 +864,34 @@ public class QvtoEvaluator {
 	 */
 	public QvtoOperationResolver getOperationResolver() {
 		return operationResolver;
+	}
+
+	/**
+	 * Returns the collected diagnostics list (for blackbox invocation context).
+	 */
+	List<Diagnostic> diagnostics() {
+		return diagnostics;
+	}
+
+	/**
+	 * Returns the extent manager (for blackbox invocation context).
+	 */
+	QvtoExtentManager extentManager() {
+		return extentManager;
+	}
+
+	/**
+	 * Returns the config properties (for blackbox invocation context).
+	 */
+	Map<String, Object> configProperties() {
+		return configProps;
+	}
+
+	/**
+	 * Sets the config properties (called from engine before execution).
+	 */
+	public void setConfigProperties(Map<String, Object> configProperties) {
+		this.configProps = configProperties != null ? configProperties : Map.of();
 	}
 
 
@@ -935,7 +1011,15 @@ public class QvtoEvaluator {
 						if (sf == null) {
 							sf = task.targetFeature();
 						}
-						if (task.isReset()) {
+						if (task.isSubtract()) {
+							// -= : remove from collection
+							Object current = task.targetObject().eGet(sf);
+							if (current instanceof Collection<?>) {
+								@SuppressWarnings("unchecked")
+								Collection<Object> col = (Collection<Object>) current;
+								col.remove(coerceForFeature(sf, resolved));
+							}
+						} else if (task.isReset()) {
 							task.targetObject().eSet(sf, coerceForFeature(sf, resolved));
 						} else {
 							Object current = task.targetObject().eGet(sf);
@@ -1092,6 +1176,7 @@ public class QvtoEvaluator {
 					pendingLvalueOwner = eo;
 					pendingLvalueFeature = actualSf != null ? actualSf : sf;
 					pendingLvalueIsReset = exp.isIsReset();
+					pendingLvalueIsSubtract = exp.isIsSubtract();
 				}
 			}
 
@@ -1127,7 +1212,15 @@ public class QvtoEvaluator {
 						// Eclipse bug449445: invalid → null for property assignment
 						Object coerced = coerceForFeature(sf,
 								value == OclInvalid.INSTANCE ? null : value);
-						if (exp.isIsReset()) {
+						if (exp.isIsSubtract()) {
+							// -= : remove element from collection
+							Object current = target.eGet(sf);
+							if (current instanceof Collection<?>) {
+								@SuppressWarnings("unchecked")
+								Collection<Object> col = (Collection<Object>) current;
+								col.remove(coerced);
+							}
+						} else if (exp.isIsReset()) {
 							if (value == OclInvalid.INSTANCE || value == null) {
 								// Clear collection or set null
 								Object current = target.eGet(sf);
@@ -1163,13 +1256,21 @@ public class QvtoEvaluator {
 					}
 				}
 				// Variable assignment
-				if (exp.isIsReset()) {
-				Object current = env.lookup(varName);
-				if (value == null && current instanceof Collection<?>) {
-					((Collection<?>) current).clear();
-				} else {
-					env.assign(varName, value);
-				}
+				if (exp.isIsSubtract()) {
+					// -= : remove element from collection variable
+					Object current = env.lookup(varName);
+					if (current instanceof Collection<?>) {
+						@SuppressWarnings("unchecked")
+						Collection<Object> col = (Collection<Object>) current;
+						col.remove(value);
+					}
+				} else if (exp.isIsReset()) {
+					Object current = env.lookup(varName);
+					if (value == null && current instanceof Collection<?>) {
+						((Collection<?>) current).clear();
+					} else {
+						env.assign(varName, value);
+					}
 				} else {
 					// += (append): add to collection
 					Object current = env.lookup(varName);
@@ -1193,7 +1294,15 @@ public class QvtoEvaluator {
 					@SuppressWarnings("unchecked")
 					Map<String, Object> tuple = (Map<String, Object>) source;
 					String partName = sf.getName();
-					if (exp.isIsReset()) {
+					if (exp.isIsSubtract()) {
+						// -= on tuple part: remove from collection
+						Object current = tuple.get(partName);
+						if (current instanceof Collection<?>) {
+							@SuppressWarnings("unchecked")
+							Collection<Object> col = (Collection<Object>) current;
+							col.remove(value);
+						}
+					} else if (exp.isIsReset()) {
 						tuple.put(partName, value);
 					} else {
 						// += on tuple part: only valid for mutable collections (List)
@@ -1217,7 +1326,15 @@ public class QvtoEvaluator {
 					if (icp != null) {
 						// Eclipse bug449445: invalid → null for property assignment,
 						// or clear if current value is a collection
-						if ((value == OclInvalid.INSTANCE || value == null) && exp.isIsReset()) {
+						if (exp.isIsSubtract()) {
+							// -= on intermediate property: remove from collection
+							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
+							if (current instanceof Collection<?>) {
+								@SuppressWarnings("unchecked")
+								Collection<Object> col = (Collection<Object>) current;
+								col.remove(value);
+							}
+						} else if ((value == OclInvalid.INSTANCE || value == null) && exp.isIsReset()) {
 							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
 							if (current instanceof Collection<?>) {
 								@SuppressWarnings("unchecked")
@@ -1264,7 +1381,15 @@ public class QvtoEvaluator {
 					// Eclipse bug449445: invalid → null for EObject property assignment
 					Object coerced = coerceForFeature(actualSf,
 							value == OclInvalid.INSTANCE ? null : value);
-					if (exp.isIsReset()) {
+					if (exp.isIsSubtract()) {
+						// -= on EObject property: remove from collection
+						Object current = eo.eGet(actualSf);
+						if (current instanceof Collection<?>) {
+							@SuppressWarnings("unchecked")
+							Collection<Object> col = (Collection<Object>) current;
+							col.remove(coerced);
+						}
+					} else if (exp.isIsReset()) {
 						if (value == OclInvalid.INSTANCE || value == null) {
 							// Clear collection or set null
 							Object current = eo.eGet(actualSf);
@@ -1572,7 +1697,7 @@ public class QvtoEvaluator {
 
 			// §8.2.2.22: Create the instance BEFORE constructor runs
 			EObject created = EcoreUtil.create(eClass);
-			addToDefaultExtent(created);
+			addToExtent(created, exp.getExtent());
 
 			// Evaluate arguments
 			List<Object> argValues = new ArrayList<>();
@@ -1731,7 +1856,7 @@ public class QvtoEvaluator {
 
 			// Only add to extent for newly created objects (not updates)
 			if (!isUpdate) {
-				addToDefaultExtent(target);
+				addToExtent(target, exp.getExtent());
 				// §8.2.1.24: Assign newly created object to the referred variable in outer scope
 				if (isExplicitVar) {
 					env.assign(varName, target);
@@ -1801,7 +1926,7 @@ public class QvtoEvaluator {
 				if (pendingLvalueOwner != null) {
 					deferredTasks.add(new DeferredResolveTask(
 							exp, pendingLvalueOwner, pendingLvalueFeature,
-							pendingLvalueIsReset, sourceObj));
+							pendingLvalueIsReset, pendingLvalueIsSubtract, sourceObj));
 				} else {
 					addWarning("Late resolve only supported in property assignments");
 				}

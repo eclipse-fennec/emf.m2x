@@ -92,6 +92,7 @@ class QvtoOperationResolver {
 	/**
 	 * Finds all imperative operations with the given name across the transformation
 	 * and imported modules. Used for implicit disjunction (§8.1.14.2).
+	 * Respects selective import visibility via {@code ModuleImport.importedNames}.
 	 */
 	List<ImperativeOperation> findAllOperations(String name) {
 		List<ImperativeOperation> result = new ArrayList<>();
@@ -108,6 +109,11 @@ class QvtoOperationResolver {
 		for (ModuleImport mi : transformation.getModuleImport()) {
 			Module importedModule = mi.getImportedModule();
 			if (importedModule != null) {
+				// §8.4: selective visibility — only allow named operations
+				List<String> importedNames = mi.getImportedNames();
+				if (!importedNames.isEmpty() && !importedNames.contains(name)) {
+					continue;
+				}
 				EClass importedModuleClass = findModuleClassIn(importedModule);
 				if (importedModuleClass != null) {
 					for (EOperation op : importedModuleClass.getEOperations()) {

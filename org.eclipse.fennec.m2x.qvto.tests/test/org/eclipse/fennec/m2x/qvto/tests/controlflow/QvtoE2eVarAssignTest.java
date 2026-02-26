@@ -288,6 +288,58 @@ class QvtoE2eVarAssignTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "b=shared");
 	}
 
+	// ---- -= (subtract) ----
+
+	@Test
+	void assign_collectionSubtract() throws Exception {
+		// §8.4: '-=' removes element from collection
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        var list : Sequence(Integer) := Sequence{1, 2, 3};
+				        list -= 2;
+				        log(list->size().toString());
+				        log(list->at(1).toString());
+				        log(list->at(2).toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "2");
+		assertLogged(result, "1");
+		assertLogged(result, "3");
+	}
+
+	@Test
+	void assign_propertySubtract() throws Exception {
+		// §8.4: '-=' on multi-valued EReference removes the element
+		EObject src1 = createSourceElement("a", 1);
+		EObject src2 = createSourceElement("b", 2);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src1, src2);
+		QvtoModelExtent outExtent = emptyExtent();
+
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SOURCE uses source('http://test/source');
+				modeltype TARGET uses target('http://test/target');
+				transformation test(in s : SOURCE, out t : TARGET) {
+				    main() {
+				        var tc := object TargetContainer { };
+				        s.rootObjects()[SourceElement]->forEach(e) {
+				            tc.elements += object TargetElement { label := e.name; };
+				        };
+				        log('before=' + tc.elements->size().toString());
+				        tc.elements -= tc.elements->at(1);
+				        log('after=' + tc.elements->size().toString());
+				        log('remaining=' + tc.elements->at(1).label);
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertLogged(result, "before=2");
+		assertLogged(result, "after=1");
+		assertLogged(result, "remaining=b");
+	}
+
 	// ---- Helpers ----
 
 	private static void assertSuccess(QvtoExecutionResult result) {

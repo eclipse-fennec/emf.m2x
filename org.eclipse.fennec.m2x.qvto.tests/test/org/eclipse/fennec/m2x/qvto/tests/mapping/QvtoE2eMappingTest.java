@@ -980,6 +980,45 @@ class QvtoE2eMappingTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "patched:10");
 	}
 
+	// §8.4 S.168: bodyless mapping with inherits — inherited body executes
+	@Test
+	void mappingDecl_bodyless_inherits_execution() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				transformation test(out t : SRC) {
+				    mapping base() : r : SourceElement {
+				        r.name := 'from-base';
+				    }
+				    abstract mapping derived() : r : SourceElement inherits base;
+				    main() {
+				        var elem := map derived();
+				        log(elem.name);
+				    }
+				}
+				""", outExtent);
+		assertSuccess(result);
+		assertLogged(result, "from-base");
+	}
+
+	// §8.4 S.168: bodyless mapping without inherits — unpopulated result
+	@Test
+	void mappingDecl_bodyless_execution() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				transformation test(out t : SRC) {
+				    abstract mapping createElem() : r : SourceElement;
+				    main() {
+				        var elem := map createElem();
+				        log(elem.name);
+				    }
+				}
+				""", outExtent);
+		assertSuccess(result);
+		assertLogged(result, "null");
+	}
+
 	// ---- Helpers ----
 
 	private static void assertSuccess(QvtoExecutionResult result) {

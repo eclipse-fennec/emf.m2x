@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 
 import org.eclipse.emf.ecore.EClass;
@@ -43,6 +44,28 @@ class QvtoModelOperations {
 
 	/** Sentinel for wrapping null values to distinguish "handled, result is null" from UNHANDLED. */
 	private static final Object WRAPPED_NULL = new Object();
+
+	/** Known extent operation names (§8.3.5). */
+	private static final Set<String> EXTENT_OPS = Set.of(
+			"objectsOfType", "objectsOfKind", "objects", "rootObjects",
+			"addElement", "addObject", "removeElement", "createEmptyModel", "copy");
+
+	/** Known element operation names (§8.3.4). */
+	private static final Set<String> ELEMENT_OPS = Set.of(
+			"metaClassName", "subobjects", "allSubobjects",
+			"subobjectsOfType", "subobjectsOfKind",
+			"allSubobjectsOfType", "allSubobjectsOfKind",
+			"clone", "deepclone", "container");
+
+	/** Checks if the operation name is a known extent operation. */
+	static boolean isExtentOperation(String name) {
+		return name != null && EXTENT_OPS.contains(name);
+	}
+
+	/** Checks if the operation name is a known element operation. */
+	static boolean isElementOperation(String name) {
+		return name != null && ELEMENT_OPS.contains(name);
+	}
 
 	private final Function<OclExpression, Object> evalFn;
 

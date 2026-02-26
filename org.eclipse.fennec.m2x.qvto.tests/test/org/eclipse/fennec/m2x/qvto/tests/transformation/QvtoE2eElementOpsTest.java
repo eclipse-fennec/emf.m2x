@@ -324,6 +324,75 @@ class QvtoE2eElementOpsTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "null:true");
 	}
 
+	// ---- Chaining vs Variable Regression (triple-evaluation bug) ----
+
+	@Test
+	void element_subobjects_chained_vs_variable() throws Exception {
+		// Regression: chaining element op result must match variable-based approach
+		EObject container = createSourceContainer("parent",
+				createSourceElement("child1", 1),
+				createSourceElement("child2", 2));
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(container);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    main() {
+				        var c := s.objectsOfKind(SourceContainer)->asSequence()->first();
+				        log('chained:' + c.subobjects()->size().repr());
+				        var subs := c.subobjects();
+				        log('variable:' + subs->size().repr());
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertLoggedInOrder(result, "chained:2", "variable:2");
+	}
+
+	@Test
+	void element_clone_chained_vs_variable() throws Exception {
+		// Regression: chaining clone + property access must match variable-based approach
+		EObject src = createSourceElement("original", 42);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    main() {
+				        var e := s.objectsOfKind(SourceElement)->asSequence()->first();
+				        log('chained:' + e.clone().oclAsType(SourceElement).name);
+				        var c := e.clone().oclAsType(SourceElement);
+				        log('variable:' + c.name);
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertLoggedInOrder(result, "chained:original", "variable:original");
+	}
+
+	@Test
+	void element_extent_to_element_chained_vs_variable() throws Exception {
+		// Regression: cross-path chain (extent op → element op) must match variable-based approach
+		EObject src = createSourceElement("testElem", 99);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    main() {
+				        log('chained:' + s.objectsOfKind(SourceElement)->asSequence()->first().metaClassName());
+				        var e := s.objectsOfKind(SourceElement)->asSequence()->first();
+				        log('variable:' + e.metaClassName());
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertLoggedInOrder(result, "chained:SourceElement", "variable:SourceElement");
+	}
+
 	// ---- Helpers ----
 
 	/**

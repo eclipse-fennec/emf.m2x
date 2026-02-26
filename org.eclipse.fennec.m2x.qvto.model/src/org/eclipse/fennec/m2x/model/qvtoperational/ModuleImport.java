@@ -38,6 +38,7 @@ import org.osgi.annotation.versioning.ProviderType;
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport#getImportedModule <em>Imported Module</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport#getModule <em>Module</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport#getBinding <em>Binding</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport#getImportedNames <em>Imported Names</em>}</li>
  * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getModuleImport()
@@ -128,5 +129,20 @@ public interface ModuleImport extends EObject, EModelElement {
 	 * @generated
 	 */
 	EList<ModelType> getBinding();
+
+	/**
+	 * Returns the value of the '<em><b>Imported Names</b></em>' attribute list.
+	 * The list contents are of type {@link java.lang.String}.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * Selective import names from 'from ... import name1, name2' syntax (§8.4). Empty list means import all.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Imported Names</em>' attribute list.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getModuleImport_ImportedNames()
+	 * @model
+	 * @generated
+	 */
+	EList<String> getImportedNames();
 
 } // ModuleImport

@@ -16,15 +16,18 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
@@ -40,6 +43,8 @@ import org.eclipse.fennec.m2x.model.qvtoperational.Status;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
+import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
+import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 
 /**
@@ -61,13 +66,16 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	private final OperationalTransformation transformation;
 	private final QvtoEvaluator evaluator;
 	private final QvtoOperationResolver operationResolver;
+	private final QvtoBlackboxRegistry blackboxRegistry;
+	private final Map<String, int[]> stringCounters = new HashMap<>();
 	private List<OclOperation> operations;
 
 	public QvtoOperationProvider(OperationalTransformation transformation, QvtoEvaluator evaluator,
-			QvtoOperationResolver operationResolver) {
+			QvtoOperationResolver operationResolver, QvtoBlackboxRegistry blackboxRegistry) {
 		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
 		this.evaluator = Objects.requireNonNull(evaluator, "evaluator must not be null");
 		this.operationResolver = Objects.requireNonNull(operationResolver, "operationResolver must not be null");
+		this.blackboxRegistry = blackboxRegistry; // nullable
 	}
 
 	@Override
@@ -359,7 +367,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 			return ops;
 		}
 
-		addModuleOperations(ops, moduleClass);
+		addModuleOperations(ops, moduleClass, null);
 
 		// Also export operations from imported modules (§8.1.4 Library access)
 		for (ModuleImport mi : transformation.getModuleImport()) {
@@ -367,7 +375,11 @@ public class QvtoOperationProvider implements OclOperationProvider {
 			if (importedModule != null) {
 				EClass importedModuleClass = QvtoOperationResolver.findModuleClassIn(importedModule);
 				if (importedModuleClass != null) {
-					addModuleOperations(ops, importedModuleClass);
+					// §8.4: selective visibility via importedNames
+					Set<String> visibleNames = mi.getImportedNames().isEmpty()
+							? null  // null = all visible
+							: Set.copyOf(mi.getImportedNames());
+					addModuleOperations(ops, importedModuleClass, visibleNames);
 				}
 			}
 		}
@@ -377,6 +389,9 @@ public class QvtoOperationProvider implements OclOperationProvider {
 
 		// §8.3.6: Status property operations
 		addStatusOperations(ops);
+
+		// §8.3.16.31–35: String counter operations
+		addStringCounterOperations(ops);
 
 		return ops;
 	}
@@ -449,31 +464,155 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				}));
 	}
 
-	private void addModuleOperations(List<OclOperation> ops, EClass moduleClass) {
+	/**
+	 * §8.3.16.31–35: String counter operations for generating unique names.
+	 *
+	 * <p>Static operations (31–34) are invoked as {@code String.startStrCounter('Foo')}
+	 * where the source is a PrimitiveType "String". Instance operation (35)
+	 * {@code addSuffixNumber()} is invoked on a String value.
+	 */
+	private void addStringCounterOperations(List<OclOperation> ops) {
+		// §8.3.16.31: String::startStrCounter(s:String) : Void — initialize/reset counter to 0
+		ops.add(new OclOperation("startStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+							&& args.length > 0 && args[0] instanceof String s) {
+						stringCounters.put(s, new int[]{0});
+					}
+					return null;
+				}));
+
+		// §8.3.16.32: String::getStrCounter(s:String) : Integer — get current value or null
+		ops.add(new OclOperation("getStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+							&& args.length > 0 && args[0] instanceof String s) {
+						int[] counter = stringCounters.get(s);
+						return counter != null ? (long) counter[0] : null;
+					}
+					return null;
+				}));
+
+		// §8.3.16.33: String::incrStrCounter(s:String) : Integer — increment and return new value
+		ops.add(new OclOperation("incrStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+							&& args.length > 0 && args[0] instanceof String s) {
+						int[] counter = stringCounters.get(s);
+						if (counter == null) {
+							counter = new int[]{0};
+							stringCounters.put(s, counter);
+						}
+						return (long) ++counter[0];
+					}
+					return null;
+				}));
+
+		// §8.3.16.34: String::restartAllStrCounter() : Void — reset all counters to 0
+		ops.add(new OclOperation("restartAllStrCounter", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())) {
+						for (int[] counter : stringCounters.values()) {
+							counter[0] = 0;
+						}
+					}
+					return null;
+				}));
+
+		// §8.3.16.35: String::addSuffixNumber() : String — append counter value as suffix
+		ops.add(new OclOperation("addSuffixNumber", ANY_TYPE, List.of(), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof String s) {
+						int[] counter = stringCounters.get(s);
+						if (counter == null) {
+							// Not started → start counter, return string without suffix
+							stringCounters.put(s, new int[]{0});
+							return s;
+						}
+						// Get current value, then increment
+						int value = counter[0];
+						counter[0]++;
+						return s + value;
+					}
+					return null;
+				}));
+	}
+
+	/**
+	 * Adds operations from a module class, optionally filtered by visible names.
+	 *
+	 * @param ops the operations list to add to
+	 * @param moduleClass the module's EClass containing EOperations
+	 * @param visibleNames if non-null, only operations with names in this set are visible
+	 */
+	private void addModuleOperations(List<OclOperation> ops, EClass moduleClass,
+			Set<String> visibleNames) {
 		for (EOperation eOp : moduleClass.getEOperations()) {
 			if (eOp instanceof ImperativeOperation impOp) {
 				String name = impOp.getName();
 				if (name == null || "main".equals(name)) {
 					continue;
 				}
-				// §8.2.1.10: Use context type for dispatch so same-name operations
-				// on different context types are dispatched correctly
+				// §8.4: selective import — skip operations not in importedNames
+				if (visibleNames != null && !visibleNames.contains(name)) {
+					continue;
+				}
+				// §8.2.1.10: Use context type for dispatch
 				OclType ownerType = resolveOwnerType(impOp);
-				ops.add(new OclOperation(
-						name,
-						ownerType,
-						List.of(),
-						ANY_TYPE,
-						(self, args) -> {
-							// §8.1.19: contextual operation on null → propagate null
-							if (self == null && impOp.getContext() != null) {
-								return null;
+
+				if (impOp.isIsBlackbox()) {
+					// Blackbox operation — delegate to library's invoke()
+					ops.add(new OclOperation(name, ownerType, List.of(), ANY_TYPE,
+							(self, args) -> invokeBlackbox(impOp, self, args)));
+				} else {
+					ops.add(new OclOperation(
+							name,
+							ownerType,
+							List.of(),
+							ANY_TYPE,
+							(self, args) -> {
+								// §8.1.19: contextual operation on null → propagate null
+								if (self == null && impOp.getContext() != null) {
+									return null;
+								}
+								return evaluator.callOperation(impOp, self, args);
 							}
-							return evaluator.callOperation(impOp, self, args);
-						}
-				));
+					));
+				}
 			}
 		}
+	}
+
+	/**
+	 * Invokes a blackbox operation by finding its library and delegating to invoke().
+	 */
+	private Object invokeBlackbox(ImperativeOperation impOp, Object self, Object[] args) {
+		if (blackboxRegistry == null) {
+			return null;
+		}
+		// Find the library that owns this operation
+		// The operation's containing EClass is the module class, whose containing
+		// EPackage is the Library module with the library name
+		EClass moduleClass = impOp.getEContainingClass();
+		if (moduleClass == null) {
+			return null;
+		}
+		EPackage modulePackage = moduleClass.getEPackage();
+		if (!(modulePackage instanceof Module module)) {
+			return null;
+		}
+
+		// Find the library by matching module name against all registered libraries
+		String moduleName = module.getName();
+		for (QvtoBlackboxLibrary lib : blackboxRegistry.getLibraries()) {
+			if (moduleName.equals(lib.getModuleName())) {
+				QvtoBlackboxInvocationContextImpl ctx = new QvtoBlackboxInvocationContextImpl(
+						self, evaluator.diagnostics(), evaluator.extentManager(),
+						evaluator.configProperties(), EPackage.Registry.INSTANCE);
+				return lib.invoke(impOp.getName(), ctx, args);
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -493,7 +632,8 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		}
 		if (classifier instanceof EDataType dt) {
 			PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
-			pt.setName(dt.getName());
+			// Map Ecore primitive names to OCL names (EString→String, EInt→Integer, etc.)
+			pt.setName(mapEcoreToOclPrimitiveName(dt.getName()));
 			return pt;
 		}
 		return ANY_TYPE;
@@ -508,6 +648,20 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					"InvalidModelMutation",
 					"Cannot modify read-only model extent (in-parameter)");
 		}
+	}
+
+	/**
+	 * Maps Ecore EDataType names to OCL primitive type names.
+	 */
+	private static String mapEcoreToOclPrimitiveName(String ecoreName) {
+		return switch (ecoreName) {
+			case "EString" -> "String";
+			case "EInt", "EIntegerObject" -> "Integer";
+			case "EDouble", "EDoubleObject", "EFloat", "EFloatObject" -> "Real";
+			case "EBoolean", "EBooleanObject" -> "Boolean";
+			case "EBigInteger" -> "UnlimitedNatural";
+			default -> ecoreName;
+		};
 	}
 
 	private static EClass resolveEClassArg(Object arg) {

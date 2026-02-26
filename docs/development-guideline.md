@@ -792,7 +792,7 @@ See [OCL Architecture](ocl-architecture.md) for full details.
 
 ### Phase 2: QVT-Operational — ✅ Complete
 
-**Status:** ✅ Complete — 862 tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10.
+**Status:** ✅ Complete — 922 tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10.
 
 See [QVT-O Architecture](qvto-architecture.md) for full details and [QVT-O Test Plan](qvto-test-plan.md) for spec-conformance tracking.
 

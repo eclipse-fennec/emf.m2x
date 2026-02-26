@@ -145,13 +145,22 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ASSIGN_EXP__IS_RESET = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 0;
 
 	/**
+	 * The feature id for the '<em><b>Is Subtract</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSIGN_EXP__IS_SUBTRACT = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 1;
+
+	/**
 	 * The feature id for the '<em><b>Left</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int ASSIGN_EXP__LEFT = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 1;
+	int ASSIGN_EXP__LEFT = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 2;
 
 	/**
 	 * The feature id for the '<em><b>Value</b></em>' containment reference list.
@@ -160,7 +169,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int ASSIGN_EXP__VALUE = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 2;
+	int ASSIGN_EXP__VALUE = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 3;
 
 	/**
 	 * The feature id for the '<em><b>Default Value</b></em>' containment reference.
@@ -169,7 +178,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int ASSIGN_EXP__DEFAULT_VALUE = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 3;
+	int ASSIGN_EXP__DEFAULT_VALUE = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 4;
 
 	/**
 	 * The number of structural features of the '<em>Assign Exp</em>' class.
@@ -178,7 +187,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int ASSIGN_EXP_FEATURE_COUNT = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 4;
+	int ASSIGN_EXP_FEATURE_COUNT = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 5;
 
 	/**
 	 * The number of operations of the '<em>Assign Exp</em>' class.
@@ -1873,6 +1882,17 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	EAttribute getAssignExp_IsReset();
 
 	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#isIsSubtract <em>Is Subtract</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Is Subtract</em>'.
+	 * @see org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#isIsSubtract()
+	 * @see #getAssignExp()
+	 * @generated
+	 */
+	EAttribute getAssignExp_IsSubtract();
+
+	/**
 	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.imperativeocl.AssignExp#getLeft <em>Left</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2538,6 +2558,14 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EAttribute ASSIGN_EXP__IS_RESET = eINSTANCE.getAssignExp_IsReset();
+
+		/**
+		 * The meta object literal for the '<em><b>Is Subtract</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute ASSIGN_EXP__IS_SUBTRACT = eINSTANCE.getAssignExp_IsSubtract();
 
 		/**
 		 * The meta object literal for the '<em><b>Left</b></em>' containment reference feature.

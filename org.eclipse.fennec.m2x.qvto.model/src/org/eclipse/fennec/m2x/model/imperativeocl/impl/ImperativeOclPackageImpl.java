@@ -343,8 +343,8 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 	 * @generated
 	 */
 	@Override
-	public EReference getAssignExp_Left() {
-		return (EReference)assignExpEClass.getEStructuralFeatures().get(1);
+	public EAttribute getAssignExp_IsSubtract() {
+		return (EAttribute)assignExpEClass.getEStructuralFeatures().get(1);
 	}
 
 	/**
@@ -353,7 +353,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 	 * @generated
 	 */
 	@Override
-	public EReference getAssignExp_Value() {
+	public EReference getAssignExp_Left() {
 		return (EReference)assignExpEClass.getEStructuralFeatures().get(2);
 	}
 
@@ -363,8 +363,18 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 	 * @generated
 	 */
 	@Override
-	public EReference getAssignExp_DefaultValue() {
+	public EReference getAssignExp_Value() {
 		return (EReference)assignExpEClass.getEStructuralFeatures().get(3);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getAssignExp_DefaultValue() {
+		return (EReference)assignExpEClass.getEStructuralFeatures().get(4);
 	}
 
 	/**
@@ -950,6 +960,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 
 		assignExpEClass = createEClass(ASSIGN_EXP);
 		createEAttribute(assignExpEClass, ASSIGN_EXP__IS_RESET);
+		createEAttribute(assignExpEClass, ASSIGN_EXP__IS_SUBTRACT);
 		createEReference(assignExpEClass, ASSIGN_EXP__LEFT);
 		createEReference(assignExpEClass, ASSIGN_EXP__VALUE);
 		createEReference(assignExpEClass, ASSIGN_EXP__DEFAULT_VALUE);
@@ -1096,6 +1107,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 
 		initEClass(assignExpEClass, AssignExp.class, "AssignExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getAssignExp_IsReset(), ecorePackage.getEBoolean(), "isReset", null, 0, 1, AssignExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getAssignExp_IsSubtract(), ecorePackage.getEBoolean(), "isSubtract", null, 0, 1, AssignExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getAssignExp_Left(), theOclPackage.getOclExpression(), null, "left", null, 1, 1, AssignExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getAssignExp_Value(), theOclPackage.getOclExpression(), null, "value", null, 0, -1, AssignExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getAssignExp_DefaultValue(), theOclPackage.getOclExpression(), null, "defaultValue", null, 0, 1, AssignExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

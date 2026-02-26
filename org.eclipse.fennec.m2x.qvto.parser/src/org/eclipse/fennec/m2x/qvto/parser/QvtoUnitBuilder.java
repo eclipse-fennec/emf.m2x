@@ -123,9 +123,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (transformation == null) {
 			// Standalone library — wrap as transformation for uniform return type
 			if (!inlineLibraries.isEmpty()) {
-				Library firstLib = inlineLibraries.remove(0);
+				Library firstLib = inlineLibraries.get(0);
 				transformation = QVTO.createOperationalTransformation();
 				transformation.setName(firstLib.getName());
+				// Keep firstLib in inlineLibraries so it gets added as implicit import below
 			} else {
 				transformation = QVTO.createOperationalTransformation();
 				transformation.setName("_unnamed");
@@ -289,6 +290,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		Library stub = QVTO.createLibrary();
 		stub.setName(qualifiedName);
 		imp.setImportedModule(stub);
+		// §8.4: from ... import name1, name2 — selective import
+		if (ctx.importedNameList() != null) {
+			var nameList = ctx.importedNameList();
+			// '*' means import all — leave importedNames empty
+			if (nameList.getChildCount() > 0 && !"*".equals(nameList.getChild(0).getText())) {
+				for (QvtOParser.QvtoIdentifierContext idCtx : nameList.qvtoIdentifier()) {
+					imp.getImportedNames().add(QvtoExpressionBuilder.qvtoIdentifierText(idCtx));
+				}
+			}
+		}
 		return imp;
 	}
 
@@ -435,9 +446,11 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		// Mapping body
-		MappingBody body = buildMappingBody(ctx.mappingBody());
-		mapping.setBody(body);
+		// Mapping body (optional for mapping declarations §8.4 S.168)
+		if (ctx.mappingBody() != null) {
+			MappingBody body = buildMappingBody(ctx.mappingBody());
+			mapping.setBody(body);
+		}
 
 		this.environment = savedEnv;
 		updateExpressionBuilder();

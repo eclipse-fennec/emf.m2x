@@ -27,6 +27,7 @@ import org.eclipse.emf.ecore.InternalEObject;
 import org.eclipse.emf.ecore.impl.EModelElementImpl;
 import org.eclipse.emf.ecore.impl.ENotificationImpl;
 
+import org.eclipse.emf.ecore.util.EDataTypeUniqueEList;
 import org.eclipse.emf.ecore.util.EObjectResolvingEList;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 
@@ -47,6 +48,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.ModuleImportImpl#getImportedModule <em>Imported Module</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.ModuleImportImpl#getModule <em>Module</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.ModuleImportImpl#getBinding <em>Binding</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.ModuleImportImpl#getImportedNames <em>Imported Names</em>}</li>
  * </ul>
  *
  * @generated
@@ -91,6 +93,16 @@ public class ModuleImportImpl extends EModelElementImpl implements ModuleImport 
 	 * @ordered
 	 */
 	protected EList<ModelType> binding;
+
+	/**
+	 * The cached value of the '{@link #getImportedNames() <em>Imported Names</em>}' attribute list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getImportedNames()
+	 * @generated
+	 * @ordered
+	 */
+	protected EList<String> importedNames;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -236,6 +248,19 @@ public class ModuleImportImpl extends EModelElementImpl implements ModuleImport 
 	 * @generated
 	 */
 	@Override
+	public EList<String> getImportedNames() {
+		if (importedNames == null) {
+			importedNames = new EDataTypeUniqueEList<String>(String.class, this, QvtOperationalPackage.MODULE_IMPORT__IMPORTED_NAMES);
+		}
+		return importedNames;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public NotificationChain eInverseAdd(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
 		switch (featureID) {
 			case QvtOperationalPackage.MODULE_IMPORT__MODULE:
@@ -291,6 +316,8 @@ public class ModuleImportImpl extends EModelElementImpl implements ModuleImport 
 				return getModule();
 			case QvtOperationalPackage.MODULE_IMPORT__BINDING:
 				return getBinding();
+			case QvtOperationalPackage.MODULE_IMPORT__IMPORTED_NAMES:
+				return getImportedNames();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}
@@ -317,6 +344,10 @@ public class ModuleImportImpl extends EModelElementImpl implements ModuleImport 
 				getBinding().clear();
 				getBinding().addAll((Collection<? extends ModelType>)newValue);
 				return;
+			case QvtOperationalPackage.MODULE_IMPORT__IMPORTED_NAMES:
+				getImportedNames().clear();
+				getImportedNames().addAll((Collection<? extends String>)newValue);
+				return;
 		}
 		super.eSet(featureID, newValue);
 	}
@@ -341,6 +372,9 @@ public class ModuleImportImpl extends EModelElementImpl implements ModuleImport 
 			case QvtOperationalPackage.MODULE_IMPORT__BINDING:
 				getBinding().clear();
 				return;
+			case QvtOperationalPackage.MODULE_IMPORT__IMPORTED_NAMES:
+				getImportedNames().clear();
+				return;
 		}
 		super.eUnset(featureID);
 	}
@@ -361,6 +395,8 @@ public class ModuleImportImpl extends EModelElementImpl implements ModuleImport 
 				return getModule() != null;
 			case QvtOperationalPackage.MODULE_IMPORT__BINDING:
 				return binding != null && !binding.isEmpty();
+			case QvtOperationalPackage.MODULE_IMPORT__IMPORTED_NAMES:
+				return importedNames != null && !importedNames.isEmpty();
 		}
 		return super.eIsSet(featureID);
 	}
@@ -377,6 +413,8 @@ public class ModuleImportImpl extends EModelElementImpl implements ModuleImport 
 		StringBuilder result = new StringBuilder(super.toString());
 		result.append(" (kind: ");
 		result.append(kind);
+		result.append(", importedNames: ");
+		result.append(importedNames);
 		result.append(')');
 		return result.toString();
 	}

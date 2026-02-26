@@ -181,6 +181,15 @@ public interface QvtOperationalFactory extends EFactory {
 	ModuleImport createModuleImport();
 
 	/**
+	 * Returns a new object of class '<em>Blackbox Operation Descriptor</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>Blackbox Operation Descriptor</em>'.
+	 * @generated
+	 */
+	BlackboxOperationDescriptor createBlackboxOperationDescriptor();
+
+	/**
 	 * Returns a new object of class '<em>Contextual Property</em>'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->

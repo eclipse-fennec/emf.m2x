@@ -167,6 +167,24 @@ class QvtoAssignVarParseTest extends AbstractQvtoParserTest {
 	}
 
 	@Test
+	void assignSubtract() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				transformation T() {
+				    mapping doIt() {
+				        var x := Sequence{1, 2, 3};
+				        x -= 2;
+				    }
+				}
+				""");
+		MappingOperation mapping = (MappingOperation) getOperation(t, "doIt");
+		MappingBody body = (MappingBody) mapping.getBody();
+		OclExpression expr = body.getContent().get(1);
+		AssignExp assignExp = assertInstanceOf(AssignExp.class, expr);
+		assertTrue(assignExp.isIsSubtract());
+		assertFalse(assignExp.isIsReset());
+	}
+
+	@Test
 	void varWithOrderedCopyInit() throws QvtoParseException {
 		OclExpression expr = parseBodyExpr("var x ::= 42;");
 		VariableInitExp varInit = assertInstanceOf(VariableInitExp.class, expr);

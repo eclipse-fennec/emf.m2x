@@ -28,6 +28,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.ResolveExp;
  * @param targetObject the l-value EObject to assign the resolved value to
  * @param targetFeature the structural feature to set on the target object
  * @param isReset whether this is a reset assignment ({@code :=}) vs append ({@code +=})
+ * @param isSubtract whether this is a subtract assignment ({@code -=})
  * @param capturedSource the eagerly evaluated source object for the resolve
  *
  * @author Data In Motion Consulting
@@ -38,5 +39,6 @@ record DeferredResolveTask(
 		EObject targetObject,
 		EStructuralFeature targetFeature,
 		boolean isReset,
+		boolean isSubtract,
 		Object capturedSource) {
 }

@@ -11,7 +11,7 @@ The OCL engine implements **OCL v2.5** (backward compatible with v2.4) as a pure
 fully decoupled from the Eclipse platform. It serves as the expression language foundation
 for all higher-level engines (QVT-O, QVT-D, MOFM2T).
 
-**Status:** Phase 1 complete. 4108 OCL tests, 0 failures. Spec-conformance verified against OCL v2.4/v2.5, see [archive](archive/ocl-spec-conformance-gaps.md).
+**Status:** Phase 1 complete. 4202 OCL tests, 0 failures. Spec-conformance verified against OCL v2.4/v2.5, see [archive](archive/ocl-spec-conformance-gaps.md).
 
 **Key properties:**
 - No Pivot layer — direct Ecore access (D16)

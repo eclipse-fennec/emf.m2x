@@ -456,6 +456,200 @@ class QvtoE2eStringExtTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "Hello World!");
 	}
 
+	// ==== P10-GAP9: String Counter API §8.3.16.31–35 ====
+
+	// ---- §8.3.16.31–32: startStrCounter / getStrCounter ----
+
+	@Test
+	void string_startStrCounter_getStrCounter() throws Exception {
+		// §8.3.16.31–32: start initializes to 0, get returns current value
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('Foo');
+				        log(String.getStrCounter('Foo').repr());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "0");
+	}
+
+	@Test
+	void string_getStrCounterBeforeStart() throws Exception {
+		// §8.3.16.32: get before start returns null
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        log(String.getStrCounter('Nonexistent').oclIsUndefined().repr());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "true");
+	}
+
+	// ---- §8.3.16.33: incrStrCounter ----
+
+	@Test
+	void string_incrStrCounter() throws Exception {
+		// §8.3.16.33: increment returns new value; auto-creates if not started
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('Foo');
+				        log(String.incrStrCounter('Foo').repr());
+				        log(String.incrStrCounter('Foo').repr());
+				        log(String.incrStrCounter('Foo').repr());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLoggedInOrder(result, "1", "2", "3");
+	}
+
+	// ---- §8.3.16.35: addSuffixNumber ----
+
+	@Test
+	void string_addSuffixNumber() throws Exception {
+		// §8.3.16.35: appends current counter value, then increments
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('Foo');
+				        String.incrStrCounter('Foo');
+				        String.incrStrCounter('Foo');
+				        log('Foo'.addSuffixNumber());
+				        log('Foo'.addSuffixNumber());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLoggedInOrder(result, "Foo2", "Foo3");
+	}
+
+	@Test
+	void string_addSuffixNumberBeforeStart() throws Exception {
+		// §8.3.16.35: if not started, auto-start and return without suffix
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        log('NewName'.addSuffixNumber());
+				        log('NewName'.addSuffixNumber());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLoggedInOrder(result, "NewName", "NewName0");
+	}
+
+	// ---- §8.3.16.34: restartAllStrCounter ----
+
+	@Test
+	void string_restartAllStrCounter() throws Exception {
+		// §8.3.16.34: restart resets all counters to 0
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('Foo');
+				        String.startStrCounter('Bar');
+				        String.incrStrCounter('Foo');
+				        String.incrStrCounter('Bar');
+				        String.restartAllStrCounter();
+				        log(String.getStrCounter('Foo').repr());
+				        log(String.getStrCounter('Bar').repr());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLoggedInOrder(result, "0", "0");
+	}
+
+	// ---- Multiple independent counters ----
+
+	@Test
+	void string_multipleCounters() throws Exception {
+		// Multiple counters are independent
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('A');
+				        String.startStrCounter('B');
+				        String.incrStrCounter('A');
+				        String.incrStrCounter('A');
+				        String.incrStrCounter('B');
+				        log(String.getStrCounter('A').repr());
+				        log(String.getStrCounter('B').repr());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLoggedInOrder(result, "2", "1");
+	}
+
+	// ==== Regression: Chaining vs. Variable — side-effect operations must be ====
+	// ==== evaluated exactly once regardless of expression style              ====
+
+	@Test
+	void string_incrStrCounter_chained_vs_variable() throws Exception {
+		// Regression: chaining (.repr() on incrStrCounter result) must not
+		// cause duplicate source evaluation. Both variants must produce
+		// identical results.
+		QvtoExecutionResult chained = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('X');
+				        log(String.incrStrCounter('X').repr());
+				        log(String.incrStrCounter('X').repr());
+				    }
+				}
+				""");
+		QvtoExecutionResult variable = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('X');
+				        var a : Integer := String.incrStrCounter('X');
+				        var b : Integer := String.incrStrCounter('X');
+				        log(a.repr());
+				        log(b.repr());
+				    }
+				}
+				""");
+		assertSuccess(chained);
+		assertSuccess(variable);
+		assertLoggedInOrder(chained, "1", "2");
+		assertLoggedInOrder(variable, "1", "2");
+	}
+
+	@Test
+	void string_addSuffixNumber_chained_vs_variable() throws Exception {
+		// Regression: chaining on addSuffixNumber must produce same result
+		// as variable-based usage
+		QvtoExecutionResult chained = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('Y');
+				        String.incrStrCounter('Y');
+				        log('Y'.addSuffixNumber() + '_done');
+				    }
+				}
+				""");
+		QvtoExecutionResult variable = execute("""
+				transformation test() {
+				    main() {
+				        String.startStrCounter('Y');
+				        String.incrStrCounter('Y');
+				        var s : String := 'Y'.addSuffixNumber();
+				        log(s + '_done');
+				    }
+				}
+				""");
+		assertSuccess(chained);
+		assertSuccess(variable);
+		assertLogged(chained, "Y1_done");
+		assertLogged(variable, "Y1_done");
+	}
+
 	// ---- Helpers ----
 
 	private static void assertSuccess(QvtoExecutionResult result) {
