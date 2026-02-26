@@ -134,6 +134,8 @@ public class QvtoEvaluator {
 
 	// §8.1.16 / §8.3.19: tag "alias" — maps alias name → (EClass, real feature name)
 	private final QvtoAliasRegistry aliasRegistry;
+	// §8.3.19: predefined tags "proxy" and "topclasses"
+	private final QvtoTagRegistry tagRegistry;
 	private final QvtoOperationResolver operationResolver;
 	private final QvtoModelOperations modelOperations;
 	private final QvtoEngineImpl engine;
@@ -162,6 +164,7 @@ public class QvtoEvaluator {
 		this.engine = engine; // nullable for backward compatibility in tests
 		this.intermediateStore = new QvtoIntermediatePropertyStore(transformation, this::eval);
 		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager);
+		this.tagRegistry = new QvtoTagRegistry(transformation);
 		this.operationResolver = new QvtoOperationResolver(transformation);
 		this.modelOperations = new QvtoModelOperations(this::eval);
 	}
@@ -195,6 +198,8 @@ public class QvtoEvaluator {
 
 		// §8.3.19: Build alias registry from tag "alias" declarations
 		aliasRegistry.build();
+		// §8.3.19: Build predefined tag registry (proxy, topclasses)
+		tagRegistry.build();
 
 		// Initialize module-level properties (property name : Type = init;)
 		for (Variable moduleVar : transformation.getOwnedVariable()) {
@@ -825,6 +830,13 @@ public class QvtoEvaluator {
 		if (extentRef != null && extentRef.getName() != null) {
 			QvtoModelExtent extent = extentManager.getExtent(extentRef.getName());
 			if (extent != null) {
+				// §8.3.19: topclasses constraint — check if root type is allowed
+				if (tagRegistry.hasTopclassConstraints()
+						&& !tagRegistry.isTopclassAllowed(extentRef.getName(), eObject.eClass())) {
+					addInfo("topclasses: " + eObject.eClass().getName()
+							+ " is not allowed as root in extent '" + extentRef.getName() + "'");
+					return;
+				}
 				extent.add(eObject);
 				return;
 			}
@@ -834,6 +846,16 @@ public class QvtoEvaluator {
 			extent = extentManager.getDefaultOutputExtent();
 		}
 		if (extent != null) {
+			// §8.3.19: topclasses constraint — check if root type is allowed
+			if (tagRegistry.hasTopclassConstraints()) {
+				String paramName = extentManager.getParameterName(extent);
+				if (paramName != null
+						&& !tagRegistry.isTopclassAllowed(paramName, eObject.eClass())) {
+					addInfo("topclasses: " + eObject.eClass().getName()
+							+ " is not allowed as root in extent '" + paramName + "'");
+					return;
+				}
+			}
 			extent.add(eObject);
 		}
 	}

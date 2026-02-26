@@ -83,7 +83,7 @@
 | §8.2.2.8 | SwitchExp + AltExp | ✅ | ja | — |
 | §8.2.2.10 | VariableInitExp | ✅ | ja | — |
 | §8.2.2.11 | AssignExp | ✅ | ja | — |
-| §8.2.2.12 | UnlinkExp | ❌ | nein | GAP-7 |
+| §8.2.2.12 | UnlinkExp | ✅ | ja | ~~GAP-7~~ ✅ |
 | §8.2.2.13 | TryExp | ✅ | ja | — |
 | §8.2.2.14 | CatchExp | ✅ | ja | — |
 | §8.2.2.15 | RaiseExp | ✅ | ja | — |
@@ -106,13 +106,13 @@
 | §8.3.6 | Transformation | 3 | 3 | — |
 | §8.3.7 | Status | 3 | 3 | — |
 | §8.3.8 | Dict | 9 | 9 | — |
-| §8.3.9 | List | 47 | 46 | GAP-8 (List::deepclone EObject) |
+| §8.3.9 | List | 47 | 47 | ~~GAP-8~~ ✅ |
 | §8.3.10 | List Iterations | 11 | 11 | — |
 | §8.3.11–15 | Collection/Bag/OrderedSet/Seq/Set | 15 | 15 | — |
 | §8.3.16 | String | 35 | 35 | — |
 | §8.3.17 | Numeric | 1 | 1 | ~~GAP-10~~ ✅ |
 | §8.3.18 | Classifier | 1 | 1 | — |
-| §8.3.19 | Predefined Tags | 4 | 1 | GAP-11 (3 Tags) |
+| §8.3.19 | Predefined Tags | 4 | 4 | ~~GAP-11~~ ✅ |
 
 ### §8.4 — Concrete Syntax (EBNF vs. ANTLR4)
 
@@ -217,24 +217,24 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | L (groß) — QVT-R Metamodell-Integration |
 | **Priorität** | Phase 4 (QVT-D) — bewusst deferred |
 
-### GAP-7: UnlinkExp
+### ~~GAP-7: UnlinkExp~~ ✅ DONE
 
 | | |
 |---|---|
 | **Spec-Referenz** | §8.2.2.12 |
 | **Was die Spec fordert** | `feature.unlink(item)` — explizites Entfernen aus Multi-Valued Properties |
-| **Aktueller Stand** | Metamodell (`UnlinkExp`) existiert. Kein Parser-Support, kein Evaluator-Support. |
-| **Eclipse QVT-O** | Implementiert (selten genutzt) |
+| **Aktueller Stand** | ✅ Implementiert als Operation-Dispatch in `QvtoOperationProvider`. `list.remove(item)` auf der live EMF-EList. 5 E2E-Tests. |
+| **Eclipse QVT-O** | Nur Stub (Evaluator returns null) — Fennec geht über Eclipse hinaus (Spec hat Vorrang) |
 | **Aufwand** | S (klein) — Operation-Dispatch-Logik, kein eigenes Grammar-Keyword nötig |
 | **Priorität** | Niedrig |
 
-### GAP-8: List::deepclone() für mutable Collections mit EObject-Elementen
+### ~~GAP-8: List::deepclone() für mutable Collections mit EObject-Elementen~~ ✅ DONE
 
 | | |
 |---|---|
 | **Spec-Referenz** | §8.3.9.13, §8.3.11.3 |
 | **Was die Spec fordert** | `deepclone()` auf mutable List kopiert jedes EObject-Element per `EcoreUtil.copy()` |
-| **Aktueller Stand** | Shallow copy für List. Immutable Collections → self (korrekt per Spec). |
+| **Aktueller Stand** | ✅ Implementiert in `QvtoOperationProvider`. EObject-Elemente per `EcoreUtil.copy()`, Primitives as-is. 4 E2E-Tests. |
 | **Eclipse QVT-O** | Implementiert |
 | **Aufwand** | S (klein) |
 | **Priorität** | Niedrig |
@@ -261,14 +261,14 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | S (klein) |
 | **Priorität** | Niedrig |
 
-### GAP-11: Predefined Tags (topclasses, rememberChanges, proxy)
+### ~~GAP-11~~: Predefined Tags (topclasses, rememberChanges, proxy) — ✅ DONE
 
 | | |
 |---|---|
 | **Spec-Referenz** | §8.3.19 |
 | **Was die Spec fordert** | Tags `topclasses`, `rememberChanges`, `proxy` mit definierter Semantik |
-| **Aktueller Stand** | `alias` Tag implementiert (QvtoAliasRegistry). `proxy` Tag-Syntax geparst, Semantik unvollständig. Restliche Tags fehlen. |
-| **Eclipse QVT-O** | Teilweise implementiert |
+| **Aktueller Stand** | ✅ Implementiert. `alias` (QvtoAliasRegistry), `proxy` und `topclasses` (QvtoTagRegistry). `proxy`: Tag wird registriert, `isProxy()` API. `topclasses`: Validierung in `addToExtent()` — nicht-erlaubte Root-Typen werden nicht hinzugefügt. `rememberChanges`/`manuallyChanged`: bewusst ignoriert (wie Eclipse). 6 E2E-Tests in `QvtoE2ePredefTagsTest`. |
+| **Eclipse QVT-O** | Nur `alias` implementiert. Alle anderen Tags nicht. |
 | **Aufwand** | S (klein) |
 | **Priorität** | Niedrig |
 
@@ -452,11 +452,11 @@ Wie Eclipse QVT-O werden folgende UML/MOF-spezifische Operationen **bewusst nich
 | GAP-1 | Collection of Models als Parameter | §8.1.1 | S | ❌ |
 | GAP-4 | Persisted Trace Data | §8.1.11.8 | M | ❌ |
 | GAP-5 | asTransformation dynamische Kompilierung | §8.1.21 | L | ❌ |
-| GAP-7 | UnlinkExp | §8.2.2.12 | S | ✅ |
-| GAP-8 | List::deepclone mit EObject-Elementen | §8.3.9.13 | S | ✅ |
+| ~~GAP-7~~ | ~~UnlinkExp~~ | ~~§8.2.2.12~~ | ~~S~~ | ✅ DONE |
+| ~~GAP-8~~ | ~~List::deepclone mit EObject-Elementen~~ | ~~§8.3.9.13~~ | ~~S~~ | ✅ DONE |
 | ~~GAP-9~~ | ~~String Counter API (5 Ops)~~ | ~~§8.3.16.31–35~~ | ~~S~~ | ✅ DONE |
 | ~~GAP-10~~ | ~~Integer::range als Operation~~ | ~~§8.3.17~~ | ~~S~~ | ✅ DONE |
-| GAP-11 | Predefined Tags (topclasses etc.) | §8.3.19 | S | Teilw. |
+| ~~GAP-11~~ | ~~Predefined Tags (topclasses etc.)~~ | ~~§8.3.19~~ | ~~S~~ | ✅ DONE |
 | GAP-13 | `refines` Keyword | §8.4 | S/L | Teilw. |
 | GAP-14 | Inline metamodel/package Syntax | §8.4 | L | Teilw. |
 | GAP-15 | datatype/primitive/exception Classifier | §8.4 | M | Teilw. |
@@ -551,5 +551,5 @@ Folgende Gaps können mit geringem Aufwand (S) geschlossen werden und verbessern
 3. ~~**GAP-17** — `-=` Assign-Operator (Grammar + Evaluator)~~ ✅ DONE
 4. ~~**GAP-9** — String Counter API (5 Methoden in QvtoOperationProvider)~~ ✅ DONE
 5. ~~**GAP-10** — Integer::range als Operation (1 Methode)~~ ✅ DONE
-6. **GAP-7** — UnlinkExp (Operation-Dispatch)
+6. ~~**GAP-7** — UnlinkExp (Operation-Dispatch)~~ ✅ DONE
 7. **N3** — `'unlimited'` Keyword (1 Lexer-Alternative)

@@ -227,6 +227,19 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					return null;
 				}));
 
+		// §8.2.2.12: UnlinkExp — feature.unlink(item)
+		// Removes item from a multivalued property (in-place mutation).
+		// Residence of removed object is unaffected.
+		ops.add(new OclOperation("unlink", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
+				(self, args) -> {
+					if (self instanceof List<?> list && args.length > 0) {
+						@SuppressWarnings("unchecked")
+						List<Object> mutableList = (List<Object>) list;
+						mutableList.remove(args[0]);
+					}
+					return self;
+				}));
+
 		// §8.3.4: Element operations (on EObject)
 		// §8.3.4.3: metaClassName() : String
 		ops.add(new OclOperation("metaClassName", ANY_TYPE, List.of(), ANY_TYPE,
@@ -344,11 +357,23 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					}
 					return null;
 				}));
-		// §8.3.4.11: deepclone() — deep copy (recursive)
+		// §8.3.4.11: Element::deepclone() — deep copy (recursive)
+		// §8.3.9.13: List(T)::deepclone() — new list with each element deep-cloned
 		ops.add(new OclOperation("deepclone", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof EObject eo) {
 						return EcoreUtil.copy(eo);
+					}
+					if (self instanceof Collection<?> coll) {
+						List<Object> result = new ArrayList<>();
+						for (Object elem : coll) {
+							if (elem instanceof EObject eo) {
+								result.add(EcoreUtil.copy(eo));
+							} else {
+								result.add(elem); // primitives are immutable
+							}
+						}
+						return result;
 					}
 					return null;
 				}));

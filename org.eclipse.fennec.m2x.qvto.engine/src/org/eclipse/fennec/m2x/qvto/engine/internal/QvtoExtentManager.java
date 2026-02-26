@@ -135,6 +135,21 @@ public class QvtoExtentManager {
 	}
 
 	/**
+	 * Returns the model parameter name for the given extent.
+	 *
+	 * @param extent the extent to find the name for
+	 * @return the parameter name, or {@code null} if not found
+	 */
+	String getParameterName(QvtoModelExtent extent) {
+		for (var entry : byName.entrySet()) {
+			if (entry.getValue() == extent) {
+				return entry.getKey();
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Returns the output extent whose metamodel contains the given classifier.
 	 * Matches by EPackage nsURI of the classifier against the ModelType's
 	 * metamodel packages of each OUT/INOUT model parameter.
