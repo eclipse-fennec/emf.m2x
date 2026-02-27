@@ -71,6 +71,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitTransformationDef(QvtOParser.TransformationDefContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#transformationRefine}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTransformationRefine(QvtOParser.TransformationRefineContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#libraryDef}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -282,6 +288,54 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitIntermediateClassDef(QvtOParser.IntermediateClassDefContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#exceptionDef}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitExceptionDef(QvtOParser.ExceptionDefContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#datatypeDef}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDatatypeDef(QvtOParser.DatatypeDefContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#primitiveDef}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPrimitiveDef(QvtOParser.PrimitiveDefContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#enumDef}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitEnumDef(QvtOParser.EnumDefContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#enumLiteralList}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitEnumLiteralList(QvtOParser.EnumLiteralListContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#enumLiteral}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitEnumLiteral(QvtOParser.EnumLiteralContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#metamodelDef}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMetamodelDef(QvtOParser.MetamodelDefContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#metamodelElement}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMetamodelElement(QvtOParser.MetamodelElementContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#typeList}.
 	 * @param ctx the parse tree
@@ -851,6 +905,55 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitDictLiteralPart(QvtOParser.DictLiteralPartContext ctx);
 	/**
+	 * Visit a parse tree produced by the {@code SimpleLitInt}
+	 * labeled alternative in {@link QvtOParser#literalSimple}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSimpleLitInt(QvtOParser.SimpleLitIntContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code SimpleLitReal}
+	 * labeled alternative in {@link QvtOParser#literalSimple}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSimpleLitReal(QvtOParser.SimpleLitRealContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code SimpleLitString}
+	 * labeled alternative in {@link QvtOParser#literalSimple}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSimpleLitString(QvtOParser.SimpleLitStringContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code SimpleLitTrue}
+	 * labeled alternative in {@link QvtOParser#literalSimple}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSimpleLitTrue(QvtOParser.SimpleLitTrueContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code SimpleLitFalse}
+	 * labeled alternative in {@link QvtOParser#literalSimple}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSimpleLitFalse(QvtOParser.SimpleLitFalseContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code SimpleLitNull}
+	 * labeled alternative in {@link QvtOParser#literalSimple}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSimpleLitNull(QvtOParser.SimpleLitNullContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code SimpleLitUnlimited}
+	 * labeled alternative in {@link QvtOParser#literalSimple}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSimpleLitUnlimited(QvtOParser.SimpleLitUnlimitedContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#blockExp}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -894,6 +997,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitSwitchExp(QvtOParser.SwitchExpContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#switchIterator}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSwitchIterator(QvtOParser.SwitchIteratorContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#switchAlt}.
 	 * @param ctx the parse tree
@@ -1115,6 +1224,20 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitArrowMappingCall(QvtOParser.ArrowMappingCallContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code ArrowObjectCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArrowObjectCall(QvtOParser.ArrowObjectCallContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code ArrowSwitchCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArrowSwitchCall(QvtOParser.ArrowSwitchCallContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code IteratorCall}
 	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.

@@ -14,7 +14,6 @@
  */
 package org.eclipse.fennec.m2x.qvto.tests;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
@@ -22,18 +21,21 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for N5: object expression with optional iterator (§8.4.7).
+ * Tests for N6: switch with iterator declarator (§8.4.7).
  */
-class QvtoObjectIteratorParseTest extends AbstractQvtoParserTest {
+class QvtoSwitchIteratorParseTest extends AbstractQvtoParserTest {
 
 	@Test
-	void objectExp_withIterator_parsesSuccessfully() throws QvtoParseException {
-		// §8.4.7: 'object' ('(' <iter_declarator> ')')? <object_declarator> <expression_block>
+	void switchWithIterator_parsesSuccessfully() throws QvtoParseException {
+		// §8.4.7: 'switch' ('(' <iter_declarator> ')')? <switch_body>
 		OperationalTransformation t = parse("""
 				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
 				transformation T(inout m : ECORE) {
 				    mapping doIt() {
-				        object (x : ecore::EClass) ecore::EPackage {};
+				        switch (x := 42) {
+				            case (x > 0) 'positive';
+				            else 'zero';
+				        };
 				    }
 				}
 				""");
@@ -41,13 +43,15 @@ class QvtoObjectIteratorParseTest extends AbstractQvtoParserTest {
 	}
 
 	@Test
-	void objectExp_withIteratorAndInit_parsesSuccessfully() throws QvtoParseException {
-		// iter_declarator with init expression
+	void switchWithIteratorNameOnly_parsesSuccessfully() throws QvtoParseException {
+		// Eclipse LPG rule 443: switchDeclaratorCS ::= IDENTIFIER
 		OperationalTransformation t = parse("""
 				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
 				transformation T(inout m : ECORE) {
 				    mapping doIt() {
-				        object (x : ecore::EClass := null) ecore::EPackage {};
+				        switch (x) {
+				            case (true) 1;
+				        };
 				    }
 				}
 				""");
@@ -55,13 +59,15 @@ class QvtoObjectIteratorParseTest extends AbstractQvtoParserTest {
 	}
 
 	@Test
-	void objectExp_withoutIterator_stillWorks() throws QvtoParseException {
-		// Regression: standard object without iterator
+	void switchWithIteratorAndType_parsesSuccessfully() throws QvtoParseException {
+		// Full form: switch (x : Integer := expr)
 		OperationalTransformation t = parse("""
 				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
 				transformation T(inout m : ECORE) {
 				    mapping doIt() {
-				        object ecore::EPackage {};
+				        switch (x : Integer := 42) {
+				            case (x > 0) 'positive';
+				        };
 				    }
 				}
 				""");
@@ -69,31 +75,33 @@ class QvtoObjectIteratorParseTest extends AbstractQvtoParserTest {
 	}
 
 	@Test
-	void objectExp_withNamedVarAndIterator_parsesSuccessfully() throws QvtoParseException {
-		// Full form: object (iter : Type) name : Type { ... }
+	void switchWithoutIterator_stillWorks() throws QvtoParseException {
+		// Regression: standard switch without iterator
 		OperationalTransformation t = parse("""
 				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
 				transformation T(inout m : ECORE) {
 				    mapping doIt() {
-				        object (x : ecore::EClass) p : ecore::EPackage {};
+				        switch {
+				            case (true) 1;
+				        };
 				    }
 				}
 				""");
 		assertNotNull(t);
 	}
 
-	// ==================== Arrow-Object form ====================
+	// ==================== Arrow-Switch form ====================
 
 	@Test
-	void arrowObjectCall_parsesSuccessfully() throws QvtoParseException {
-		// §8.4.7: coll->object(x:T) Type { ... } = coll->collect(x | object Type { ... })
+	void arrowSwitchCall_parsesSuccessfully() throws QvtoParseException {
+		// §8.2.2.8: coll->switch(i) { ... } = coll->xcollect(i | switch { ... })
 		OperationalTransformation t = parse("""
-				modeltype SRC uses 'http://test/source/1.0';
-				modeltype TGT uses 'http://test/target/1.0';
-				transformation T(in s : SRC, out t : TGT) {
-				    mapping doIt(elems : Sequence(source::SourceElement)) {
-				        elems->object (x : source::SourceElement) target::TargetElement {
-				            name := x.name;
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE) {
+				    mapping doIt(elems : Sequence(ecore::EClass)) {
+				        elems->switch (x) {
+				            case (x.name = 'Foo') 'found';
+				            else 'not found';
 				        };
 				    }
 				}

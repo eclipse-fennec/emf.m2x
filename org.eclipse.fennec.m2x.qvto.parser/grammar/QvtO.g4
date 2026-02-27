@@ -76,8 +76,16 @@ modeltypeWhere
 // §8.4: <transformation> ::= <transformation_decl> | <transformation_def>
 // Declaration form: transformation T(...); — module elements follow at unit level
 // Definition form:  transformation T(...) { moduleElement* } ;?
+// §8.4.7: <transformation_h> ::= <qualifier>* 'transformation' <identifier>
+//         <transformation_signature> <transformation_usage_refine>?
+// <transformation_usage_refine> ::= <module_usage> | <transformation_refine>
+// <transformation_refine> ::= 'refines' <moduleref>
 transformationDef
-    : qualifier* 'transformation' qualifiedName '(' modelParamList? ')' moduleUsage* ('{' moduleElement* '}' ';'? | ';')
+    : qualifier* 'transformation' qualifiedName '(' modelParamList? ')' (moduleUsage* | transformationRefine) ('{' moduleElement* '}' ';'? | ';')
+    ;
+
+transformationRefine
+    : 'refines' moduleRef
     ;
 
 libraryDef
@@ -144,6 +152,11 @@ moduleElement
     | entryDef
     | propertyDecl
     | intermediateClassDef
+    | exceptionDef
+    | datatypeDef
+    | primitiveDef
+    | enumDef
+    | metamodelDef
     | tagDecl ';'
     | typedefDecl ';'
     | accessDecl
@@ -181,8 +194,12 @@ param
     : directionKind? qvtoIdentifier ':' typeExpression
     ;
 
+// §8.4.7: <mapping_extra> ::= <mapping_extension> | <mapping_refinement>
+// <mapping_extension> ::= <mapping_extension_key> <scoped_identifier_list>
+// <mapping_refinement> ::= 'refines' <scoped_identifier>
 mappingExtension
     : mappingExtensionKind scopedNameList
+    | 'refines' scopedName
     ;
 
 mappingExtensionKind
@@ -231,8 +248,10 @@ queryDef
     : qualifier* 'query' scopedName simpleSignature ':' resultList (block | '=' expression ';' | ';')
     ;
 
+// §8.4.7: <constructor> ::= <constructor_decl> | <constructor_def>
+// <constructor_header> ::= <qualifier>* 'constructor' <scoped_identifier> <simple_signature>
 constructorDef
-    : 'constructor' scopedName simpleSignature block ';'?
+    : qualifier* 'constructor' scopedName simpleSignature (block ';'? | ';')
     ;
 
 // §8.4: <entry> ::= 'main' <simple_signature> <expression_block>
@@ -259,6 +278,50 @@ propertyDecl
 
 intermediateClassDef
     : 'intermediate' 'class' qvtoIdentifier ('extends' typeList)? '{' classifierFeature* '}' ';'?
+    ;
+
+// §8.4: <classifier_info> ::= 'exception' — exception classifier declaration
+exceptionDef
+    : 'exception' qvtoIdentifier ('extends' typeList)? '{' classifierFeature* '}' ';'?
+    ;
+
+// §8.4: <classifier_info> ::= 'datatype' — user-defined datatype declaration
+datatypeDef
+    : 'datatype' qvtoIdentifier '{' classifierFeature* '}' ';'?
+    ;
+
+// §8.4: <classifier_info> ::= 'primitive' — primitive type declaration
+primitiveDef
+    : 'primitive' qvtoIdentifier ';'
+    ;
+
+// §8.4.6: <enumeration> ::= 'enum' <identifier> '{' <enum_literal_list> '}'
+enumDef
+    : 'enum' qvtoIdentifier '{' enumLiteralList? '}' ';'?
+    ;
+
+enumLiteralList
+    : enumLiteral (',' enumLiteral)*
+    ;
+
+enumLiteral
+    : STRING_LITERAL
+    | DOUBLE_QUOTED_STRING
+    | qvtoIdentifier
+    ;
+
+// §8.4.6: <metamodel> ::= ('metamodel' | 'package') <name> '{' <metamodel_element>* '}' ';'?
+metamodelDef
+    : ('metamodel' | 'package') qvtoIdentifier '{' metamodelElement* '}' ';'?
+    ;
+
+metamodelElement
+    : intermediateClassDef
+    | exceptionDef
+    | datatypeDef
+    | primitiveDef
+    | enumDef
+    | tagDecl ';'
     ;
 
 typeList
@@ -476,7 +539,18 @@ dictLiteral
     ;
 
 dictLiteralPart
-    : key=expression '=' value=expression
+    : key=literalSimple '=' value=expression
+    ;
+
+// §8.4.7: <literal_simple> ::= <INTEGER> | <FLOAT> | <STRING> | 'true' | 'false' | 'unlimited' | 'null'
+literalSimple
+    : INTEGER_LITERAL                                                                    # SimpleLitInt
+    | REAL_LITERAL                                                                       # SimpleLitReal
+    | stringLiteral_                                                                      # SimpleLitString
+    | 'true'                                                                             # SimpleLitTrue
+    | 'false'                                                                            # SimpleLitFalse
+    | 'null'                                                                             # SimpleLitNull
+    | ('*' | 'unlimited')                                                                # SimpleLitUnlimited
     ;
 
 // ==================== Imperative Expressions ====================
@@ -513,7 +587,13 @@ forVarList
     ;
 
 switchExp
-    : 'switch' ('(' expression ')')? '{' switchAlt* ('else' expression ';')? '}'
+    : 'switch' ('(' switchIterator ')')? '{' switchAlt* ('else' expression ';')? '}'
+    ;
+
+// §8.4.7: <switch_exp> ::= 'switch' ('(' <iter_declarator> ')')? <switch_body>
+// Eclipse LPG rules 443/444: switchDeclaratorCS ::= IDENTIFIER | IDENTIFIER = OclExpressionCS
+switchIterator
+    : qvtoIdentifier (':' typeExpression)? (varInitOp expression)?
     ;
 
 switchAlt
@@ -609,8 +689,10 @@ returnExp
     : 'return' expression?
     ;
 
+// §8.4.7: <var_init_exp> ::= 'var' <declarator_list> | 'var' '(' <declarator_list> ')'
 varDeclExp
     : 'var' varDeclarator (',' varDeclarator)*
+    | 'var' '(' varDeclarator (',' varDeclarator)* ')'
     ;
 
 varDeclarator
@@ -649,6 +731,10 @@ iteratorOrOperationCall
     | 'late'? resolveInKind '(' scopedName (',' resolveArgs)? ')'                           # ArrowResolveInCall
     // §8.2.2.7: list->map f() = list->xcollect(i | i.map f()) — mapping call on collection
     | mappingCallKind scopedName '(' argumentList? ')'                                      # ArrowMappingCall
+    // §8.4.7: coll->object(x:T) Type { ... } = coll->collect(x | object Type { ... })
+    | objectExp                                                                             # ArrowObjectCall
+    // §8.2.2.8: coll->switch(i) { ... } = coll->xcollect(i | switch { ... })
+    | switchExp                                                                             # ArrowSwitchCall
     | qvtoIdentifier '(' iteratorVariables '|' expression ')'                              # IteratorCall
     | qvtoIdentifier '(' qvtoIdentifier (':' iterType=typeExpression)?
       ';' qvtoIdentifier (':' accType=typeExpression)? '=' expression '|' expression ')'   # IterateCall
@@ -679,11 +765,12 @@ tupleLiteralPart
 
 // ==================== Scoped + Qualified Names ====================
 
+// §8.4.7: <scoped_identifier> ::= <identifier> ('::' <identifier>)*
+// Also supports primitive/collection context types (e.g., String::wrap(), Collection(Real)::sum())
 scopedName
-    : qualifiedName '::' qvtoIdentifier
-    | primitiveType '::' qvtoIdentifier
+    : primitiveType '::' qvtoIdentifier
     | collectionType '::' qvtoIdentifier
-    | qvtoIdentifier
+    | qvtoIdentifier ('::' qvtoIdentifier)*
     ;
 
 scopedNameList
@@ -762,8 +849,14 @@ qvtoIdentifier
     | 'while'
     | 'from'
     | 'opposites'
+    | 'datatype'
     | 'derived'
+    | 'enum'
+    | 'exception'
+    | 'metamodel'
     | 'ordered'
+    | 'package'
+    | 'primitive'
     | 'readonly'
     | 'composes'
     | 'references'

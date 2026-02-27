@@ -438,6 +438,20 @@ public class QvtoEvaluator {
 				}
 				yield result;
 			}
+			// §8.2.2.7/§8.2.2.8: xcollect — like collect but without flattening
+			case "xcollect" -> {
+				List<Object> result = new ArrayList<>();
+				for (Object elem : coll) {
+					env.pushScope();
+					try {
+						env.define(iterName, elem);
+						result.add(eval(body));
+					} finally {
+						env.popScope();
+					}
+				}
+				yield result;
+			}
 			case "forAll" -> {
 				for (Object elem : coll) {
 					env.pushScope();
@@ -1614,10 +1628,12 @@ public class QvtoEvaluator {
 				return lastResult;
 			} catch (RaiseException | FatalAssertionException ex) {
 				// §8.2.2.13: search except clauses for matching type
-				String exType = (ex instanceof RaiseException re) ? re.exceptionType : "AssertionFailed";
+				// Wrap FatalAssertionException as RaiseException for uniform matching
+				RaiseException re = (ex instanceof RaiseException r) ? r
+						: new RaiseException("AssertionFailed", null);
 
 				for (CatchExp catchExp : exp.getExceptClause()) {
-					if (matchesExceptClause(catchExp, exType)) {
+					if (matchesExceptClause(catchExp, re)) {
 						Object result = WRAPPED_NULL;
 						for (OclExpression bodyExpr : catchExp.getBody()) {
 							result = wrapNull(eval(bodyExpr));
@@ -1630,16 +1646,25 @@ public class QvtoEvaluator {
 			}
 		}
 
-		private boolean matchesExceptClause(CatchExp catchExp, String exType) {
+		private boolean matchesExceptClause(CatchExp catchExp, RaiseException re) {
 			// Empty exception list = catch-all
 			if (catchExp.getException().isEmpty()) {
 				return true;
 			}
-			// Check if any declared exception type matches
+			String exType = re.exceptionType;
+			EClassifier exClassifier = re.exceptionClassifier;
+			// Check if any declared exception type matches (including inheritance)
 			for (EClassifier declaredType : catchExp.getException()) {
 				String typeName = declaredType.getName();
 				if (typeName.equals(exType) || "Exception".equals(typeName)) {
 					return true;
+				}
+				// §8.4: Check EClass inheritance hierarchy
+				if (exClassifier instanceof EClass raisedClass
+						&& declaredType instanceof EClass declaredClass) {
+					if (raisedClass.getEAllSuperTypes().contains(declaredClass)) {
+						return true;
+					}
 				}
 			}
 			return false;
@@ -1650,17 +1675,15 @@ public class QvtoEvaluator {
 			// §8.2.2.15: raise produces an exception
 			String exType = "Exception";
 			String argument = null;
-			if (exp.getException() != null) {
-				exType = exp.getException().getName();
+			EClassifier exClassifier = exp.getException();
+			if (exClassifier != null) {
+				exType = exClassifier.getName();
 			}
 			if (exp.getArgument() != null) {
 				Object argVal = eval(exp.getArgument());
 				argument = argVal != null ? argVal.toString() : null;
-			} else if (exp.getException() == null) {
-				// raise with only string literal — stored as argument in the AST
-				// This case is handled by the parser setting argument
 			}
-			throw new RaiseException(exType, argument);
+			throw new RaiseException(exType, argument, exClassifier);
 		}
 
 		@Override

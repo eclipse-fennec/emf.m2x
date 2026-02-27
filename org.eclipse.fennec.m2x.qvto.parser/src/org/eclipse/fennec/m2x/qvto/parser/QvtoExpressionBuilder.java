@@ -189,6 +189,62 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return exp;
 	}
 
+	// ==================== Simple Literals (Dict keys, §8.4.7) ====================
+
+	@Override
+	public IntegerLiteralExp visitSimpleLitInt(QvtOParser.SimpleLitIntContext ctx) {
+		IntegerLiteralExp exp = OCL.createIntegerLiteralExp();
+		exp.setIntegerSymbol(Long.parseLong(ctx.INTEGER_LITERAL().getText()));
+		return exp;
+	}
+
+	@Override
+	public RealLiteralExp visitSimpleLitReal(QvtOParser.SimpleLitRealContext ctx) {
+		RealLiteralExp exp = OCL.createRealLiteralExp();
+		exp.setRealSymbol(Double.parseDouble(ctx.REAL_LITERAL().getText()));
+		return exp;
+	}
+
+	@Override
+	public StringLiteralExp visitSimpleLitString(QvtOParser.SimpleLitStringContext ctx) {
+		StringLiteralExp exp = OCL.createStringLiteralExp();
+		QvtOParser.StringLiteral_Context strCtx = ctx.stringLiteral_();
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < strCtx.getChildCount(); i++) {
+			String text = strCtx.getChild(i).getText();
+			sb.append(unescapeString(text.substring(1, text.length() - 1)));
+		}
+		exp.setStringSymbol(sb.toString());
+		return exp;
+	}
+
+	@Override
+	public BooleanLiteralExp visitSimpleLitTrue(QvtOParser.SimpleLitTrueContext ctx) {
+		BooleanLiteralExp exp = OCL.createBooleanLiteralExp();
+		exp.setBooleanSymbol(true);
+		return exp;
+	}
+
+	@Override
+	public BooleanLiteralExp visitSimpleLitFalse(QvtOParser.SimpleLitFalseContext ctx) {
+		BooleanLiteralExp exp = OCL.createBooleanLiteralExp();
+		exp.setBooleanSymbol(false);
+		return exp;
+	}
+
+	@Override
+	public NullLiteralExp visitSimpleLitNull(QvtOParser.SimpleLitNullContext ctx) {
+		return OCL.createNullLiteralExp();
+	}
+
+	@Override
+	public UnlimitedNaturalLiteralExp visitSimpleLitUnlimited(
+			QvtOParser.SimpleLitUnlimitedContext ctx) {
+		UnlimitedNaturalLiteralExp exp = OCL.createUnlimitedNaturalLiteralExp();
+		exp.setUnlimitedNaturalSymbol(-1L);
+		return exp;
+	}
+
 	// ==================== Path Name Resolution ====================
 
 	@Override
@@ -501,6 +557,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		} else if (call instanceof QvtOParser.ArrowMappingCallContext mapCtx) {
 			// §8.2.2.7: list->map f() — mapping call on collection
 			result = createArrowMappingCallOnCollection(source, mapCtx);
+		} else if (call instanceof QvtOParser.ArrowObjectCallContext objCtx) {
+			// §8.4.7: coll->object(x:T) Type { ... } = coll->collect(x | object Type { ... })
+			result = createArrowObjectCall(source, objCtx);
+		} else if (call instanceof QvtOParser.ArrowSwitchCallContext switchCtx) {
+			// §8.2.2.8: coll->switch(i) { ... } = coll->xcollect(i | switch { ... })
+			result = createArrowSwitchCall(source, switchCtx);
 		} else {
 			result = source;
 		}
@@ -1027,7 +1089,43 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	@Override
-	public SwitchExp visitSwitchExp(QvtOParser.SwitchExpContext ctx) {
+	public OclExpression visitSwitchExp(QvtOParser.SwitchExpContext ctx) {
+		// §8.4.7: switch ('(' <iter_declarator> ')')? <switch_body>
+		QvtOParser.SwitchIteratorContext iterCtx = ctx.switchIterator();
+
+		QvtoEnvironment savedEnv = null;
+		VariableInitExp varInitExp = null;
+
+		if (iterCtx != null) {
+			// Standalone switch with iterator: switch (x := expr) { ... }
+			// Bind iterator variable in scope so case conditions can reference it.
+			String varName = qvtoIdentifierText(iterCtx.qvtoIdentifier());
+			Variable iterVar = OCL.createVariable();
+			iterVar.setName(varName);
+			if (iterCtx.typeExpression() != null) {
+				OclType varType = resolveTypeExpression(iterCtx.typeExpression());
+				if (varType != null) {
+					iterVar.setType(varType);
+				}
+			}
+
+			if (iterCtx.expression() != null) {
+				// Has init expression: wrap in BlockExp { var x := expr; switch { ... } }
+				Variable initVar = OCL.createVariable();
+				initVar.setName(varName);
+				if (iterVar.getType() != null) {
+					initVar.setType(iterVar.getType());
+				}
+				initVar.setOwnedInit((OclExpression) visit(iterCtx.expression()));
+				varInitExp = IMP.createVariableInitExp();
+				varInitExp.setReferredVariable(initVar);
+				varInitExp.setWithResult(true); // ::= semantics — block returns switch result, not void
+			}
+
+			savedEnv = this.environment;
+			this.environment = this.environment.nested(iterVar);
+		}
+
 		SwitchExp switchExp = IMP.createSwitchExp();
 
 		for (QvtOParser.SwitchAltContext altCtx : ctx.switchAlt()) {
@@ -1038,8 +1136,20 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		}
 
 		// else part
-		if (ctx.expression() != null && !ctx.expression().isEmpty()) {
-			switchExp.setElsePart((OclExpression) visit(ctx.expression(0)));
+		if (ctx.expression() != null) {
+			switchExp.setElsePart((OclExpression) visit(ctx.expression()));
+		}
+
+		if (savedEnv != null) {
+			this.environment = savedEnv;
+		}
+
+		// If there's an iterator with init, wrap: { var x := expr; switch { ... } }
+		if (varInitExp != null) {
+			BlockExp block = IMP.createBlockExp();
+			block.getBody().add(varInitExp);
+			block.getBody().add(switchExp);
+			return block;
 		}
 
 		return switchExp;
@@ -1778,6 +1888,84 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return collectExp;
 	}
 
+	private IteratorExp createArrowObjectCall(OclExpression source,
+			QvtOParser.ArrowObjectCallContext ctx) {
+		// §8.4.7: coll->object(x:T) Type { ... } desugars to coll->collect(x | object Type { ... })
+		QvtOParser.ObjectExpContext objCtx = ctx.objectExp();
+
+		IteratorExp collectExp = OCL.createIteratorExp();
+		collectExp.setOwnedSource(source);
+		collectExp.setName("collect");
+
+		// Iterator variable from objectIterator: (x : Type)
+		Variable iterVar = OCL.createVariable();
+		if (objCtx.objectIterator() != null) {
+			QvtOParser.ObjectIteratorContext iterCtx = objCtx.objectIterator();
+			iterVar.setName(qvtoIdentifierText(iterCtx.qvtoIdentifier()));
+			OclType iterType = resolveTypeExpression(iterCtx.typeExpression());
+			if (iterType != null) {
+				iterVar.setType(iterType);
+			}
+		} else {
+			// No explicit iterator — generate synthetic name, infer type from source
+			iterVar.setName("_xobj_it");
+			OclType elementType = inferElementType(source);
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
+		}
+		collectExp.getOwnedIterators().add(iterVar);
+
+		// Build body: the ObjectExp (visited with the iterator variable in scope)
+		QvtoEnvironment savedEnv = this.environment;
+		this.environment = this.environment.nested(iterVar);
+		ObjectExp objectBody = visitObjectExp(objCtx);
+		this.environment = savedEnv;
+
+		collectExp.setOwnedBody(objectBody);
+		return collectExp;
+	}
+
+	private IteratorExp createArrowSwitchCall(OclExpression source,
+			QvtOParser.ArrowSwitchCallContext ctx) {
+		// §8.2.2.8: coll->switch(i) { ... } desugars to coll->xcollect(i | switch { ... })
+		QvtOParser.SwitchExpContext switchCtx = ctx.switchExp();
+
+		IteratorExp xcollectExp = OCL.createIteratorExp();
+		xcollectExp.setOwnedSource(source);
+		xcollectExp.setName("xcollect");
+
+		// Iterator variable from switchIterator: (i) or (i : Type) or (i := expr)
+		Variable iterVar = OCL.createVariable();
+		if (switchCtx.switchIterator() != null) {
+			QvtOParser.SwitchIteratorContext iterCtx = switchCtx.switchIterator();
+			iterVar.setName(qvtoIdentifierText(iterCtx.qvtoIdentifier()));
+			if (iterCtx.typeExpression() != null) {
+				OclType iterType = resolveTypeExpression(iterCtx.typeExpression());
+				if (iterType != null) {
+					iterVar.setType(iterType);
+				}
+			}
+		} else {
+			// No explicit iterator — generate synthetic name
+			iterVar.setName("_xswitch_it");
+			OclType elementType = inferElementType(source);
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
+		}
+		xcollectExp.getOwnedIterators().add(iterVar);
+
+		// Build body: the SwitchExp (visited with the iterator variable in scope)
+		QvtoEnvironment savedEnv = this.environment;
+		this.environment = this.environment.nested(iterVar);
+		OclExpression switchBody = visitSwitchExp(switchCtx);
+		this.environment = savedEnv;
+
+		xcollectExp.setOwnedBody(switchBody);
+		return xcollectExp;
+	}
+
 	private IteratorExp createIteratorExp(OclExpression source,
 			QvtOParser.IteratorCallContext ctx, boolean isSafe) {
 		IteratorExp exp = OCL.createIteratorExp();
@@ -2099,10 +2287,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (ctx.collectionType() != null) {
 			return resolveCollectionType(ctx.collectionType());
 		}
-		if (ctx.qualifiedName() != null) {
+		// §8.4.7: scoped_identifier ::= identifier ('::' identifier)*
+		// Context type = all segments except the last (operation name)
+		List<QvtOParser.QvtoIdentifierContext> ids = ctx.qvtoIdentifier();
+		if (ids.size() >= 2) {
 			List<String> segments = new ArrayList<>();
-			for (QvtOParser.QvtoIdentifierContext idCtx : ctx.qualifiedName().qvtoIdentifier()) {
-				segments.add(qvtoIdentifierText(idCtx));
+			for (int i = 0; i < ids.size() - 1; i++) {
+				segments.add(qvtoIdentifierText(ids.get(i)));
 			}
 			return createClassifierType(resolveClassifier(segments));
 		}
@@ -2126,21 +2317,23 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	String scopedNameText(QvtOParser.ScopedNameContext ctx) {
-		if (ctx.qualifiedName() != null) {
-			return qualifiedNameText(ctx.qualifiedName())
-					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier());
-		}
 		// §8.1.9: Contextual operations on primitive types (e.g., query String::wrap())
 		if (ctx.primitiveType() != null) {
 			return ctx.primitiveType().getText()
-					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier());
+					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier(0));
 		}
 		// §8.1.9: Contextual operations on collection types (e.g., query Collection(Real)::op())
 		if (ctx.collectionType() != null) {
 			return ctx.collectionType().getText()
-					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier());
+					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier(0));
 		}
-		return qvtoIdentifierText(ctx.qvtoIdentifier());
+		// §8.4.7: scoped_identifier ::= identifier ('::' identifier)*
+		List<QvtOParser.QvtoIdentifierContext> ids = ctx.qvtoIdentifier();
+		List<String> parts = new ArrayList<>();
+		for (QvtOParser.QvtoIdentifierContext idCtx : ids) {
+			parts.add(qvtoIdentifierText(idCtx));
+		}
+		return String.join("::", parts);
 	}
 
 	String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {

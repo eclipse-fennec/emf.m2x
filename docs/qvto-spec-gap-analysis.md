@@ -122,9 +122,9 @@
 | Bereich | Regeln gesamt | Implementiert | Gaps |
 |---------|:------------:|:------------:|------|
 | Top-Level | ~12 | ~12 | ~~GAP-12~~ ✅, GAP-13, ~~N1~~ ✅ |
-| Deklarationen | ~20 | ~19 | GAP-14, GAP-15, ~~N2~~ ✅, ~~N4~~ ✅ |
+| Deklarationen | ~20 | ~20 | ~~GAP-14~~ ✅, ~~GAP-15~~ ✅, ~~N2~~ ✅, ~~N4~~ ✅ |
 | Operationen | ~15 | ~15 | ~~GAP-16~~ ✅, N8 |
-| Expressions | ~30 | ~30 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, ~~GAP-19~~ ✅, ~~GAP-20~~ ✅, ~~GAP-21~~ ✅, ~~GAP-22~~ ✅, ~~N3~~ ✅, ~~N5~~ ✅, N6, N7 |
+| Expressions | ~30 | ~30 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, ~~GAP-19~~ ✅, ~~GAP-20~~ ✅, ~~GAP-21~~ ✅, ~~GAP-22~~ ✅, ~~N3~~ ✅, ~~N5~~ ✅, ~~N6~~ ✅, N7 |
 | Kommentare | 3 | 2 | ~~GAP-23~~ ✅ |
 
 ---
@@ -294,27 +294,27 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | S (klein) für Parser, L für Semantik |
 | **Priorität** | Niedrig — Phase 4 (QVT-R) |
 
-### GAP-14: Inline `metamodel`/`package` Syntax
+### GAP-14: Inline `metamodel`/`package` Syntax + `enum` — ✅ DONE
 
 | | |
 |---|---|
-| **Spec-Referenz** | §8.4, S. 166 |
+| **Spec-Referenz** | §8.4.6, S. 163 |
 | **Was die Spec fordert** | `metamodel MM { class Foo { ... }; enum Bar { ... }; }` — Inline-Metamodell-Definition |
-| **Aktueller Stand** | Komplett nicht implementiert. Nur `intermediate class` als Classifier. |
-| **Eclipse QVT-O** | Teilweise implementiert |
+| **Aktueller Stand** | ✅ Implementiert: `metamodel`/`package` Blöcke mit Sub-EPackage, `enum` Deklarationen (String-/Identifier-Literale), alle Classifier-Typen (class, exception, datatype, primitive, enum) innerhalb von metamodel/package-Blöcken. 9 Tests (E2E). |
+| **Eclipse QVT-O** | Teilweise implementiert (keine metamodel/package-Blöcke, nur module-level Classifier) |
 | **Aufwand** | L (groß) |
-| **Priorität** | Niedrig — in der Praxis fast nie genutzt (man nutzt Ecore-Dateien) |
+| **Tests** | 9 E2E-Tests: enum (string literals, identifier literals, empty), metamodel (with class, package keyword, with enum, with exception+primitive, with datatype, full spec example) |
 
-### GAP-15: `datatype`, `primitive`, `exception` Classifier-Deklarationen
+### GAP-15: `datatype`, `primitive`, `exception` Classifier-Deklarationen — ✅ DONE
 
 | | |
 |---|---|
 | **Spec-Referenz** | §8.4, S. 166 |
 | **Was die Spec fordert** | `datatype MyData { ... };`, `primitive MyPrim;`, `exception MyEx;` als eigenständige Classifier |
-| **Aktueller Stand** | Nur `intermediate class` implementiert |
-| **Eclipse QVT-O** | Teilweise |
+| **Aktueller Stand** | ✅ Alle drei Classifier-Arten implementiert. Grammar-Regeln, Parser-Visitor, intermediateClass-Registrierung. Exception-Vererbung im Evaluator (matchesExceptClause prüft EClass-Hierarchie). 9 Tests (E2E). |
+| **Eclipse QVT-O** | Teilweise (nur exception + intermediate class) |
 | **Aufwand** | M (mittel) |
-| **Priorität** | Niedrig |
+| **Tests** | 9 E2E-Tests: exception (simple, features, extends, multiple inheritance, multiple catch), datatype (simple, used as intermediate), primitive (simple), mixed declarations |
 
 ### GAP-16: Mapping-Deklaration ohne Body — ✅ DONE
 
@@ -456,9 +456,9 @@ Wie Eclipse QVT-O werden folgende UML/MOF-spezifische Operationen **bewusst nich
 | ~~GAP-9~~ | ~~String Counter API (5 Ops)~~ | ~~§8.3.16.31–35~~ | ~~S~~ | ✅ DONE |
 | ~~GAP-10~~ | ~~Integer::range als Operation~~ | ~~§8.3.17~~ | ~~S~~ | ✅ DONE |
 | ~~GAP-11~~ | ~~Predefined Tags (topclasses etc.)~~ | ~~§8.3.19~~ | ~~S~~ | ✅ DONE |
-| GAP-13 | `refines` Keyword | §8.4 | S/L | Teilw. |
-| GAP-14 | Inline metamodel/package Syntax | §8.4 | L | Teilw. |
-| GAP-15 | datatype/primitive/exception Classifier | §8.4 | M | Teilw. |
+| ~~GAP-13~~ | ~~`refines` Keyword~~ | ~~§8.4~~ | ~~S~~ | ✅ DONE — Parser-Support: `transformation T(...) refines OtherT` (EAnnotation) + `mapping ... refines baseMapping` (PendingExtension). Semantik (Pattern-Inheritance) nicht implementiert — Phase 4. 6 Tests. |
+| ~~GAP-14~~ | ~~Inline metamodel/package Syntax~~ | ~~§8.4~~ | ~~L~~ | ✅ DONE |
+| ~~GAP-15~~ | ~~datatype/primitive/exception Classifier~~ | ~~§8.4~~ | ~~M~~ | ✅ DONE |
 | ~~GAP-16~~ | ~~Mapping-Deklaration ohne Body~~ | ~~§8.4~~ | ~~S~~ | ✅ DONE |
 | ~~GAP-19~~ | ~~`%` Format-Operator~~ | ~~§8.4.4~~ | ~~S~~ | ✅ DONE |
 | ~~GAP-20~~ | ~~`#`, `##`, `*` Shorthand-Operatoren~~ | ~~§8.4.4~~ | ~~M~~ | ✅ DONE |
@@ -505,11 +505,11 @@ Systematischer Abgleich aller ~120 EBNF-Produktionen aus §8.4.7 (S. 164–171) 
 | ~~N3~~ | ~~`'unlimited'` Keyword~~ | ~~§8.4.7 S. 169~~ | ~~Gering~~ | ✅ DONE — `'unlimited'` als Alternative in `literalExpression` + Soft-Keyword in `qvtoIdentifier`. Erzeugt denselben AST wie `'*'`. 2 Tests. |
 | ~~N4~~ | ~~`'derived'` Feature-Key~~ | ~~§8.4.7 S. 167~~ | ~~Gering~~ | ✅ DONE — War bereits in `classifierFeatureModifier` + `qvtoIdentifier` implementiert. E2E-Test existiert in `QvtoE2eIntermediateClassFeaturesTest`. |
 | ~~N5~~ | ~~`object` mit Iterator~~ | ~~§8.4.7 S. 170~~ | ~~Gering~~ | ✅ DONE — `objectIterator` Regel in `objectExp`, Grammar akzeptiert `object (x : Type) ...`. Iterator wird semantisch ignoriert (wie Eclipse). 4 Tests. |
-| N6 | `switch` mit Iterator-Deklarator | §8.4.7 S. 170 | Gering | Spec hat `<iter_declarator>`, Fennec hat nur Expression als Switch-Wert. |
-| N7 | `var` mit Klammern | §8.4.7 S. 171 | Gering | `'var' '(' <declarator_list> ')'` Form fehlt. Selten genutzt. |
-| N8 | Qualifier vor `constructor` | §8.4.7 S. 168 | Gering | `<qualifier>*` vor `constructor` fehlt. Kein `blackbox constructor` möglich. |
+| ~~N6~~ | ~~`switch` mit Iterator-Deklarator~~ | ~~§8.4.7 S. 170~~ | ~~Gering~~ | ✅ DONE — `switchIterator` Regel in `switchExp`. Standalone `switch (x := expr) { ... }` bindet Variable in Scope (spec-konformer als Eclipse). Arrow-Form `coll->switch(i) { ... }` → `xcollect(i | switch { ... })`. `xcollect` Iterator im Engine (wie `collect` ohne Flattening). 9 Tests (5 Parse + 4 E2E). |
+| ~~N7~~ | ~~`var` mit Klammern~~ | ~~§8.4.7 S. 171~~ | ~~Gering~~ | ✅ DONE — `varDeclExp` Grammatik-Alternative für `'var' '(' declarator_list ')'`. Visitor unverändert (gleiche Kindstruktur). 7 Tests (4 Parse + 3 E2E). |
+| ~~N8~~ | ~~Qualifier vor `constructor`~~ | ~~§8.4.7 S. 168~~ | ~~Gering~~ | ✅ DONE — `qualifier*` vor `constructor`, `constructor_decl` (nur `;`), `scopedName` erweitert auf `identifier ('::' identifier)*` (Spec-konform, Eclipse-Pattern `pkg::Type::Ctor`). 6 Tests. |
 | ~~N9~~ | ~~Operations in Intermediate Classes~~ | ~~§8.4.7 S. 167~~ | ~~Mittel~~ | ✅ DONE — `<classifier_operation>` → EOperation (Deklaration, kein Body, wie Eclipse). |
-| N10 | Dict-Key Typ | §8.4.7 S. 170 | — | Fennec ist **permissiver** (beliebige Expression als Key, Spec nur `<literal_simple>`). Kein Bug. |
+| ~~N10~~ | ~~Dict-Key Typ~~ | ~~§8.4.7 S. 170~~ | ~~Gering~~ | ✅ DONE — `dictLiteralPart` Key eingeschränkt auf `literalSimple` (Spec: `<dict_item> ::= <literal_simple> '=' <expression>`, Eclipse: `literalSimpleCS`). Expression-Keys werden jetzt korrekt als Parse-Fehler abgelehnt. 5 Tests. |
 
 ### Bewusste EXTRA-Erweiterungen (nicht in Spec)
 
@@ -533,7 +533,7 @@ Die folgenden bereits bekannten Gaps wurden durch den EBNF-Quercheck bestätigt:
 |-----|-------------|
 | GAP-13 (`refines`) | `<transformation_refine>`, `<mapping_refinement>` (S. 165, 168) |
 | GAP-14 (metamodel/package) | `<metamodel>`, `<metamodel_h>`, `<metamodel_element>` (S. 167) |
-| GAP-15 (datatype/primitive/exception) | `<classifier_info>`, `<enumeration>` (S. 167) |
+| ~~GAP-15~~ (datatype/primitive/exception) ✅ | `<classifier_info>`, `<enumeration>` (S. 167) |
 | GAP-19 (`%` Operator) | `<mult_op>` (S. 169) |
 | GAP-20 (`#`, `##`, `*`) | `<unary_op>` (S. 169) |
 | GAP-21 (`!->`) | `<access_op>` (S. 169) |

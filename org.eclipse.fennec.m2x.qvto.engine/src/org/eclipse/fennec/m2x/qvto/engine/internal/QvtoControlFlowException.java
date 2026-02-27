@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
+import org.eclipse.emf.ecore.EClassifier;
+
 /**
  * Sealed hierarchy for QVT-O control flow exceptions.
  *
@@ -88,10 +90,16 @@ sealed abstract class QvtoControlFlowException extends RuntimeException
 		private static final long serialVersionUID = 1L;
 		final String exceptionType;
 		final String argument;
+		final EClassifier exceptionClassifier;
 
 		RaiseException(String exceptionType, String argument) {
+			this(exceptionType, argument, null);
+		}
+
+		RaiseException(String exceptionType, String argument, EClassifier exceptionClassifier) {
 			this.exceptionType = exceptionType;
 			this.argument = argument;
+			this.exceptionClassifier = exceptionClassifier;
 		}
 	}
 }

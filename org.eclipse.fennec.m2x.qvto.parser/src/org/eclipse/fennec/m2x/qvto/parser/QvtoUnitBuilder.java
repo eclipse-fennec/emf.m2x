@@ -25,6 +25,8 @@ import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EDataType;
+import org.eclipse.emf.ecore.EEnum;
+import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
@@ -248,9 +250,19 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		// Module usages (access/extends)
+		// Module usages (access/extends) or transformation refine
 		for (QvtOParser.ModuleUsageContext usageCtx : ctx.moduleUsage()) {
 			processModuleUsage(transformation, usageCtx);
+		}
+		if (ctx.transformationRefine() != null) {
+			// §8.4.7: <transformation_refine> ::= 'refines' <moduleref>
+			// Store as EAnnotation since metamodel has no 'refines' feature
+			QvtOParser.ModuleRefContext refCtx = ctx.transformationRefine().moduleRef();
+			String refinedName = qualifiedNameText(refCtx.qualifiedName());
+			EAnnotation ann = org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEAnnotation();
+			ann.setSource("http://www.eclipse.org/fennec/m2x/qvto/refines");
+			ann.getDetails().put("refinedModule", refinedName);
+			transformation.getEAnnotations().add(ann);
 		}
 
 		// Set up environment with model parameters as variables
@@ -388,6 +400,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			processPropertyDecl(ctx.propertyDecl(), module);
 		} else if (ctx.intermediateClassDef() != null) {
 			processIntermediateClass(ctx.intermediateClassDef(), module);
+		} else if (ctx.exceptionDef() != null) {
+			processExceptionDef(ctx.exceptionDef(), module);
+		} else if (ctx.datatypeDef() != null) {
+			processDatatypeDef(ctx.datatypeDef(), module);
+		} else if (ctx.primitiveDef() != null) {
+			processPrimitiveDef(ctx.primitiveDef(), module);
+		} else if (ctx.enumDef() != null) {
+			processEnumDef(ctx.enumDef(), module, null);
+		} else if (ctx.metamodelDef() != null) {
+			processMetamodelDef(ctx.metamodelDef(), module);
 		} else if (ctx.tagDecl() != null) {
 			EAnnotation tag = buildTag(ctx.tagDecl());
 			if (tag != null) {
@@ -445,10 +467,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Collect mapping extensions for deferred resolution (after all operations are parsed)
 		for (QvtOParser.MappingExtensionContext extCtx : ctx.mappingExtension()) {
-			String kind = extCtx.mappingExtensionKind().getText();
-			for (QvtOParser.ScopedNameContext nameCtx : extCtx.scopedNameList().scopedName()) {
-				String refName = expressionBuilder.scopedNameText(nameCtx);
-				pendingExtensions.add(new PendingExtension(mapping, kind, refName));
+			if (extCtx.mappingExtensionKind() != null) {
+				String kind = extCtx.mappingExtensionKind().getText();
+				for (QvtOParser.ScopedNameContext nameCtx : extCtx.scopedNameList().scopedName()) {
+					String refName = expressionBuilder.scopedNameText(nameCtx);
+					pendingExtensions.add(new PendingExtension(mapping, kind, refName));
+				}
+			} else if (extCtx.scopedName() != null) {
+				// §8.4.7: <mapping_refinement> ::= 'refines' <scoped_identifier>
+				String refName = expressionBuilder.scopedNameText(extCtx.scopedName());
+				pendingExtensions.add(new PendingExtension(mapping, "refines", refName));
 			}
 		}
 
@@ -639,24 +667,31 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	public Constructor visitConstructorDef(QvtOParser.ConstructorDefContext ctx) {
 		Constructor constructor = QVTO.createConstructor();
 
+		// §8.4.7: <qualifier>* 'constructor' ...
+		for (QvtOParser.QualifierContext qCtx : ctx.qualifier()) {
+			applyOperationQualifier(constructor, qCtx.getText());
+		}
+
 		setOperationNameAndContext(constructor, ctx.scopedName());
 
 		buildSimpleSignature(constructor, ctx.simpleSignature());
 
-		QvtoEnvironment savedEnv = this.environment;
-		setupOperationEnvironment(constructor);
+		if (ctx.block() != null) {
+			QvtoEnvironment savedEnv = this.environment;
+			setupOperationEnvironment(constructor);
 
-		var body = QVTO.createConstructorBody();
-		for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-			OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-			if (expr != null) {
-				body.getContent().add(expr);
+			var body = QVTO.createConstructorBody();
+			for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
+				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
+				if (expr != null) {
+					body.getContent().add(expr);
+				}
 			}
-		}
-		constructor.setBody(body);
+			constructor.setBody(body);
 
-		this.environment = savedEnv;
-		updateExpressionBuilder();
+			this.environment = savedEnv;
+			updateExpressionBuilder();
+		}
 		return constructor;
 	}
 
@@ -768,17 +803,103 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			List<QvtOParser.ModuleElementContext> elements, Module module) {
 		EPackage intermPkg = null;
 		for (QvtOParser.ModuleElementContext elemCtx : elements) {
+			String name = null;
+			boolean isDataType = false;
+
 			if (elemCtx.intermediateClassDef() != null) {
-				QvtOParser.IntermediateClassDefContext icCtx = elemCtx.intermediateClassDef();
-				String name = QvtoExpressionBuilder.qvtoIdentifierText(icCtx.qvtoIdentifier());
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.intermediateClassDef().qvtoIdentifier());
+			} else if (elemCtx.exceptionDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.exceptionDef().qvtoIdentifier());
+			} else if (elemCtx.datatypeDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.datatypeDef().qvtoIdentifier());
+				isDataType = true;
+			} else if (elemCtx.primitiveDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.primitiveDef().qvtoIdentifier());
+				isDataType = true;
+			} else if (elemCtx.enumDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.enumDef().qvtoIdentifier());
+				isDataType = true; // EEnum is an EDataType
+			} else if (elemCtx.metamodelDef() != null) {
+				// Pre-create shells for classifiers inside metamodel block
+				if (intermPkg == null) {
+					intermPkg = getOrCreateIntermediatePackage(module);
+				}
+				preCreateMetamodelShells(elemCtx.metamodelDef(), intermPkg);
+			}
+
+			if (name != null) {
 				if (intermPkg == null) {
 					intermPkg = getOrCreateIntermediatePackage(module);
 				}
 				// Only create if not already present (idempotent)
 				if (intermPkg.getEClassifier(name) == null) {
+					if (isDataType) {
+						EDataType shell = EcoreFactory.eINSTANCE.createEDataType();
+						shell.setName(name);
+						shell.setInstanceClassName("java.lang.Object");
+						intermPkg.getEClassifiers().add(shell);
+					} else {
+						EClass shell = EcoreFactory.eINSTANCE.createEClass();
+						shell.setName(name);
+						intermPkg.getEClassifiers().add(shell);
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * §8.4.6: Pre-creates classifier shells inside a metamodel/package block.
+	 */
+	private void preCreateMetamodelShells(QvtOParser.MetamodelDefContext ctx, EPackage parentPkg) {
+		String pkgName = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+		EPackage metaPkg = (EPackage) parentPkg.getESubpackages().stream()
+				.filter(p -> pkgName.equals(p.getName()))
+				.findFirst().orElse(null);
+		if (metaPkg == null) {
+			metaPkg = EcoreFactory.eINSTANCE.createEPackage();
+			metaPkg.setName(pkgName);
+			metaPkg.setNsPrefix(pkgName);
+			metaPkg.setNsURI(parentPkg.getNsURI() + "/" + pkgName);
+			parentPkg.getESubpackages().add(metaPkg);
+		}
+		for (QvtOParser.MetamodelElementContext elemCtx : ctx.metamodelElement()) {
+			String name = null;
+			boolean isDataType = false;
+			if (elemCtx.intermediateClassDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.intermediateClassDef().qvtoIdentifier());
+			} else if (elemCtx.exceptionDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.exceptionDef().qvtoIdentifier());
+			} else if (elemCtx.datatypeDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.datatypeDef().qvtoIdentifier());
+				isDataType = true;
+			} else if (elemCtx.primitiveDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.primitiveDef().qvtoIdentifier());
+				isDataType = true;
+			} else if (elemCtx.enumDef() != null) {
+				name = QvtoExpressionBuilder.qvtoIdentifierText(
+						elemCtx.enumDef().qvtoIdentifier());
+				isDataType = true;
+			}
+			if (name != null && metaPkg.getEClassifier(name) == null) {
+				if (isDataType) {
+					EDataType shell = EcoreFactory.eINSTANCE.createEDataType();
+					shell.setName(name);
+					shell.setInstanceClassName("java.lang.Object");
+					metaPkg.getEClassifiers().add(shell);
+				} else {
 					EClass shell = EcoreFactory.eINSTANCE.createEClass();
 					shell.setName(name);
-					intermPkg.getEClassifiers().add(shell);
+					metaPkg.getEClassifiers().add(shell);
 				}
 			}
 		}
@@ -821,6 +942,362 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (module instanceof OperationalTransformation ot) {
 			ot.getIntermediateClass().add(intermediateClass);
 		}
+	}
+
+	/**
+	 * §8.4: Processes an exception classifier declaration.
+	 * Creates an EClass in the intermediate package, annotated as exception.
+	 * Like Eclipse QVT-O: exception classes can have features and extends.
+	 */
+	private void processExceptionDef(QvtOParser.ExceptionDefContext ctx, Module module) {
+		String className = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+		EPackage intermPkg = getOrCreateIntermediatePackage(module);
+
+		// Retrieve existing shell created in pre-pass
+		EClass exceptionClass = (EClass) intermPkg.getEClassifier(className);
+		if (exceptionClass == null) {
+			exceptionClass = EcoreFactory.eINSTANCE.createEClass();
+			exceptionClass.setName(className);
+			intermPkg.getEClassifiers().add(exceptionClass);
+		}
+
+		// Mark as exception via annotation (like Eclipse: ExceptionDefCS)
+		EAnnotation kindAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+		kindAnn.setSource("fennec:intermediate:kind");
+		kindAnn.getDetails().put("exception", "true");
+		exceptionClass.getEAnnotations().add(kindAnn);
+
+		// Resolve supertypes (extends clause)
+		if (ctx.typeList() != null) {
+			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
+				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
+				if (resolved instanceof ClassifierType ct
+						&& ct.getReferredClassifier() instanceof EClass superClass) {
+					exceptionClass.getESuperTypes().add(superClass);
+				}
+			}
+		}
+
+		// Features: properties and operations
+		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
+			if (featureCtx.simpleSignature() != null) {
+				processClassifierOperation(featureCtx, exceptionClass);
+			} else {
+				processClassifierFeature(featureCtx, exceptionClass);
+			}
+		}
+
+		if (module instanceof OperationalTransformation ot) {
+			ot.getIntermediateClass().add(exceptionClass);
+		}
+	}
+
+	/**
+	 * §8.4: Processes a datatype classifier declaration.
+	 * Creates an EClass (with features) in the intermediate package, annotated as datatype.
+	 */
+	private void processDatatypeDef(QvtOParser.DatatypeDefContext ctx, Module module) {
+		String className = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+		EPackage intermPkg = getOrCreateIntermediatePackage(module);
+
+		// Datatype with features is modeled as EClass (like intermediate class)
+		EClassifier existing = intermPkg.getEClassifier(className);
+		EClass datatypeClass;
+		if (existing instanceof EClass ec) {
+			datatypeClass = ec;
+		} else {
+			// Pre-pass may have created EDataType, replace with EClass if features exist
+			if (existing != null) {
+				intermPkg.getEClassifiers().remove(existing);
+			}
+			datatypeClass = EcoreFactory.eINSTANCE.createEClass();
+			datatypeClass.setName(className);
+			intermPkg.getEClassifiers().add(datatypeClass);
+		}
+
+		// Mark as datatype via annotation
+		EAnnotation kindAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+		kindAnn.setSource("fennec:intermediate:kind");
+		kindAnn.getDetails().put("datatype", "true");
+		datatypeClass.getEAnnotations().add(kindAnn);
+
+		// Features
+		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
+			if (featureCtx.simpleSignature() != null) {
+				processClassifierOperation(featureCtx, datatypeClass);
+			} else {
+				processClassifierFeature(featureCtx, datatypeClass);
+			}
+		}
+
+		if (module instanceof OperationalTransformation ot) {
+			ot.getIntermediateClass().add(datatypeClass);
+		}
+	}
+
+	/**
+	 * §8.4: Processes a primitive type declaration.
+	 * Creates an EDataType in the intermediate package, annotated as primitive.
+	 */
+	private void processPrimitiveDef(QvtOParser.PrimitiveDefContext ctx, Module module) {
+		String typeName = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+		EPackage intermPkg = getOrCreateIntermediatePackage(module);
+
+		// Retrieve existing shell or create new
+		EClassifier existing = intermPkg.getEClassifier(typeName);
+		EDataType primitiveType;
+		if (existing instanceof EDataType dt) {
+			primitiveType = dt;
+		} else {
+			if (existing != null) {
+				intermPkg.getEClassifiers().remove(existing);
+			}
+			primitiveType = EcoreFactory.eINSTANCE.createEDataType();
+			primitiveType.setName(typeName);
+			primitiveType.setInstanceClassName("java.lang.Object");
+			intermPkg.getEClassifiers().add(primitiveType);
+		}
+
+		// Mark as primitive via annotation
+		EAnnotation kindAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+		kindAnn.setSource("fennec:intermediate:kind");
+		kindAnn.getDetails().put("primitive", "true");
+		primitiveType.getEAnnotations().add(kindAnn);
+	}
+
+	/**
+	 * §8.4.6: Processes an enum classifier declaration.
+	 * Creates an EEnum with EEnumLiterals in the target package.
+	 *
+	 * @param targetPkg if non-null, use this package; otherwise use intermediate package
+	 */
+	private void processEnumDef(QvtOParser.EnumDefContext ctx, Module module, EPackage targetPkg) {
+		String enumName = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+		EPackage pkg = targetPkg != null ? targetPkg : getOrCreateIntermediatePackage(module);
+
+		// Retrieve existing shell or create new
+		EClassifier existing = pkg.getEClassifier(enumName);
+		EEnum eenum;
+		if (existing instanceof EEnum ee) {
+			eenum = ee;
+		} else {
+			if (existing != null) {
+				pkg.getEClassifiers().remove(existing);
+			}
+			eenum = EcoreFactory.eINSTANCE.createEEnum();
+			eenum.setName(enumName);
+			pkg.getEClassifiers().add(eenum);
+		}
+
+		// Process literals
+		if (ctx.enumLiteralList() != null) {
+			int ordinal = 0;
+			for (QvtOParser.EnumLiteralContext litCtx : ctx.enumLiteralList().enumLiteral()) {
+				String litName;
+				if (litCtx.STRING_LITERAL() != null) {
+					String raw = litCtx.STRING_LITERAL().getText();
+					litName = raw.substring(1, raw.length() - 1);
+				} else if (litCtx.DOUBLE_QUOTED_STRING() != null) {
+					String raw = litCtx.DOUBLE_QUOTED_STRING().getText();
+					litName = raw.substring(1, raw.length() - 1);
+				} else {
+					litName = QvtoExpressionBuilder.qvtoIdentifierText(litCtx.qvtoIdentifier());
+				}
+				EEnumLiteral literal = EcoreFactory.eINSTANCE.createEEnumLiteral();
+				literal.setName(litName);
+				literal.setValue(ordinal++);
+				eenum.getELiterals().add(literal);
+			}
+		}
+	}
+
+	/**
+	 * §8.4.6: Processes a metamodel/package block declaration.
+	 * Creates a sub-EPackage and processes classifier elements inside it.
+	 */
+	private void processMetamodelDef(QvtOParser.MetamodelDefContext ctx, Module module) {
+		String pkgName = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+		EPackage intermPkg = getOrCreateIntermediatePackage(module);
+
+		// Find or create the sub-package
+		EPackage metaPkg = intermPkg.getESubpackages().stream()
+				.filter(p -> pkgName.equals(p.getName()))
+				.findFirst().orElse(null);
+		if (metaPkg == null) {
+			metaPkg = EcoreFactory.eINSTANCE.createEPackage();
+			metaPkg.setName(pkgName);
+			metaPkg.setNsPrefix(pkgName);
+			metaPkg.setNsURI(intermPkg.getNsURI() + "/" + pkgName);
+			intermPkg.getESubpackages().add(metaPkg);
+		}
+
+		// Register sub-package in packageRegistry for type resolution
+		if (packageRegistry != null) {
+			packageRegistry.put(metaPkg.getNsURI(), metaPkg);
+		}
+
+		// Process each metamodel element
+		for (QvtOParser.MetamodelElementContext elemCtx : ctx.metamodelElement()) {
+			if (elemCtx.intermediateClassDef() != null) {
+				processIntermediateClassInPackage(elemCtx.intermediateClassDef(), module, metaPkg);
+			} else if (elemCtx.exceptionDef() != null) {
+				processExceptionDefInPackage(elemCtx.exceptionDef(), module, metaPkg);
+			} else if (elemCtx.datatypeDef() != null) {
+				processDatatypeDefInPackage(elemCtx.datatypeDef(), module, metaPkg);
+			} else if (elemCtx.primitiveDef() != null) {
+				processPrimitiveDefInPackage(elemCtx.primitiveDef(), metaPkg);
+			} else if (elemCtx.enumDef() != null) {
+				processEnumDef(elemCtx.enumDef(), module, metaPkg);
+			} else if (elemCtx.tagDecl() != null) {
+				EAnnotation tag = buildTag(elemCtx.tagDecl());
+				if (tag != null) {
+					module.getOwnedTag().add(tag);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Processes an intermediate class inside a specific package (metamodel block).
+	 */
+	private void processIntermediateClassInPackage(
+			QvtOParser.IntermediateClassDefContext ctx, Module module, EPackage targetPkg) {
+		String className = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+
+		EClass intermediateClass = (EClass) targetPkg.getEClassifier(className);
+		if (intermediateClass == null) {
+			intermediateClass = EcoreFactory.eINSTANCE.createEClass();
+			intermediateClass.setName(className);
+			targetPkg.getEClassifiers().add(intermediateClass);
+		}
+
+		if (ctx.typeList() != null) {
+			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
+				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
+				if (resolved instanceof ClassifierType ct
+						&& ct.getReferredClassifier() instanceof EClass superClass) {
+					intermediateClass.getESuperTypes().add(superClass);
+				}
+			}
+		}
+
+		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
+			if (featureCtx.simpleSignature() != null) {
+				processClassifierOperation(featureCtx, intermediateClass);
+			} else {
+				processClassifierFeature(featureCtx, intermediateClass);
+			}
+		}
+
+		if (module instanceof OperationalTransformation ot) {
+			ot.getIntermediateClass().add(intermediateClass);
+		}
+	}
+
+	/**
+	 * Processes an exception inside a specific package (metamodel block).
+	 */
+	private void processExceptionDefInPackage(
+			QvtOParser.ExceptionDefContext ctx, Module module, EPackage targetPkg) {
+		String className = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+
+		EClass exceptionClass = (EClass) targetPkg.getEClassifier(className);
+		if (exceptionClass == null) {
+			exceptionClass = EcoreFactory.eINSTANCE.createEClass();
+			exceptionClass.setName(className);
+			targetPkg.getEClassifiers().add(exceptionClass);
+		}
+
+		EAnnotation kindAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+		kindAnn.setSource("fennec:intermediate:kind");
+		kindAnn.getDetails().put("exception", "true");
+		exceptionClass.getEAnnotations().add(kindAnn);
+
+		if (ctx.typeList() != null) {
+			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
+				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
+				if (resolved instanceof ClassifierType ct
+						&& ct.getReferredClassifier() instanceof EClass superClass) {
+					exceptionClass.getESuperTypes().add(superClass);
+				}
+			}
+		}
+
+		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
+			if (featureCtx.simpleSignature() != null) {
+				processClassifierOperation(featureCtx, exceptionClass);
+			} else {
+				processClassifierFeature(featureCtx, exceptionClass);
+			}
+		}
+
+		if (module instanceof OperationalTransformation ot) {
+			ot.getIntermediateClass().add(exceptionClass);
+		}
+	}
+
+	/**
+	 * Processes a datatype inside a specific package (metamodel block).
+	 */
+	private void processDatatypeDefInPackage(
+			QvtOParser.DatatypeDefContext ctx, Module module, EPackage targetPkg) {
+		String className = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+
+		EClassifier existing = targetPkg.getEClassifier(className);
+		EClass datatypeClass;
+		if (existing instanceof EClass ec) {
+			datatypeClass = ec;
+		} else {
+			if (existing != null) {
+				targetPkg.getEClassifiers().remove(existing);
+			}
+			datatypeClass = EcoreFactory.eINSTANCE.createEClass();
+			datatypeClass.setName(className);
+			targetPkg.getEClassifiers().add(datatypeClass);
+		}
+
+		EAnnotation kindAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+		kindAnn.setSource("fennec:intermediate:kind");
+		kindAnn.getDetails().put("datatype", "true");
+		datatypeClass.getEAnnotations().add(kindAnn);
+
+		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
+			if (featureCtx.simpleSignature() != null) {
+				processClassifierOperation(featureCtx, datatypeClass);
+			} else {
+				processClassifierFeature(featureCtx, datatypeClass);
+			}
+		}
+
+		if (module instanceof OperationalTransformation ot) {
+			ot.getIntermediateClass().add(datatypeClass);
+		}
+	}
+
+	/**
+	 * Processes a primitive inside a specific package (metamodel block).
+	 */
+	private void processPrimitiveDefInPackage(QvtOParser.PrimitiveDefContext ctx, EPackage targetPkg) {
+		String typeName = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
+
+		EClassifier existing = targetPkg.getEClassifier(typeName);
+		EDataType primitiveType;
+		if (existing instanceof EDataType dt) {
+			primitiveType = dt;
+		} else {
+			if (existing != null) {
+				targetPkg.getEClassifiers().remove(existing);
+			}
+			primitiveType = EcoreFactory.eINSTANCE.createEDataType();
+			primitiveType.setName(typeName);
+			primitiveType.setInstanceClassName("java.lang.Object");
+			targetPkg.getEClassifiers().add(primitiveType);
+		}
+
+		EAnnotation kindAnn = EcoreFactory.eINSTANCE.createEAnnotation();
+		kindAnn.setSource("fennec:intermediate:kind");
+		kindAnn.getDetails().put("primitive", "true");
+		primitiveType.getEAnnotations().add(kindAnn);
 	}
 
 	/**
@@ -1108,6 +1585,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (packageRegistry != null) {
 			packageRegistry.put(intermediatePackageUri, pkg);
 		}
+		// Register as sub-package of the module for discoverability
+		module.getESubpackages().add(pkg);
 		return pkg;
 	}
 
