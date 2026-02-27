@@ -19,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.net.URI;
-import java.util.List;
 import java.util.Optional;
 
 import org.eclipse.emf.ecore.EObject;
@@ -227,10 +226,4 @@ class QvtoE2eFromImportTest {
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());
 	}
 
-	private static void assertLogged(QvtoExecutionResult result, String expected) {
-		boolean found = result.diagnostics().stream()
-				.anyMatch(d -> d.getMessage().contains(expected));
-		assertTrue(found, "Expected log containing '" + expected
-				+ "' but diagnostics were: " + result.diagnostics());
-	}
 }

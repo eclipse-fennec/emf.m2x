@@ -396,7 +396,7 @@ public class OclBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Oc
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
-	@Override public T visitStringLiteral(OclParser.StringLiteralContext ctx) { return visitChildren(ctx); }
+	@Override public T visitStringLit(OclParser.StringLitContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -453,6 +453,13 @@ public class OclBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Oc
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitMapLit(OclParser.MapLitContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitStringLiteral_(OclParser.StringLiteral_Context ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
@@ -551,4 +558,11 @@ public class OclBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Oc
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitPathName(OclParser.PathNameContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitIdentifier(OclParser.IdentifierContext ctx) { return visitChildren(ctx); }
 }

@@ -96,6 +96,19 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		this.environment = OclEnvironment.root(selfVar);
 	}
 
+	/**
+	 * Registers an alias name for the {@code self} variable (G-10: §12.12.5 form [B]).
+	 * After this call, both the alias and {@code "self"} resolve to the same variable.
+	 */
+	void registerSelfAlias(String alias) {
+		Variable selfVar = environment.lookup("self").orElseThrow();
+		Variable aliasVar = FACTORY.createVariable();
+		aliasVar.setName(alias);
+		aliasVar.setType(selfVar.getType());
+		// Wire the alias to point to the same underlying type — both resolve to self
+		this.environment = this.environment.nested(aliasVar);
+	}
+
 	// ==================== Entry Points ====================
 
 	@Override
@@ -120,11 +133,20 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	}
 
 	@Override
-	public StringLiteralExp visitStringLiteral(OclParser.StringLiteralContext ctx) {
+	public StringLiteralExp visitStringLit(OclParser.StringLitContext ctx) {
+		return (StringLiteralExp) visit(ctx.stringLiteral_());
+	}
+
+	@Override
+	public StringLiteralExp visitStringLiteral_(OclParser.StringLiteral_Context ctx) {
 		StringLiteralExp exp = FACTORY.createStringLiteralExp();
-		String text = ctx.STRING_LITERAL().getText();
-		// Remove surrounding quotes and unescape
-		exp.setStringSymbol(unescapeString(text.substring(1, text.length() - 1)));
+		// G-04: Adjacent string concatenation — concatenate all STRING_LITERAL parts
+		StringBuilder sb = new StringBuilder();
+		for (var token : ctx.STRING_LITERAL()) {
+			String text = token.getText();
+			sb.append(unescapeString(text.substring(1, text.length() - 1)));
+		}
+		exp.setStringSymbol(sb.toString());
 		return exp;
 	}
 
@@ -232,7 +254,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		TupleLiteralExp exp = FACTORY.createTupleLiteralExp();
 		for (OclParser.TupleLiteralPartContext partCtx : ctx.tupleLiteralPart()) {
 			TupleLiteralPart part = FACTORY.createTupleLiteralPart();
-			part.setName(partCtx.IDENTIFIER().getText());
+			part.setName(identifierText(partCtx.identifier()));
 			if (partCtx.typeExpression() != null) {
 				part.setType(resolveTypeExpression(partCtx.typeExpression()));
 			}
@@ -401,7 +423,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 		for (OclParser.LetBindingContext bindCtx : bindings) {
 			Variable var = FACTORY.createVariable();
-			var.setName(bindCtx.IDENTIFIER().getText());
+			var.setName(identifierText(bindCtx.identifier()));
 			if (bindCtx.typeExpression() != null) {
 				var.setType(resolveTypeExpression(bindCtx.typeExpression()));
 			}
@@ -484,6 +506,8 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 		OperationCallExp exp = FACTORY.createOperationCallExp();
 		exp.setIsImplicit(true);
+		// G-06: implicit-source op@pre(args)
+		exp.setIsPre(ctx.isMarkedPre() != null);
 
 		// Implicit source: self
 		VariableExp selfRef = createVariableExp(environment.lookup("self").orElseThrow());
@@ -520,6 +544,10 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 	private OclExpression createPropertyCall(OclExpression source,
 			OclParser.PropertySuffixContext ctx, boolean isSafe) {
+		// G-07: qualified property call — resolve qualifier if present
+		// For now we ignore the qualifier pathName prefix and just use the identifier
+		// (full supertype-qualified lookup would require oclAsType-like logic)
+
 		// Check if source is a collection → implicit collect (OCL v2.4 §7.6.1)
 		if (source.getType() instanceof CollectionType sourceColType) {
 			return createImplicitCollect(source, ctx, isSafe, sourceColType);
@@ -530,7 +558,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		exp.setIsSafe(isSafe);
 		exp.setIsPre(ctx.isMarkedPre() != null);
 
-		String propName = ctx.IDENTIFIER().getText();
+		String propName = identifierText(ctx.identifier());
 		resolveProperty(exp, propName);
 		return exp;
 	}
@@ -556,7 +584,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		bodyExp.setOwnedSource(iterRef);
 		bodyExp.setIsSafe(isSafe);
 		bodyExp.setIsPre(ctx.isMarkedPre() != null);
-		String propName = ctx.IDENTIFIER().getText();
+		String propName = identifierText(ctx.identifier());
 		resolveProperty(bodyExp, propName);
 
 		// Build the IteratorExp("collect")
@@ -606,7 +634,8 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 			}
 		}
 
-		String opName = ctx.IDENTIFIER().getText();
+		// G-07: qualified calls — for now ignore the optional qualifier prefix
+		String opName = identifierText(ctx.identifier());
 		resolveOperation(exp, opName);
 		return exp;
 	}
@@ -616,7 +645,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		IteratorExp exp = FACTORY.createIteratorExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
-		exp.setName(ctx.IDENTIFIER().getText());
+		exp.setName(identifierText(ctx.identifier()));
 		ArrowCallMarker.mark(exp);
 
 		OclEnvironment savedEnv = this.environment;
@@ -626,9 +655,9 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 		OclParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
 		List<Variable> iterVars = new ArrayList<>();
-		for (int i = 0; i < varsCtx.IDENTIFIER().size(); i++) {
+		for (int i = 0; i < varsCtx.identifier().size(); i++) {
 			Variable iterVar = FACTORY.createVariable();
-			iterVar.setName(varsCtx.IDENTIFIER(i).getText());
+			iterVar.setName(identifierText(varsCtx.identifier(i)));
 			if (i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null) {
 				iterVar.setType(resolveTypeExpression(varsCtx.typeExpression(i)));
 			} else if (elementType != null) {
@@ -638,7 +667,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 			exp.getOwnedIterators().add(iterVar);
 		}
 		// §11.9: validate iterator variable count — forAll/exists allow up to 3, all others exactly 1
-		String iterName = ctx.IDENTIFIER().getText();
+		String iterName = identifierText(ctx.identifier());
 		int maxVars = switch (iterName) {
 			case "forAll", "exists" -> 3;
 			default -> 1;
@@ -676,9 +705,9 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 		OclEnvironment savedEnv = this.environment;
 
-		// Iterator variable (IDENTIFIER(0) = "iterate", IDENTIFIER(1) = iter var)
+		// Iterator variable (identifier(0) = "iterate", identifier(1) = iter var)
 		Variable iterVar = FACTORY.createVariable();
-		iterVar.setName(ctx.IDENTIFIER(1).getText());
+		iterVar.setName(identifierText(ctx.identifier(1)));
 		if (ctx.iterType != null) {
 			iterVar.setType(resolveTypeExpression(ctx.iterType));
 		} else {
@@ -690,9 +719,9 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		}
 		exp.getOwnedIterators().add(iterVar);
 
-		// Accumulator variable (second IDENTIFIER after ';')
+		// Accumulator variable (second identifier after ';')
 		Variable accVar = FACTORY.createVariable();
-		accVar.setName(ctx.IDENTIFIER(2).getText());
+		accVar.setName(identifierText(ctx.identifier(2)));
 		if (ctx.accType != null) {
 			accVar.setType(resolveTypeExpression(ctx.accType));
 		}
@@ -715,7 +744,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 	private OclExpression createCollectionOperation(OclExpression source,
 			OclParser.CollectionOperationCallContext ctx, boolean isSafe) {
-		String opName = ctx.IDENTIFIER().getText();
+		String opName = identifierText(ctx.identifier());
 
 		// OCL shorthand: ->any(expr) is ->any(_implicit | expr) (same for all iterators)
 		if (ITERATOR_NAMES.contains(opName) && ctx.argumentList() != null
@@ -861,7 +890,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		var type = FACTORY.createTupleType();
 		for (OclParser.TupleTypePartContext partCtx : ctx.tupleTypePart()) {
 			var part = FACTORY.createTuplePart();
-			part.setName(partCtx.IDENTIFIER().getText());
+			part.setName(identifierText(partCtx.identifier()));
 			part.setType(resolveTypeExpression(partCtx.typeExpression()));
 			type.getOwnedParts().add(part);
 		}
@@ -1145,10 +1174,24 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 	// ==================== Utility Methods ====================
 
+	/**
+	 * Extracts the text of an {@code identifier} parser rule, handling both
+	 * plain {@code IDENTIFIER} tokens and escaped identifiers {@code _'keyword'}.
+	 */
+	static String identifierText(OclParser.IdentifierContext ctx) {
+		if (ctx.ESCAPED_IDENTIFIER() != null) {
+			// Strip _' prefix and ' suffix, unescape '' → '
+			String raw = ctx.ESCAPED_IDENTIFIER().getText();
+			String inner = raw.substring(2, raw.length() - 1);
+			return inner.replace("''", "'");
+		}
+		return ctx.IDENTIFIER().getText();
+	}
+
 	private List<String> pathNameSegments(OclParser.PathNameContext ctx) {
 		List<String> segments = new ArrayList<>();
-		for (var id : ctx.IDENTIFIER()) {
-			segments.add(id.getText());
+		for (var id : ctx.identifier()) {
+			segments.add(identifierText(id));
 		}
 		return segments;
 	}
@@ -1178,6 +1221,26 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 					case '\\' -> { sb.append('\\'); i++; }
 					case '\'' -> { sb.append('\''); i++; }
 					case '"' -> { sb.append('"'); i++; }
+					case 'x' -> {
+						// G-05: Hex escape \xHH
+						if (i + 3 < s.length()) {
+							int hexVal = Integer.parseInt(s.substring(i + 2, i + 4), 16);
+							sb.append((char) hexVal);
+							i += 3;
+						} else {
+							sb.append(c);
+						}
+					}
+					case 'u' -> {
+						// G-05: Unicode escape (backslash-u HHHH)
+						if (i + 5 < s.length()) {
+							int uniVal = Integer.parseInt(s.substring(i + 2, i + 6), 16);
+							sb.append((char) uniVal);
+							i += 5;
+						} else {
+							sb.append(c);
+						}
+					}
 					case '0', '1', '2', '3', '4', '5', '6', '7' -> {
 						// Octal escape: \0 to \377
 						int start = i + 1;

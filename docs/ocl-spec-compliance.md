@@ -4,7 +4,7 @@
 >
 > **Date:** 2026-02-25
 > **OCL Tests:** 4202 Tests, 0 Failures
-> **Overall:** ~97% of standard library operations implemented, all core language features covered
+> **Overall:** 194/201 standard library operations (96.5%), all core language features covered, 11 concrete syntax gaps identified (3 medium, 8 low)
 
 **Related documents:**
 - [OCL Architecture](ocl-architecture.md) — implementation details
@@ -41,7 +41,7 @@
 | **S-04** | `oclLocale` attribute | §11.2.1 | **Done** ✅ | Implemented |
 | **S-09** | `oclAsType()` on collections | §11.7 | **Done** ✅ | Partial |
 
-#### Open — ordered by implementation priority
+#### Open — Semantics & Library
 
 | ID | Gap | Spec Ref | Priority | Status | Eclipse OCL |
 |----|-----|----------|----------|--------|-------------|
@@ -51,6 +51,22 @@
 | **S-08** | Qualified association navigation | §7.5.4 | **LOW** | Deferred (UML-only) | Implemented (UML Pivot) |
 | **S-03** | OclMessage / `^^` operator | §11.10, §7.6.4 | **DEFERRED** | Deferred indefinitely | Not implemented (same) |
 | **S-05** | `UnspecifiedValueExp` evaluator case | §10.3.1 | **DEFERRED** | Deferred indefinitely (tied to S-03) | Not implemented (same) |
+
+#### Open — Concrete Syntax (Grammar)
+
+| ID | Gap | Spec Ref | Priority | Status | Eclipse OCL |
+|----|-----|----------|----------|--------|-------------|
+| **G-01** | Escaped identifiers `_'keyword'` | §9.3.4 | **MEDIUM** | Open | Implemented |
+| **G-03** | Real exponent notation `1e10`, `1.5E-3` | §9.3.19 | **MEDIUM** | Open | Implemented |
+| **G-10** | Self-variable alias `context p : Person` | §12.12.5 | **MEDIUM** | Open | Implemented |
+| **G-02** | Unicode identifier characters | §9.3.4 | **LOW** | Open | Implemented |
+| **G-04** | Adjacent string concatenation `'a' 'b'` | §9.3.20 | **LOW** | Open | Implemented |
+| **G-05** | `\x`/`\u` escape sequences in strings | §9.3.20 | **LOW** | Open | Implemented |
+| **G-06** | Implicit-source `op@pre(args)` | §9.3.35 | **LOW** | Open | Implemented |
+| **G-07** | Qualified calls `obj.Path::op()` | §9.3.35/36 | **LOW** | Open | Implemented |
+| **G-09** | Nested block comments `/* /* */ */` | §9.3.49 | **LOW** | Open | Implemented |
+| **G-11** | Unqualified operation context | §12.12.10 | **LOW** | Open | Implemented |
+| **G-12** | Optional return type in operation context | §12.12.10 | **LOW** | Open | Implemented |
 
 ### Existing GAP Status Updates
 
@@ -166,20 +182,42 @@ Our OCL metamodel has **50 classifiers** in `org.eclipse.fennec.m2x.ocl.model`.
 
 ## 4. Chapter 9 — Concrete Syntax (Grammar)
 
-Our ANTLR4 grammar `Ocl.g4` covers all production rules from the spec except:
+Our ANTLR4 grammar `Ocl.g4` covers ~95% of production rules from §9.3 and §12.12.
+
+### Implemented Production Rules
 
 | Grammar Rule | Status | Notes |
 |-------------|--------|-------|
-| All expression rules | ✅ | Including precedence |
-| Collection literal parts | ✅ | Including ranges |
-| Iterator/iterate syntax | ✅ | |
-| `let-in` | ✅ | |
-| `if-then-else-endif` | ✅ | |
-| `@pre` suffix | ✅ | |
+| All expression rules (§9.3.2) | ✅ | Including precedence |
+| Variable expressions (§9.3.3) | ✅ | Via `pathName` / `self` |
+| Path names (§9.3.7) | ✅ | `IDENTIFIER ('::' IDENTIFIER)*` |
+| All literal types (§9.3.8–21) | ✅ | Collection, Tuple, Primitive, Null, Invalid |
+| Collection literal parts + ranges (§9.3.12–14) | ✅ | `expression ('..' expression)?` |
+| Iterator/iterate syntax (§9.3.24–26) | ✅ | All forms |
+| Type rules (§9.3.28–32) | ✅ | Primitive, Collection, Tuple, Map (v2.5) |
+| Feature/Operation/Property calls (§9.3.34–36) | ✅ | Dot-call and arrow-call |
+| `@pre` suffix (§9.3.39) | ✅ | |
+| `let-in` (§9.3.41–42) | ✅ | Multi-binding |
+| `if-then-else-endif` (§9.3.46) | ✅ | + `elseif` (v2.5) |
 | Safe navigation `?.` / `?->` | ✅ | v2.5 |
-| Message `^^` / `^` | ❌ S-03 | Not in grammar |
-| Qualified name navigation | ✅ | Package::Type |
-| Complete OCL document | ✅ | `OclDocumentBuilder` |
+| Complete OCL document (§12.12.1–9) | ✅ | `OclDocumentBuilder` |
+
+### Syntax Gaps
+
+| ID | Gap | Spec Ref | Priority | Notes |
+|----|-----|----------|----------|-------|
+| **G-01** | Escaped identifiers `_'keyword'` | §9.3.4 | Medium | Reservierte Wörter nicht als Identifier nutzbar. Workaround: Modell-Elemente nicht mit OCL-Keywords benennen. |
+| **G-03** | Real exponent notation `1e10`, `1.5E-3` | §9.3.19 | Medium | `REAL_LITERAL` unterstützt nur `[0-9]+ '.' [0-9]+`. Workaround: Dezimalform verwenden. |
+| **G-10** | Self-variable alias `context p : Person inv:` | §12.12.5 | Medium | Classifier-Context erlaubt kein Aliasing von `self`. Workaround: `self` direkt nutzen. |
+| **G-02** | Unicode identifier characters | §9.3.4 | Low | Nur ASCII `[a-zA-Z_]`. Kein Griechisch, Kyrillisch etc. |
+| **G-04** | Adjacent string concatenation `'a' 'b'` | §9.3.20 | Low | Workaround: `'a' + 'b'` |
+| **G-05** | `\x`/`\u` escape sequences | §9.3.20 | Low | Octal Escapes ✅, Hex/Unicode fehlen |
+| **G-06** | Implicit-source `op@pre(args)` | §9.3.35 | Low | Workaround: `self.op@pre(args)` |
+| **G-07** | Qualified calls `obj.Path::op()` | §9.3.35/36 | Low | Zugriff auf redefinierte Features. Selten gebraucht. |
+| **G-09** | Nested block comments | §9.3.49 | Low | `/* /* */ */` scheitert. Selten gebraucht. |
+| **G-11** | Unqualified operation context | §12.12.10 | Low | `context op(...)` braucht immer `Path::op(...)` |
+| **G-12** | Optional return type in operation context | §12.12.10 | Low | Return-Typ ist Pflicht; Spec erlaubt optional |
+| S-03 | Message `^^` / `^` | §9.3.43–45 | Deferred | OclMessage nicht implementiert (wie Eclipse) |
 
 ### Type-Checker / Validation (§9)
 
@@ -243,7 +281,9 @@ The spec defines static type rules that a conforming implementation should check
 
 ### 6.1 Coverage Summary
 
-**195 out of 201 spec operations implemented (97%)**
+**194 out of 201 spec operations implemented (96.5%)**
+
+Missing: `oclIsInState()` (3x: OclAny, OclVoid, OclInvalid — UML-only, S-06) + OclMessage operations (4x: `hasReturned`, `result`, `isSignalSent`, `isOperationCall` — S-03)
 
 ### 6.2 OclAny Operations (§11.2)
 
@@ -564,16 +604,161 @@ The spec defines how OCL integrates with UML metamodel features that have no dir
 
 ---
 
+### Concrete Syntax Gaps
+
+#### G-01: Escaped Identifiers `_'keyword'` — MEDIUM
+
+**Spec reference:** §9.3.4 (simpleNameCS)
+
+**Description:** The spec defines three forms for identifiers: `[A]` letter-prefixed (standard), `[B]` `_'string'` (escaped identifier, allows reserved words as names), `[C]` `_'operator'` (escaped operator symbol). Forms [B] and [C] allow model elements named after OCL keywords (e.g., `_'if'`, `_'self'`).
+
+**Current state:** Only form [A] is supported. `IDENTIFIER : [a-zA-Z_] [a-zA-Z0-9_]*`.
+
+**Workaround:** Avoid naming model elements with OCL reserved words.
+
+**Eclipse OCL:** Implemented.
+
+---
+
+#### G-03: Real Exponent Notation — MEDIUM
+
+**Spec reference:** §9.3.19 (RealLiteralExpCS)
+
+**Description:** The spec says real literals can have an exponent part: `1e10`, `1.5E-3`, `3E+2`. "Either the fraction part or the exponent part may be missing but not both."
+
+**Current state:** `REAL_LITERAL : [0-9]+ '.' [0-9]+` — only fractional form. No exponent support.
+
+**Workaround:** Use decimal form (`0.0000015` instead of `1.5E-6`).
+
+**Eclipse OCL:** Implemented.
+
+---
+
+#### G-10: Self-Variable Alias in Classifier Context — MEDIUM
+
+**Spec reference:** §12.12.5 (classifierContextDeclCS)
+
+**Description:** The spec defines form [B]: `context p : Person inv: p.age > 0` — aliasing `self` to a custom variable name `p` in a classifier context.
+
+**Current state:** Only form [A] supported: `context Person inv: self.age > 0`. No self-aliasing.
+
+**Workaround:** Use `self` directly or use `let p : Person = self in ...`.
+
+**Eclipse OCL:** Implemented.
+
+---
+
+#### G-02: Unicode Identifier Characters — LOW
+
+**Spec reference:** §9.3.4 (simpleNameCS)
+
+**Description:** The spec's `NameStartChar` includes Unicode ranges (`#xC0-#xD6`, `#xD8-#xF6`, etc.) and `$`. Our grammar only supports ASCII `[a-zA-Z_]`.
+
+**Current state:** International identifiers (Greek, Cyrillic, etc.) are not parseable.
+
+**Eclipse OCL:** Implemented (via Xtext/ANTLR Unicode support).
+
+---
+
+#### G-04: Adjacent String Concatenation — LOW
+
+**Spec reference:** §9.3.20 (StringLiteralExpCS)
+
+**Description:** The spec allows `'hello' 'world'` = `'helloworld'` (adjacent string literal concatenation for multi-line splitting).
+
+**Current state:** Not supported. Each string literal is a separate token.
+
+**Workaround:** Use `'hello' + 'world'` or `'hello'.concat('world')`.
+
+**Eclipse OCL:** Implemented.
+
+---
+
+#### G-05: Hex/Unicode Escape Sequences — LOW
+
+**Spec reference:** §9.3.20 (StringLiteralExpCS)
+
+**Description:** The spec defines `\xNN` (hex) and `\uNNNN` (Unicode) escape sequences in string literals.
+
+**Current state:** `\\`, `\'`, `\"`, `\n`, `\t`, `\r`, `\f`, `\b`, and octal escapes are supported. Hex/Unicode escapes are not.
+
+**Eclipse OCL:** Implemented.
+
+---
+
+#### G-06: Implicit-Source `op@pre(args)` — LOW
+
+**Spec reference:** §9.3.35 form [F] (OperationCallExpCS)
+
+**Description:** `@pre` on implicit-source operation calls (without explicit `self.`): `op@pre(args)`.
+
+**Current state:** Only supported with explicit source: `self.op@pre(args)`.
+
+**Eclipse OCL:** Implemented.
+
+---
+
+#### G-07: Qualified Calls `obj.Path::op()` — LOW
+
+**Spec reference:** §9.3.35 forms [I]/[J], §9.3.36 form [D]
+
+**Description:** Qualified access to redefined/overridden features: `obj.SuperType::op()` or `obj.SuperType::prop`.
+
+**Current state:** Not parseable. Dot-call target must be a simple identifier, not a path.
+
+**Workaround:** Cast with `oclAsType()` first: `obj.oclAsType(SuperType).op()`.
+
+**Eclipse OCL:** Implemented.
+
+---
+
+#### G-09: Nested Block Comments — LOW
+
+**Spec reference:** §9.3.49
+
+**Description:** The spec says "paragraph comments may be nested": `/* outer /* inner */ still comment */`.
+
+**Current state:** `BLOCK_COMMENT : '/*' .*? '*/'` — non-greedy, does not support nesting.
+
+**Eclipse OCL:** Implemented (nested comments via custom lexer logic).
+
+---
+
+#### G-11: Unqualified Operation Context — LOW
+
+**Spec reference:** §12.12.10 form [B] (operationCS)
+
+**Description:** Operation context without path qualifier: `context op(x : Integer) : Boolean`.
+
+**Current state:** Always requires `Path::op(...)` form: `context MyClass::op(x : Integer) : Boolean`.
+
+**Eclipse OCL:** Implemented.
+
+---
+
+#### G-12: Optional Return Type in Operation Context — LOW
+
+**Spec reference:** §12.12.10 (operationCS)
+
+**Description:** The spec allows the return type to be optional (`typeCS?`). Our grammar requires `: typeExpression`.
+
+**Current state:** `context MyClass::op(x : Integer) : Boolean` — return type is mandatory.
+
+**Eclipse OCL:** Implements optional return type.
+
+---
+
 ## Appendix: Implementation Statistics
 
 | Metric | Value |
 |--------|-------|
 | Tests | 4202 (0 failures) |
 | Metamodel classifiers | 53 |
-| Stdlib operations | 195 / 201 (97%) |
+| Stdlib operations | 194 / 201 (96.5%) |
 | Iterators | 12 / 12 (100%) |
 | Literal types | 10 / 10 (100%) |
 | Expression types | 17 / 18 (94%) — missing: OclMessageArg |
+| Concrete syntax rules | ~95% — 11 gaps (3 medium, 8 low) |
 | Safe navigation (v2.5) | ✅ |
 | Three-valued logic | ✅ |
 | @pre / postconditions | ✅ |
@@ -582,4 +767,25 @@ The spec defines how OCL integrates with UML metamodel features that have no dir
 
 ---
 
-*Last updated 2026-02-25 — based on systematic analysis of OCL v2.4 spec (formal/2014-02-03) chapters 7–13 against Fennec OCL implementation.*
+## Gap Kategorisierung
+
+### Nach Kategorie
+
+| Kategorie | Gaps | Beschreibung |
+|-----------|------|-------------|
+| **UML-only** | S-03, S-05, S-06, S-07, S-08 | Kein Ecore-Äquivalent, bewusst deferred |
+| **Tooling (Phase 5)** | S-10 | Type-Checker bringt erst im LSP Mehrwert |
+| **Syntax — Mittel** | G-01, G-03, G-10 | Könnten in der Praxis auffallen |
+| **Syntax — Niedrig** | G-02, G-04, G-05, G-06, G-07, G-09, G-11, G-12 | Workarounds vorhanden, selten gebraucht |
+
+### Verbleibende offene Gaps (Zusammenfassung)
+
+| Priorität | Anzahl | IDs |
+|-----------|--------|-----|
+| Medium | 4 | S-10, G-01, G-03, G-10 |
+| Low | 7 | S-06, S-07, S-08, G-02, G-04–G-07, G-09, G-11, G-12 |
+| Deferred | 2 | S-03, S-05 |
+
+---
+
+*Last updated 2026-02-27 — based on systematic analysis of OCL v2.4 spec (formal/2014-02-03) chapters 7–13 against Fennec OCL implementation, verified via MCP spec tools.*

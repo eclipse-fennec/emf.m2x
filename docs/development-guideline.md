@@ -784,17 +784,27 @@ LSP modules depend on the parser and engine modules being stable. They are **not
 
 ### Phase 1: OCL (Foundation) — ✅ Complete
 
-**Status:** ✅ Complete — 4108 tests, 0 failures, spec-verified against OCL v2.4/v2.5.
+**Status:** ✅ Complete — 4202 tests, 0 failures, spec-verified against OCL v2.4/v2.5.
 
-**Deferred to Phase 5 (LSP):** GAP-2 (@pre/postconditions), GAP-3 (validate type-checker).
+**Deferred OCL Gaps:**
+- **S-10** (validate type-checker) — Deferred to Phase 5 (LSP). No-op stub, brings value only with real-time diagnostics.
+- **S-03/S-05** (OclMessage / `^^` / UnspecifiedValueExp) — Deferred indefinitely. UML behavioral modeling, Eclipse also skips.
+- **S-06/S-07/S-08** (oclIsInState, AssociationClass, Qualified associations) — UML-only, no Ecore equivalent.
+- **G-01** (escaped identifiers `_'keyword'`), **G-03** (real exponent `1e10`), **G-10** (self-variable alias `context p : Person`) — Medium-priority syntax gaps, workarounds exist.
+- 8 low-priority syntax gaps (G-02, G-04–G-07, G-09, G-11, G-12) — see [OCL Spec Compliance](ocl-spec-compliance.md).
 
-See [OCL Architecture](ocl-architecture.md) for full details.
+See [OCL Architecture](ocl-architecture.md) and [OCL Spec Compliance](ocl-spec-compliance.md) for full details.
 
 ### Phase 2: QVT-Operational — ✅ Complete
 
-**Status:** ✅ Complete — 922 tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10.
+**Status:** ✅ Complete — 1050 tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10 + GAP-1.
 
-See [QVT-O Architecture](qvto-architecture.md) for full details and [QVT-O Test Plan](qvto-test-plan.md) for spec-conformance tracking.
+**Deferred QVT-O Gaps:**
+- **GAP-4** (Persisted Trace Data) — Spec says "left unspecified", Eclipse doesn't implement it either. Deferred until concrete use case arises.
+- **GAP-5** (`asTransformation()` dynamic compilation) — Works with pre-registered transformations; runtime compiler deferred indefinitely (conscious limitation).
+- **P10-07** (UML-specific operations: `_localId`, `_globalId`, `markedAs`, `markValue`, `stereotypedBy`, `stereotypedStrictlyBy`) — Consciously skipped, like Eclipse. Fennec targets Ecore/EMF, not UML.
+
+See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Plan](qvto-test-plan.md) for spec-conformance tracking, and [QVT-O Spec Gap Analysis](qvto-spec-gap-analysis.md) for detailed gap documentation.
 
 ### Phase 3: Acceleo/MOFM2T (with OCL expressions + cherry-picked extensions)
 
@@ -815,6 +825,10 @@ See [QVT-O Architecture](qvto-architecture.md) for full details and [QVT-O Test 
 | 4.3 | `qvtd.parser` | ANTLR4 grammar (`QvtRelations.g4`, imports `Ocl.g4`). QVT-Core is primarily a compilation target, no separate parser unless needed. |
 | 4.4 | `qvtd.engine` | Declarative transformation engine: relation matching, pattern matching, domain enforcement, `checkonly`/`enforce` semantics, optional QVTr→QVTc compilation |
 | 4.5 | `qvtd.tests` | Relation tests, domain tests, pattern matching tests |
+
+**Deferred QVT-O Gaps (require QVT-R metamodel):**
+- **GAP-6** (`refined`, `relation`, `refinedRelation`) — `OperationalTransformation.refined: Transformation[0..1]`, `MappingOperation.refinedRelation` require QVT-R metamodel types (§8.2.1.1, §8.2.1.11)
+- **GAP-13 Semantik** (`refines` pattern inheritance) — Parser support ✅ (6 tests), but semantic execution of `refines` requires relation refinement logic from QVT-R
 
 ### Phase 5: Language Servers (Future)
 

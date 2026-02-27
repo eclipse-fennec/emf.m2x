@@ -1499,4 +1499,10 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitTupleType(QvtOParser.TupleTypeContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#identifier}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitIdentifier(QvtOParser.IdentifierContext ctx);
 }

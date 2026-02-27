@@ -506,6 +506,16 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	 * @generated
 	 */
 	@Override
+	public EAttribute getModelParameter_CollectionKind() {
+		return (EAttribute)modelParameterEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getImperativeOperation() {
 		return imperativeOperationEClass;
 	}
@@ -1251,6 +1261,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		createEReference(mappingParameterEClass, MAPPING_PARAMETER__EXTENT);
 
 		modelParameterEClass = createEClass(MODEL_PARAMETER);
+		createEAttribute(modelParameterEClass, MODEL_PARAMETER__COLLECTION_KIND);
 
 		imperativeOperationEClass = createEClass(IMPERATIVE_OPERATION);
 		createEAttribute(imperativeOperationEClass, IMPERATIVE_OPERATION__IS_BLACKBOX);
@@ -1426,6 +1437,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		initEReference(getMappingParameter_Extent(), this.getModelParameter(), null, "extent", null, 0, 1, MappingParameter.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(modelParameterEClass, ModelParameter.class, "ModelParameter", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEAttribute(getModelParameter_CollectionKind(), theOclPackage.getCollectionKind(), "collectionKind", null, 0, 1, ModelParameter.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(imperativeOperationEClass, ImperativeOperation.class, "ImperativeOperation", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getImperativeOperation_IsBlackbox(), ecorePackage.getEBoolean(), "isBlackbox", null, 0, 1, ImperativeOperation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

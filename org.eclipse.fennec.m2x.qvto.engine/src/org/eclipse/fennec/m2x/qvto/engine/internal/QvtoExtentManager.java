@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,14 +30,15 @@ import org.eclipse.fennec.m2x.model.qvtoperational.ModelType;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
+import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext.ParameterBinding;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 
 /**
  * Manages the binding between {@link ModelParameter} declarations and
  * {@link QvtoModelExtent} instances from the execution context.
  *
- * <p>Extents are bound by position: the first model parameter maps to the
- * first extent, etc.
+ * <p>Supports both positional binding (legacy) and named binding with
+ * collection-of-models parameters (§8.1.1, §8.2.1.5).
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -46,6 +48,8 @@ public class QvtoExtentManager {
 	private final List<QvtoModelExtent> extents;
 	private final List<ModelParameter> modelParams;
 	private final Map<String, QvtoModelExtent> byName = new HashMap<>();
+	/** For collection-of-models parameters: name → list of extents. */
+	private final Map<String, List<QvtoModelExtent>> groupedByName = new HashMap<>();
 
 	public QvtoExtentManager(OperationalTransformation transformation, QvtoExecutionContext context) {
 		Objects.requireNonNull(transformation, "transformation must not be null");
@@ -53,14 +57,52 @@ public class QvtoExtentManager {
 		this.extents = context.modelExtents();
 
 		List<ModelParameter> params = transformation.getModelParameter();
-		int bound = Math.min(params.size(), extents.size());
-		this.modelParams = List.copyOf(params.subList(0, bound));
-		for (int i = 0; i < bound; i++) {
-			byName.put(params.get(i).getName(), extents.get(i));
-			// §8.1.3.2: in-parameter extents are read-only
-			if (params.get(i).getKind() == DirectionKind.IN
-					&& extents.get(i) instanceof BasicQvtoModelExtent basic) {
-				basic.setReadOnly(true);
+
+		if (context.hasParameterBindings()) {
+			// Named binding mode: match ParameterBindings to ModelParameters by name
+			this.modelParams = List.copyOf(params);
+			Map<String, ParameterBinding> bindingMap = new HashMap<>();
+			for (ParameterBinding pb : context.parameterBindings()) {
+				bindingMap.put(pb.name(), pb);
+			}
+			for (ModelParameter mp : params) {
+				ParameterBinding pb = bindingMap.get(mp.getName());
+				if (pb == null) {
+					continue;
+				}
+				if (mp.isSetCollectionKind()) {
+					// Collection-of-models parameter: store grouped extents
+					groupedByName.put(mp.getName(), pb.extents());
+					// byName maps to first extent (for default output operations)
+					if (!pb.extents().isEmpty()) {
+						byName.put(mp.getName(), pb.extents().get(0));
+					}
+				} else {
+					// Normal single-extent parameter
+					if (!pb.extents().isEmpty()) {
+						byName.put(mp.getName(), pb.extents().get(0));
+					}
+				}
+				// §8.1.3.2: in-parameter extents are read-only
+				if (mp.getKind() == DirectionKind.IN) {
+					for (QvtoModelExtent ext : pb.extents()) {
+						if (ext instanceof BasicQvtoModelExtent basic) {
+							basic.setReadOnly(true);
+						}
+					}
+				}
+			}
+		} else {
+			// Legacy positional binding
+			int bound = Math.min(params.size(), extents.size());
+			this.modelParams = List.copyOf(params.subList(0, bound));
+			for (int i = 0; i < bound; i++) {
+				byName.put(params.get(i).getName(), extents.get(i));
+				// §8.1.3.2: in-parameter extents are read-only
+				if (params.get(i).getKind() == DirectionKind.IN
+						&& extents.get(i) instanceof BasicQvtoModelExtent basic) {
+					basic.setReadOnly(true);
+				}
 			}
 		}
 	}
@@ -99,6 +141,16 @@ public class QvtoExtentManager {
 	}
 
 	/**
+	 * Returns the grouped extents for a collection-of-models parameter.
+	 *
+	 * @param name the model parameter name
+	 * @return the list of extents, or {@code null} if not a collection parameter
+	 */
+	List<QvtoModelExtent> getExtents(String name) {
+		return groupedByName.get(name);
+	}
+
+	/**
 	 * Returns the default output extent: the first {@code out} or {@code inout}
 	 * model parameter's extent. Falls back to the last extent if none matches.
 	 *
@@ -108,7 +160,7 @@ public class QvtoExtentManager {
 		for (int i = 0; i < modelParams.size(); i++) {
 			DirectionKind kind = modelParams.get(i).getKind();
 			if (kind == DirectionKind.OUT || kind == DirectionKind.INOUT) {
-				return extents.get(i);
+				return byName.get(modelParams.get(i).getName());
 			}
 		}
 		return extents.isEmpty() ? null : extents.get(extents.size() - 1);
@@ -125,8 +177,7 @@ public class QvtoExtentManager {
 			return false;
 		}
 		EObject root = EcoreUtil.getRootContainer(eObject);
-		for (int i = 0; i < modelParams.size() && i < extents.size(); i++) {
-			QvtoModelExtent extent = extents.get(i);
+		for (QvtoModelExtent extent : extents) {
 			if (extent.isReadOnly() && extent.getContents().contains(root)) {
 				return true;
 			}
@@ -166,19 +217,44 @@ public class QvtoExtentManager {
 			return null;
 		}
 		String nsURI = objPkg.getNsURI();
-		for (int i = 0; i < modelParams.size(); i++) {
-			DirectionKind kind = modelParams.get(i).getKind();
+		for (ModelParameter mp : modelParams) {
+			DirectionKind kind = mp.getKind();
 			if (kind != DirectionKind.OUT && kind != DirectionKind.INOUT) {
 				continue;
 			}
-			if (modelParams.get(i).getEType() instanceof ModelType modelType) {
+			if (mp.getEType() instanceof ModelType modelType) {
 				for (EPackage metamodel : modelType.getMetamodel()) {
 					if (nsURI != null && nsURI.equals(metamodel.getNsURI())) {
-						return extents.get(i);
+						// For collection-of-models: return the first OUT extent in the group
+						return byName.get(mp.getName());
 					}
 				}
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Creates an aggregated extent view over all extents of a collection-of-models parameter.
+	 * The aggregated extent provides read-only access to all objects across all grouped extents.
+	 *
+	 * @param name the parameter name
+	 * @return an aggregated extent, or {@code null} if not a collection parameter
+	 */
+	QvtoModelExtent getAggregatedExtent(String name) {
+		List<QvtoModelExtent> group = groupedByName.get(name);
+		if (group == null) {
+			return null;
+		}
+		List<EObject> aggregated = new ArrayList<>();
+		for (QvtoModelExtent ext : group) {
+			aggregated.addAll(ext.getContents());
+		}
+		BasicQvtoModelExtent result = new BasicQvtoModelExtent();
+		result.setContents(aggregated);
+		if (!group.isEmpty() && group.get(0).isReadOnly()) {
+			result.setReadOnly(true);
+		}
+		return result;
 	}
 }

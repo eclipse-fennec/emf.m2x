@@ -130,7 +130,9 @@
     <genClasses ecoreClass="qvtoperational.ecore#//MappingParameter">
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingParameter/extent"/>
     </genClasses>
-    <genClasses ecoreClass="qvtoperational.ecore#//ModelParameter"/>
+    <genClasses ecoreClass="qvtoperational.ecore#//ModelParameter">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ModelParameter/collectionKind"/>
+    </genClasses>
     <genClasses ecoreClass="qvtoperational.ecore#//ImperativeOperation">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute qvtoperational.ecore#//ImperativeOperation/isBlackbox"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//ImperativeOperation/body"/>

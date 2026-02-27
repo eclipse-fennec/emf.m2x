@@ -42,7 +42,7 @@ completeOclDocument
     ;
 
 importDeclaration
-    : ('import' | 'include' | 'library') (IDENTIFIER ':')? pathName ('::' '*')?
+    : ('import' | 'include' | 'library') (identifier ':')? pathName ('::' '*')?
     ;
 
 packageDeclaration
@@ -56,7 +56,7 @@ contextDeclaration
     ;
 
 classifierContextDeclaration
-    : 'context' pathName (classifierContextBody)+
+    : 'context' (identifier ':')? pathName (classifierContextBody)+
     ;
 
 classifierContextBody
@@ -65,35 +65,35 @@ classifierContextBody
     ;
 
 invariantConstraint
-    : 'inv' (IDENTIFIER ('(' expression ')')?)? ':' expression
+    : 'inv' (identifier ('(' expression ')')?)? ':' expression
     ;
 
 definitionConstraint
-    : 'static'? 'def' IDENTIFIER? ':'
-      ( IDENTIFIER ':' typeExpression '=' expression                                     // attribute def
-      | IDENTIFIER '(' parameterList? ')' ':' typeExpression '=' expression              // operation def
+    : 'static'? 'def' identifier? ':'
+      ( identifier ':' typeExpression '=' expression                                     // attribute def
+      | identifier '(' parameterList? ')' ':' typeExpression '=' expression              // operation def
       )
     ;
 
 operationContextDeclaration
-    : 'context' pathName '::' IDENTIFIER '(' parameterList? ')' ':' typeExpression
+    : 'context' (pathName '::')? identifier '(' parameterList? ')' (':' typeExpression)?
       operationContextBody+
     ;
 
 operationContextBody
-    : 'pre'  (IDENTIFIER)? ':' expression                                                # PreCondition
-    | 'post' (IDENTIFIER)? ':' expression                                                # PostCondition
-    | 'body' (IDENTIFIER)? ':' expression                                                # BodyExpression
+    : 'pre'  (identifier)? ':' expression                                                # PreCondition
+    | 'post' (identifier)? ':' expression                                                # PostCondition
+    | 'body' (identifier)? ':' expression                                                # BodyExpression
     ;
 
 propertyContextDeclaration
-    : 'context' pathName '::' IDENTIFIER ':' typeExpression
+    : 'context' pathName '::' identifier ':' typeExpression
       propertyContextBody+
     ;
 
 propertyContextBody
-    : 'init'   (IDENTIFIER)? ':' expression                                              # InitExpression
-    | 'derive' (IDENTIFIER)? ':' expression                                              # DeriveExpression
+    : 'init'   (identifier)? ':' expression                                              # InitExpression
+    | 'derive' (identifier)? ':' expression                                              # DeriveExpression
     ;
 
 parameterList
@@ -101,7 +101,7 @@ parameterList
     ;
 
 parameter
-    : IDENTIFIER ':' typeExpression
+    : identifier ':' typeExpression
     ;
 
 // ==================== Expressions (Operator Precedence via ANTLR4 left-recursion) ====================
@@ -130,7 +130,7 @@ primaryExpression
       'else' elseExp=expression 'endif'                                                  # IfExp
     | 'let' letBinding (',' letBinding)* 'in' expression                                 # LetExp
     | literalExpression                                                                  # LiteralExp
-    | pathName '(' argumentList? ')'                                                     # OperationCallExp
+    | pathName '(' argumentList? ')' isMarkedPre?                                        # OperationCallExp
     | primitiveType                                                                      # PrimitiveTypeExp
     | collectionType                                                                     # CollectionTypeExp
     | mapType                                                                            # MapTypeExp
@@ -139,19 +139,19 @@ primaryExpression
     ;
 
 propertyOrCallSuffix
-    : IDENTIFIER '(' argumentList? ')' isMarkedPre?                                      # DotCallSuffix
-    | IDENTIFIER isMarkedPre?                                                            # PropertySuffix
+    : (pathName '::')? identifier '(' argumentList? ')' isMarkedPre?                     # DotCallSuffix
+    | (pathName '::')? identifier isMarkedPre?                                           # PropertySuffix
     ;
 
 iteratorOrOperationCall
-    : IDENTIFIER '(' iteratorVariables '|' expression ')'                                # IteratorCall
-    | IDENTIFIER '(' IDENTIFIER (':' iterType=typeExpression)?
-      ';' IDENTIFIER (':' accType=typeExpression)? '=' expression '|' expression ')'     # IterateCall
-    | IDENTIFIER '(' argumentList? ')'                                                   # CollectionOperationCall
+    : identifier '(' iteratorVariables '|' expression ')'                                # IteratorCall
+    | identifier '(' identifier (':' iterType=typeExpression)?
+      ';' identifier (':' accType=typeExpression)? '=' expression '|' expression ')'     # IterateCall
+    | identifier '(' argumentList? ')'                                                   # CollectionOperationCall
     ;
 
 iteratorVariables
-    : IDENTIFIER (':' typeExpression)? (',' IDENTIFIER (':' typeExpression)?)*
+    : identifier (':' typeExpression)? (',' identifier (':' typeExpression)?)*
     ;
 
 argumentList
@@ -159,7 +159,7 @@ argumentList
     ;
 
 letBinding
-    : IDENTIFIER (':' typeExpression)? '=' expression
+    : identifier (':' typeExpression)? '=' expression
     ;
 
 isMarkedPre
@@ -171,7 +171,7 @@ isMarkedPre
 literalExpression
     : INTEGER_LITERAL                                                                    # IntegerLiteral
     | REAL_LITERAL                                                                       # RealLiteral
-    | STRING_LITERAL                                                                     # StringLiteral
+    | stringLiteral_                                                                     # StringLit
     | 'true'                                                                             # TrueLiteral
     | 'false'                                                                            # FalseLiteral
     | 'null'                                                                             # NullLiteral
@@ -180,6 +180,10 @@ literalExpression
     | collectionLiteral                                                                  # CollectionLit
     | tupleLiteral                                                                       # TupleLit
     | mapLiteral                                                                         # MapLit
+    ;
+
+stringLiteral_
+    : STRING_LITERAL+
     ;
 
 collectionLiteral
@@ -203,7 +207,7 @@ tupleLiteral
     ;
 
 tupleLiteralPart
-    : IDENTIFIER (':' typeExpression)? '=' expression
+    : identifier (':' typeExpression)? '=' expression
     ;
 
 mapLiteral
@@ -249,13 +253,20 @@ tupleType
     ;
 
 tupleTypePart
-    : IDENTIFIER ':' typeExpression
+    : identifier ':' typeExpression
     ;
 
 // ==================== Path Names ====================
 
 pathName
-    : IDENTIFIER ('::' IDENTIFIER)*
+    : identifier ('::' identifier)*
+    ;
+
+// ==================== Identifier (supports escaped identifiers §9.3.4) ====================
+
+identifier
+    : IDENTIFIER
+    | ESCAPED_IDENTIFIER
     ;
 
 // ==================== Lexer Rules ====================
@@ -268,7 +279,8 @@ pathName
 // --- Literals ---
 
 REAL_LITERAL
-    : [0-9]+ '.' [0-9]+
+    : [0-9]+ '.' [0-9]+ ([eE] [+-]? [0-9]+)?
+    | [0-9]+ [eE] [+-]? [0-9]+
     ;
 
 INTEGER_LITERAL
@@ -276,17 +288,31 @@ INTEGER_LITERAL
     ;
 
 STRING_LITERAL
-    : '\'' ( '\\\\' | '\\\'' | '\\"' | '\\n' | '\\t' | '\\r' | '\\f' | '\\b' | '\\' [0-3]? [0-7] [0-7]? | ~['\\] )* '\''
+    : '\'' ( '\\\\' | '\\\'' | '\\"' | '\\n' | '\\t' | '\\r' | '\\f' | '\\b'
+           | '\\x' [0-9a-fA-F] [0-9a-fA-F]
+           | '\\u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]
+           | '\\' [0-3]? [0-7] [0-7]?
+           | ~['\\] )* '\''
     ;
 
 // --- Identifiers ---
 
-IDENTIFIER
-    : ('_' | LETTER) (LETTER | [0-9] | '_')*
+// G-01: Escaped identifiers _'keyword' (§9.3.4) — must precede IDENTIFIER for priority
+ESCAPED_IDENTIFIER
+    : '_' '\'' ( '\'\'' | ~['] )* '\''
     ;
 
+IDENTIFIER
+    : ('_' | '$' | LETTER) (LETTER | [0-9] | '_' | '$')*
+    ;
+
+// G-02: Unicode identifier characters (§9.3.4)
 fragment LETTER
     : [a-zA-Z]
+    | [\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF]
+    | [\u0370-\u037D\u037F-\u1FFF]
+    | [\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF]
+    | [\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]
     ;
 
 // --- Whitespace and Comments ---
@@ -299,6 +325,7 @@ LINE_COMMENT
     : '--' ~[\r\n]* -> skip
     ;
 
+// G-09: Nested block comments (§9.3.49)
 BLOCK_COMMENT
-    : '/*' .*? '*/' -> skip
+    : '/*' ( BLOCK_COMMENT | . )*? '*/' -> skip
     ;

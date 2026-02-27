@@ -845,13 +845,22 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int MODEL_PARAMETER__RES_OWNER = VAR_PARAMETER__RES_OWNER;
 
 	/**
+	 * The feature id for the '<em><b>Collection Kind</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int MODEL_PARAMETER__COLLECTION_KIND = VAR_PARAMETER_FEATURE_COUNT + 0;
+
+	/**
 	 * The number of structural features of the '<em>Model Parameter</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int MODEL_PARAMETER_FEATURE_COUNT = VAR_PARAMETER_FEATURE_COUNT + 0;
+	int MODEL_PARAMETER_FEATURE_COUNT = VAR_PARAMETER_FEATURE_COUNT + 1;
 
 	/**
 	 * The operation id for the '<em>Get EAnnotation</em>' operation.
@@ -4297,6 +4306,17 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	EClass getModelParameter();
 
 	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.qvtoperational.ModelParameter#getCollectionKind <em>Collection Kind</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Collection Kind</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.ModelParameter#getCollectionKind()
+	 * @see #getModelParameter()
+	 * @generated
+	 */
+	EAttribute getModelParameter_CollectionKind();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation <em>Imperative Operation</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -5216,6 +5236,14 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EClass MODEL_PARAMETER = eINSTANCE.getModelParameter();
+
+		/**
+		 * The meta object literal for the '<em><b>Collection Kind</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute MODEL_PARAMETER__COLLECTION_KIND = eINSTANCE.getModelParameter_CollectionKind();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.ImperativeOperationImpl <em>Imperative Operation</em>}' class.

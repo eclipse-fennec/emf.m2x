@@ -371,12 +371,12 @@ public interface OclVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitRealLiteral(OclParser.RealLiteralContext ctx);
 	/**
-	 * Visit a parse tree produced by the {@code StringLiteral}
+	 * Visit a parse tree produced by the {@code StringLit}
 	 * labeled alternative in {@link OclParser#literalExpression}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
-	T visitStringLiteral(OclParser.StringLiteralContext ctx);
+	T visitStringLit(OclParser.StringLitContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code TrueLiteral}
 	 * labeled alternative in {@link OclParser#literalExpression}.
@@ -433,6 +433,12 @@ public interface OclVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitMapLit(OclParser.MapLitContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link OclParser#stringLiteral_}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitStringLiteral_(OclParser.StringLiteral_Context ctx);
 	/**
 	 * Visit a parse tree produced by {@link OclParser#collectionLiteral}.
 	 * @param ctx the parse tree
@@ -517,4 +523,10 @@ public interface OclVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitPathName(OclParser.PathNameContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link OclParser#identifier}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitIdentifier(OclParser.IdentifierContext ctx);
 }

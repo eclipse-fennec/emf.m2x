@@ -25,8 +25,8 @@ import java.util.concurrent.Executor;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.fennec.m2x.model.trace.Trace;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.model.trace.Trace;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;

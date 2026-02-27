@@ -786,6 +786,7 @@ qualifiedName
 // Accepts IDENTIFIER plus contextual keywords that are not reserved in all positions.
 qvtoIdentifier
     : IDENTIFIER
+    | ESCAPED_IDENTIFIER
     | 'access'
     | 'blackbox'
     | 'configuration'

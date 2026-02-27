@@ -1310,6 +1310,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Collect modifiers
 		boolean isReferences = false;
 		boolean isComposes = false;
+		@SuppressWarnings("unused")
 		boolean isId = false;
 		boolean isStatic = false;
 		boolean isReadonly = false;
@@ -1646,22 +1647,34 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		ModelParameter param = QVTO.createModelParameter();
 		param.setKind(resolveDirection(ctx.directionKind().getText()));
 
+		// §8.1.1, §8.2.1.5: Check if typeSpec wraps a CollectionType around a ModelType
+		// e.g. 'in many : Sequence(SRC)' → collectionKind=SEQUENCE, inner type name='SRC'
+		String modelTypeName;
+		if (ctx.typeSpec() != null && ctx.typeSpec().typeExpression() != null
+				&& ctx.typeSpec().typeExpression().collectionType() != null) {
+			var collType = ctx.typeSpec().typeExpression().collectionType();
+			param.setCollectionKind(
+					QvtoExpressionBuilder.resolveCollectionKind(collType.collectionKind().getText()));
+			modelTypeName = collType.typeExpression().getText();
+		} else if (ctx.typeSpec() != null && ctx.typeSpec().typeExpression() != null) {
+			modelTypeName = ctx.typeSpec().typeExpression().getText();
+		} else {
+			modelTypeName = null;
+		}
+
 		// §8.4: Named param (directionKind name ':' typeSpec) vs unnamed (directionKind typeSpec)
 		if (ctx.qvtoIdentifier() != null) {
 			param.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 		} else {
-			// Unnamed: derive name from type (e.g., 'out ecore' → name 'ecore')
-			String typeName = ctx.typeSpec().typeExpression().getText();
-			param.setName(typeName);
+			// Unnamed: derive name from inner type (e.g., 'out Sequence(ecore)' → name 'ecore')
+			param.setName(modelTypeName != null ? modelTypeName : "unnamed");
 		}
 
 		// Store the type name from typeSpec for later linking to ModelType
-		if (ctx.typeSpec() != null && ctx.typeSpec().typeExpression() != null) {
-			String typeName = ctx.typeSpec().typeExpression().getText();
-			// Temporarily store as EAnnotation for post-processing
+		if (modelTypeName != null) {
 			EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
 			ann.setSource("qvto.modeltype");
-			ann.getDetails().put("name", typeName);
+			ann.getDetails().put("name", modelTypeName);
 			param.getEAnnotations().add(ann);
 		}
 		return param;

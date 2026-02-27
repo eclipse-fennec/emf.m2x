@@ -129,39 +129,48 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			LOG.warning("Unresolved classifier: " + classifierName + " — skipping context");
 			return null;
 		}
+
+		// G-10: Self-variable alias — 'context' (alias ':')? pathName
+		// If an identifier is present before ':', it's the self-alias
+		String selfAlias = null;
+		if (ctx.identifier() != null) {
+			selfAlias = OclAstBuilder.identifierText(ctx.identifier());
+		}
+
 		for (OclParser.ClassifierContextBodyContext bodyCtx : ctx.classifierContextBody()) {
 			if (bodyCtx.invariantConstraint() != null) {
-				buildInvariant(bodyCtx.invariantConstraint(), classifier);
+				buildInvariant(bodyCtx.invariantConstraint(), classifier, selfAlias);
 			} else if (bodyCtx.definitionConstraint() != null) {
-				buildDefinition(bodyCtx.definitionConstraint(), classifier);
+				buildDefinition(bodyCtx.definitionConstraint(), classifier, selfAlias);
 			}
 		}
 		return null;
 	}
 
-	private void buildInvariant(OclParser.InvariantConstraintContext ctx, EClassifier classifier) {
+	private void buildInvariant(OclParser.InvariantConstraintContext ctx, EClassifier classifier,
+			String selfAlias) {
 		Constraint constraint = FACTORY.createConstraint();
 		constraint.setKind(ConstraintKind.INV);
 		constraint.setContextClassifier(classifier);
 
-		// inv name(...) : expr — name is optional IDENTIFIER
-		if (ctx.IDENTIFIER() != null) {
-			constraint.setName(ctx.IDENTIFIER().getText());
+		// inv name(...) : expr — name is optional identifier
+		if (ctx.identifier() != null) {
+			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
 
 		// The body expression is the last expression in the rule
-		// Grammar: 'inv' (IDENTIFIER ('(' expression ')')?)? ':' expression
+		// Grammar: 'inv' (identifier ('(' expression ')')?)? ':' expression
 		// If there's a guard expression in parens, it's expression(0), body is expression(1)
 		// If no guard, body is expression(0)
 		OclParser.ExpressionContext bodyExpr = ctx.expression().size() > 1
 				? ctx.expression(1)
 				: ctx.expression(0);
-		constraint.setSpecification(buildExpression(bodyExpr, classifier));
+		constraint.setSpecification(buildExpression(bodyExpr, classifier, selfAlias));
 		constraints.add(constraint);
 	}
 
 	private void buildDefinition(OclParser.DefinitionConstraintContext ctx,
-			EClassifier classifier) {
+			EClassifier classifier, String selfAlias) {
 		Constraint constraint = FACTORY.createConstraint();
 		constraint.setKind(ConstraintKind.DEF);
 		constraint.setContextClassifier(classifier);
@@ -173,11 +182,11 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 		// def label? : featureName : type = expr        (attribute def)
 		// def label? : featureName ( params ) : type = expr  (operation def)
-		// The feature name is always the LAST IDENTIFIER in the list.
-		// If there are 2 IDENTIFIERs, the first is the optional label (ignored).
-		List<org.antlr.v4.runtime.tree.TerminalNode> ids = ctx.IDENTIFIER();
+		// The feature name is always the LAST identifier in the list.
+		// If there are 2 identifiers, the first is the optional label (ignored).
+		List<OclParser.IdentifierContext> ids = ctx.identifier();
 		if (!ids.isEmpty()) {
-			constraint.setName(ids.get(ids.size() - 1).getText());
+			constraint.setName(OclAstBuilder.identifierText(ids.get(ids.size() - 1)));
 		}
 
 		// Operation def: parameterList presence indicates operation definition.
@@ -189,14 +198,14 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			if (paramList != null) {
 				for (OclParser.ParameterContext param : paramList.parameter()) {
 					EParameter eParam = EcoreFactory.eINSTANCE.createEParameter();
-					eParam.setName(param.IDENTIFIER().getText());
+					eParam.setName(OclAstBuilder.identifierText(param.identifier()));
 					syntheticOp.getEParameters().add(eParam);
 				}
 			}
 			constraint.setContextOperation(syntheticOp);
 		}
 
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
+		constraint.setSpecification(buildExpression(ctx.expression(), classifier, selfAlias));
 		constraints.add(constraint);
 	}
 
@@ -218,14 +227,26 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	@Override
 	public Object visitOperationContextDeclaration(
 			OclParser.OperationContextDeclarationContext ctx) {
-		String classifierName = pathNameText(ctx.pathName());
-		EClassifier classifier = resolveClassifierFromPath(classifierName);
-		if (classifier == null) {
-			LOG.warning("Unresolved classifier: " + classifierName + " — skipping context");
+		// G-11/G-12: 'context' (pathName '::')? identifier '(' parameterList? ')' (':' typeExpression)?
+		EClassifier classifier;
+		String opName;
+
+		if (ctx.pathName() != null) {
+			// Qualified: context Type::op(...)
+			String classifierName = pathNameText(ctx.pathName());
+			classifier = resolveClassifierFromPath(classifierName);
+			if (classifier == null) {
+				LOG.warning("Unresolved classifier: " + classifierName + " — skipping context");
+				return null;
+			}
+		} else {
+			// G-11: Unqualified: context op(...) — use current package context
+			// Without a classifier qualifier, we cannot resolve — skip with warning
+			LOG.warning("Unqualified operation context (no classifier) — skipping");
 			return null;
 		}
 
-		String opName = ctx.IDENTIFIER().getText();
+		opName = OclAstBuilder.identifierText(ctx.identifier());
 		int paramCount = ctx.parameterList() != null ? ctx.parameterList().parameter().size() : 0;
 		EOperation operation = resolveOperation(classifier, opName, paramCount);
 
@@ -247,8 +268,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		constraint.setKind(ConstraintKind.PRE);
 		constraint.setContextClassifier(classifier);
 		constraint.setContextOperation(operation);
-		if (ctx.IDENTIFIER() != null) {
-			constraint.setName(ctx.IDENTIFIER().getText());
+		if (ctx.identifier() != null) {
+			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
 		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
 		constraints.add(constraint);
@@ -260,8 +281,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		constraint.setKind(ConstraintKind.POST);
 		constraint.setContextClassifier(classifier);
 		constraint.setContextOperation(operation);
-		if (ctx.IDENTIFIER() != null) {
-			constraint.setName(ctx.IDENTIFIER().getText());
+		if (ctx.identifier() != null) {
+			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
 		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
 		constraints.add(constraint);
@@ -273,8 +294,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		constraint.setKind(ConstraintKind.BODY);
 		constraint.setContextClassifier(classifier);
 		constraint.setContextOperation(operation);
-		if (ctx.IDENTIFIER() != null) {
-			constraint.setName(ctx.IDENTIFIER().getText());
+		if (ctx.identifier() != null) {
+			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
 		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
 		constraints.add(constraint);
@@ -292,7 +313,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			return null;
 		}
 
-		String propName = ctx.IDENTIFIER().getText();
+		String propName = OclAstBuilder.identifierText(ctx.identifier());
 		EStructuralFeature property = resolveProperty(classifier, propName);
 
 		for (OclParser.PropertyContextBodyContext bodyCtx : ctx.propertyContextBody()) {
@@ -311,8 +332,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		constraint.setKind(ConstraintKind.INIT);
 		constraint.setContextClassifier(classifier);
 		constraint.setContextProperty(property);
-		if (ctx.IDENTIFIER() != null) {
-			constraint.setName(ctx.IDENTIFIER().getText());
+		if (ctx.identifier() != null) {
+			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
 		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
 		constraints.add(constraint);
@@ -324,8 +345,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		constraint.setKind(ConstraintKind.DERIVE);
 		constraint.setContextClassifier(classifier);
 		constraint.setContextProperty(property);
-		if (ctx.IDENTIFIER() != null) {
-			constraint.setName(ctx.IDENTIFIER().getText());
+		if (ctx.identifier() != null) {
+			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
 		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
 		constraints.add(constraint);
@@ -335,7 +356,16 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
 			EClassifier contextType) {
-		return (OclExpression) new OclAstBuilder(contextType, packageRegistry).visit(ctx);
+		return buildExpression(ctx, contextType, null);
+	}
+
+	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
+			EClassifier contextType, String selfAlias) {
+		OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry);
+		if (selfAlias != null) {
+			builder.registerSelfAlias(selfAlias);
+		}
+		return (OclExpression) builder.visit(ctx);
 	}
 
 	// ==================== Classifier Resolution ====================
@@ -421,8 +451,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	private String pathNameText(OclParser.PathNameContext ctx) {
 		List<String> segments = new ArrayList<>();
-		for (var id : ctx.IDENTIFIER()) {
-			segments.add(id.getText());
+		for (var id : ctx.identifier()) {
+			segments.add(OclAstBuilder.identifierText(id));
 		}
 		return String.join("::", segments);
 	}

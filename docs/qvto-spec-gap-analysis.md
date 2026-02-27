@@ -8,11 +8,14 @@
 
 ## Übersicht
 
-**Fennec QVT-O Status:** 941 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf") — Phase 0–10 ✅
+**Fennec QVT-O Status:** 1050 Tests, 0 Failures, 0 @Disabled, 1 @Tag("perf") — Phase 0–10 ✅ + GAP-1
 
-**Gesamtabdeckung:** ~97% der QVT-O v1.3 Spec. Die verbleibenden Gaps betreffen überwiegend:
-- UML/MOF-spezifische Features (bewusst übersprungen, wie Eclipse)
-- QVT-R Hybrid-Kopplung (Phase 4)
+**Gesamtabdeckung:** ~98% der QVT-O v1.3 Spec. Die verbleibenden offenen Gaps:
+- GAP-4: Persisted Trace Data (Spec: "left unspecified", Eclipse: nicht implementiert)
+- GAP-5: asTransformation ohne dynamische Kompilierung (bewusste Einschränkung)
+- GAP-6: QVT-R Hybrid-Kopplung (Phase 4)
+- GAP-13 Semantik: `refines` Pattern-Inheritance (Phase 4)
+- P10-07: UML/MOF-spezifische Features (bewusst übersprungen, wie Eclipse)
 
 ---
 
@@ -22,7 +25,7 @@
 
 | Sektion | Thema | Status | Fennec-Tests | Gaps |
 |---------|-------|--------|:------------:|------|
-| §8.1.1 | Operational Transformation | ✅ | ~18 | GAP-1 (Collection-of-Models), ~~GAP-2 (@extent)~~ ✅ |
+| §8.1.1 | Operational Transformation | ✅ | ~26 | ~~GAP-1 (Collection-of-Models)~~ ✅, ~~GAP-2 (@extent)~~ ✅ |
 | §8.1.2 | Model Types | ✅ | ~12 | where-Clause nur geparst, nicht evaluiert |
 | §8.1.3 | Extents, Models, Model Parameters | ✅ | ~15 | ~~GAP-2 (@extent Engine-Routing)~~ ✅ |
 | §8.1.4 | Libraries | ✅ | ~52 | ~~GAP-3 (Blackbox Libraries)~~ ✅ |
@@ -52,7 +55,7 @@
 | §8.2.1.2 | Library | ✅ | — |
 | §8.2.1.3 | Module | ✅ | D22: extends EPackage only (bewusst) |
 | §8.2.1.4 | ModuleImport | ✅ | — |
-| §8.2.1.5 | ModelParameter | ✅ | — |
+| §8.2.1.5 | ModelParameter | ✅ | ~~GAP-1~~ ✅ (collectionKind) |
 | §8.2.1.6 | ModelType | ✅ | — |
 | §8.2.1.7 | VarParameter | ✅ | D22: extends EParameter only (bewusst) |
 | §8.2.1.8 | DirectionKind | ✅ | — |
@@ -121,7 +124,7 @@
 
 | Bereich | Regeln gesamt | Implementiert | Gaps |
 |---------|:------------:|:------------:|------|
-| Top-Level | ~12 | ~12 | ~~GAP-12~~ ✅, GAP-13, ~~N1~~ ✅ |
+| Top-Level | ~12 | ~12 | ~~GAP-12~~ ✅, ~~GAP-13~~ ✅ (Parser), ~~N1~~ ✅ |
 | Deklarationen | ~20 | ~20 | ~~GAP-14~~ ✅, ~~GAP-15~~ ✅, ~~N2~~ ✅, ~~N4~~ ✅ |
 | Operationen | ~15 | ~15 | ~~GAP-16~~ ✅, N8 |
 | Expressions | ~30 | ~30 | ~~GAP-17~~ ✅, ~~GAP-18~~ ✅, ~~GAP-19~~ ✅, ~~GAP-20~~ ✅, ~~GAP-21~~ ✅, ~~GAP-22~~ ✅, ~~N3~~ ✅, ~~N5~~ ✅, ~~N6~~ ✅, N7 |
@@ -144,25 +147,25 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 - **§8.1.15 Mapping Inheritance** — inherits, merges, execution order (10 Tests)
 - **§8.1.16 Type Extensions** — List, Dict, typedef, tag (20 Tests)
 - **§8.1.17–20 Imperative Expressions, Variables, Null, Invalid** — Alle imperativen Konstrukte (112+ Tests)
-- **§8.2.2 ImperativeOCL Package** — Alle EClasses bis auf UnlinkExp
+- **§8.2.2 ImperativeOCL Package** — Alle EClasses inkl. UnlinkExp (GAP-7 ✅)
 - **§8.3.5–9 Standard Library** — Model, Transformation, Status, Dict, List Operationen (vollständig)
 
 ---
 
 ## Gaps (detailliert)
 
-### GAP-1: Collection of Models als Model-Parameter
+### ~~GAP-1: Collection of Models als Model-Parameter~~ ✅ DONE
 
 | | |
 |---|---|
-| **Spec-Referenz** | §8.1.1, S. 65 |
+| **Spec-Referenz** | §8.1.1, S. 65; §8.2.1.5 |
 | **Was die Spec fordert** | `in uml : Sequence(UML)` — Model-Parameter kann Collection-Typ haben |
-| **Aktueller Stand** | Grammar parst `typeSpec` mit `typeExpression`, aber Engine behandelt Model-Extents nicht als Collection |
-| **Eclipse QVT-O** | Nicht unterstützt |
+| **Aktueller Stand** | ✅ Implementiert. Metamodell: `ModelParameter.collectionKind` (unsettable EAttribute → `CollectionKind`). Parser: `Sequence(SRC)` / `Set(SRC)` Syntax erkannt, `collectionKind` gesetzt, EType zeigt auf innere ModelType. API: `QvtoExecutionContext.Builder` mit `addModelExtents(name, e1, e2, ...)` für Named-Parameter-Binding + `ParameterBinding` Record. Engine: `QvtoExtentManager` gruppiert Extents per Collection-Parameter, `getAggregatedExtent()` liefert aggregierte Sicht über alle Extents. 8 Tests (4 Parse + 4 E2E). |
+| **Eclipse QVT-O** | Nicht unterstützt — Fennec geht über Eclipse hinaus (Spec hat Vorrang) |
 | **Aufwand** | S (klein) |
-| **Priorität** | Niedrig — Eclipse ignoriert das ebenfalls |
+| **Priorität** | Niedrig |
 
-### GAP-2: `@extent`-Annotation (Extent-Routing) — ✅ DONE
+### ~~GAP-2: `@extent`-Annotation (Extent-Routing)~~ ✅ DONE
 
 | | |
 |---|---|
@@ -173,7 +176,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | M (mittel) — Parser-Verarbeitung + Engine-Extent-Routing |
 | **Priorität** | Mittel — relevant für Multi-Extent-Transformationen mit Packages im selben Metamodell |
 
-### GAP-3: Blackbox Libraries — ✅ DONE
+### ~~GAP-3: Blackbox Libraries~~ ✅ DONE
 
 | | |
 |---|---|
@@ -239,7 +242,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | S (klein) |
 | **Priorität** | Niedrig |
 
-### GAP-9: String Counter API (5 Operationen) ✅ DONE
+### ~~GAP-9: String Counter API (5 Operationen)~~ ✅ DONE
 
 | | |
 |---|---|
@@ -261,7 +264,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | S (klein) |
 | **Priorität** | Niedrig |
 
-### ~~GAP-11~~: Predefined Tags (topclasses, rememberChanges, proxy) — ✅ DONE
+### ~~GAP-11: Predefined Tags (topclasses, rememberChanges, proxy)~~ ✅ DONE
 
 | | |
 |---|---|
@@ -272,7 +275,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | S (klein) |
 | **Priorität** | Niedrig |
 
-### GAP-12: `from <unit> import <names>` Syntax — ✅ DONE
+### ~~GAP-12: `from <unit> import <names>` Syntax~~ ✅ DONE
 
 | | |
 |---|---|
@@ -283,18 +286,18 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | M (mittel) |
 | **Priorität** | Mittel — nützlich für Multi-File Composition |
 
-### GAP-13: `refines` Keyword bei Transformation
+### ~~GAP-13: `refines` Keyword bei Transformation~~ ✅ DONE (Parser)
 
 | | |
 |---|---|
 | **Spec-Referenz** | §8.4, S. 164–165 |
-| **Was die Spec fordert** | `transformation T(...) refines R_UML2RDBMS { ... }` |
-| **Aktueller Stand** | Nicht im Parser |
-| **Eclipse QVT-O** | Eingeschränkt |
-| **Aufwand** | S (klein) für Parser, L für Semantik |
-| **Priorität** | Niedrig — Phase 4 (QVT-R) |
+| **Was die Spec fordert** | `transformation T(...) refines R_UML2RDBMS { ... }`, `mapping ... refines baseMapping` |
+| **Aktueller Stand** | ✅ Parser-Support implementiert. `transformation T(...) refines OtherT` (EAnnotation `qvto/refines` mit `refinedModule`). `mapping ... refines baseMapping` (PendingExtension). Semantik (Pattern-Inheritance) nicht implementiert — Phase 4. 6 Tests. |
+| **Eclipse QVT-O** | Eingeschränkt (Transformation refines ja, Mapping refines nein) |
+| **Aufwand** | S (klein) für Parser ✅, L für Semantik (Phase 4) |
+| **Priorität** | Niedrig — Semantik deferred bis Phase 4 (QVT-R) |
 
-### GAP-14: Inline `metamodel`/`package` Syntax + `enum` — ✅ DONE
+### ~~GAP-14: Inline `metamodel`/`package` Syntax + `enum`~~ ✅ DONE
 
 | | |
 |---|---|
@@ -305,7 +308,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | L (groß) |
 | **Tests** | 9 E2E-Tests: enum (string literals, identifier literals, empty), metamodel (with class, package keyword, with enum, with exception+primitive, with datatype, full spec example) |
 
-### GAP-15: `datatype`, `primitive`, `exception` Classifier-Deklarationen — ✅ DONE
+### ~~GAP-15: `datatype`, `primitive`, `exception` Classifier-Deklarationen~~ ✅ DONE
 
 | | |
 |---|---|
@@ -316,7 +319,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | M (mittel) |
 | **Tests** | 9 E2E-Tests: exception (simple, features, extends, multiple inheritance, multiple catch), datatype (simple, used as intermediate), primitive (simple), mixed declarations |
 
-### GAP-16: Mapping-Deklaration ohne Body — ✅ DONE
+### ~~GAP-16: Mapping-Deklaration ohne Body~~ ✅ DONE
 
 | | |
 |---|---|
@@ -327,7 +330,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | S (klein) |
 | **Tests** | 3 Parse-Tests (bodyless, blackbox bodyless, bodyless+extensions), 2 E2E-Tests (bodyless+inherits, bodyless standalone) |
 
-### GAP-17: `-=` Assign-Operator — ✅ DONE
+### ~~GAP-17: `-=` Assign-Operator~~ ✅ DONE
 
 | | |
 |---|---|
@@ -338,7 +341,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Aufwand** | S (klein) |
 | **Priorität** | Niedrig |
 
-### GAP-18: `!=` als Vergleichs-Alternative — ✅ DONE
+### ~~GAP-18: `!=` als Vergleichs-Alternative~~ ✅ DONE
 
 | | |
 |---|---|
@@ -348,7 +351,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Eclipse QVT-O** | Nur `!=`, kein `==`, keine Directive |
 | **Tests** | `QvtoE2eLexerNotEqualTest` (5 Tests: basic, equal values, mixed with `<>`, null, xselectOne-Koexistenz) |
 
-### GAP-19: `%` Binary Format Operator — ✅ DONE
+### ~~GAP-19: `%` Binary Format Operator~~ ✅ DONE
 
 | | |
 |---|---|
@@ -358,7 +361,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Eclipse QVT-O** | Implementiert |
 | **Tests** | `QvtoShorthandParseTest.formatOperator_parsesCorrectly`, `QvtoE2eShorthandTest.formatOperator_formatsString/multipleArgs/calledAsMethod` (4 Tests) |
 
-### GAP-20: `#`, `##`, unary `*` Shorthand-Operatoren — ✅ DONE
+### ~~GAP-20: `#`, `##`, unary `*` Shorthand-Operatoren~~ ✅ DONE
 
 | | |
 |---|---|
@@ -369,7 +372,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Tests** | `QvtoShorthandParseTest` (3 Tests: hash, doubleHash, unaryStar), `QvtoE2eShorthandTest` (5 Tests: hash/doubleHash mit primitiven + Ecore-Typen, unaryStar) |
 | **Bugfix** | `objectsOfType`/`subobjectsOfType`/`allSubobjectsOfType` — `==` Identity-Check durch `isExactType()` ersetzt (nsURI+Name-Vergleich, robust über EPackage-Instanzen hinweg, §8.3.5.3) |
 
-### GAP-21: `!->` (not-arrow) Operator — ✅ DONE
+### ~~GAP-21: `!->` (not-arrow) Operator~~ ✅ DONE
 
 | | |
 |---|---|
@@ -379,7 +382,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Eclipse QVT-O** | Implementiert |
 | **Tests** | `QvtoShorthandParseTest.notArrowOperator_parsesCorrectly`, `QvtoE2eShorthandTest.notArrow_negatesBoolean/emptyCollection` (3 Tests) |
 
-### GAP-22: Intermediate Class Features (Multiplicity, Opposites, Operations, generische Stereotypen) — ✅ DONE
+### ~~GAP-22: Intermediate Class Features (Multiplicity, Opposites, Operations, generische Stereotypen)~~ ✅ DONE
 
 | | |
 |---|---|
@@ -390,7 +393,7 @@ Die folgenden Spec-Sektionen sind **vollständig implementiert** und durch Tests
 | **Eclipse QVT-O** | Teilweise (ohne classifier_operation) |
 | **Tests** | `QvtoE2eIntermediateClassFeaturesTest` (10 Tests) |
 
-### GAP-23: `//` als Zeilenkommentar — ✅ DONE
+### ~~GAP-23: `//` als Zeilenkommentar~~ ✅ DONE
 
 | | |
 |---|---|
@@ -437,18 +440,18 @@ Wie Eclipse QVT-O werden folgende UML/MOF-spezifische Operationen **bewusst nich
 
 | # | Gap | Spec-Ref | Aufwand | Eclipse |
 |---|-----|----------|---------|---------|
-| GAP-2 | `@extent`-Annotation (Extent-Routing) | §8.1.3, §8.1.6, §8.4 | M | ✅ DONE |
-| GAP-3 | Blackbox Libraries (Java-Integration) | §8.1.4 | M | ✅ DONE |
-| GAP-12 | `from <unit> import <names>` Syntax | §8.4 | M | ✅ DONE |
-| GAP-18 | `!=` Vergleichs-Alternative | §8.4.4 | S | ✅ DONE |
-| GAP-23 | `//` Zeilenkommentar | §8.4.2 | S | ✅ DONE |
-| GAP-17 | `-=` Assign-Operator | §8.4 | S | ✅ DONE |
+| ~~GAP-2~~ | ~~`@extent`-Annotation (Extent-Routing)~~ | ~~§8.1.3, §8.1.6, §8.4~~ | ~~M~~ | ✅ DONE |
+| ~~GAP-3~~ | ~~Blackbox Libraries (Java-Integration)~~ | ~~§8.1.4~~ | ~~M~~ | ✅ DONE |
+| ~~GAP-12~~ | ~~`from <unit> import <names>` Syntax~~ | ~~§8.4~~ | ~~M~~ | ✅ DONE |
+| ~~GAP-18~~ | ~~`!=` Vergleichs-Alternative~~ | ~~§8.4.4~~ | ~~S~~ | ✅ DONE |
+| ~~GAP-23~~ | ~~`//` Zeilenkommentar~~ | ~~§8.4.2~~ | ~~S~~ | ✅ DONE |
+| ~~GAP-17~~ | ~~`-=` Assign-Operator~~ | ~~§8.4~~ | ~~S~~ | ✅ DONE |
 
 ### Priorität: Niedrig
 
 | # | Gap | Spec-Ref | Aufwand | Eclipse |
 |---|-----|----------|---------|---------|
-| GAP-1 | Collection of Models als Parameter | §8.1.1 | S | ❌ |
+| ~~GAP-1~~ | ~~Collection of Models als Parameter~~ | ~~§8.1.1~~ | ~~S~~ | ✅ DONE |
 | GAP-4 | Persisted Trace Data | §8.1.11.8 | M | ❌ |
 | GAP-5 | asTransformation dynamische Kompilierung | §8.1.21 | L | ❌ |
 | ~~GAP-7~~ | ~~UnlinkExp~~ | ~~§8.2.2.12~~ | ~~S~~ | ✅ DONE |
@@ -531,13 +534,13 @@ Die folgenden bereits bekannten Gaps wurden durch den EBNF-Quercheck bestätigt:
 
 | Gap | EBNF-Stelle |
 |-----|-------------|
-| GAP-13 (`refines`) | `<transformation_refine>`, `<mapping_refinement>` (S. 165, 168) |
-| GAP-14 (metamodel/package) | `<metamodel>`, `<metamodel_h>`, `<metamodel_element>` (S. 167) |
+| ~~GAP-13~~ (`refines`) ✅ Parser | `<transformation_refine>`, `<mapping_refinement>` (S. 165, 168) |
+| ~~GAP-14~~ (metamodel/package) ✅ | `<metamodel>`, `<metamodel_h>`, `<metamodel_element>` (S. 167) |
 | ~~GAP-15~~ (datatype/primitive/exception) ✅ | `<classifier_info>`, `<enumeration>` (S. 167) |
-| GAP-19 (`%` Operator) | `<mult_op>` (S. 169) |
-| GAP-20 (`#`, `##`, `*`) | `<unary_op>` (S. 169) |
-| GAP-21 (`!->`) | `<access_op>` (S. 169) |
-| GAP-22 (IC Features) | `<classifier_feature>`, `<multiplicity>`, `<opposite_property>`, `<stereotype_qualifier>` (S. 167) |
+| ~~GAP-19~~ (`%` Operator) ✅ | `<mult_op>` (S. 169) |
+| ~~GAP-20~~ (`#`, `##`, `*`) ✅ | `<unary_op>` (S. 169) |
+| ~~GAP-21~~ (`!->`) ✅ | `<access_op>` (S. 169) |
+| ~~GAP-22~~ (IC Features) ✅ | `<classifier_feature>`, `<multiplicity>`, `<opposite_property>`, `<stereotype_qualifier>` (S. 167) |
 
 ---
 
@@ -551,4 +554,4 @@ Folgende Gaps können mit geringem Aufwand (S) geschlossen werden und verbessern
 4. ~~**GAP-9** — String Counter API (5 Methoden in QvtoOperationProvider)~~ ✅ DONE
 5. ~~**GAP-10** — Integer::range als Operation (1 Methode)~~ ✅ DONE
 6. ~~**GAP-7** — UnlinkExp (Operation-Dispatch)~~ ✅ DONE
-7. **N3** — `'unlimited'` Keyword (1 Lexer-Alternative)
+7. ~~**N3** — `'unlimited'` Keyword (1 Lexer-Alternative)~~ ✅ DONE

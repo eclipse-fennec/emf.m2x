@@ -179,9 +179,24 @@ public class QvtoEvaluator {
 		EList<ModelParameter> modelParams = transformation.getModelParameter();
 		for (int i = 0; i < modelParams.size(); i++) {
 			ModelParameter mp = modelParams.get(i);
-			QvtoModelExtent extent = extentManager.getExtent(i);
-			if (mp.getName() != null && extent != null) {
-				env.define(mp.getName(), extent);
+			if (mp.getName() == null) {
+				continue;
+			}
+			if (mp.isSetCollectionKind()) {
+				// §8.1.1, §8.2.1.5: Collection-of-models parameter — bind aggregated extent
+				QvtoModelExtent aggregated = extentManager.getAggregatedExtent(mp.getName());
+				if (aggregated != null) {
+					env.define(mp.getName(), aggregated);
+				}
+			} else {
+				// Try name-based first (for Builder API), fall back to positional
+				QvtoModelExtent extent = extentManager.getExtent(mp.getName());
+				if (extent == null) {
+					extent = extentManager.getExtent(i);
+				}
+				if (extent != null) {
+					env.define(mp.getName(), extent);
+				}
 			}
 		}
 
@@ -1051,7 +1066,6 @@ public class QvtoEvaluator {
 							// -= : remove from collection
 							Object current = task.targetObject().eGet(sf);
 							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
 								Collection<Object> col = (Collection<Object>) current;
 								col.remove(coerceForFeature(sf, resolved));
 							}

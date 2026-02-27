@@ -40,11 +40,11 @@ import org.eclipse.fennec.m2x.model.imperativeocl.ForExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
 import org.eclipse.fennec.m2x.model.imperativeocl.InstantiationExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.LogExp;
-import org.eclipse.fennec.m2x.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.RaiseExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ReturnExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.SeverityKind;
 import org.eclipse.fennec.m2x.model.imperativeocl.SwitchExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
@@ -2345,10 +2345,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	static String qvtoIdentifierText(QvtOParser.QvtoIdentifierContext ctx) {
+		if (ctx.ESCAPED_IDENTIFIER() != null) {
+			// G-01: Strip _' prefix and ' suffix, unescape '' → '
+			String raw = ctx.ESCAPED_IDENTIFIER().getText();
+			String inner = raw.substring(2, raw.length() - 1);
+			return inner.replace("''", "'");
+		}
 		return ctx.getText();
 	}
 
-	private CollectionKind resolveCollectionKind(String kindText) {
+	static CollectionKind resolveCollectionKind(String kindText) {
 		return switch (kindText) {
 			case "Set" -> CollectionKind.SET;
 			case "OrderedSet" -> CollectionKind.ORDERED_SET;
