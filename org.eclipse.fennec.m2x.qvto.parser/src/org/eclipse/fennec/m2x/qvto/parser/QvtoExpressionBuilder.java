@@ -448,8 +448,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public OperationCallExp visitEqualityExp(QvtOParser.EqualityExpContext ctx) {
-		// §8.4.4: '!=' is a synonym for '<>' — normalize for OCL engine
-		String op = "!=".equals(ctx.op.getText()) ? "<>" : ctx.op.getText();
+		// §8.4.4: '!=' is a synonym for '<>', '==' is a synonym for '=' — normalize for OCL engine
+		String rawOp = ctx.op.getText();
+		String op = switch (rawOp) {
+			case "!=" -> "<>";
+			case "==" -> "=";
+			default -> rawOp;
+		};
 		return createBinaryOperation(op,
 				(OclExpression) visit(ctx.expression(0)),
 				(OclExpression) visit(ctx.expression(1)));

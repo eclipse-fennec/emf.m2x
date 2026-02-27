@@ -182,6 +182,23 @@ class QvtoE2eLibraryTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "test=5");
 	}
 
+	// ---- Q-4: Library declaration without body (§8.4.7) ----
+
+	@Test
+	void libraryDeclaration_withoutBody() throws Exception {
+		// §8.4.7: <library_decl> ::= <library_h> ';' — forward declaration without body
+		QvtoExecutionResult result = execute("""
+				library EmptyLib;
+				transformation test() {
+				    main() {
+				        log('parsed');
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "parsed");
+	}
+
 	// ---- Helpers ----
 
 	private static void assertSuccess(QvtoExecutionResult result) {

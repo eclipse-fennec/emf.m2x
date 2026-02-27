@@ -346,9 +346,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		ModelType modelType = QVTO.createModelType();
 		modelType.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 
-		// Conformance kind from STRING_LITERAL (e.g., "strict", "effective")
+		// Conformance kind from STRING_LITERAL or DOUBLE_QUOTED_STRING (e.g., "strict", "effective")
 		if (ctx.STRING_LITERAL() != null) {
 			String text = ctx.STRING_LITERAL().getText();
+			modelType.setConformanceKind(text.substring(1, text.length() - 1));
+		} else if (ctx.DOUBLE_QUOTED_STRING() != null) {
+			String text = ctx.DOUBLE_QUOTED_STRING().getText();
 			modelType.setConformanceKind(text.substring(1, text.length() - 1));
 		}
 

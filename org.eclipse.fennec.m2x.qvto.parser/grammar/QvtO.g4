@@ -55,7 +55,7 @@ importedNameList
     ;
 
 modeltypeDecl
-    : 'modeltype' qvtoIdentifier (STRING_LITERAL)? 'uses' packageRefList modeltypeWhere? ';'
+    : 'modeltype' qvtoIdentifier (STRING_LITERAL | DOUBLE_QUOTED_STRING)? 'uses' packageRefList modeltypeWhere? ';'
     ;
 
 packageRefList
@@ -90,6 +90,7 @@ transformationRefine
 
 libraryDef
     : 'library' qualifiedName simpleSignature? moduleUsage* '{' moduleElement* '}' ';'?
+    | 'library' qualifiedName simpleSignature? moduleUsage* ';'
     ;
 
 modelParamList
@@ -420,8 +421,8 @@ expression
     | expression op=('*' | '/' | '%') expression                                          # MultExp
     | expression op=('+' | '-') expression                                               # AddExp
     | expression op=('<' | '>' | '<=' | '>=') expression                                 # CompareExp
-    // §8.4.4: '!=' is a synonym for '<>' (like Eclipse QVT-O)
-    | expression op=('=' | '<>' | '!=') expression                                        # EqualityExp
+    // §8.4.4: '!=' is a synonym for '<>', '==' is a synonym for '=' (like Eclipse QVT-O)
+    | expression op=('=' | '<>' | '!=' | '==') expression                                  # EqualityExp
     | expression 'and' expression                                                        # AndExp
     | expression 'or' expression                                                         # OrExp
     | expression 'xor' expression                                                        # XorExp
@@ -862,6 +863,9 @@ qvtoIdentifier
     | 'composes'
     | 'references'
     | 'unlimited'
+    | 'class'
+    | 'default'
+    | 'refines'
     ;
 
 // ==================== Comment Override ====================
@@ -897,6 +901,11 @@ DOUBLE_HASH
 
 HASH
     : '#'
+    ;
+
+// §8.4.4: '==' as synonym for '=' — explicit token so lexer matches as single token (not two '=')
+DOUBLE_EQUAL
+    : '=='
     ;
 
 // §8.4.4: '!=' as synonym for '<>' — explicit token to disambiguate from '!' '[' (XselectOne)

@@ -277,6 +277,26 @@ class QvtoTransformationParseTest extends AbstractQvtoParserTest {
 		assertEquals("effective", t.getUsedModelType().get(0).getConformanceKind());
 	}
 
+	// Q-2: §8.4.7 — ModelType compliance kind with double-quoted string
+	@Test
+	void modeltypeStrictCompliance_doubleQuoted() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				modeltype SRC "strict" uses 'http://test/source/1.0';
+				transformation T(in s : SRC) {}
+				""");
+		assertEquals("strict", t.getUsedModelType().get(0).getConformanceKind());
+	}
+
+	// Q-2: §8.4.7 — ModelType effective compliance kind with double-quoted string
+	@Test
+	void modeltypeEffectiveCompliance_doubleQuoted() throws QvtoParseException {
+		OperationalTransformation t = parse("""
+				modeltype SRC "effective" uses 'http://test/source/1.0';
+				transformation T(in s : SRC) {}
+				""");
+		assertEquals("effective", t.getUsedModelType().get(0).getConformanceKind());
+	}
+
 	// §8.2.1.6: ModelType with two packages
 	@Test
 	void modeltypeMultiplePackages() throws QvtoParseException {
