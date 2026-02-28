@@ -1,0 +1,39 @@
+Bundle-Name: Fennec QVT-O Benchmark
+Bundle-Description: Performance benchmarks: Fennec QVT-O vs Eclipse QVT-O
+
+-library: enableEMF
+
+-buildpath: \
+	org.antlr.antlr4-runtime;version=latest,\
+	org.eclipse.fennec.m2x.qvto.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.qvto.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.qvto.api;version=snapshot,\
+	org.eclipse.fennec.m2x.qvto.model;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x;version=snapshot
+
+-testpath: \
+	lib/org.eclipse.m2m.qvt.oml_3.11.0.jar;version=file,\
+	lib/org.eclipse.m2m.qvt.oml.common_3.11.0.jar;version=file,\
+	lib/org.eclipse.m2m.qvt.oml.cst.parser_3.11.0.jar;version=file,\
+	lib/org.eclipse.m2m.qvt.oml.ecore.imperativeocl_3.11.0.jar;version=file,\
+	lib/org.eclipse.m2m.qvt.oml.emf.util_3.11.0.jar;version=file,\
+	lib/org.eclipse.m2m.qvt.oml.runtime_3.11.0.jar;version=file,\
+	lib/org.eclipse.ocl.ecore_3.22.0.jar;version=file,\
+	lib/org.eclipse.ocl_3.22.0.jar;version=file,\
+	lib/org.eclipse.ocl.common_1.22.0.jar;version=file,\
+	lib/lpg.runtime.java_2.0.17.jar;version=file,\
+	lib/org.eclipse.equinox.common_3.20.300.jar;version=file,\
+	lib/org.eclipse.equinox.supplement_1.12.100.jar;version=file,\
+	lib/org.eclipse.equinox.registry_3.12.600.jar;version=file,\
+	lib/org.eclipse.core.runtime_3.34.100.jar;version=file,\
+	lib/org.osgi.service.prefs_1.1.2.jar;version=file,\
+	lib/org.eclipse.core.jobs_3.15.700.jar;version=file,\
+	lib/org.eclipse.core.contenttype_3.9.800.jar;version=file,\
+	lib/org.eclipse.core.resources_3.23.100.jar;version=file,\
+	lib/org.eclipse.core.filesystem_1.11.400.jar;version=file,\
+	lib/org.eclipse.core.expressions_3.9.500.jar;version=file,\
+	lib/org.eclipse.m2m.qvt.oml.ocl_3.11.0.jar;version=file

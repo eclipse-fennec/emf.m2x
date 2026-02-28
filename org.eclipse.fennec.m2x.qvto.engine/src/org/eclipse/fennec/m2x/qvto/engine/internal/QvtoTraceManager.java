@@ -15,7 +15,10 @@
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
@@ -36,9 +39,10 @@ import org.eclipse.fennec.m2x.model.trace.VarParameterValue;
 /**
  * In-memory trace store for resolve support and EMF trace export.
  *
- * <p>Maintains two parallel data structures:
+ * <p>Maintains indexed data structures for O(1) trace lookups:
  * <ul>
- *   <li>A flat list of {@link QvtoTraceRecord} for fast resolve lookups (linear scan)</li>
+ *   <li>A flat list of {@link QvtoTraceRecord} for ordered iteration</li>
+ *   <li>Index maps for cached-result, source→records, and result→records lookups</li>
  *   <li>An EMF {@link Trace} model for export via
  *       {@link org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult}</li>
  * </ul>
@@ -51,6 +55,15 @@ class QvtoTraceManager {
 	private final List<QvtoTraceRecord> records = new ArrayList<>();
 	private final Trace trace = TraceFactory.eINSTANCE.createTrace();
 
+	// Index 1: Cached-result lookup — (MappingOperation, compositeKey) → QvtoTraceRecord
+	private final Map<MappingOperation, Map<Object, QvtoTraceRecord>> mappingIndex = new HashMap<>();
+
+	// Index 2: Source → Records (for resolve/resolveIn)
+	private final Map<Object, List<QvtoTraceRecord>> sourceIndex = new IdentityHashMap<>();
+
+	// Index 3: Result → Records (for invResolve/invResolveIn)
+	private final Map<Object, List<QvtoTraceRecord>> resultIndex = new IdentityHashMap<>();
+
 	/**
 	 * Records a mapping invocation for both resolve lookups and EMF trace export.
 	 *
@@ -61,7 +74,23 @@ class QvtoTraceManager {
 	 */
 	void addRecord(MappingOperation mappingOp, Object source, Object[] args, Object result) {
 		String mappingName = mappingOp.getName();
-		records.add(new QvtoTraceRecord(mappingName, mappingOp, source, args.clone(), result));
+		Object[] clonedArgs = args.clone();
+		QvtoTraceRecord record = new QvtoTraceRecord(mappingName, mappingOp, source, clonedArgs, result);
+		records.add(record);
+
+		// Update mapping index (for lookupCachedResult)
+		Object compositeKey = buildCompositeKey(source, clonedArgs);
+		mappingIndex.computeIfAbsent(mappingOp, k -> new HashMap<>()).put(compositeKey, record);
+
+		// Update source index (for resolve/resolveIn)
+		if (source != null) {
+			sourceIndex.computeIfAbsent(source, k -> new ArrayList<>()).add(record);
+		}
+
+		// Update result index (for invResolve/invResolveIn)
+		if (result != null) {
+			resultIndex.computeIfAbsent(result, k -> new ArrayList<>()).add(record);
+		}
 
 		// Build parallel EMF TraceRecord for export
 		TraceRecord emfRecord = TraceFactory.eINSTANCE.createTraceRecord();
@@ -141,15 +170,13 @@ class QvtoTraceManager {
 	 * @return the cached result, or {@code null} if no cache hit
 	 */
 	Object lookupCachedResult(MappingOperation mappingOp, Object source, Object[] args) {
-		String mappingName = mappingOp.getName();
-		for (QvtoTraceRecord record : records) {
-			if (record.mappingName().equals(mappingName)
-					&& record.source() == source
-					&& record.argsMatch(args)) {
-				return record.result();
-			}
+		Map<Object, QvtoTraceRecord> byKey = mappingIndex.get(mappingOp);
+		if (byKey == null) {
+			return null;
 		}
-		return null;
+		Object compositeKey = buildCompositeKey(source, args);
+		QvtoTraceRecord record = byKey.get(compositeKey);
+		return record != null ? record.result() : null;
 	}
 
 	/**
@@ -158,10 +185,10 @@ class QvtoTraceManager {
 	 */
 	List<EObject> resolve(Object source, EClass targetType) {
 		List<EObject> results = new ArrayList<>();
-		for (QvtoTraceRecord record : records) {
-			if (source != null && record.source() != source) {
-				continue;
-			}
+		List<QvtoTraceRecord> candidates = source != null
+				? sourceIndex.getOrDefault(source, List.of())
+				: records;
+		for (QvtoTraceRecord record : candidates) {
 			if (record.result() instanceof EObject eo) {
 				if (targetType == null || targetType.isInstance(eo)) {
 					results.add(eo);
@@ -177,10 +204,10 @@ class QvtoTraceManager {
 	 */
 	List<EObject> invResolve(Object result, EClass sourceType) {
 		List<EObject> results = new ArrayList<>();
-		for (QvtoTraceRecord record : records) {
-			if (result != null && record.result() != result) {
-				continue;
-			}
+		List<QvtoTraceRecord> candidates = result != null
+				? resultIndex.getOrDefault(result, List.of())
+				: records;
+		for (QvtoTraceRecord record : candidates) {
 			if (record.source() instanceof EObject eo) {
 				if (sourceType == null || sourceType.isInstance(eo)) {
 					results.add(eo);
@@ -196,11 +223,11 @@ class QvtoTraceManager {
 	 */
 	List<EObject> resolveIn(String mappingName, Object source, EClass targetType) {
 		List<EObject> results = new ArrayList<>();
-		for (QvtoTraceRecord record : records) {
+		List<QvtoTraceRecord> candidates = source != null
+				? sourceIndex.getOrDefault(source, List.of())
+				: records;
+		for (QvtoTraceRecord record : candidates) {
 			if (!record.mappingName().equals(mappingName)) {
-				continue;
-			}
-			if (source != null && record.source() != source) {
 				continue;
 			}
 			if (record.result() instanceof EObject eo) {
@@ -220,11 +247,11 @@ class QvtoTraceManager {
 	 */
 	List<EObject> invResolveIn(String mappingName, Object result, EClass sourceType) {
 		List<EObject> results = new ArrayList<>();
-		for (QvtoTraceRecord record : records) {
+		List<QvtoTraceRecord> candidates = result != null
+				? resultIndex.getOrDefault(result, List.of())
+				: records;
+		for (QvtoTraceRecord record : candidates) {
 			if (!record.mappingName().equals(mappingName)) {
-				continue;
-			}
-			if (result != null && record.result() != result) {
 				continue;
 			}
 			if (record.source() instanceof EObject eo) {
@@ -234,6 +261,46 @@ class QvtoTraceManager {
 			}
 		}
 		return results;
+	}
+
+	/**
+	 * Builds a composite key for the mapping index.
+	 * Uses identity for EObjects and equality for DataType values (§8.1.11.2).
+	 */
+	private static Object buildCompositeKey(Object source, Object[] args) {
+		if (args.length == 0) {
+			return source;
+		}
+		// Use List for composite key — List.hashCode/equals uses element equality
+		// For EObject identity we wrap in IdentityKey
+		List<Object> key = new ArrayList<>(1 + args.length);
+		key.add(wrapKey(source));
+		for (Object arg : args) {
+			key.add(wrapKey(arg));
+		}
+		return key;
+	}
+
+	private static Object wrapKey(Object value) {
+		if (value instanceof EObject) {
+			return new IdentityKey(value);
+		}
+		return value;
+	}
+
+	/**
+	 * Wrapper that uses identity (==) for hashCode/equals, used for EObject keys.
+	 */
+	private record IdentityKey(Object value) {
+		@Override
+		public int hashCode() {
+			return System.identityHashCode(value);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			return obj instanceof IdentityKey other && this.value == other.value;
+		}
 	}
 
 	private static VarParameterValue createVarParameterValue(

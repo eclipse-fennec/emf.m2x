@@ -1,0 +1,18 @@
+Bundle-Name: Fennec OCL Benchmark
+Bundle-Description: Correctness comparison and performance benchmarks: Fennec OCL vs Eclipse OCL Classic
+
+-library: enableEMF
+
+-buildpath: \
+	org.antlr.antlr4-runtime;version=latest,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x;version=snapshot
+
+-testpath: \
+	lib/org.eclipse.ocl.ecore_3.22.0.jar;version=file,\
+	lib/org.eclipse.ocl_3.22.0.jar;version=file,\
+	lib/org.eclipse.ocl.common_1.22.0.jar;version=file,\
+	lib/lpg.runtime.java_2.0.17.jar;version=file

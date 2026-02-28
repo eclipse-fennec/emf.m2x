@@ -15,8 +15,12 @@
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
@@ -39,6 +43,9 @@ import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 class QvtoOperationResolver {
 
 	private final OperationalTransformation transformation;
+	private EClass cachedModuleClass;
+	private boolean moduleClassResolved;
+	private Map<String, List<ImperativeOperation>> operationIndex;
 
 	QvtoOperationResolver(OperationalTransformation transformation) {
 		this.transformation = Objects.requireNonNull(transformation);
@@ -64,13 +71,17 @@ class QvtoOperationResolver {
 	 * Finds the module EClass (named like the transformation) within the transformation.
 	 */
 	EClass findModuleClass() {
-		String name = transformation.getName();
-		return transformation.getEClassifiers().stream()
-				.filter(EClass.class::isInstance)
-				.map(EClass.class::cast)
-				.filter(c -> c.getName().equals(name))
-				.findFirst()
-				.orElse(null);
+		if (!moduleClassResolved) {
+			String name = transformation.getName();
+			cachedModuleClass = transformation.getEClassifiers().stream()
+					.filter(EClass.class::isInstance)
+					.map(EClass.class::cast)
+					.filter(c -> c.getName().equals(name))
+					.findFirst()
+					.orElse(null);
+			moduleClassResolved = true;
+		}
+		return cachedModuleClass;
 	}
 
 	/**
@@ -95,36 +106,45 @@ class QvtoOperationResolver {
 	 * Respects selective import visibility via {@code ModuleImport.importedNames}.
 	 */
 	List<ImperativeOperation> findAllOperations(String name) {
-		List<ImperativeOperation> result = new ArrayList<>();
-		// 1. Search main transformation module class
+		if (operationIndex == null) {
+			operationIndex = buildOperationIndex();
+		}
+		return operationIndex.getOrDefault(name, List.of());
+	}
+
+	private Map<String, List<ImperativeOperation>> buildOperationIndex() {
+		Map<String, List<ImperativeOperation>> index = new HashMap<>();
+		// 1. Index main transformation module class
 		EClass moduleClass = findModuleClass();
 		if (moduleClass != null) {
 			for (EOperation op : moduleClass.getEOperations()) {
-				if (op instanceof ImperativeOperation impOp && name.equals(op.getName())) {
-					result.add(impOp);
+				if (op instanceof ImperativeOperation impOp) {
+					index.computeIfAbsent(op.getName(), k -> new ArrayList<>()).add(impOp);
 				}
 			}
 		}
-		// 2. Search imported modules (§8.1.4: library operations accessible via import)
+		// 2. Index imported modules (§8.1.4: library operations accessible via import)
 		for (ModuleImport mi : transformation.getModuleImport()) {
 			Module importedModule = mi.getImportedModule();
 			if (importedModule != null) {
-				// §8.4: selective visibility — only allow named operations
 				List<String> importedNames = mi.getImportedNames();
-				if (!importedNames.isEmpty() && !importedNames.contains(name)) {
-					continue;
-				}
+				Set<String> importedNameSet = importedNames.isEmpty()
+						? null : new HashSet<>(importedNames);
 				EClass importedModuleClass = findModuleClassIn(importedModule);
 				if (importedModuleClass != null) {
 					for (EOperation op : importedModuleClass.getEOperations()) {
-						if (op instanceof ImperativeOperation impOp && name.equals(op.getName())) {
-							result.add(impOp);
+						if (op instanceof ImperativeOperation impOp) {
+							// §8.4: selective visibility — only allow named operations
+							if (importedNameSet != null && !importedNameSet.contains(op.getName())) {
+								continue;
+							}
+							index.computeIfAbsent(op.getName(), k -> new ArrayList<>()).add(impOp);
 						}
 					}
 				}
 			}
 		}
-		return result;
+		return index;
 	}
 
 	/**

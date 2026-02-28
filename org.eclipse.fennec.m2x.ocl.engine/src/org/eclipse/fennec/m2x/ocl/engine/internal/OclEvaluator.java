@@ -1306,15 +1306,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	/**
-	 * Reads a property value using the accessor cache for generated models,
-	 * falling back to eGet for dynamic models.
+	 * Reads a property value using the accessor cache.
+	 * For generated models uses LambdaMetafactory accessors,
+	 * for dynamic models uses cached eGet-based accessors.
 	 */
 	private Object getProperty(EObject eo, EStructuralFeature sf) {
-		PropertyAccessor accessor = accessorCache.getAccessor(eo, sf);
-		if (accessor != null) {
-			return accessor.get(eo);
-		}
-		return eo.eGet(sf);
+		return accessorCache.getAccessor(eo, sf).get(eo);
 	}
 
 	/**

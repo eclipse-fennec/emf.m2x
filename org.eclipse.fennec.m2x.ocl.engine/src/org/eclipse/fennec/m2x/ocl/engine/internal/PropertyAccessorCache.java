@@ -103,11 +103,6 @@ public final class PropertyAccessorCache {
 	}
 
 	PropertyAccessor getAccessor(EObject eo, EStructuralFeature sf) {
-		// Dynamic features have no generated getters — eGet is the only option
-		// and is already optimal. Skip the cache to avoid record allocation overhead.
-		if (sf.getContainerClass() == null) {
-			return null;
-		}
 		AccessorKey key = new AccessorKey(eo.getClass(), sf);
 		PropertyAccessor accessor = cache.get(key);
 		if (accessor != null) {
@@ -117,17 +112,22 @@ public final class PropertyAccessorCache {
 	}
 
 	private static PropertyAccessor createAccessor(Class<?> implClass, EStructuralFeature sf) {
-		// Try to find the typed getter on the implementation class
-		String getterName = getterName(sf);
-		try {
-			Method getter = findGetter(implClass, getterName);
-			if (getter != null) {
-				return createLambdaAccessor(getter);
+		// Generated EMF classes have a containerClass — use LambdaMetafactory for
+		// JIT-inlineable direct getter calls (~5 ns vs ~40 ns for eGet)
+		if (sf.getContainerClass() != null) {
+			String getterName = getterName(sf);
+			try {
+				Method getter = findGetter(implClass, getterName);
+				if (getter != null) {
+					return createLambdaAccessor(getter);
+				}
+			} catch (Throwable t) {
+				// Fall through to eGet fallback
 			}
-		} catch (Throwable t) {
-			// Fall through to eGet fallback
 		}
-		// Fallback: use eGet (for dynamic EObjects or if reflection fails)
+		// Dynamic EMF objects (no generated class): cache an eGet-based accessor.
+		// This captures the resolved EStructuralFeature instance, avoiding repeated
+		// name-based feature lookups (O(n) scan over all features) on every access.
 		return target -> ((EObject) target).eGet(sf);
 	}
 

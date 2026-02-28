@@ -1117,29 +1117,8 @@ public class QvtoEvaluator {
 	 * @return the EObject that owns the feature, or null if not resolvable
 	 */
 	private EObject resolveImplicitPropertyTarget(String featureName) {
-		// ObjectExp: check the _objectExp variable first (innermost object scope)
-		Object objectExp = env.lookup("_objectExp");
-		if (objectExp instanceof EObject eo
-				&& (eo.eClass().getEStructuralFeature(featureName) != null
-						|| resolveAlias(featureName, eo) != null)) {
-			return eo;
-		}
-		// §8.2.1.17: Mapping body — result has priority over self for implicit properties,
-		// because mapping body assignments target the result object.
-		Object result = env.lookup("result");
-		if (result instanceof EObject eo
-				&& (eo.eClass().getEStructuralFeature(featureName) != null
-						|| resolveAlias(featureName, eo) != null)) {
-			return eo;
-		}
-		// self context (constructor body, standalone helper)
-		Object self = env.lookup("self");
-		if (self instanceof EObject eo
-				&& (eo.eClass().getEStructuralFeature(featureName) != null
-						|| resolveAlias(featureName, eo) != null)) {
-			return eo;
-		}
-		return null;
+		// Single scope walk for all 3 candidates: _objectExp > result > self (§8.2.1.17)
+		return env.lookupImplicitTarget(featureName, this::resolveAlias);
 	}
 
 	/**
