@@ -3,11 +3,12 @@ Bundle-Description: OCL v2.5 EMF metamodel (51 EClasses + 2 EEnums)
 
 -library: enableEMF
 
--generate:\
-	model/ocl.genmodel;\
-		generate=fennecEMF;\
-		genmodel=model/ocl.genmodel;\
-		output=src
+# Generate the ocl model on demand
+#-generate:\
+#	model/ocl.genmodel;\
+#		generate=fennecEMF;\
+#		genmodel=model/ocl.genmodel;\
+#		output=src
 
 -includeresource.model: model=model
 

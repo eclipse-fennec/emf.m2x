@@ -1,5 +1,5 @@
-Bundle-Name: Fennec OCL Parser
-Bundle-Description: ANTLR4-based parser for OCL v2.5 expressions and Complete OCL documents
+Bundle-Name: Fennec M2T Parser
+Bundle-Description: ANTLR4-based parser for MOFM2T v1.0 templates
 
 -library: enableEMF
 
@@ -15,24 +15,26 @@ antlr4.tool.cp = \
 	${repo;org.abego.treelayout:org.abego.treelayout.core;1.0.3}:\
 	${repo;com.ibm.icu:icu4j;72.1}
 
-# Generate the grammar on demand
+# Split grammar: run grammar/generate.sh manually to regenerate src-gen/.
+# Commented out because the shell script is Linux/Mac only.
 #-generate: \
-#	grammar/Ocl.g4; \
+#	grammar/M2tLexer.g4; \
 #		output=src-gen; \
-#		system='java -cp ${antlr4.tool.cp} org.antlr.v4.Tool \
-#			-visitor -no-listener \
-#			-package org.eclipse.fennec.m2x.ocl.parser \
-#			-o src-gen/org/eclipse/fennec/m2x/ocl/parser \
-#			${project}/grammar/Ocl.g4'
+#		system='${project}/grammar/generate.sh \
+#			${antlr4.tool.cp} \
+#			src-gen/org/eclipse/fennec/m2x/m2t/parser \
+#			${project}/grammar'
 
-# Include grammar file for downstream import (QVT-O, QVT-R, MOFM2T)
+# Include grammar file for downstream import
 -includeresource.grammar: grammar=grammar
 
-# Suppress deprecation warnings from ANTLR4-generated code (tokenNames → VOCABULARY)
+# Suppress deprecation warnings from ANTLR4-generated code (tokenNames -> VOCABULARY)
 javac.deprecation = false
 
 -buildpath: \
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.ocl.api;version=latest,\
 	org.eclipse.fennec.m2x.ocl.model;version=latest,\
+	org.eclipse.fennec.m2x.m2t.api;version=latest,\
+	org.eclipse.fennec.m2x.m2t.model;version=latest,\
 	org.osgi.service.condition;version=latest

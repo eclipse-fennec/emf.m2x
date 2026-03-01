@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<genmodel:GenModel xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+    xmlns:genmodel="http://www.eclipse.org/emf/2002/GenModel" copyrightText="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"
+    modelDirectory="/org.eclipse.fennec.m2x.m2t.model/src" modelPluginID="org.eclipse.fennec.m2x.m2t.model"
+    modelName="M2t" rootExtendsClass="org.eclipse.emf.ecore.impl.MinimalEObjectImpl$Container"
+    importerID="org.eclipse.emf.importer.ecore" complianceLevel="21.0" copyrightFields="false"
+    usedGenPackages="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel#//ocl"
+    operationReflection="true" importOrganizing="true" oSGiCompatible="true">
+  <foreignModel>m2t.ecore</foreignModel>
+  <genPackages prefix="M2t" basePackage="org.eclipse.fennec.m2x.model" resource="XMI"
+      disposableProviderFactory="true" ecorePackage="m2t.ecore#/">
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="m2t.ecore#//OpenModeKind">
+      <genEnumLiterals ecoreEnumLiteral="m2t.ecore#//OpenModeKind/overwrite"/>
+      <genEnumLiterals ecoreEnumLiteral="m2t.ecore#//OpenModeKind/append"/>
+    </genEnums>
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="m2t.ecore#//VisibilityKind">
+      <genEnumLiterals ecoreEnumLiteral="m2t.ecore#//VisibilityKind/public"/>
+      <genEnumLiterals ecoreEnumLiteral="m2t.ecore#//VisibilityKind/private"/>
+      <genEnumLiterals ecoreEnumLiteral="m2t.ecore#//VisibilityKind/protected"/>
+    </genEnums>
+    <genClasses ecoreClass="m2t.ecore#//Module">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Module/ownedModuleElement"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//Module/input"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//Module/extends"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//Module/imports"/>
+    </genClasses>
+    <genClasses image="false" ecoreClass="m2t.ecore#//ModuleElement">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute m2t.ecore#//ModuleElement/name"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute m2t.ecore#//ModuleElement/visibility"/>
+      <genFeatures property="None" notify="false" createChild="false" ecoreFeature="ecore:EReference m2t.ecore#//ModuleElement/module"/>
+    </genClasses>
+    <genClasses image="false" ecoreClass="m2t.ecore#//Block">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Block/body"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Block/init"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//InitSection">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//InitSection/variable"/>
+    </genClasses>
+    <genClasses image="false" ecoreClass="m2t.ecore#//TemplateExpression"/>
+    <genClasses ecoreClass="m2t.ecore#//Template">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Template/parameter"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Template/guard"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//Template/overrides"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute m2t.ecore#//Template/main"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Template/post"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//Query">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Query/parameter"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Query/expression"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//Query/returnType"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//Macro">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Macro/parameter"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//Macro/returnType"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//ForBlock">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//ForBlock/loopVariable"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//ForBlock/iterSet"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//ForBlock/guard"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//ForBlock/before"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//ForBlock/each"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//ForBlock/after"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//IfBlock">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//IfBlock/ifExpr"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//IfBlock/elseIf"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//IfBlock/else"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//LetBlock">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//LetBlock/letVariable"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//LetBlock/elseLet"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//LetBlock/else"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//FileBlock">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//FileBlock/fileUrl"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute m2t.ecore#//FileBlock/openMode"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//FileBlock/uniqId"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//FileBlock/charset"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//ProtectedAreaBlock">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//ProtectedAreaBlock/marker"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//TraceBlock">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//TraceBlock/modelElement"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//TextExpression">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute m2t.ecore#//TextExpression/value"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//TemplateInvocation">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//TemplateInvocation/definition"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//TemplateInvocation/argument"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//TemplateInvocation/before"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//TemplateInvocation/each"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//TemplateInvocation/after"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute m2t.ecore#//TemplateInvocation/super"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//QueryInvocation">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//QueryInvocation/definition"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//QueryInvocation/argument"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//MacroInvocation">
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//MacroInvocation/definition"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//MacroInvocation/argument"/>
+    </genClasses>
+  </genPackages>
+</genmodel:GenModel>

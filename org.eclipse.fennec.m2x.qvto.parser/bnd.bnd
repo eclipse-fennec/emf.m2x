@@ -15,15 +15,16 @@ antlr4.tool.cp = \
 	${repo;org.abego.treelayout:org.abego.treelayout.core;1.0.3}:\
 	${repo;com.ibm.icu:icu4j;72.1}
 
--generate: \
-	grammar/QvtO.g4; \
-		output=src-gen; \
-		system='java -cp ${antlr4.tool.cp} org.antlr.v4.Tool \
-			-visitor -no-listener \
-			-lib ${project}/../org.eclipse.fennec.m2x.ocl.parser/grammar \
-			-package org.eclipse.fennec.m2x.qvto.parser \
-			-o src-gen/org/eclipse/fennec/m2x/qvto/parser \
-			${project}/grammar/QvtO.g4'
+# Generate grammar on demand
+#-generate: \
+#	grammar/QvtO.g4; \
+#		output=src-gen; \
+#		system='java -cp ${antlr4.tool.cp} org.antlr.v4.Tool \
+#			-visitor -no-listener \
+#			-lib ${project}/../org.eclipse.fennec.m2x.ocl.parser/grammar \
+#			-package org.eclipse.fennec.m2x.qvto.parser \
+#			-o src-gen/org/eclipse/fennec/m2x/qvto/parser \
+#			${project}/grammar/QvtO.g4'
 
 # Include grammar file for downstream import
 -includeresource.grammar: grammar=grammar

@@ -3,11 +3,12 @@ Bundle-Description: QVT-Operational v1.3 EMF metamodel (3 EPackages, 59 classifi
 
 -library: enableEMF
 
--generate:\
-	model/qvto.genmodel;\
-		generate=fennecEMF;\
-		genmodel=model/qvto.genmodel;\
-		output=src
+# Modify model only on demand
+#-generate:\
+#	model/qvto.genmodel;\
+#		generate=fennecEMF;\
+#		genmodel=model/qvto.genmodel;\
+#		output=src
 
 -includeresource.model: model=model
 

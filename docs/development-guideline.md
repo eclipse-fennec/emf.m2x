@@ -806,15 +806,21 @@ See [OCL Architecture](ocl-architecture.md) and [OCL Spec Compliance](ocl-spec-c
 
 See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Plan](qvto-test-plan.md) for spec-conformance tracking, and [QVT-O Spec Gap Analysis](qvto-spec-gap-analysis.md) for detailed gap documentation.
 
-### Phase 3: Acceleo/MOFM2T (with OCL expressions + cherry-picked extensions)
+### Phase 3: Acceleo/MOFM2T (with OCL expressions + cherry-picked extensions) — In Progress
 
-| Step | Module | Description |
-|------|--------|-------------|
-| 3.1 | `m2t.model` | Template model: Module, Template, Query, ForBlock, IfBlock (+ elseif), LetBlock, FileBlock, ProtectedAreaBlock. OCL expressions embedded via `ocl.model` types. |
-| 3.2 | `m2t.api` | `M2tEngine` interface, `M2tService` extension interface, `M2tModuleResolver`, `M2tGenerationOptions`, public API |
-| 3.3 | `m2t.parser` | ANTLR4 grammar (`Mofm2t.g4`, imports `Ocl.g4` for embedded OCL expressions) |
-| 3.4 | `m2t.engine` | Template evaluator (uses OCL engine with lenient mode by default), file writer with encoding, protected area preservation, post() support, Java service integration, DS component |
-| 3.5 | `m2t.tests` | Template generation tests, MOFM2T spec compliance tests |
+**Status:** P3-0 (Metamodel + Infrastructure) ✅ Complete. Next: P3-1 (Parser).
+
+**Implementation Plan:** See [`m2t-implementation-plan.md`](m2t-implementation-plan.md) for detailed sub-phases.
+
+| Sub-Phase | Module | Description | Status |
+|-----------|--------|-------------|--------|
+| P3-0 | `m2t.model`, `m2t.api` | EMF metamodel (2 enums, 17 EClasses), public API interfaces, bundle infrastructure | ✅ Done |
+| P3-1 | `m2t.parser` | ANTLR4 grammar (`M2t.g4`, imports `Ocl.g4`, text_explicit + code_explicit modes) | TODO |
+| P3-2 | `m2t.engine` | Core engine (template eval, for/if/let, whitespace handling, query invocation) | TODO |
+| P3-3 | `m2t.engine` | FileBlock + writer stack (file output, stdout, charset) | TODO |
+| P3-4 | `m2t.engine` | Module composition (import/extends), protected areas, trace block | TODO |
+| P3-5 | `m2t.engine` | Macros + MOFM2T standard library (15 string operations) | TODO |
+| P3-6 | `m2t.engine` | Post-expression, encoding, end-to-end tests, regression check | TODO |
 
 ### Phase 4: QVT-Declarative (Relations + Core)
 
