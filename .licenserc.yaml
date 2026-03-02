@@ -22,6 +22,7 @@ header:
     - '**/package-info.java'
     - '**/packageinfo'
     - '**/module-info.java'
+    - '**/*.sh'
     - '**/*.bnd'
     - '**/*.bndrun'
     - '**/*.xml'

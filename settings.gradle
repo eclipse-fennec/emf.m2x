@@ -20,9 +20,15 @@ plugins {
 }
 rootProject.name = "fennec-m2x"
 
-// Exclude 'docs' folder from Gradle build — it contains documentation, not build targets
+// Exclude non-standard projects from Gradle build
+def excludedProjects = [
+  'docs',                                          // documentation, not build targets
+  'org.eclipse.fennec.m2x.ocl.benchmark',          // requires local Eclipse JARs in lib/
+  'org.eclipse.fennec.m2x.qvto.benchmark',         // requires local Eclipse JARs in lib/
+] as Set
+
 gradle.beforeProject { project ->
-  if (project.name == 'docs') {
+  if (project.name in excludedProjects) {
     project.tasks.configureEach { task ->
       task.enabled = false
     }
