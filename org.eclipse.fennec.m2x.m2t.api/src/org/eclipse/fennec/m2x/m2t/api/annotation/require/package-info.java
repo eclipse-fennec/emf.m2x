@@ -14,11 +14,4 @@
  */
 @org.osgi.annotation.bundle.Export
 @org.osgi.annotation.versioning.Version("1.0")
-@org.osgi.annotation.bundle.Capability(
-		namespace = "org.eclipse.fennec.m2x",
-		name = "m2t.engine",
-		attribute = {
-				"provider=eclipse-fennec",
-				"version:Version=1.0"
-		})
-package org.eclipse.fennec.m2x.m2t.engine;
+package org.eclipse.fennec.m2x.m2t.api.annotation.require;

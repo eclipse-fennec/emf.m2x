@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -94,10 +95,11 @@ public class OclEngineImpl implements OclEngine {
 	private final PropertyAccessorCache accessorCache;
 	private final List<OclOperationProvider> configProviders;
 	private final boolean configCustomOpsEnabled;
+	private final OclEvaluationOptions defaultOptions;
 	private final List<OclOperationProvider> defProviders = new CopyOnWriteArrayList<>();
 	private final List<CompleteOclContribution> oclContributions = new CopyOnWriteArrayList<>();
 	private final Map<DefKey, DefEntry> defProperties = new ConcurrentHashMap<>();
-	private volatile OclEvaluationOptions delegateOptions = OclEvaluationOptions.strict();
+	private volatile OclEvaluationOptions delegateOptions;
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -115,6 +117,8 @@ public class OclEngineImpl implements OclEngine {
 		this.accessorCache = new PropertyAccessorCache();
 		this.configProviders = List.copyOf(config.operationProviders());
 		this.configCustomOpsEnabled = config.customOperationsEnabled();
+		this.defaultOptions = toDefaultOptions(config);
+		this.delegateOptions = defaultOptions;
 	}
 
 	/**
@@ -226,7 +230,7 @@ public class OclEngineImpl implements OclEngine {
 
 	@Override
 	public Object evaluate(OclExpression expression, OclContext context) {
-		return evaluate(expression, context, OclEvaluationOptions.strict());
+		return evaluate(expression, context, defaultOptions);
 	}
 
 	@Override
@@ -494,6 +498,23 @@ public class OclEngineImpl implements OclEngine {
 	 */
 	public OclExpressionCache getExpressionCache() {
 		return expressionCache;
+	}
+
+	/**
+	 * Builds {@link OclEvaluationOptions} from the given {@link OclConfiguration}.
+	 */
+	private static OclEvaluationOptions toDefaultOptions(OclConfiguration config) {
+		Duration timeout = config.timeoutMs() > 0 ? Duration.ofMillis(config.timeoutMs()) : null;
+		return new OclEvaluationOptions(
+				config.nullHandling(),
+				config.errorRecovery(),
+				config.maxDepth(),
+				timeout,
+				config.maxCollectionSize(),
+				config.maxClosureIterations(),
+				config.maxRegexLength(),
+				config.customOperationsEnabled(),
+				List.of());
 	}
 
 	/**

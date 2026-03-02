@@ -8,3 +8,11 @@ jacocoTestReport {
         "${rootProject.projectDir}/org.eclipse.fennec.m2x.ocl.parser/src"
     ))
 }
+
+def resolveTask = tasks.named("resolve.test") {
+	outputBndrun = layout.buildDirectory.file("test.bndrun")
+}
+
+tasks.named("testOSGi") {
+	bndrun = resolveTask.flatMap { it.outputBndrun }
+}

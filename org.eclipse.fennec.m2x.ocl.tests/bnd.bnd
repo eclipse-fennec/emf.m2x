@@ -1,7 +1,10 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
 Bundle-Name: Fennec OCL Tests
 Bundle-Description: Unit tests, delegate tests, and spec compliance tests for the Fennec OCL engine
 
--library: enableEMF
+-library: \
+	enableEMF,\
+	enableOSGi-Test
 
 src=${^src},src-gen
 
@@ -15,6 +18,7 @@ src=${^src},src-gen
 -includeresource.model: model=model
 
 -buildpath: \
+	org.osgi.test.junit5.cm;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\

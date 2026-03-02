@@ -14,6 +14,13 @@
  */
 @org.osgi.annotation.bundle.Export
 @org.osgi.annotation.versioning.Version("1.0")
+@org.osgi.annotation.bundle.Capability(
+		namespace = "org.eclipse.fennec.m2x",
+		name = "ocl.engine",
+		attribute = {
+				"provider=eclipse-fennec",
+				"version:Version=1.0"
+		})
 @org.osgi.annotation.bundle.Requirement(
 		namespace = "org.eclipse.fennec.m2x",
 		name = "ocl.parser")

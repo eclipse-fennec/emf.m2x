@@ -19,6 +19,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.ConfigurationPolicy;
 
 /**
  * Default {@link OclExpressionCache} service component.
@@ -41,8 +42,12 @@ import org.osgi.service.component.annotations.Component;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-@Component(service = OclExpressionCache.class)
+@Component(name="DefaultOclExpressionCache" , service = OclExpressionCache.class, configurationPolicy = ConfigurationPolicy.OPTIONAL)
 public class DefaultOclExpressionCacheComponent implements OclExpressionCache {
+	
+	public @interface Config {
+		int oclExpressionSize() default DefaultOclExpressionCacheComponent.DEFAULT_SIZE;
+	}
 
 	/** Default cache size: 1024 entries. */
 	private static final int DEFAULT_SIZE = 1024;
@@ -50,8 +55,8 @@ public class DefaultOclExpressionCacheComponent implements OclExpressionCache {
 	private final OclLruExpressionCache delegate;
 
 	@Activate
-	public DefaultOclExpressionCacheComponent() {
-		this.delegate = new OclLruExpressionCache(DEFAULT_SIZE);
+	public DefaultOclExpressionCacheComponent(Config config) {
+		this.delegate = new OclLruExpressionCache(config.oclExpressionSize());
 	}
 
 	@Override

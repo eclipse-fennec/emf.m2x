@@ -676,15 +676,27 @@ engine.installDelegates();
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│  OclParserSupport (PROTOTYPE)                               │
+│  → OclExpressionParser service                              │
+│  Each consumer gets its own parser instance                 │
+└──────────────┬──────────────────────────────────────────────┘
+               │ @Reference(scope = PROTOTYPE_REQUIRED)
+               │
+┌──────────────┼──────────────────────────────────────────────┐
 │  DefaultOclExpressionCacheComponent (SINGLETON)             │
 │  → OclExpressionCache service (LRU, 1024 entries)          │
+│  Shared across all engine instances by default              │
 └──────────────┬──────────────────────────────────────────────┘
                │ @Reference(name="expressionCache")
 ┌──────────────▼──────────────────────────────────────────────┐
 │  OclEngineComponent (PROTOTYPE)                             │
 │  → OclEngine service                                        │
-│  Each instance has its own PropertyAccessorCache             │
-│  All instances share the injected OclExpressionCache         │
+│  @Designate(ocd = OclEngineConfiguration.class)             │
+│  Each consumer gets its own engine instance with:           │
+│  - own PropertyAccessorCache (per-engine, not shared)       │
+│  - own OclParserSupport instance (PROTOTYPE_REQUIRED)       │
+│  - shared OclExpressionCache (via @Reference target)        │
+│  Engine-wide defaults from ConfigAdmin (ocl.* properties)   │
 └──────────────┬──────────────────────────────────────────────┘
                │
 ┌──────────────▼──────────────────────────────────────────────┐
@@ -692,23 +704,163 @@ engine.installDelegates();
 └─────────────────────────────────────────────────────────────┘
 ```
 
+**Component scopes and lifecycle:**
+
+| Component | Scope | Instances | Rationale |
+|-----------|-------|-----------|-----------|
+| `OclParserSupport` | PROTOTYPE | One per engine | ANTLR4 parser is lightweight; each engine gets its own instance via `PROTOTYPE_REQUIRED` |
+| `OclEngineComponent` | PROTOTYPE | One per consumer | Each `@Reference OclEngine` injection creates a fresh engine with isolated `PropertyAccessorCache` |
+| `DefaultOclExpressionCacheComponent` | SINGLETON | One per config (shared) | Parse cache is thread-safe and expensive to warm; shared across all engines by default |
+
+**Key:** Every `@Reference OclEngine` injection yields a **fresh, isolated engine instance**. The parser and engine are never shared between consumers. Only the expression cache is shared (by default) — this is intentional, since parsed ASTs are immutable and safe to reuse.
+
 **Key components:**
-- `OclEngineComponent` — PROTOTYPE scope, extends `OclEngineImpl`, no `installDelegates`
+- `OclEngineComponent` — PROTOTYPE scope, extends `OclEngineImpl`, `@Designate`d with `OclEngineConfiguration`
+- `OclParserSupport` — PROTOTYPE scope, ANTLR4-based parser
+- `OclEngineConfiguration` — `@ObjectClassDefinition` annotation with `ocl.*` prefixed properties
+- `OclConfigurationHelper` — maps `OclEngineConfiguration` to `OclConfiguration`
 - `DefaultOclExpressionCacheComponent` — SINGLETON, provides default LRU cache (1024 entries)
 - Delegate factories — separate `@Component` services with emf.osgi properties
 
-### 9.4 Customizing the Expression Cache (OSGi Configurator)
+### 9.4 Engine-Wide Defaults via ConfigAdmin
+
+The `OclEngineComponent` supports engine-wide defaults through the `OclEngineConfiguration` Metatype annotation. All properties use the `ocl.` prefix and map directly to `OclConfiguration` fields.
+
+**Available properties:**
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ocl.maxDepth` | int | 1,000 | Maximum expression nesting depth |
+| `ocl.maxCollectionSize` | int | 1,000,000 | Maximum collection elements |
+| `ocl.maxClosureIterations` | int | 100,000 | Maximum closure() iterations |
+| `ocl.maxRegexLength` | int | 1,000 | Maximum regex pattern length |
+| `ocl.timeout` | long | 0 | Evaluation timeout in ms (0 = no timeout) |
+| `ocl.nullHandling` | String | `STRICT` | `STRICT` or `LENIENT` |
+| `ocl.errorRecovery` | String | `FAIL_FAST` | `FAIL_FAST` or `COLLECT_ERRORS` |
+| `ocl.customOperationsEnabled` | boolean | false | Enable config-registered custom operations |
+
+These defaults are used by:
+- `evaluate(expression, context)` — convenience method without explicit options
+- `delegateOptions` — initial value for EMF delegate evaluations
+
+Calls with explicit `OclEvaluationOptions` override the engine-wide defaults.
+
+**Default configuration (OSGi Configurator JSON):**
 
 ```json
 {
     ":configurator:resource-version": 1,
-    "org.eclipse.fennec.m2x.ocl.engine.OclEngineComponent": {
-        "expressionCache.target": "(cache.name=large-cache)"
+    "DefaultOclEngine": {
+        "ocl.maxDepth": 500,
+        "ocl.maxCollectionSize": 100000,
+        "ocl.timeout": 5000,
+        "ocl.nullHandling": "STRICT"
     }
 }
 ```
 
-### 9.5 Consumer Example
+Without explicit configuration, all defaults match `OclEvaluationOptions.strict()` — existing behavior is preserved.
+
+### 9.5 Expression Cache Sharing and Isolation
+
+By default, all engine instances share the single `DefaultOclExpressionCache` (SINGLETON). This is efficient because parsed `OclExpression` ASTs are immutable and thread-safe.
+
+**Shared cache (default behavior — no configuration needed):**
+
+All engines use the same cache. A parse result cached by one engine is reused by all others:
+
+```
+Engine A ──┐
+Engine B ──┼──→ DefaultOclExpressionCache (1024 entries)
+Engine C ──┘
+```
+
+**Custom shared cache (larger size):**
+
+Create a cache with custom size; all engines that target it share the same instance:
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultOclExpressionCache~large": {
+        "oclExpressionSize": 8192,
+        "name": "large-cache"
+    },
+    "DefaultOclEngine": {
+        "expressionCache.target": "(name=large-cache)"
+    }
+}
+```
+
+**Individual caches per engine (isolation):**
+
+Create separate cache instances for engines that should not share parse results — e.g. when different engines evaluate expressions against different metamodels:
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultOclExpressionCache~app-a": {
+        "oclExpressionSize": 2048,
+        "name": "cache-app-a"
+    },
+    "DefaultOclExpressionCache~app-b": {
+        "oclExpressionSize": 512,
+        "name": "cache-app-b"
+    },
+    "DefaultOclEngine~app-a": {
+        "expressionCache.target": "(name=cache-app-a)",
+        "engine.tag": "app-a"
+    },
+    "DefaultOclEngine~app-b": {
+        "expressionCache.target": "(name=cache-app-b)",
+        "engine.tag": "app-b"
+    }
+}
+```
+
+```
+Engine app-a ──→ cache-app-a (2048 entries)
+Engine app-b ──→ cache-app-b (512 entries)
+```
+
+### 9.6 Multiple Engine Configurations
+
+Use factory configurations to create multiple engines with different security profiles:
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultOclEngine~trusted": {
+        "ocl.maxDepth": 1000,
+        "ocl.nullHandling": "STRICT",
+        "engine.tag": "trusted"
+    },
+    "DefaultOclEngine~sandbox": {
+        "ocl.maxDepth": 50,
+        "ocl.maxCollectionSize": 1000,
+        "ocl.maxClosureIterations": 100,
+        "ocl.timeout": 2000,
+        "ocl.nullHandling": "STRICT",
+        "engine.tag": "sandbox"
+    }
+}
+```
+
+Consumers select a specific engine via target filter:
+
+```java
+@Component
+public class MyService {
+
+    @Reference(target = "(engine.tag=trusted)")
+    OclEngine trustedEngine;
+
+    @Reference(target = "(engine.tag=sandbox)")
+    OclEngine sandboxEngine;
+}
+```
+
+### 9.7 Consumer Example
 
 ```java
 @Component
@@ -780,30 +932,47 @@ Limits are per-evaluation (not global). Violations produce `OclInvalid` with dia
 
 When evaluating OCL expressions from untrusted sources:
 
-1. **Set conservative limits:**
+1. **Set conservative limits** — per-evaluation (standalone):
    ```java
    OclEvaluationOptions sandboxed = OclEvaluationOptions.strict()
        .withMaxDepth(100)
        .withMaxCollectionSize(10_000)
        .withMaxClosureIterations(1_000)
-       .withMaxRegexLength(200);
+       .withMaxRegexLength(200)
+       .withTimeout(Duration.ofSeconds(5));
    ```
 
-2. **Use bounded model extents** for `allInstances()`.
+2. **Set engine-wide defaults** — via `OclConfiguration` (standalone) or ConfigAdmin (OSGi):
+   ```java
+   // Standalone
+   OclConfiguration config = OclConfiguration.builder(parser)
+       .maxDepth(100).maxCollectionSize(10_000)
+       .maxClosureIterations(1_000).maxRegexLength(200)
+       .timeoutMs(5000).build();
+   ```
+   ```json
+   // OSGi Configurator
+   {
+       ":configurator:resource-version": 1,
+       "DefaultOclEngine": {
+           "ocl.maxDepth": 100,
+           "ocl.maxCollectionSize": 10000,
+           "ocl.maxClosureIterations": 1000,
+           "ocl.maxRegexLength": 200,
+           "ocl.timeout": 5000
+       }
+   }
+   ```
 
-3. **Configure delegate options** before `installDelegates()`:
+3. **Use bounded model extents** for `allInstances()`.
+
+4. **Configure delegate options** before `installDelegates()` (standalone only; in OSGi the engine-wide defaults are applied automatically):
    ```java
    engine.setDelegateOptions(sandboxed);
    engine.installDelegates();
    ```
 
-4. **Check `OclResult.diagnostics()`** — limit violations are reported as error diagnostics.
-
-5. **Set evaluation timeout** for untrusted input:
-   ```java
-   OclEvaluationOptions sandboxed = OclEvaluationOptions.strict()
-       .withTimeout(Duration.ofSeconds(5));
-   ```
+5. **Check `OclResult.diagnostics()`** — limit violations are reported as error diagnostics.
 
 ---
 

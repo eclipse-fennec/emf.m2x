@@ -14,14 +14,16 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine;
 
-import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
+import org.osgi.service.metatype.annotations.Designate;
 
 /**
  * OSGi Declarative Services component that publishes the {@link OclEngine}
@@ -44,16 +46,27 @@ import org.osgi.service.component.annotations.ServiceScope;
  * }
  * </pre>
  *
+ * <p>Engine-wide defaults (security limits, null handling, error recovery) can
+ * be configured via ConfigurationAdmin using {@code ocl.*} properties:
+ * <pre>
+ * "DefaultOclEngine": {
+ *     "ocl.maxDepth": 500,
+ *     "ocl.nullHandling": "LENIENT"
+ * }
+ * </pre>
+ *
  * @author Data In Motion Consulting
  * @since 1.0
  */
-@Component(service = OclEngine.class, scope = ServiceScope.PROTOTYPE)
+@Designate(ocd = OclEngineConfiguration.class)
+@Component(name="DefaultOclEngine", service = OclEngine.class, scope = ServiceScope.PROTOTYPE, configurationPolicy = ConfigurationPolicy.OPTIONAL)
 public class OclEngineComponent extends OclEngineImpl {
 
 	@Activate
 	public OclEngineComponent(
-			@Reference OclExpressionParser parser,
+			OclEngineConfiguration config,
+			@Reference(scope = ReferenceScope.PROTOTYPE_REQUIRED) OclExpressionParser parser,
 			@Reference(name = "expressionCache") OclExpressionCache cache) {
-		super(OclConfiguration.builder(parser).expressionCache(cache).build());
+		super(OclConfigurationHelper.from(config, parser, cache));
 	}
 }

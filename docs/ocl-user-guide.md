@@ -125,7 +125,7 @@ OclEngine engine = new OclEngineImpl(config);
 
 ### 3.4 OSGi (Declarative Services)
 
-In OSGi, the engine is available as a DS component. Inject it via `@Reference`:
+In OSGi, the engine and parser are registered as **PROTOTYPE-scoped** DS components. Every `@Reference` injection creates a fresh, isolated instance:
 
 ```java
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
@@ -136,12 +136,117 @@ import org.osgi.service.component.annotations.Reference;
 public class MyComponent {
 
     @Reference
-    private OclEngine engine;
+    private OclEngine engine;  // fresh instance, own PropertyAccessorCache
 
     public boolean validateName(EObject obj) {
         return (Boolean) engine.evaluate("self.name.size() > 0", OclContext.of(obj));
     }
 }
+```
+
+**Component scopes:**
+
+| Component | Scope | What's shared? |
+|-----------|-------|----------------|
+| `OclParserSupport` | PROTOTYPE | Nothing — each engine gets its own parser |
+| `OclEngineComponent` | PROTOTYPE | Nothing — each consumer gets its own engine with isolated `PropertyAccessorCache` |
+| `DefaultOclExpressionCacheComponent` | SINGLETON | **Shared by default** — all engines share the same LRU parse cache (1024 entries) |
+
+The expression cache is shared because parsed `OclExpression` ASTs are immutable and thread-safe. This means a parse result from one engine benefits all others.
+
+To use **individual caches** (e.g. for different metamodels), create factory configurations with `expressionCache.target` — see [§3.5](#35-osgi-configuration-via-configadmin) and the [Architecture Doc §9.5](ocl-architecture.md#95-expression-cache-sharing-and-isolation).
+
+### 3.5 OSGi Configuration via ConfigAdmin
+
+The `OclEngineComponent` supports engine-wide defaults through OSGi ConfigurationAdmin. All properties use the `ocl.` prefix.
+
+**OSGi Configurator JSON:**
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultOclEngine": {
+        "ocl.maxDepth": 500,
+        "ocl.maxCollectionSize": 100000,
+        "ocl.maxClosureIterations": 10000,
+        "ocl.maxRegexLength": 200,
+        "ocl.timeout": 5000,
+        "ocl.nullHandling": "STRICT",
+        "ocl.errorRecovery": "FAIL_FAST",
+        "ocl.customOperationsEnabled": false
+    }
+}
+```
+
+**Available properties:**
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `ocl.maxDepth` | int | 1,000 | Maximum expression nesting depth |
+| `ocl.maxCollectionSize` | int | 1,000,000 | Maximum collection elements |
+| `ocl.maxClosureIterations` | int | 100,000 | Maximum closure() iterations |
+| `ocl.maxRegexLength` | int | 1,000 | Maximum regex pattern length |
+| `ocl.timeout` | long | 0 | Evaluation timeout in ms (0 = no timeout) |
+| `ocl.nullHandling` | String | `STRICT` | `STRICT` or `LENIENT` |
+| `ocl.errorRecovery` | String | `FAIL_FAST` | `FAIL_FAST` or `COLLECT_ERRORS` |
+| `ocl.customOperationsEnabled` | boolean | false | Enable config-registered custom operations |
+
+These defaults are used by `evaluate(expression, context)` (without explicit options). Calls with explicit `OclEvaluationOptions` override the engine-wide defaults.
+
+**Multiple engine configurations:**
+
+Use factory configurations to create multiple engines with different settings:
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultOclEngine~strict": {
+        "ocl.maxDepth": 100,
+        "ocl.nullHandling": "STRICT",
+        "engine.tag": "strict"
+    },
+    "DefaultOclEngine~lenient": {
+        "ocl.maxDepth": 1000,
+        "ocl.nullHandling": "LENIENT",
+        "engine.tag": "lenient"
+    }
+}
+```
+
+Inject a specific engine via filter:
+
+```java
+@Reference(target = "(engine.tag=strict)")
+private OclEngine strictEngine;
+
+@Reference(target = "(engine.tag=lenient)")
+private OclEngine lenientEngine;
+```
+
+### 3.6 Standalone Configuration with Engine-Wide Defaults
+
+The `OclConfiguration` builder also supports engine-wide defaults for standalone (non-OSGi) use:
+
+```java
+OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
+    .expressionCache(OclLruExpressionCache.ofSize(2048))
+    .nullHandling(NullHandling.LENIENT)
+    .errorRecovery(ErrorRecovery.COLLECT_ERRORS)
+    .maxDepth(500)
+    .timeoutMs(5000)
+    .maxCollectionSize(100_000)
+    .maxClosureIterations(10_000)
+    .maxRegexLength(200)
+    .build();
+
+OclEngine engine = new OclEngineImpl(config);
+
+// evaluate() without options uses the engine-wide defaults
+Object result = engine.evaluate("self.name", OclContext.of(obj));
+
+// evaluate() with explicit options overrides the defaults
+Object sandboxed = engine.evaluate(expr, ctx,
+    OclEvaluationOptions.strict().withMaxDepth(50));
 ```
 
 ---
@@ -282,6 +387,12 @@ OclContext ctx = new OclContext(myEObject, null, Map.of(), null, interceptor);
 ## 6. Evaluation Options
 
 `OclEvaluationOptions` controls how the engine handles nulls, errors, and resource limits.
+
+There are three levels of configuration, from broadest to narrowest:
+
+1. **Engine-wide defaults** — set via `OclConfiguration` builder (standalone) or ConfigAdmin (OSGi). Used by `evaluate(expression, context)`.
+2. **Delegate defaults** — set via `setDelegateOptions()`. Used by EMF delegate evaluations.
+3. **Per-evaluation options** — passed explicitly to `evaluate(expression, context, options)`. Override engine-wide defaults.
 
 ### 6.1 Presets
 
@@ -734,6 +845,27 @@ if (result.value() == OclInvalid.INSTANCE) {
 | User input (console, LSP) | Untrusted | Tightened limits + timeout |
 | Custom operation providers | Controlled (D29) | Disabled by default; requires `customOperationsEnabled` on both Config and Options |
 | EMF delegates | Explicit opt-in | Configure `delegateOptions` before `installDelegates()` |
+
+### OSGi: Engine-Wide Security Defaults via ConfigAdmin
+
+In an OSGi environment, configure conservative defaults centrally via ConfigAdmin instead of relying on each caller to pass sandboxed options:
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultOclEngine": {
+        "ocl.maxDepth": 100,
+        "ocl.maxCollectionSize": 10000,
+        "ocl.maxClosureIterations": 1000,
+        "ocl.maxRegexLength": 200,
+        "ocl.timeout": 5000,
+        "ocl.nullHandling": "STRICT",
+        "ocl.errorRecovery": "FAIL_FAST"
+    }
+}
+```
+
+These limits apply to all `evaluate(expression, context)` calls (without explicit options), including EMF delegate evaluations. Callers can still pass explicit `OclEvaluationOptions` to override for individual evaluations.
 
 ### EMF Delegate Security
 

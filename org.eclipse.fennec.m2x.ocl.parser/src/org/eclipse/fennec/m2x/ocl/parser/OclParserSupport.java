@@ -26,6 +26,8 @@ import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.ServiceScope;
 
 /**
  * Entry point for OCL parsing. Provides methods to parse single expressions
@@ -44,6 +46,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclParseException;
  * @author Data In Motion Consulting
  * @since 1.0
  */
+@Component(scope = ServiceScope.PROTOTYPE, property = "parser.type=DEFAULT")
 public class OclParserSupport implements OclExpressionParser {
 
 	/**
