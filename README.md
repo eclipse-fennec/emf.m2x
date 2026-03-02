@@ -1,11 +1,95 @@
 # Fennec M2M
-lorem ipsum
+
+Lightweight, spec-compliant implementations of OMG model transformation and constraint languages, fully decoupled from the Eclipse platform.
+
+- **OCL v2.5** — Object Constraint Language (backward compatible with v2.4)
+- **QVT Operational v1.3** — Query/View/Transformation (imperative)
+- **QVT Declarative v1.3** — Relations + Core (planned)
+- **MOFM2T v1.0** — MOF Model to Text Transformation (in progress)
+
+All engines work as **standalone Java 21 libraries** with optional OSGi support via Declarative Services.
+
+## Modules
+
+### OCL — Object Constraint Language
+
+| Bundle | Description | Status |
+|--------|-------------|--------|
+| `org.eclipse.fennec.m2x.ocl.model` | OCL EMF metamodel (50 classifiers) | Done |
+| `org.eclipse.fennec.m2x.ocl.api` | Public API interfaces | Done |
+| `org.eclipse.fennec.m2x.ocl.parser` | ANTLR4 parser | Done |
+| `org.eclipse.fennec.m2x.ocl.engine` | Switch-based evaluator | Done |
+| `org.eclipse.fennec.m2x.ocl.tests` | 4,202 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.ocl.benchmark` | Performance benchmarks | Done |
+
+### QVT-O — QVT Operational
+
+| Bundle | Description | Status |
+|--------|-------------|--------|
+| `org.eclipse.fennec.m2x.qvto.model` | QVT-O + Trace EMF metamodel (59 classifiers) | Done |
+| `org.eclipse.fennec.m2x.qvto.api` | Public API interfaces | Done |
+| `org.eclipse.fennec.m2x.qvto.parser` | ANTLR4 parser | Done |
+| `org.eclipse.fennec.m2x.qvto.engine` | Evaluator (mappings, resolve, trace, blackbox) | Done |
+| `org.eclipse.fennec.m2x.qvto.tests` | 1,050 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvto.benchmark` | Performance benchmarks | Done |
+
+### M2T — MOF Model to Text
+
+| Bundle | Description | Status |
+|--------|-------------|--------|
+| `org.eclipse.fennec.m2x.m2t.model` | MOFM2T EMF metamodel (2 enums, 17 EClasses) | Done |
+| `org.eclipse.fennec.m2x.m2t.api` | Public API interfaces | Done |
+| `org.eclipse.fennec.m2x.m2t.parser` | ANTLR4 parser | In Progress |
+| `org.eclipse.fennec.m2x.m2t.engine` | Template evaluator | Planned |
+| `org.eclipse.fennec.m2x.m2t.tests` | Tests | Planned |
 
 ## Build
 
 ```bash
-./gradlew build                                    # Build all
+cd workspace/
+
+# Build all
+./gradlew build
+
+# Run tests per component
+./gradlew org.eclipse.fennec.m2x.ocl.tests:test
+./gradlew org.eclipse.fennec.m2x.qvto.tests:test
+./gradlew org.eclipse.fennec.m2x.m2t.tests:test
+
+# Run benchmarks
+./gradlew org.eclipse.fennec.m2x.ocl.benchmark:perfTest
+./gradlew org.eclipse.fennec.m2x.qvto.benchmark:perfTest
 ```
+
+**Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
+
+## User Guides
+
+- **[OCL Engine User Guide](docs/ocl-user-guide.md)** — How to use the OCL engine as a Java library (setup, evaluation, caching, EMF delegates, custom operations)
+- **[QVT-O Engine User Guide](docs/qvto-user-guide.md)** — How to use the QVT-O engine (setup, model extents, execution, tracing, blackbox libraries, multi-file composition)
+
+## Architecture & Design
+
+- [Development Guideline](docs/development-guideline.md) — Conventions, coding standards, testing strategy, OSGi architecture, roadmap
+- [OCL Architecture](docs/ocl-architecture.md) — OCL implementation reference (metamodel, parser, engine, caching, delegates)
+- [QVT-O Architecture](docs/qvto-architecture.md) — QVT-O implementation reference (metamodel, parser, engine, trace, resolve)
+- [Design Decisions](docs/design-decisions.md) — Decision records D1–D28 with rationale
+- [OCL Spec Compliance](docs/ocl-spec-compliance.md) — Gap analysis against OCL v2.4 spec
+- [QVT-O Test Plan](docs/qvto-test-plan.md) — Spec-conformance test plan (Phase 0–10)
+- [M2T Implementation Plan](docs/m2t-implementation-plan.md) — MOFM2T implementation plan (P3-0 through P3-6)
+
+## Benchmarks
+
+Fennec is significantly faster than the Eclipse reference implementations:
+
+| Metric | OCL | QVT-O |
+|--------|-----|-------|
+| Parse | 100–315x faster | 2.2x faster |
+| Parse (cached) | ~100,000x faster | — |
+| Parse + Eval | 176–454x faster | — |
+| End-to-End | — | 2.3x faster |
+
+See [Benchmark Results](docs/benchmark-results.md) for detailed numbers and methodology.
 
 ## Developers
 

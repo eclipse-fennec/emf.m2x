@@ -21,25 +21,25 @@ Machine: mark-dell
 
 ### 1.1 Parse Performance
 
-Times are total for 1,000 iterations (lower is better).
+Times are total for 1000 iterations (lower is better).
 
-| Expression | Fennec plain | Fennec+cache | Fennec+warmUp | Eclipse | Fennec/Eclipse |
-|-----------|-------------|-------------|--------------|---------|----------------|
-| simple | 6.66 ms | 0.12 ms | 0.11 ms | 665.37 ms | **0.01x** (100x faster) |
-| medium | 34.52 ms | 0.15 ms | 0.14 ms | 9,793.92 ms | **0.004x** (with cache) |
-| complex | 51.31 ms | 0.16 ms | 0.15 ms | 16,168.95 ms | **0.003x** (with cache) |
+| Expression | Fennec plain | Fennec+cache | Fennec+warmUp | Eclipse | Fennec plain/Eclipse |
+|-----------|-------------|-------------|--------------|---------|----------------------|
+| simple | 6.66 ms | 0.12 ms | 0.11 ms | 665.37 ms | **100x faster** |
+| medium | 34.52 ms | 0.15 ms | 0.14 ms | 9793.92 ms | **284x faster** |
+| complex | 51.31 ms | 0.16 ms | 0.15 ms | 16168.95 ms | **315x faster** |
 
-**Summary:** Fennec parser is **~100x faster** without cache, **~100,000x faster** with cache (cache hit = no re-parse). Eclipse OCL Classic uses heavyweight Ecore/pivot setup per parse.
+**Summary:** Fennec parser is **~100–315x faster** without cache, **~100000x faster** with cache (cache hit = no re-parse). Eclipse OCL Classic uses heavyweight Ecore/pivot setup per parse.
 
 ### 1.2 Parse + Eval Performance
 
 Realistic workload: parse and evaluate in one call.
 
-| Expression | Fennec plain | Fennec+cache | Fennec+warmUp | Eclipse | Fennec/Eclipse |
-|-----------|-------------|-------------|--------------|---------|----------------|
-| simple | 6.60 ms | 0.36 ms | 0.34 ms | 1,165.15 ms | **0.0003x** (with cache) |
-| medium | 35.60 ms | 3.28 ms | 2.77 ms | 16,152.72 ms | **0.0002x** (with cache) |
-| complex | 69.15 ms | 4.67 ms | 4.71 ms | 25,816.78 ms | **0.0002x** (with cache) |
+| Expression | Fennec plain | Fennec+cache | Fennec+warmUp | Eclipse | Fennec plain/Eclipse |
+|-----------|-------------|-------------|--------------|---------|----------------------|
+| simple | 6.60 ms | 0.36 ms | 0.34 ms | 1165.15 ms | **176x faster** |
+| medium | 35.60 ms | 3.28 ms | 2.77 ms | 16152.72 ms | **454x faster** |
+| complex | 69.15 ms | 4.67 ms | 4.71 ms | 25816.78 ms | **373x faster** |
 
 ### 1.3 Eval Performance (pre-parsed)
 

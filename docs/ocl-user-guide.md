@@ -1,0 +1,675 @@
+# OCL Engine User Guide
+
+Fennec OCL is a lightweight, spec-compliant OCL v2.5 engine (backward compatible with v2.4) that works as a standalone Java library — no Eclipse platform required.
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Quick Start](#2-quick-start)
+3. [Engine Setup](#3-engine-setup)
+4. [Evaluating Expressions](#4-evaluating-expressions)
+5. [OclContext — Evaluation Context](#5-oclcontext--evaluation-context)
+6. [Evaluation Options](#6-evaluation-options)
+7. [Caching](#7-caching)
+8. [Error Handling](#8-error-handling)
+9. [EMF Delegate Integration](#9-emf-delegate-integration)
+10. [Complete OCL Documents](#10-complete-ocl-documents)
+11. [Custom Operations](#11-custom-operations)
+12. [Thread Safety](#12-thread-safety)
+13. [Value Type Mapping](#13-value-type-mapping)
+
+---
+
+## 1. Overview
+
+The Fennec OCL Engine provides:
+
+- **OCL v2.5** expression parsing and evaluation (backward compatible with v2.4)
+- **Standalone operation** — works as a plain Java library without OSGi
+- **OSGi-optional** — full Declarative Services support when running in OSGi
+- **ANTLR4-based parser** — fast, reliable parsing with precise error locations
+- **EMF delegate integration** — derived features, operation bodies, and validation constraints
+- **LRU expression cache** — thread-safe caching with hit/miss statistics
+- **Configurable evaluation** — strict/lenient null handling, timeouts, depth limits
+
+### Performance
+
+Fennec OCL is significantly faster than Eclipse OCL Classic:
+
+| Operation | Speedup |
+|-----------|---------|
+| Parse (no cache) | 100–315x faster |
+| Parse (cached) | ~100,000x faster |
+| Parse + Eval | 176–454x faster |
+| Pure Evaluation | 20–59% faster |
+
+See [benchmark-results.md](benchmark-results.md) for detailed numbers.
+
+### Maven Coordinates
+
+```
+GroupId: org.eclipse.fennec.m2x
+```
+
+| Bundle | Description |
+|--------|-------------|
+| `org.eclipse.fennec.m2x.ocl.api` | Public API interfaces |
+| `org.eclipse.fennec.m2x.ocl.parser` | ANTLR4 parser |
+| `org.eclipse.fennec.m2x.ocl.engine` | Evaluator implementation |
+| `org.eclipse.fennec.m2x.ocl.model` | OCL EMF metamodel |
+
+---
+
+## 2. Quick Start
+
+Minimal example — parse and evaluate an OCL expression against an EMF object:
+
+```java
+import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+
+// Create engine
+OclEngine engine = new OclEngineImpl(new OclParserSupport());
+
+// Evaluate an expression
+Object result = engine.evaluate("self.name.size() > 0", OclContext.of(myEObject));
+System.out.println(result); // true
+```
+
+That's it. Three lines to set up, one line to evaluate.
+
+---
+
+## 3. Engine Setup
+
+### 3.1 Minimal (No Cache)
+
+```java
+import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+
+OclEngine engine = new OclEngineImpl(new OclParserSupport());
+```
+
+### 3.2 With LRU Expression Cache
+
+```java
+import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+
+OclEngine engine = new OclEngineImpl(
+    new OclParserSupport(),
+    OclLruExpressionCache.ofSize(2048)
+);
+```
+
+### 3.3 With OclConfiguration Builder (Recommended)
+
+```java
+import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+
+OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
+    .expressionCache(OclLruExpressionCache.ofSize(2048))
+    .addOperationProvider(myCustomOps)
+    .build();
+
+OclEngine engine = new OclEngineImpl(config);
+```
+
+### 3.4 OSGi (Declarative Services)
+
+In OSGi, the engine is available as a DS component. Inject it via `@Reference`:
+
+```java
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+
+@Component
+public class MyComponent {
+
+    @Reference
+    private OclEngine engine;
+
+    public boolean validateName(EObject obj) {
+        return (Boolean) engine.evaluate("self.name.size() > 0", OclContext.of(obj));
+    }
+}
+```
+
+---
+
+## 4. Evaluating Expressions
+
+### 4.1 Convenience: Parse + Eval in One Step
+
+The simplest approach — pass a String expression and context:
+
+```java
+Object result = engine.evaluate("self.name", OclContext.of(myEObject));
+```
+
+This parses and evaluates in one call. If a cache is configured, the parsed expression is cached automatically.
+
+### 4.2 Pre-Parsed: Parse Once, Evaluate Many Times
+
+For repeated evaluation of the same expression against different objects:
+
+```java
+import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+
+// Parse once
+OclExpression expr = engine.parse("self.name.size() > 3", myEClass);
+
+// Evaluate many times
+for (EObject obj : objects) {
+    Object result = engine.evaluate(expr, OclContext.of(obj));
+}
+```
+
+### 4.3 With Diagnostics: Fault-Tolerant Evaluation
+
+Use `evaluateWithDiagnostics()` to collect warnings and errors without throwing:
+
+```java
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclResult;
+
+OclResult result = engine.evaluateWithDiagnostics(
+    expr,
+    OclContext.of(myEObject),
+    OclEvaluationOptions.lenient()
+);
+
+if (result.isSuccess()) {
+    String name = result.getValueAs(String.class);
+} else {
+    result.diagnostics().forEach(d -> System.err.println(d.getMessage()));
+}
+```
+
+### 4.4 With Custom Evaluation Options
+
+```java
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+
+Object result = engine.evaluate(
+    expr,
+    OclContext.of(myEObject),
+    OclEvaluationOptions.strict().withTimeout(Duration.ofSeconds(5))
+);
+```
+
+---
+
+## 5. OclContext — Evaluation Context
+
+`OclContext` is a Java record that defines the evaluation environment.
+
+### 5.1 Factory Methods
+
+```java
+// Just a context object (self)
+OclContext ctx = OclContext.of(myEObject);
+
+// With external variables
+OclContext ctx = OclContext.of(myEObject, Map.of("threshold", 42));
+
+// With model extent (enables allInstances())
+OclContext ctx = OclContext.of(myEObject, myExtent);
+
+// With ResourceSet (for package resolution)
+OclContext ctx = OclContext.of(myEObject, myResourceSet);
+
+// With extent and ResourceSet
+OclContext ctx = OclContext.of(myEObject, myExtent, myResourceSet);
+
+// Variables only (no self)
+OclContext ctx = OclContext.of(Map.of("x", 1, "y", 2));
+```
+
+### 5.2 Full Constructor
+
+```java
+OclContext ctx = new OclContext(
+    myEObject,           // self — context object (nullable)
+    myExtent,            // OclModelExtent — scope for allInstances() (nullable)
+    Map.of("x", 42),    // variables — external variable bindings
+    myResourceSet,       // ResourceSet — for EPackage resolution (nullable)
+    myInterceptor        // BiFunction<EObject, String, Object> — property interceptor (nullable)
+);
+```
+
+### 5.3 OclModelExtent — allInstances() Scope
+
+To use `allInstances()` in OCL expressions, provide an `OclModelExtent`:
+
+```java
+import org.eclipse.fennec.m2x.ocl.api.OclModelExtent;
+
+OclModelExtent extent = eClass -> {
+    // Return all instances of the given EClass in your model
+    return myResource.getAllContents()
+        .filter(eClass::isInstance)
+        .toList();
+};
+```
+
+### 5.4 Property Interceptor
+
+Intercept property access for custom resolution (e.g., aspect-oriented properties):
+
+```java
+BiFunction<EObject, String, Object> interceptor = (obj, propertyName) -> {
+    if ("customProp".equals(propertyName)) {
+        return computeCustomValue(obj);
+    }
+    return OclContext.PROPERTY_NOT_HANDLED; // fall back to default
+};
+
+OclContext ctx = new OclContext(myEObject, null, Map.of(), null, interceptor);
+```
+
+---
+
+## 6. Evaluation Options
+
+`OclEvaluationOptions` controls how the engine handles nulls, errors, and resource limits.
+
+### 6.1 Presets
+
+```java
+// Strict: null access → OclInvalid, stop on first error
+OclEvaluationOptions strict = OclEvaluationOptions.strict();
+
+// Lenient: null access → null, collect all errors
+OclEvaluationOptions lenient = OclEvaluationOptions.lenient();
+```
+
+### 6.2 Custom Options
+
+All `with*` methods return new immutable instances:
+
+```java
+OclEvaluationOptions options = OclEvaluationOptions.strict()
+    .withTimeout(Duration.ofSeconds(10))
+    .withMaxDepth(500)
+    .withMaxCollectionSize(100_000)
+    .withMaxClosureIterations(50_000)
+    .withMaxRegexLength(500);
+```
+
+### 6.3 Option Reference
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `NullHandling.STRICT` | yes | Null property access returns `OclInvalid.INSTANCE` |
+| `NullHandling.LENIENT` | | Null property access returns `null` |
+| `ErrorRecovery.FAIL_FAST` | yes | Stop on first error |
+| `ErrorRecovery.COLLECT_ERRORS` | | Collect all errors, continue evaluation |
+| `maxDepth` | 1,000 | Maximum expression nesting depth |
+| `timeout` | none | Maximum evaluation time |
+| `maxCollectionSize` | 1,000,000 | Maximum elements in a collection |
+| `maxClosureIterations` | 100,000 | Maximum closure() iterations |
+| `maxRegexLength` | 1,000 | Maximum regex pattern length |
+
+---
+
+## 7. Caching
+
+### 7.1 Expression Cache
+
+The `OclLruExpressionCache` caches parsed `OclExpression` ASTs keyed by `(expression, contextType)`:
+
+```java
+import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
+
+OclLruExpressionCache cache = OclLruExpressionCache.ofSize(2048);
+OclEngine engine = new OclEngineImpl(new OclParserSupport(), cache);
+
+// Cache statistics
+long hits = cache.hitCount();
+long misses = cache.missCount();
+long size = cache.size();
+double hitRate = (double) hits / (hits + misses);
+```
+
+- **Thread-safe** — internally synchronized
+- **LRU eviction** — least-recently-used entries evicted when full
+- **Cache key** — `nsURI#contextTypeName#expression`
+
+### 7.2 WarmUp
+
+Pre-populate the PropertyAccessorCache and parse common expressions:
+
+```java
+OclEngineImpl engine = new OclEngineImpl(config);
+engine.warmUp(MyPackage.eINSTANCE);
+```
+
+This caches property accessors for all classes in the package, reducing first-evaluation latency.
+
+### 7.3 Performance Impact
+
+From benchmarks with cache enabled:
+
+| Scenario | Without Cache | With Cache | Speedup |
+|----------|--------------|------------|---------|
+| Simple expression (repeated) | 6.66 ms | ~0.06 ms | ~100x |
+| Medium expression (repeated) | 34.52 ms | ~0.35 ms | ~100x |
+
+---
+
+## 8. Error Handling
+
+### 8.1 Parse Errors
+
+`OclParseException` is a checked exception with line/column information:
+
+```java
+try {
+    engine.parse("self.name +++ 42", myEClass);
+} catch (OclParseException e) {
+    System.err.println(e.getMessage());
+    for (Resource.Diagnostic error : e.getErrors()) {
+        System.err.printf("  Line %d, Col %d: %s%n",
+            error.getLine(), error.getColumn(), error.getMessage());
+    }
+}
+```
+
+### 8.2 OclInvalid vs. null
+
+OCL distinguishes three value states:
+
+| State | Meaning | Check |
+|-------|---------|-------|
+| Regular value | Normal result | `result != null && !(result instanceof OclInvalid)` |
+| `null` | OCL void/undefined | `result == null` |
+| `OclInvalid.INSTANCE` | OCL invalid (error) | `result instanceof OclInvalid` |
+
+### 8.3 OclResult — Three States
+
+When using `evaluateWithDiagnostics()`:
+
+```java
+OclResult result = engine.evaluateWithDiagnostics(expr, ctx, options);
+
+if (result.hasValue()) {
+    // Normal value — no errors, value is present and not invalid
+    process(result.getValueAs(String.class));
+} else if (result.isInvalid()) {
+    // OclInvalid — the expression evaluated to invalid
+    handleInvalid(result.diagnostics());
+} else if (result.isNull()) {
+    // null — the expression evaluated to void/undefined
+    handleNull();
+}
+
+// Or simply check for success (no ERROR-level diagnostics)
+if (result.isSuccess()) {
+    // safe to use result.value()
+}
+```
+
+---
+
+## 9. EMF Delegate Integration
+
+Register the OCL engine as an EMF delegate for derived features, operation bodies, and validation constraints.
+
+### 9.1 Standalone Registration
+
+```java
+OclEngineImpl engine = new OclEngineImpl(config);
+engine.installDelegates();
+
+// Now EMF will use Fennec OCL for:
+// - EOperation invocation delegates (body annotations)
+// - EStructuralFeature setting delegates (derivation/initial annotations)
+// - EValidator validation delegates (constraint annotations)
+
+// Cleanup when done
+engine.uninstallDelegates();
+```
+
+### 9.2 Delegate URI
+
+```
+http://www.eclipse.org/fennec/m2x/ocl/1.0
+```
+
+### 9.3 Ecore Annotations
+
+In your `.ecore` model, add annotations with this delegate URI:
+
+**Derived Feature:**
+```xml
+<eStructuralFeatures xsi:type="ecore:EAttribute" name="fullName" eType="ecore:EDataType ...">
+  <eAnnotations source="http://www.eclipse.org/fennec/m2x/ocl/1.0">
+    <details key="derivation" value="self.firstName + ' ' + self.lastName"/>
+  </eAnnotations>
+</eStructuralFeatures>
+```
+
+**Operation Body:**
+```xml
+<eOperations name="isAdult" eType="ecore:EDataType ...">
+  <eAnnotations source="http://www.eclipse.org/fennec/m2x/ocl/1.0">
+    <details key="body" value="self.age >= 18"/>
+  </eAnnotations>
+</eOperations>
+```
+
+**Validation Constraint:**
+```xml
+<eAnnotations source="http://www.eclipse.org/fennec/m2x/ocl/1.0">
+  <details key="nameNotEmpty" value="self.name.size() > 0"/>
+</eAnnotations>
+```
+
+### 9.4 OSGi
+
+In OSGi, the delegate factories are registered automatically as DS components. No manual `installDelegates()` call needed.
+
+---
+
+## 10. Complete OCL Documents
+
+Load standalone `.ocl` documents that define additional operations, properties, and constraints for existing Ecore models.
+
+### 10.1 Parse a Document
+
+```java
+import org.eclipse.fennec.m2x.model.ocl.Constraint;
+
+List<Constraint> constraints = engine.parseDocument(
+    """
+    context Person
+    inv nameNotEmpty: self.name.size() > 0
+    inv agePositive: self.age >= 0
+
+    context Person
+    def: fullName : String = self.firstName + ' ' + self.lastName
+    """
+);
+```
+
+### 10.2 Load and Register
+
+`loadDocument()` parses the document and registers all definitions (def:, inv:) with the engine:
+
+```java
+engine.loadDocument(oclDocumentText);
+
+// Now def:-operations are available in subsequent evaluations
+Object fullName = engine.evaluate("self.fullName", OclContext.of(personObject));
+```
+
+### 10.3 With ResourceSet
+
+If the document references types from specific packages:
+
+```java
+List<Constraint> constraints = engine.parseDocument(oclDocument, myResourceSet);
+```
+
+### 10.4 OSGi: CompleteOclContribution
+
+In OSGi, deploy Complete OCL documents as whiteboard services:
+
+```java
+import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
+
+@Component(service = CompleteOclContribution.class)
+public class MyOclConstraints implements CompleteOclContribution {
+
+    @Override
+    public URI getDocumentUri() {
+        return URI.createURI("platform:/plugin/my.bundle/model/constraints.ocl");
+    }
+
+    @Override
+    public String getDocumentText() {
+        return """
+            context Person
+            inv nameNotEmpty: self.name.size() > 0
+            """;
+    }
+}
+```
+
+---
+
+## 11. Custom Operations
+
+Extend the OCL standard library with custom operations.
+
+### 11.1 Define an Operation
+
+Use `OclOperation.of()` for simple no-arg operations or the full constructor for operations with parameters:
+
+```java
+import org.eclipse.fennec.m2x.ocl.api.OclOperation;
+
+// Simple no-arg operation using factory method
+OclOperation toUpperCase = OclOperation.of(
+    "toUpperCase",    // operation name
+    stringOclType,    // owner type (OclType instance for String)
+    stringOclType,    // return type
+    (self, args) -> ((String) self).toUpperCase()
+);
+```
+
+### 11.2 Register via Provider
+
+```java
+public class MyOperations implements OclOperationProvider {
+
+    @Override
+    public List<OclOperation> getOperations() {
+        return List.of(
+            new OclOperation(
+                "trimToNull",
+                stringType,
+                List.of(),       // no parameters
+                stringType,
+                (self, args) -> {
+                    String s = ((String) self).trim();
+                    return s.isEmpty() ? null : s;
+                }
+            )
+        );
+    }
+}
+
+// Standalone registration
+engine.registerOperations(new MyOperations());
+
+// Unregister when no longer needed
+engine.unregisterOperations(provider);
+```
+
+### 11.3 OSGi Registration
+
+```java
+@Component(service = OclOperationProvider.class)
+public class MyOperations implements OclOperationProvider {
+    @Override
+    public List<OclOperation> getOperations() {
+        return List.of(/* ... */);
+    }
+}
+```
+
+Operations registered this way are automatically discovered by the engine.
+
+### 11.4 Using OclConfiguration
+
+```java
+OclConfiguration config = OclConfiguration.builder(parser)
+    .addOperationProvider(new MyOperations())
+    .addOperationProvider(new MoreOperations())
+    .build();
+```
+
+---
+
+## 12. Thread Safety
+
+| Component | Thread-Safe? | Notes |
+|-----------|:---:|-------|
+| `OclEngineImpl` | Yes | Stateless evaluation; shared parser and cache are synchronized |
+| `OclLruExpressionCache` | Yes | Internally synchronized with atomic counters |
+| `OclContext` | Yes | Immutable record |
+| `OclEvaluationOptions` | Yes | Immutable record |
+| `OclResult` | Yes | Immutable record |
+| `OclExpression` (parsed AST) | Yes | Immutable after parsing; safe to share across threads |
+| `OclParserSupport` | Yes | Thread-safe parser implementation |
+| `installDelegates()` | No | Modifies global EMF registries — call once at startup |
+
+**Recommended pattern for multi-threaded use:**
+
+```java
+// Create once, share across threads
+OclEngine engine = new OclEngineImpl(config);
+
+// Each thread creates its own context
+ExecutorService pool = Executors.newFixedThreadPool(8);
+for (EObject obj : objects) {
+    pool.submit(() -> {
+        OclContext ctx = OclContext.of(obj);
+        return engine.evaluate("self.name", ctx);
+    });
+}
+```
+
+---
+
+## 13. Value Type Mapping
+
+OCL types map to Java types as follows:
+
+| OCL Type | Java Type | Notes |
+|----------|-----------|-------|
+| `Boolean` | `java.lang.Boolean` | |
+| `Integer` | `java.lang.Integer` | Promoted to `Long` for large values |
+| `Real` | `java.lang.Double` | |
+| `String` | `java.lang.String` | |
+| `UnlimitedNatural` | `java.lang.Integer` | `*` maps to `-1` |
+| `OclVoid` | `null` | |
+| `OclInvalid` | `OclInvalid.INSTANCE` | Singleton |
+| `Set(T)` | `java.util.Set<T>` | `LinkedHashSet` (preserves insertion order) |
+| `OrderedSet(T)` | `java.util.Set<T>` | `LinkedHashSet` |
+| `Bag(T)` | `java.util.List<T>` | `ArrayList` (duplicates allowed) |
+| `Sequence(T)` | `java.util.List<T>` | `ArrayList` |
+| `Tuple` | `java.util.Map<String, Object>` | Keys are part names |
+| Any EClass | `org.eclipse.emf.ecore.EObject` | |
+| Any EEnum | EMF-generated enum literal | |
+| Any EDataType | Corresponding Java instance class | |
