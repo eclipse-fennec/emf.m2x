@@ -17,6 +17,7 @@ Fennec OCL is a lightweight, spec-compliant OCL v2.5 engine (backward compatible
 11. [Custom Operations](#11-custom-operations)
 12. [Thread Safety](#12-thread-safety)
 13. [Value Type Mapping](#13-value-type-mapping)
+14. [Security Hardening](#14-security-hardening)
 
 ---
 
@@ -589,11 +590,12 @@ public class MyOperations implements OclOperationProvider {
     }
 }
 
-// Standalone registration
-engine.registerOperations(new MyOperations());
-
-// Unregister when no longer needed
-engine.unregisterOperations(provider);
+// Standalone registration via configuration (D29: no runtime registration)
+OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
+    .operationProviders(List.of(new MyOperations()))
+    .customOperationsEnabled(true)  // D29: required opt-in
+    .build();
+OclEngine engine = new OclEngineImpl(config);
 ```
 
 ### 11.3 OSGi Registration
@@ -673,3 +675,92 @@ OCL types map to Java types as follows:
 | Any EClass | `org.eclipse.emf.ecore.EObject` | |
 | Any EEnum | EMF-generated enum literal | |
 | Any EDataType | Corresponding Java instance class | |
+
+---
+
+## 14. Security Hardening
+
+When evaluating OCL expressions from untrusted sources (user input, external Complete OCL documents, model annotations from unknown models), configure conservative resource limits to prevent denial-of-service attacks.
+
+### Configurable Limits
+
+| Field | Type | Default | Protects against |
+|-------|------|---------|-----------------|
+| `maxDepth` | int | 1,000 | Stack overflow via deeply nested expressions |
+| `maxCollectionSize` | int | 1,000,000 | Range explosion, product explosion, allInstances |
+| `maxClosureIterations` | int | 100,000 | Unbounded closure traversal |
+| `maxRegexLength` | int | 1,000 | ReDoS via crafted regex patterns |
+| `timeout` | Duration | none | Runaway evaluation (deadline-based enforcement) |
+
+All limits produce `OclInvalid` with a diagnostic error when exceeded.
+
+### Sandboxed Evaluation
+
+```java
+import java.time.Duration;
+
+// Configure conservative limits for untrusted input
+OclEvaluationOptions sandboxed = OclEvaluationOptions.strict()
+    .withMaxDepth(100)
+    .withMaxCollectionSize(10_000)
+    .withMaxClosureIterations(1_000)
+    .withMaxRegexLength(200)
+    .withTimeout(Duration.ofSeconds(5));
+
+// Evaluate with sandboxed options
+OclResult result = engine.evaluateWithDiagnostics(expr, context, sandboxed);
+
+// Check for limit violations
+if (result.value() == OclInvalid.INSTANCE) {
+    result.diagnostics().forEach(d ->
+        logger.warn("OCL limit violation: {}", d.getMessage()));
+}
+```
+
+### How Limits Are Enforced
+
+- **Recursion depth** — checked in `eval()` before every expression evaluation
+- **Collection size** — checked before creating ranges (`Sequence{1..n}`), products, and allInstances results
+- **Closure iterations** — checked in the worklist loop of `closure()` iterator
+- **Regex length** — checked before `Pattern.compile()` in `matches()`, `replaceAll()`, `replaceFirst()`
+- **Timeout** — deadline-based `System.nanoTime()` check at every `eval()` call and every closure iteration (~15ns overhead)
+
+### Trust Boundaries
+
+| Source | Trust Level | Recommendation |
+|--------|------------|----------------|
+| Own model annotations | Trusted | Default `strict()` options |
+| External Complete OCL documents | Semi-trusted | `strict()` with tightened limits |
+| User input (console, LSP) | Untrusted | Tightened limits + timeout |
+| Custom operation providers | Controlled (D29) | Disabled by default; requires `customOperationsEnabled` on both Config and Options |
+| EMF delegates | Explicit opt-in | Configure `delegateOptions` before `installDelegates()` |
+
+### EMF Delegate Security
+
+```java
+// Configure delegate options BEFORE installing delegates
+engine.setDelegateOptions(sandboxed);
+engine.installDelegates();
+```
+
+After `installDelegates()`, any model loaded in the `EPackage.Registry` can trigger OCL evaluation via EAnnotations. Only install delegates if you trust the models being loaded.
+
+### Custom Operation Security (D29)
+
+Custom operations are **disabled by default**. To enable them, set `customOperationsEnabled` on both the engine configuration and the per-evaluation options (AND-linked):
+
+```java
+// Engine configuration: enable custom ops engine-wide
+OclConfiguration config = OclConfiguration.builder(parserSupport)
+    .addOperationProvider(myProvider)
+    .customOperationsEnabled(true)
+    .build();
+
+// Per-evaluation: enable for this specific evaluation
+OclEvaluationOptions opts = OclEvaluationOptions.strict()
+    .withCustomOperationsEnabled(true);
+```
+
+If either flag is `false`, custom operations are not dispatched. This allows sandboxing individual evaluations (e.g. user input) even when the engine has providers registered.
+
+For the full security analysis with BSI TR-03185 mapping, see [OCL Security Analysis](ocl-security-analysis.md).

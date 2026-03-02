@@ -54,6 +54,8 @@ class QvtoTraceManager {
 
 	private final List<QvtoTraceRecord> records = new ArrayList<>();
 	private final Trace trace = TraceFactory.eINSTANCE.createTrace();
+	private final int maxTraceRecords;
+	private boolean limitReached;
 
 	// Index 1: Cached-result lookup — (MappingOperation, compositeKey) → QvtoTraceRecord
 	private final Map<MappingOperation, Map<Object, QvtoTraceRecord>> mappingIndex = new HashMap<>();
@@ -65,7 +67,25 @@ class QvtoTraceManager {
 	private final Map<Object, List<QvtoTraceRecord>> resultIndex = new IdentityHashMap<>();
 
 	/**
+	 * Creates a new trace manager with the given record limit.
+	 *
+	 * @param maxTraceRecords maximum number of trace records, or 0 for unlimited
+	 */
+	QvtoTraceManager(int maxTraceRecords) {
+		this.maxTraceRecords = maxTraceRecords;
+	}
+
+	/**
+	 * Returns {@code true} if the trace record limit has been reached.
+	 */
+	boolean isLimitReached() {
+		return limitReached;
+	}
+
+	/**
 	 * Records a mapping invocation for both resolve lookups and EMF trace export.
+	 * If {@code maxTraceRecords} is set and reached, further records are silently
+	 * dropped (Q-6 / M-4c).
 	 *
 	 * @param mappingOp the mapping operation AST node
 	 * @param source the source object
@@ -73,6 +93,10 @@ class QvtoTraceManager {
 	 * @param result the result object
 	 */
 	void addRecord(MappingOperation mappingOp, Object source, Object[] args, Object result) {
+		if (maxTraceRecords > 0 && records.size() >= maxTraceRecords) {
+			limitReached = true;
+			return;
+		}
 		String mappingName = mappingOp.getName();
 		Object[] clonedArgs = args.clone();
 		QvtoTraceRecord record = new QvtoTraceRecord(mappingName, mappingOp, source, clonedArgs, result);

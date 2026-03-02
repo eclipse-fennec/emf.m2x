@@ -23,55 +23,42 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.junit.jupiter.api.AfterEach;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
  * Tests for custom OCL operations via {@link OclOperationProvider}.
- * Verifies register/unregister, and that custom operations are callable
- * from OCL expressions.
+ * D29: Operations are now configured via {@link OclConfiguration} with
+ * {@code customOperationsEnabled(true)} and activated per-evaluation via
+ * {@link OclEvaluationOptions#withCustomOperationsEnabled(boolean)}.
  */
 class OclCustomOperationTest extends AbstractOclTest {
 
 	static EObject self;
-	private OclOperationProvider registeredProvider;
+
+	private static final OclEvaluationOptions CUSTOM_OPTS =
+			OclEvaluationOptions.strict().withCustomOperationsEnabled(true);
 
 	@BeforeAll
 	static void setUp() {
 		self = createPerson("Alice", 30, 50000.0, true);
 	}
 
-	@AfterEach
-	void cleanUp() {
-		if (registeredProvider != null) {
-			engine.unregisterOperations(registeredProvider);
-			registeredProvider = null;
-		}
-	}
-
-	// --- Registration ---
-
-	@Test
-	void registerOperations_addsProvider() {
-		OclOperationProvider provider = createDoubleAgeProvider();
-		engine.registerOperations(provider);
-		registeredProvider = provider;
-		// Provider is registered — no exception
-		assertNotNull(provider);
-	}
-
-	@Test
-	void unregisterOperations_removesProvider() {
-		OclOperationProvider provider = createDoubleAgeProvider();
-		engine.registerOperations(provider);
-		engine.unregisterOperations(provider);
-		// Unregistered successfully — set to null so @AfterEach doesn't double-unregister
-		registeredProvider = null;
+	/** Creates a custom engine with the given provider. */
+	private static OclEngineImpl engineWith(OclOperationProvider provider) {
+		OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
+				.addOperationProvider(provider)
+				.customOperationsEnabled(true)
+				.build();
+		return new OclEngineImpl(config);
 	}
 
 	// --- Custom no-arg operation ---
@@ -86,10 +73,9 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation op = OclOperation.of("shout", anyType, stringType,
 				(source, args) -> source.toString().toUpperCase() + "!");
 
-		registeredProvider = () -> List.of(op);
-		engine.registerOperations(registeredProvider);
-
-		assertEquals("ALICE!", engine.evaluate("self.name.shout()", OclContext.of(self)));
+		OclEngineImpl eng = engineWith(() -> List.of(op));
+		var parsed = eng.parse("self.name.shout()", personClass);
+		assertEquals("ALICE!", eng.evaluate(parsed, OclContext.of(self), CUSTOM_OPTS));
 	}
 
 	// --- Custom operation with argument ---
@@ -104,10 +90,9 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation op = new OclOperation("addN", anyType, List.of(intType), intType,
 				(source, args) -> ((Number) source).longValue() + ((Number) args[0]).longValue());
 
-		registeredProvider = () -> List.of(op);
-		engine.registerOperations(registeredProvider);
-
-		assertEquals(35, engine.evaluate("self.age.addN(5)", OclContext.of(self)));
+		OclEngineImpl eng = engineWith(() -> List.of(op));
+		var parsed = eng.parse("self.age.addN(5)", personClass);
+		assertEquals(35, eng.evaluate(parsed, OclContext.of(self), CUSTOM_OPTS));
 	}
 
 	// --- Multiple operations from one provider ---
@@ -126,11 +111,11 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation exclaim = OclOperation.of("exclaim", anyType, stringType,
 				(source, args) -> source.toString() + "!!!");
 
-		registeredProvider = () -> List.of(doubleOp, exclaim);
-		engine.registerOperations(registeredProvider);
-
-		assertEquals(60, engine.evaluate("self.age.double()", OclContext.of(self)));
-		assertEquals("Alice!!!", engine.evaluate("self.name.exclaim()", OclContext.of(self)));
+		OclEngineImpl eng = engineWith(() -> List.of(doubleOp, exclaim));
+		var parsedDouble = eng.parse("self.age.double()", personClass);
+		var parsedExclaim = eng.parse("self.name.exclaim()", personClass);
+		assertEquals(60, eng.evaluate(parsedDouble, OclContext.of(self), CUSTOM_OPTS));
+		assertEquals("Alice!!!", eng.evaluate(parsedExclaim, OclContext.of(self), CUSTOM_OPTS));
 	}
 
 	// --- Operation returning boolean ---
@@ -145,10 +130,9 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation isLong = OclOperation.of("isLongName", anyType, boolType,
 				(source, args) -> source.toString().length() > 3);
 
-		registeredProvider = () -> List.of(isLong);
-		engine.registerOperations(registeredProvider);
-
-		assertEquals(true, engine.evaluate("self.name.isLongName()", OclContext.of(self)));
+		OclEngineImpl eng = engineWith(() -> List.of(isLong));
+		var parsed = eng.parse("self.name.isLongName()", personClass);
+		assertEquals(true, eng.evaluate(parsed, OclContext.of(self), CUSTOM_OPTS));
 	}
 
 	// --- Operation returning String ---
@@ -163,10 +147,9 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation reverse = OclOperation.of("reverse", anyType, stringType,
 				(source, args) -> new StringBuilder(source.toString()).reverse().toString());
 
-		registeredProvider = () -> List.of(reverse);
-		engine.registerOperations(registeredProvider);
-
-		assertEquals("ecilA", engine.evaluate("self.name.reverse()", OclContext.of(self)));
+		OclEngineImpl eng = engineWith(() -> List.of(reverse));
+		var parsed = eng.parse("self.name.reverse()", personClass);
+		assertEquals("ecilA", eng.evaluate(parsed, OclContext.of(self), CUSTOM_OPTS));
 	}
 
 	// --- OclOperation record ---
@@ -202,15 +185,4 @@ class OclCustomOperationTest extends AbstractOclTest {
 		assertEquals(2, op.parameterTypes().size());
 	}
 
-	// --- Helper ---
-
-	private static OclOperationProvider createDoubleAgeProvider() {
-		AnyType anyType = OclFactory.eINSTANCE.createAnyType();
-		anyType.setName("OclAny");
-		PrimitiveType intType = OclFactory.eINSTANCE.createPrimitiveType();
-		intType.setName("Integer");
-		OclOperation op = OclOperation.of("doubleAge", anyType, intType,
-				(source, args) -> ((Number) source).longValue() * 2);
-		return () -> List.of(op);
-	}
 }

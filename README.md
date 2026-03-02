@@ -30,7 +30,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.qvto.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvto.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvto.engine` | Evaluator (mappings, resolve, trace, blackbox) | Done |
-| `org.eclipse.fennec.m2x.qvto.tests` | 1,050 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvto.tests` | 1,059 tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.qvto.benchmark` | Performance benchmarks | Done |
 
 ### M2T — MOF Model to Text
@@ -67,6 +67,8 @@ cd workspace/
 
 - **[OCL Engine User Guide](docs/ocl-user-guide.md)** — How to use the OCL engine as a Java library (setup, evaluation, caching, EMF delegates, custom operations)
 - **[QVT-O Engine User Guide](docs/qvto-user-guide.md)** — How to use the QVT-O engine (setup, model extents, execution, tracing, blackbox libraries, multi-file composition)
+- **[OCL Security Analysis](docs/ocl-security-analysis.md)** — OCL threat model, attack vectors, hardening measures, BSI TR-03185 mapping
+- **[QVT-O Security Analysis](docs/qvto-security-analysis.md)** — QVT-O threat model, attack vectors, hardening measures, BSI TR-03185 mapping
 
 ## Architecture & Design
 

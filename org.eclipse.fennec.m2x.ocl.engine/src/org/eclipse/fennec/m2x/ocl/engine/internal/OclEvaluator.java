@@ -116,6 +116,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private Map<DefRegistry.DefKey, DefRegistry.DefEntry> defProperties = Map.of();
 	private int depth;
 
+	/** Deadline for timeout enforcement (nanoseconds), or 0 if no timeout. */
+	private long deadlineNanos;
+
 	/*
 	 * 1-entry feature resolution cache ("last resolved").
 	 *
@@ -147,6 +150,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 		this.options = Objects.requireNonNull(options, "options must not be null");
 		this.customProviders = Objects.requireNonNull(customProviders, "customProviders must not be null");
 		this.accessorCache = Objects.requireNonNull(accessorCache, "accessorCache must not be null");
+		if (options.timeout() != null) {
+			deadlineNanos = System.nanoTime() + options.timeout().toNanos();
+		}
 	}
 
 	/**
@@ -191,6 +197,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 		if (++depth > options.maxDepth()) {
 			--depth;
 			return addError("Maximum evaluation depth exceeded: " + options.maxDepth());
+		}
+		if (checkTimeout()) {
+			--depth;
+			return addError("Evaluation timeout exceeded");
 		}
 		try {
 			Object result = doSwitch(expression);
@@ -1024,6 +1034,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 					addError("Closure iteration limit exceeded: " + options.maxClosureIterations());
 					return OclInvalid.INSTANCE;
 				}
+				if (checkTimeout()) {
+					addError("Evaluation timeout exceeded");
+					return OclInvalid.INSTANCE;
+				}
 				Object element = workList.remove(0);
 				if (!result.add(element)) {
 					continue; // already visited
@@ -1058,6 +1072,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	// --- Internal helpers ---
+
+	private boolean checkTimeout() {
+		return deadlineNanos != 0 && System.nanoTime() > deadlineNanos;
+	}
 
 	private Object[] evaluateArguments(List<OclExpression> argExps) {
 		Object[] args = new Object[argExps.size()];

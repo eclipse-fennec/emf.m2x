@@ -20,7 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 import org.eclipse.emf.common.util.Diagnostic;
@@ -62,8 +62,12 @@ public class QvtoEngineImpl implements QvtoEngine {
 	private final QvtoParserSupport parserSupport;
 	private final OclEngineImpl oclEngine;
 	private final QvtoBlackboxRegistry blackboxRegistry;
-	private final List<QvtoUnitResolver> unitResolvers = new CopyOnWriteArrayList<>();
+	private final List<QvtoUnitResolver> unitResolvers;
 	private final Executor parallelExecutor;
+	private final boolean blackboxEnabled;
+	private final Set<String> allowedBlackboxModules;
+	private final boolean unitResolverEnabled;
+	private final Set<String> allowedUnitModules;
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -76,8 +80,12 @@ public class QvtoEngineImpl implements QvtoEngine {
 		OclConfiguration oclConfig = config.oclConfiguration();
 		this.oclEngine = new OclEngineImpl(oclConfig);
 		this.blackboxRegistry = config.blackboxRegistry();
-		this.unitResolvers.addAll(config.unitResolvers());
+		this.unitResolvers = List.copyOf(config.unitResolvers());
 		this.parallelExecutor = config.parallelExecutor();
+		this.blackboxEnabled = config.blackboxEnabled();
+		this.allowedBlackboxModules = config.allowedBlackboxModules();
+		this.unitResolverEnabled = config.unitResolverEnabled();
+		this.allowedUnitModules = config.allowedUnitModules();
 	}
 
 	// --- Parsing ---
@@ -116,19 +124,26 @@ public class QvtoEngineImpl implements QvtoEngine {
 		Objects.requireNonNull(options, "options must not be null");
 
 		// §8.1.13: Link phase — resolve stub imports via unit resolvers and blackbox registry
-		boolean hasResolvers = !unitResolvers.isEmpty() || blackboxRegistry != null;
-		if (hasResolvers) {
-			try {
-				QvtoLinker linker = new QvtoLinker(parserSupport, unitResolvers,
-						EPackage.Registry.INSTANCE, blackboxRegistry);
-				linker.link(transformation);
-			} catch (QvtoParseException e) {
-				return new QvtoExecutionResult(
-						List.of(new org.eclipse.emf.common.util.BasicDiagnostic(
-								Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine",
-								0, "Link error: " + e.getMessage(), null)),
-						null);
-			}
+		// D29: Enforce enable flags — only pass resolvers/registry when enabled
+		List<QvtoUnitResolver> effectiveResolvers = unitResolverEnabled ? unitResolvers : List.of();
+		QvtoBlackboxRegistry effectiveRegistry = blackboxEnabled ? blackboxRegistry : null;
+		Set<String> effectiveBbAllow = blackboxEnabled ? allowedBlackboxModules : Set.of();
+		Set<String> effectiveUrAllow = unitResolverEnabled ? allowedUnitModules : Set.of();
+
+		// Always run the linker — it validates that all imports can be resolved.
+		// When enable flags are false, no resolvers/registry are available,
+		// so unresolved imports will correctly fail with "Cannot resolve import".
+		try {
+			QvtoLinker linker = new QvtoLinker(parserSupport, effectiveResolvers,
+					EPackage.Registry.INSTANCE, effectiveRegistry,
+					effectiveBbAllow, effectiveUrAllow);
+			linker.link(transformation);
+		} catch (QvtoParseException e) {
+			return new QvtoExecutionResult(
+					List.of(new org.eclipse.emf.common.util.BasicDiagnostic(
+							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine",
+							0, "Link error: " + e.getMessage(), null)),
+					null);
 		}
 
 		QvtoEvalEnvironment env = QvtoEvalEnvironment.forTransformation(context.configProperties());
@@ -138,31 +153,14 @@ public class QvtoEngineImpl implements QvtoEngine {
 				oclEngine, env, options, transformation, extentManager, this);
 		evaluator.setConfigProperties(context.configProperties());
 
-		// Register QVT-O operations as OCL custom provider for mutual recursion
+		// D29: Pass QVT-O operations as additionalProviders — always active, no mutable registration
 		QvtoOperationProvider qvtoProvider = new QvtoOperationProvider(
-				transformation, evaluator, evaluator.getOperationResolver(), blackboxRegistry);
-		oclEngine.registerOperations(qvtoProvider);
-		try {
-			List<Diagnostic> diagnostics = evaluator.execute();
-			Trace trace = options.tracingEnabled() ? evaluator.getTrace() : null;
-			return new QvtoExecutionResult(diagnostics, trace);
-		} finally {
-			oclEngine.unregisterOperations(qvtoProvider);
-		}
-	}
+				transformation, evaluator, evaluator.getOperationResolver(), effectiveRegistry);
+		evaluator.setAdditionalProviders(List.of(qvtoProvider));
 
-	// --- Extension Registration ---
-
-	@Override
-	public void registerUnitResolver(QvtoUnitResolver resolver) {
-		Objects.requireNonNull(resolver, "resolver must not be null");
-		unitResolvers.add(resolver);
-	}
-
-	@Override
-	public void unregisterUnitResolver(QvtoUnitResolver resolver) {
-		Objects.requireNonNull(resolver, "resolver must not be null");
-		unitResolvers.remove(resolver);
+		List<Diagnostic> diagnostics = evaluator.execute();
+		Trace trace = options.tracingEnabled() ? evaluator.getTrace() : null;
+		return new QvtoExecutionResult(diagnostics, trace);
 	}
 
 	/**

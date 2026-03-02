@@ -36,6 +36,8 @@
 | D26 | QVT-O: `Dict`/`List` as aliases for OCL `Map`/`Sequence` | Syntactically recognized, semantically mapped to OCL types |
 | D27 | QVT-O: Unit Resolver — ServiceLoader + Whiteboard | Standalone: `ServiceLoader<QvtoUnitResolver>` + filesystem/classpath. OSGi: `@Reference(MULTIPLE)` whiteboard |
 | D28 | QVT-O v1.3, Eclipse feature scope | Implement what Eclipse implements, document gaps for later |
+| D29 | Extension Security Controls | Custom ops / blackbox / unit resolvers disabled by default, opt-in with allow-lists |
+| D30 | Resource Integrity Service (Future) | Build-time SHA-256 hashing of arbitrary resources (scripts, ecore, files) with optional runtime verification |
 
 ---
 
@@ -332,7 +334,7 @@ QvtoOperationProvider implements OclOperationProvider
 **Context:** QVT-O transformations can import other transformations and libraries by qualified name. The system needs a mechanism to resolve these qualified names to actual transformation units (`.qvto` files or compiled units).
 
 **Decision:**
-- **Standalone:** `ServiceLoader<QvtoUnitResolver>` discovers resolvers on the classpath. Built-in resolvers for filesystem paths and classpath resources. Programmatic registration via `QvtoEngine.registerUnitResolver(resolver)` also supported.
+- **Standalone:** `ServiceLoader<QvtoUnitResolver>` discovers resolvers on the classpath. Built-in resolvers for filesystem paths and classpath resources. Resolvers are passed via `QvtoConfiguration.Builder.unitResolvers(...)` (D29: runtime registration removed).
 - **OSGi:** Whiteboard pattern with `@Reference(cardinality = MULTIPLE, policy = DYNAMIC) volatile List<QvtoUnitResolver>` on `QvtoEngineComponent`. Bundles contribute resolvers as DS components.
 
 **Rationale:** Consistent with the OSGi-optional architecture (D9). ServiceLoader provides zero-config discovery in standalone mode. The whiteboard pattern is already proven with `OclOperationProvider` and `CompleteOclContribution` in Phase 1. Multiple resolvers can be composed (first match wins), supporting different resolution strategies (workspace, repository, classpath).
@@ -348,3 +350,174 @@ QvtoOperationProvider implements OclOperationProvider
 **Known Eclipse gaps to document:** intermediate classes (partial), access modifiers on properties, some late resolution features, module-level exception handling. A complete gap analysis will be produced during the `qvto.parser` phase when the grammar is defined.
 
 **Rationale:** Eclipse QVT-O is the de-facto standard for QVT-O usage. Its feature subset covers >99% of real-world transformations. Documenting gaps ensures nothing is silently dropped and allows prioritized implementation later based on user demand.
+
+---
+
+### DR-D29: Extension Security Controls
+
+**Context:** Both OCL and QVT-O engines have extension points that allow executing arbitrary Java code:
+
+- **OCL:** `OclOperationProvider` — custom operations invoked during expression evaluation
+- **QVT-O:** `QvtoBlackboxLibrary` — Java libraries callable from transformations
+- **QVT-O:** `QvtoUnitResolver` — resolves import names to transformation source code
+
+These are trust boundaries: a malicious provider/library/resolver has full JVM access (filesystem, network, processes). Currently all registered extensions are always active — there is no opt-in mechanism.
+
+**Threat:** In multi-tenant or plugin-based environments (OSGi whiteboard, ServiceLoader), an attacker could register a malicious extension that gets automatically discovered and invoked.
+
+**Decision:** All extension points are **disabled by default** and require explicit opt-in. Two enforcement levels (AND-linked):
+
+#### OCL: Boolean Enable Flag
+
+| Setting | Location | Default | Semantics |
+|---------|----------|---------|-----------|
+| `customOperationsEnabled` | `OclConfiguration` | `false` | Engine-wide: are custom ops allowed at all? |
+| `customOperationsEnabled` | `OclEvaluationOptions` | `false` | Per-evaluation: override for this evaluation |
+
+Custom operations are only dispatched if **both** flags are `true`. This enables:
+- Config `false` → hard disable, Options cannot override (Defense in Depth)
+- Config `true`, Options `false` → enabled engine, but sandboxed evaluation (e.g. for user input)
+- Config `true`, Options `true` → fully active
+
+**Enforcement point:** `OclEvaluator.dispatchCustomOperation()` — returns `NOT_FOUND` immediately if disabled.
+
+#### QVT-O: Enable Flag + Allow-Lists
+
+| Setting | Location | Default | Semantics |
+|---------|----------|---------|-----------|
+| `blackboxEnabled` | `QvtoConfiguration` | `false` | Are blackbox libraries allowed? |
+| `allowedBlackboxModules` | `QvtoConfiguration` | `Set.of()` | If enabled: empty = allow all, non-empty = allow only listed modules |
+| `unitResolverEnabled` | `QvtoConfiguration` | `false` | Are unit resolvers allowed? |
+| `allowedUnitModules` | `QvtoConfiguration` | `Set.of()` | If enabled: empty = allow all, non-empty = allow only listed modules |
+| `maxBlackboxLibraries` | `QvtoConfiguration` | `10` | Maximum number of registered blackbox libraries |
+| `maxUnitResolvers` | `QvtoConfiguration` | `5` | Maximum number of registered unit resolvers |
+
+**Allow-list semantics:**
+- `enabled == false` → extension completely disabled
+- `enabled == true && allowList.isEmpty()` → all registered extensions allowed
+- `enabled == true && !allowList.isEmpty()` → only modules whose `qualifiedName` is in the list
+
+**Enforcement point:** `QvtoLinker` — before the evaluator starts. Unresolvable imports produce `QvtoParseException("Cannot resolve import: ...")` → fail-fast.
+
+**Max-limits rationale:** Too many resolvers/libraries increase attack surface and cause performance issues (linear scan per import).
+
+#### Immutable Configuration
+
+Runtime registration methods (`registerUnitResolver()`, `unregisterUnitResolver()`, `registerOperations()`, `unregisterOperations()`) have been removed. All extensions are declared at configuration time via immutable `QvtoConfiguration` / `OclConfiguration`. This prevents runtime injection attacks.
+
+- **Standalone:** Extensions passed to `QvtoConfiguration.builder()`
+- **OSGi:** DS component activation injects extensions into configuration
+
+**Rationale:** Explicit opt-in follows the principle of least privilege. Breaking change is acceptable (no backward compatibility constraint). The two-level enforcement (Configuration + Options) provides defense in depth for OCL.
+
+---
+
+### DR-D30: Resource Integrity Service (Future)
+
+**Context:** QVT-O scripts, Ecore models, and other resources loaded at runtime could be tampered with. D29 controls *who* can provide extensions, but not *whether the content* of a resolved resource has been modified.
+
+**Problem:** An attacker who cannot inject a malicious resolver (blocked by D29) might still modify the resource file on disk that a legitimate resolver reads. The resolver returns the tampered content, which passes the allow-list check (correct qualifiedName) but contains malicious code.
+
+**Decision:** Build-time SHA-256 hashing of arbitrary resources with optional runtime verification. This is a **future requirement** — the design is defined here, implementation is deferred.
+
+#### Architecture
+
+```
+Build-Zeit (Gradle/bnd):
+  resource files → SHA-256 → generated Java class ResourceHashes
+                              (immutable Map<String, String> name→hash)
+                              → compiled into descriptor bundle
+
+Laufzeit (Engine):
+  Resolver liefert Source → hash(source) == ResourceHashes.get(name)?
+  Match    → proceed
+  Mismatch → reject with IntegrityException
+```
+
+#### Bundle Separation
+
+```
+Bundle A: "my.transformations"         Bundle B: "my.transformations.integrity"
+├── scripts/                           ├── ResourceHashes.class (generated)
+│   ├── Main.qvto                      │   contains:
+│   ├── Helper.qvto                    │     HASHES: Map<String, String>
+│   └── model.ecore                    │     CHAIN_HASH: String
+└── (no services)                      └── MyUnitResolver.class (OSGi service)
+```
+
+Two separate bundles ensure that replacing Bundle A (the scripts) is detected by Bundle B (the hashes). An attacker must replace *both* bundles to succeed.
+
+#### Hash Scheme
+
+| Feature | Description |
+|---------|-------------|
+| **Individual hashes** | `SHA-256(salt + resourceContent)` per resource |
+| **Chain hash** | `SHA-256` over sorted `(name + hash)` pairs — changes when *any* resource is added/removed/modified |
+| **Salt** | `bundleSymbolicName + ":" + bundleVersion + ":" + buildTimestamp` — prevents pre-computation |
+| **External trust anchor** | Chain hash published in CI artifact / deployment DB / signed manifest — enables cross-bundle verification |
+
+#### Applicability
+
+This is a **generic resource integrity mechanism**, not specific to QVT-O:
+
+| Resource Type | Use Case |
+|---------------|----------|
+| `.qvto` scripts | Transformation integrity |
+| `.ecore` models | Metamodel integrity |
+| `.ocl` documents | Complete OCL constraint integrity |
+| `.mtl` templates | M2T template integrity |
+| Any file | Arbitrary resource verification |
+
+#### Configuration
+
+| Setting | Default | Semantics |
+|---------|---------|-----------|
+| `integrityVerificationEnabled` | `false` | Is hash verification active? |
+| `integrityHashProvider` | `null` | Implementation providing the hash map |
+| `requireIntegrity` | `false` | `true` = reject unverified resources; `false` = warn only |
+
+**Development mode:** `integrityVerificationEnabled = false` — no hash checks, full developer agility.
+
+**Production mode:** `integrityVerificationEnabled = true, requireIntegrity = true` — all resources must match their hashes.
+
+#### Build Integration
+
+Gradle task generates the hash class into `src-gen/`:
+
+```groovy
+task generateResourceHashes {
+    inputs.dir("scripts/")
+    inputs.dir("model/")
+    outputs.file("src-gen/.../ResourceHashes.java")
+    doLast {
+        // SHA-256 over all configured resource files
+        // Generate Java class with HASHES map + CHAIN_HASH
+    }
+}
+```
+
+Fits the existing build model: `src-gen/` is generated code, bnd compiles and packages it.
+
+#### Attack Analysis
+
+| Attack | Result |
+|--------|--------|
+| Replace script bundle only | Hash mismatch → **detected** |
+| Replace both script + integrity bundle | Requires compromising two bundles → **harder** |
+| Replace integrity bundle only | Hashes don't match unmodified scripts → **detected** (wrong direction) |
+| Classpath manipulation (plain Java) | No bundle isolation → **vulnerable** (mitigation: signed JARs) |
+| OSGi bundle replacement | Mitigated by OSGi bundle signing (Stufe 1, deployer responsibility) |
+| Pre-compute hashes | Salted hashes prevent rainbow tables → **mitigated** |
+
+#### Hardening Levels (Embedder Responsibility)
+
+| Level | Mechanism | Protects Against | Effort |
+|-------|-----------|------------------|--------|
+| 1 | OSGi bundle signing (`jarsigner`) | Bundle replacement | Low (platform feature) |
+| 2 | Chain hash + external trust anchor | Both-bundles-replaced | Medium (our code) |
+| 3 | Salted hashes | Pre-computation | Low (our code) |
+| 4 | bnd/Gradle build integration | Developer errors (forgotten hash update) | Medium (our code) |
+
+**Implementation priority:** Levels 2–4 are our responsibility. Level 1 is the deployer's responsibility and provides the strongest single protection.
+
+**Status:** Future requirement. Implementation deferred until Phase 5 (Language Servers / Production Hardening).

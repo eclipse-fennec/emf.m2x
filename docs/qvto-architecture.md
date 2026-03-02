@@ -223,7 +223,11 @@ public sealed interface QvtoUnit {              // Sealed union
 ```
 
 **OSGi registration:** `@Reference(cardinality = MULTIPLE, policy = DYNAMIC)` whiteboard.
-**Standalone:** `ServiceLoader<QvtoUnitResolver>` + programmatic `QvtoEngine.registerUnitResolver()`.
+**Standalone:** Pass resolvers via `QvtoConfiguration.Builder.unitResolvers(List<QvtoUnitResolver>)`.
+
+> **D29 Security:** Unit resolvers are **disabled by default**. Set `unitResolverEnabled(true)` in
+> `QvtoConfiguration` to activate resolver lookups. Optionally restrict which modules may be
+> resolved via `allowedUnitModules(Set<String>)`.
 
 ### 4.7 Blackbox Libraries (§8.1.4)
 
@@ -325,26 +329,52 @@ registry.register(myLibrary);
 
 QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
     .blackboxRegistry(registry)
+    .blackboxEnabled(true)                    // D29: required opt-in
+    .allowedBlackboxModules(Set.of("mylib"))  // D29: optional allow-list
     .build();
 ```
+
+> **D29 Security:** Blackbox libraries are **disabled by default**. Set `blackboxEnabled(true)` to
+> activate registry lookups. Optionally restrict which modules may be resolved via
+> `allowedBlackboxModules(Set<String>)` — an empty set (default) allows all registered libraries
+> when enabled. See also §4.7.6 for linker enforcement.
 
 **OSGi:** The registry is a DS Component with `@Reference(MULTIPLE, DYNAMIC)` whiteboard
 for `QvtoBlackboxLibrary` services.
 
 #### 4.7.6 Synthetic Module Creation (QvtoLinker)
 
-When the parser encounters `import mylib;`, it creates a stub `Library` module with only the
-qualified name set and no classifiers. During linking, `QvtoLinker` resolves these stubs:
+When the parser encounters `import mylib;`, `access Tools;`, or `extends Base;`, it creates a
+**stub module** — a `Library`/`OperationalTransformation` with only the qualified name set.
+The parser marks each stub with a `qvto.linker.stub` EAnnotation so the linker can distinguish
+real stubs (requiring external resolution) from inline-defined modules (forward declarations
+in the same compilation unit).
 
-1. Try `QvtoUnitResolver` instances (regular QVT-O modules)
-2. Fallback: consult `QvtoBlackboxRegistry.getLibrary(qualifiedName)`
-3. If found, create a **synthetic Library module**:
-   - `Library.isBlackbox = true`
-   - One `EClass` (module class) with the library name
-   - For each `BlackboxOperationDescriptor`: a synthetic `Helper` EOperation
-     - `Helper.isBlackbox = true`, `Helper.isQuery = true`
-     - Context parameter (`self`) if `contextType != null`
-     - Named parameters (`arg0`, `arg1`, ...)
+**Linker resolution order:**
+
+1. **Inline modules** — modules defined in the same source (e.g., `library Tools { ... }` +
+   `access Tools;` in the same file). Matched by name against non-stub `ModuleImport` targets.
+2. **Unit resolvers** — `QvtoUnitResolver` instances (regular QVT-O modules from other files).
+   Only consulted if `unitResolverEnabled = true` (D29).
+3. **Blackbox registry** — `QvtoBlackboxRegistry.getLibrary(qualifiedName)`.
+   Only consulted if `blackboxEnabled = true` (D29).
+
+If a stub cannot be resolved through any of these, the linker throws
+`QvtoParseException("Cannot resolve import: qualifiedName")` — **fail-fast at link time**.
+
+> **D29 Security:** The linker **always runs**, regardless of enable flags. When
+> `blackboxEnabled = false` and `unitResolverEnabled = false`, only inline modules can be
+> resolved. Any external import will fail at link time with a clear error message.
+> Allow-lists (`allowedBlackboxModules`, `allowedUnitModules`) provide additional filtering
+> when the corresponding feature is enabled.
+
+**Synthetic module creation** (when a blackbox library is resolved):
+- `Library.isBlackbox = true`
+- One `EClass` (module class) with the library name
+- For each `BlackboxOperationDescriptor`: a synthetic `Helper` EOperation
+  - `Helper.isBlackbox = true`, `Helper.isQuery = true`
+  - Context parameter (`self`) if `contextType != null`
+  - Named parameters (`arg0`, `arg1`, ...)
 
 This synthetic module integrates seamlessly with the existing `QvtoOperationResolver` —
 blackbox operations are found the same way as regular helpers.

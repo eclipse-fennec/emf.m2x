@@ -30,13 +30,16 @@ import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclOrderedSet;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclUnlimitedNatural;
-import org.junit.jupiter.api.AfterEach;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -398,14 +401,15 @@ class OclGapFixesTest extends AbstractOclTest {
 	@Nested
 	class Gap10CustomOpOwnerType {
 
-		private OclOperationProvider registeredProvider;
+		private static final OclEvaluationOptions CUSTOM_OPTS =
+				OclEvaluationOptions.strict().withCustomOperationsEnabled(true);
 
-		@AfterEach
-		void cleanUp() {
-			if (registeredProvider != null) {
-				engine.unregisterOperations(registeredProvider);
-				registeredProvider = null;
-			}
+		private OclEngineImpl engineWith(OclOperationProvider provider) {
+			OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
+					.addOperationProvider(provider)
+					.customOperationsEnabled(true)
+					.build();
+			return new OclEngineImpl(config);
 		}
 
 		@Test
@@ -415,17 +419,17 @@ class OclGapFixesTest extends AbstractOclTest {
 			PrimitiveType stringType = OclFactory.eINSTANCE.createPrimitiveType();
 			stringType.setName("String");
 
-			// Register two ops with same name but different owner types
+			// Two ops with same name but different owner types
 			OclOperation intOp = OclOperation.of("myOp", intType, intType,
 					(source, args) -> ((Number) source).longValue() * 10);
 			OclOperation strOp = OclOperation.of("myOp", stringType, stringType,
 					(source, args) -> source.toString().toUpperCase());
 
-			registeredProvider = () -> List.of(intOp, strOp);
-			engine.registerOperations(registeredProvider);
-
-			assertEquals(420, eval("42.myOp()", self));
-			assertEquals("ALICE", eval("'alice'.myOp()", self));
+			OclEngineImpl eng = engineWith(() -> List.of(intOp, strOp));
+			var parsed1 = eng.parse("42.myOp()", personClass);
+			var parsed2 = eng.parse("'alice'.myOp()", personClass);
+			assertEquals(420, eng.evaluate(parsed1, OclContext.of(self), CUSTOM_OPTS));
+			assertEquals("ALICE", eng.evaluate(parsed2, OclContext.of(self), CUSTOM_OPTS));
 		}
 
 		@Test
@@ -438,11 +442,11 @@ class OclGapFixesTest extends AbstractOclTest {
 			OclOperation op = OclOperation.of("describe", anyType, stringType,
 					(source, args) -> "value=" + source);
 
-			registeredProvider = () -> List.of(op);
-			engine.registerOperations(registeredProvider);
-
-			assertEquals("value=42", eval("42.describe()", self));
-			assertEquals("value=hello", eval("'hello'.describe()", self));
+			OclEngineImpl eng = engineWith(() -> List.of(op));
+			var parsed1 = eng.parse("42.describe()", personClass);
+			var parsed2 = eng.parse("'hello'.describe()", personClass);
+			assertEquals("value=42", eng.evaluate(parsed1, OclContext.of(self), CUSTOM_OPTS));
+			assertEquals("value=hello", eng.evaluate(parsed2, OclContext.of(self), CUSTOM_OPTS));
 		}
 	}
 

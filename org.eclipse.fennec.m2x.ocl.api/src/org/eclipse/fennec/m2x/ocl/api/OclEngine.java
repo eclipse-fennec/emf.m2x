@@ -179,25 +179,6 @@ public interface OclEngine {
 	 */
 	List<Diagnostic> validate(OclExpression expression, EClassifier contextType);
 
-	// --- Extension: Custom Operations ---
-
-	/**
-	 * Registers a provider of custom OCL operations (non-OSGi usage).
-	 *
-	 * <p>In an OSGi environment, providers are discovered automatically via the
-	 * whiteboard pattern ({@code @Component(service = OclOperationProvider.class)}).
-	 *
-	 * @param provider the operation provider to register
-	 */
-	void registerOperations(OclOperationProvider provider);
-
-	/**
-	 * Unregisters a previously registered operation provider.
-	 *
-	 * @param provider the operation provider to unregister
-	 */
-	void unregisterOperations(OclOperationProvider provider);
-
 	// --- Extension: Complete OCL Documents ---
 
 	/**

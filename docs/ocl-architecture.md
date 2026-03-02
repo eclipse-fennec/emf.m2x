@@ -112,9 +112,7 @@ public interface OclEngine {
     // Validation
     List<Diagnostic> validate(OclExpression expression, EClassifier contextType);
 
-    // Extension management
-    void registerOperations(OclOperationProvider provider);
-    void unregisterOperations(OclOperationProvider provider);
+    // Extension management (D29: runtime registration removed — use OclConfiguration)
     void registerCompleteOclDocument(CompleteOclContribution contribution);
     void unregisterCompleteOclDocument(CompleteOclContribution contribution);
 }
@@ -745,6 +743,7 @@ All limits are configured via `OclEvaluationOptions`:
 | `maxCollectionSize` | int | 1,000,000 | S-2: Range explosion, S-3: Product explosion, S-12: allInstances |
 | `maxClosureIterations` | int | 100,000 | S-4: Unbounded closure traversal |
 | `maxRegexLength` | int | 1,000 | S-1: ReDoS via crafted regex patterns |
+| `timeout` | Duration | none | S-13: Runaway evaluation (deadline-based) |
 
 Limits are per-evaluation (not global). Violations produce `OclInvalid` with diagnostic error.
 
@@ -764,7 +763,7 @@ Limits are per-evaluation (not global). Violations produce `OclInvalid` with dia
 | S-10 | Integer overflow | Low | Documented: accepted risk |
 | S-11 | String concatenation amplification | Low | Partially mitigated: bounded by maxDepth |
 | S-12 | allInstances result size | Medium | Mitigated: maxCollectionSize |
-| S-13 | Custom operation provider abuse | Low | Documented: trust boundary |
+| S-13 | Custom operation provider abuse | Low | Mitigated: D29 disabled by default |
 | S-14 | EMF delegate URI spoofing | Low | Documented: by design |
 
 ### 10.4 Trust Boundaries
@@ -774,7 +773,7 @@ Limits are per-evaluation (not global). Violations produce `OclInvalid` with dia
 | Own model annotations | Trusted | Default `strict()` options |
 | External Complete OCL documents | Semi-trusted | `strict()` with tightened limits |
 | User input (console, LSP) | Untrusted | Tightened limits, consider timeout |
-| Custom operation providers | Trusted (code) | Only register known implementations |
+| Custom operation providers | Controlled (D29) | Disabled by default; requires `customOperationsEnabled` on both Config and Options |
 | Model extent for allInstances | Varies | Bounded extent, set `maxCollectionSize` |
 
 ### 10.5 Embedder Guidance
@@ -800,7 +799,11 @@ When evaluating OCL expressions from untrusted sources:
 
 4. **Check `OclResult.diagnostics()`** — limit violations are reported as error diagnostics.
 
-5. **Future:** `timeout` field exists in `OclEvaluationOptions` but is not yet enforced.
+5. **Set evaluation timeout** for untrusted input:
+   ```java
+   OclEvaluationOptions sandboxed = OclEvaluationOptions.strict()
+       .withTimeout(Duration.ofSeconds(5));
+   ```
 
 ---
 
@@ -814,7 +817,9 @@ When evaluating OCL expressions from untrusted sources:
 | `OclEvaluator` | Per-evaluation instance, no shared mutable state | Thread-safe by design |
 | `OclStdlib` | Static methods, no state | Thread-safe by design |
 | `OclEvalEnvironment` | Per-evaluation chain-of-scopes, not shared | Thread-safe by design |
-| `operationProviders` | `CopyOnWriteArrayList` — safe concurrent read, rare write | Thread-safe |
+| `configProviders` | Immutable `List` from configuration (D29) — no mutable registration | Thread-safe by design |
+| `defProviders` | `CopyOnWriteArrayList` — for `loadDocument()` def-operations | Thread-safe |
+| `additionalProviders` | Per-evaluation via `OclEvaluationOptions` — no shared state | Thread-safe by design |
 | `expressionCache` | `ConcurrentHashMap` in delegates | Thread-safe |
 | `delegateOptions` | `volatile` field on `OclEngineImpl` | Visibility guaranteed |
 | Parser (ANTLR4) | New `OclLexer`/`OclParser` per parse call | Thread-safe |

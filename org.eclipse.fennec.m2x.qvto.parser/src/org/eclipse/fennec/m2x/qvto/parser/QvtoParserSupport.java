@@ -42,6 +42,13 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 public class QvtoParserSupport {
 
 	/**
+	 * EAnnotation source used to mark stub modules that need link-time resolution.
+	 * Inline-defined modules (parsed in the same compilation unit) do NOT carry this
+	 * annotation, allowing the linker to distinguish stubs from forward declarations.
+	 */
+	public static final String LINKER_STUB_ANNOTATION = QvtoUnitBuilder.LINKER_STUB_ANNOTATION;
+
+	/**
 	 * Parses a QVT-O transformation source using the global package registry.
 	 *
 	 * @param source the QVT-O source text

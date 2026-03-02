@@ -83,19 +83,4 @@ public interface QvtoEngine {
 	QvtoExecutionResult execute(OperationalTransformation transformation,
 			QvtoExecutionContext context, QvtoEvaluationOptions options);
 
-	// --- Extension Registration (standalone mode) ---
-
-	/**
-	 * Registers a unit resolver for resolving imported units.
-	 *
-	 * @param resolver the unit resolver to register
-	 */
-	void registerUnitResolver(QvtoUnitResolver resolver);
-
-	/**
-	 * Unregisters a previously registered unit resolver.
-	 *
-	 * @param resolver the unit resolver to unregister
-	 */
-	void unregisterUnitResolver(QvtoUnitResolver resolver);
 }

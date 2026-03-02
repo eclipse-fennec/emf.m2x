@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ConsumerType;
  * Resolves QVT-O compilation units by qualified name.
  *
  * <p>In standalone mode, register resolvers via
- * {@link QvtoEngine#registerUnitResolver(QvtoUnitResolver)}. In OSGi,
+ * {@link QvtoConfiguration.Builder#addUnitResolver(QvtoUnitResolver)}. In OSGi,
  * publish implementations as whiteboard services (D27).
  *
  * @author Data In Motion Consulting

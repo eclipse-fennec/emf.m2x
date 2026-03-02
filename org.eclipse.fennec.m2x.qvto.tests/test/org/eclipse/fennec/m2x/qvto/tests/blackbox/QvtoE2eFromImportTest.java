@@ -66,6 +66,8 @@ class QvtoE2eFromImportTest {
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 				.blackboxRegistry(registry)
 				.addUnitResolver(resolver)
+				.blackboxEnabled(true)
+				.unitResolverEnabled(true)
 				.build();
 		engine = new QvtoEngineImpl(config);
 	}

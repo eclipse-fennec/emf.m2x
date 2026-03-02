@@ -656,7 +656,7 @@ Each of our `.model` bundles must register its EPackages. Each `.parser` bundle 
 
 | Extension | Eclipse extension point | Without OSGi | With OSGi |
 |---|---|---|---|
-| **OCL Custom Operations** | `org.eclipse.ocl.pivot.standard_library` | `OclEngine.registerOperations(...)` | DS whiteboard: `@Component(service = OclOperationProvider.class)` |
+| **OCL Custom Operations** | `org.eclipse.ocl.pivot.standard_library` | `OclConfiguration.builder(parser).operationProviders(...).customOperationsEnabled(true)` (D29: disabled by default) | DS whiteboard: `@Component(service = OclOperationProvider.class)` |
 | **OCL Standard Library** | `org.eclipse.ocl.pivot.standard_library` | Built-in, loaded at startup | DS whiteboard: `@Component(service = OclStandardLibraryContribution.class)` |
 | **Complete OCL Documents** | `org.eclipse.ocl.pivot.complete_ocl_registry` | `OclEngine.registerCompleteOclDocument(contribution)` / `unregisterCompleteOclDocument(contribution)` | DS whiteboard: `@Component(service = CompleteOclContribution.class)` |
 | **Model Extents / Resource Providers** | N/A (programmatic in Eclipse too) | Pass `Resource` / `ResourceSet` directly | DS `@Reference` |
@@ -665,8 +665,8 @@ Each of our `.model` bundles must register its EPackages. Each `.parser` bundle 
 
 | Extension | Eclipse extension point | Without OSGi | With OSGi |
 |---|---|---|---|
-| **Blackbox Libraries** | `org.eclipse.m2m.qvt.oml.javaBlackboxUnits` / `blackboxProvider` | `QvtoEngine.registerBlackbox(...)` | DS whiteboard: `@Component(service = QvtoBlackboxLibrary.class)` |
-| **Unit Resolver** (finds .qvto files) | `org.eclipse.m2m.qvt.oml.unitResolverFactory` | `QvtoEngine.registerUnitResolver(...)` (classpath/filesystem-based) | DS whiteboard: `@Component(service = QvtoUnitResolver.class)` |
+| **Blackbox Libraries** | `org.eclipse.m2m.qvt.oml.javaBlackboxUnits` / `blackboxProvider` | `QvtoConfiguration.builder(ocl).blackboxRegistry(...).blackboxEnabled(true)` (D29: disabled by default) | DS whiteboard: `@Component(service = QvtoBlackboxLibrary.class)` |
+| **Unit Resolver** (finds .qvto files) | `org.eclipse.m2m.qvt.oml.unitResolverFactory` | `QvtoConfiguration.builder(ocl).unitResolvers(...).unitResolverEnabled(true)` (D29: disabled by default) | DS whiteboard: `@Component(service = QvtoUnitResolver.class)` |
 | **Deployed Transformations** | `org.eclipse.m2m.qvt.oml.runtime.qvtTransformation` | Load by URI/path directly | DS whiteboard: `@Component(service = QvtoTransformationContribution.class)` |
 
 #### QVT-D Extensions

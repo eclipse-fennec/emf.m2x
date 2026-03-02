@@ -82,6 +82,13 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private static final AtomicLong INTERMEDIATE_SEQ =
 			new AtomicLong();
 
+	/**
+	 * EAnnotation source used to mark stub modules that need link-time resolution.
+	 * Inline-defined modules (parsed in the same compilation unit) do NOT carry this
+	 * annotation, allowing the linker to distinguish stubs from forward declarations.
+	 */
+	static final String LINKER_STUB_ANNOTATION = "qvto.linker.stub";
+
 	private record PendingExtension(MappingOperation mapping, String kind, String name) {}
 
 	private final EPackage.Registry packageRegistry;
@@ -327,6 +334,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		String qualifiedName = qualifiedNameText(ctx.qualifiedName());
 		Library stub = QVTO.createLibrary();
 		stub.setName(qualifiedName);
+		markAsLinkerStub(stub);
 		imp.setImportedModule(stub);
 		// §8.4: from ... import name1, name2 — selective import
 		if (ctx.importedNameList() != null) {
@@ -1847,6 +1855,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			// can reference it (Library would fail the instanceof check in visitNewExp)
 			OperationalTransformation stub = QVTO.createOperationalTransformation();
 			stub.setName(qualifiedName);
+			markAsLinkerStub(stub);
 			imp.setImportedModule(stub);
 			module.getModuleImport().add(imp);
 			// Track for TransformationInstantiationExp detection in visitNewExp
@@ -1869,6 +1878,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			String qualifiedName = qualifiedNameText(refCtx.qualifiedName());
 			OperationalTransformation stub = QVTO.createOperationalTransformation();
 			stub.setName(qualifiedName);
+			markAsLinkerStub(stub);
 			imp.setImportedModule(stub);
 			module.getModuleImport().add(imp);
 			importedModuleStubs.put(qualifiedName, stub);
@@ -1990,5 +2000,11 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {
 		return expressionBuilder.qualifiedNameText(ctx);
+	}
+
+	private static void markAsLinkerStub(Module module) {
+		EAnnotation ann = org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEAnnotation();
+		ann.setSource(LINKER_STUB_ANNOTATION);
+		module.getEAnnotations().add(ann);
 	}
 }

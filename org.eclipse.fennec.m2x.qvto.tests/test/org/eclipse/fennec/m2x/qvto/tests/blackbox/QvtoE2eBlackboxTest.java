@@ -63,6 +63,7 @@ class QvtoE2eBlackboxTest {
 
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 				.blackboxRegistry(registry)
+				.blackboxEnabled(true)
 				.build();
 		engine = new QvtoEngineImpl(config);
 	}

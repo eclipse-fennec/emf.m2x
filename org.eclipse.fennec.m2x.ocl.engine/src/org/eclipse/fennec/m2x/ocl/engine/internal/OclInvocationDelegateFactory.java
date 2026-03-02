@@ -126,7 +126,7 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 					List<FeatureCallExp> preNodes = PreStateScanCollector.findPreNodes(postExpr);
 					snapshot = PreStateScanCollector.capturePreState(
 							preNodes, context, engine.getDelegateOptions(),
-							engine.getOperationProviders());
+							engine.getOperationProviders(engine.getDelegateOptions()));
 				}
 
 				// 3. Execute body (if present)

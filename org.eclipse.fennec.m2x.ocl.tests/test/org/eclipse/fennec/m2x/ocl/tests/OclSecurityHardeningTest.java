@@ -20,7 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
 import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
@@ -229,6 +231,28 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 		assertTrue(result.diagnostics().size() > 0);
 	}
 
+	// --- S-13: Timeout Enforcement ---
+
+	@Test
+	void s13_timeout_exceedingDeadline_returnsInvalid() throws OclParseException {
+		EObject person = createPerson("test", 30, 50000, false);
+		// Nanosecond timeout — guaranteed to be expired by the time evaluation starts
+		OclEvaluationOptions opts = OclEvaluationOptions.strict()
+				.withTimeout(Duration.ofNanos(1));
+		Object result = evalWithOptions("1 + 2", person, opts);
+		assertSame(OclInvalid.INSTANCE, result);
+	}
+
+	@Test
+	void s13_timeout_withinDeadline_succeeds() throws OclParseException {
+		EObject person = createPerson("test", 30, 50000, false);
+		// Generous timeout (5s) with simple expression
+		OclEvaluationOptions opts = OclEvaluationOptions.strict()
+				.withTimeout(Duration.ofSeconds(5));
+		Object result = evalWithOptions("1 + 2", person, opts);
+		assertEquals(3L, result);
+	}
+
 	// --- Options Default Values ---
 
 	@Test
@@ -276,6 +300,63 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 	@Test
 	void delegateOptions_defaultToStrict() {
 		assertNotNull(engine.getDelegateOptions());
-		assertEquals(OclEvaluationOptions.strict(), engine.getDelegateOptions());
+		assertEquals(OclEvaluationOptions.NullHandling.STRICT,
+				engine.getDelegateOptions().nullHandling());
+		assertEquals(OclEvaluationOptions.ErrorRecovery.FAIL_FAST,
+				engine.getDelegateOptions().errorRecovery());
+	}
+
+	// --- D29: Extension Security Controls ---
+
+	@Test
+	void d29_customOpsEnabled_defaultsFalseInConfig() {
+		var config = org.eclipse.fennec.m2x.ocl.api.OclConfiguration.builder(
+				new org.eclipse.fennec.m2x.ocl.parser.OclParserSupport()).build();
+		assertEquals(false, config.customOperationsEnabled());
+	}
+
+	@Test
+	void d29_customOpsEnabled_defaultsFalseInOptions() {
+		assertEquals(false, OclEvaluationOptions.strict().customOperationsEnabled());
+		assertEquals(false, OclEvaluationOptions.lenient().customOperationsEnabled());
+		assertEquals(List.of(), OclEvaluationOptions.strict().additionalProviders());
+		assertEquals(List.of(), OclEvaluationOptions.lenient().additionalProviders());
+	}
+
+	@Test
+	void d29_configProvider_requiresBothFlags() throws OclParseException {
+		org.eclipse.fennec.m2x.model.ocl.AnyType anyType = org.eclipse.fennec.m2x.model.ocl.OclFactory.eINSTANCE.createAnyType();
+		anyType.setName("OclAny");
+		org.eclipse.fennec.m2x.model.ocl.PrimitiveType intType = org.eclipse.fennec.m2x.model.ocl.OclFactory.eINSTANCE.createPrimitiveType();
+		intType.setName("Integer");
+
+		org.eclipse.fennec.m2x.ocl.api.OclOperation op = org.eclipse.fennec.m2x.ocl.api.OclOperation.of(
+				"d29test", anyType, intType, (source, args) -> 999L);
+		org.eclipse.fennec.m2x.ocl.api.OclOperationProvider provider = () -> List.of(op);
+
+		// Config enabled, options NOT enabled → provider not active
+		var config1 = org.eclipse.fennec.m2x.ocl.api.OclConfiguration.builder(
+				new org.eclipse.fennec.m2x.ocl.parser.OclParserSupport())
+				.addOperationProvider(provider)
+				.customOperationsEnabled(true)
+				.build();
+		var eng1 = new org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl(config1);
+		var providers1 = eng1.getOperationProviders(OclEvaluationOptions.strict());
+		assertEquals(0, providers1.size(), "Options flag false → no config providers");
+
+		// Config NOT enabled, options enabled → provider not active
+		var config2 = org.eclipse.fennec.m2x.ocl.api.OclConfiguration.builder(
+				new org.eclipse.fennec.m2x.ocl.parser.OclParserSupport())
+				.addOperationProvider(provider)
+				.build(); // customOperationsEnabled defaults to false
+		var eng2 = new org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl(config2);
+		var providers2 = eng2.getOperationProviders(
+				OclEvaluationOptions.strict().withCustomOperationsEnabled(true));
+		assertEquals(0, providers2.size(), "Config flag false → no config providers");
+
+		// Both enabled → provider active
+		var providers3 = eng1.getOperationProviders(
+				OclEvaluationOptions.strict().withCustomOperationsEnabled(true));
+		assertEquals(1, providers3.size(), "Both flags true → config provider active");
 	}
 }

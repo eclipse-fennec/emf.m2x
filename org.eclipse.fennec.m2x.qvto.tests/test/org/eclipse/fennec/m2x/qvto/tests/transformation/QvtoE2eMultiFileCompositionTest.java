@@ -70,6 +70,7 @@ class QvtoE2eMultiFileCompositionTest {
 
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 				.addUnitResolver(inlineResolver)
+				.unitResolverEnabled(true)
 				.build();
 		engine = new QvtoEngineImpl(config);
 	}
@@ -171,6 +172,7 @@ class QvtoE2eMultiFileCompositionTest {
 
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 				.addUnitResolver(failResolver)
+				.unitResolverEnabled(true)
 				.build();
 		QvtoEngineImpl failEngine = new QvtoEngineImpl(config);
 
@@ -285,6 +287,7 @@ class QvtoE2eMultiFileCompositionTest {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 				.addUnitResolver(name -> Optional.empty())
+				.unitResolverEnabled(true)
 				.build();
 		QvtoEngineImpl emptyEngine = new QvtoEngineImpl(config);
 
@@ -366,6 +369,7 @@ class QvtoE2eMultiFileCompositionTest {
 
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 				.addUnitResolver(failResolver)
+				.unitResolverEnabled(true)
 				.build();
 		QvtoEngineImpl failEngine = new QvtoEngineImpl(config);
 
@@ -444,6 +448,7 @@ class QvtoE2eMultiFileCompositionTest {
 		// Use a fixed thread pool instead of virtual threads
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 				.addUnitResolver(resolver)
+				.unitResolverEnabled(true)
 				.parallelExecutor(Executors.newFixedThreadPool(2))
 				.build();
 		QvtoEngineImpl customEngine = new QvtoEngineImpl(config);

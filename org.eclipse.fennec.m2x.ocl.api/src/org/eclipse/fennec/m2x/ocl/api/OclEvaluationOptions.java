@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.api;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -36,7 +37,9 @@ public record OclEvaluationOptions(
 		Duration timeout,
 		int maxCollectionSize,
 		int maxClosureIterations,
-		int maxRegexLength) {
+		int maxRegexLength,
+		boolean customOperationsEnabled,
+		List<OclOperationProvider> additionalProviders) {
 
 	/**
 	 * Controls how {@code null} values are handled during navigation.
@@ -73,6 +76,8 @@ public record OclEvaluationOptions(
 	 * @param maxCollectionSize maximum collection size for ranges, products, allInstances (must be positive)
 	 * @param maxClosureIterations maximum iterations for closure (must be positive)
 	 * @param maxRegexLength maximum regex pattern length for matches/replaceAll/replaceFirst (must be positive)
+	 * @param customOperationsEnabled whether config-registered custom operations are active
+	 * @param additionalProviders per-evaluation providers, always active regardless of enable flag
 	 */
 	public OclEvaluationOptions {
 		Objects.requireNonNull(nullHandling, "nullHandling must not be null");
@@ -89,6 +94,8 @@ public record OclEvaluationOptions(
 		if (maxRegexLength <= 0) {
 			throw new IllegalArgumentException("maxRegexLength must be positive: " + maxRegexLength);
 		}
+		additionalProviders = List.copyOf(Objects.requireNonNull(additionalProviders,
+				"additionalProviders must not be null"));
 	}
 
 	/**
@@ -100,7 +107,8 @@ public record OclEvaluationOptions(
 	public static OclEvaluationOptions strict() {
 		return new OclEvaluationOptions(NullHandling.STRICT, ErrorRecovery.FAIL_FAST,
 				DEFAULT_MAX_DEPTH, null,
-				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH);
+				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
+				false, List.of());
 	}
 
 	/**
@@ -112,7 +120,8 @@ public record OclEvaluationOptions(
 	public static OclEvaluationOptions lenient() {
 		return new OclEvaluationOptions(NullHandling.LENIENT, ErrorRecovery.COLLECT_ERRORS,
 				DEFAULT_MAX_DEPTH, null,
-				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH);
+				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
+				false, List.of());
 	}
 
 	/**
@@ -123,7 +132,8 @@ public record OclEvaluationOptions(
 	 */
 	public OclEvaluationOptions withMaxDepth(int maxDepth) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength);
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				customOperationsEnabled, additionalProviders);
 	}
 
 	/**
@@ -134,7 +144,8 @@ public record OclEvaluationOptions(
 	 */
 	public OclEvaluationOptions withMaxCollectionSize(int maxCollectionSize) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength);
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				customOperationsEnabled, additionalProviders);
 	}
 
 	/**
@@ -145,7 +156,8 @@ public record OclEvaluationOptions(
 	 */
 	public OclEvaluationOptions withMaxClosureIterations(int maxClosureIterations) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength);
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				customOperationsEnabled, additionalProviders);
 	}
 
 	/**
@@ -156,7 +168,8 @@ public record OclEvaluationOptions(
 	 */
 	public OclEvaluationOptions withMaxRegexLength(int maxRegexLength) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength);
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				customOperationsEnabled, additionalProviders);
 	}
 
 	/**
@@ -167,6 +180,38 @@ public record OclEvaluationOptions(
 	 */
 	public OclEvaluationOptions withTimeout(Duration timeout) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength);
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				customOperationsEnabled, additionalProviders);
+	}
+
+	/**
+	 * Returns a copy with the given custom operations enabled flag.
+	 *
+	 * <p>When {@code true} AND the engine's {@link OclConfiguration} also has
+	 * custom operations enabled, config-registered providers will be active.
+	 *
+	 * @param enabled whether to enable config-registered custom operations
+	 * @return new options with the given flag
+	 */
+	public OclEvaluationOptions withCustomOperationsEnabled(boolean enabled) {
+		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				enabled, additionalProviders);
+	}
+
+	/**
+	 * Returns a copy with the given additional providers.
+	 *
+	 * <p>Additional providers are always active regardless of the
+	 * {@code customOperationsEnabled} flag. This is used for per-evaluation
+	 * providers such as the QVT-O↔OCL bridge.
+	 *
+	 * @param providers per-evaluation providers, must not be {@code null}
+	 * @return new options with the given providers
+	 */
+	public OclEvaluationOptions withAdditionalProviders(List<OclOperationProvider> providers) {
+		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				customOperationsEnabled, providers);
 	}
 }

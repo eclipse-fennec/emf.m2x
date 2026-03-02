@@ -16,6 +16,7 @@ Fennec QVT-O is a lightweight, spec-compliant QVT Operational v1.3 transformatio
 10. [Tracing](#10-tracing)
 11. [Blackbox Libraries](#11-blackbox-libraries)
 12. [Multi-File Composition](#12-multi-file-composition)
+13. [Security Hardening](#13-security-hardening)
 
 ---
 
@@ -343,8 +344,11 @@ QvtoExecutionResult result = engine.execute(trafo, ctx, options);
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `maxStackDepth` | 1,000 | Maximum recursive mapping call depth |
-| `timeout` | none | Maximum execution time |
+| `maxStackDepth` | 1,000 | Maximum recursive mapping/helper call depth |
+| `timeout` | none | Maximum execution time (deadline-enforced) |
+| `maxLoopIterations` | 1,000,000 | Maximum iterations per while/for loop |
+| `maxDiagnostics` | 10,000 | Maximum diagnostic entries before truncation |
+| `maxTraceRecords` | 1,000,000 | Maximum trace records (0 = unlimited) |
 | `tracingEnabled` | false | Collect trace records for resolve operations |
 | `oclOptions` | strict | OCL evaluation options (null handling, limits) |
 
@@ -720,9 +724,8 @@ QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
     .addUnitResolver(new FileSystemUnitResolver(basePath))
     .build();
 
-// Or register dynamically:
-engine.registerUnitResolver(resolver);
-engine.unregisterUnitResolver(resolver);
+// D29: unitResolverEnabled(true) required to activate resolver lookups
+// Runtime registration removed — all resolvers declared at configuration time
 ```
 
 **OSGi:**
@@ -779,3 +782,97 @@ main() {
     tasks->wait();
 }
 ```
+
+---
+
+## 13. Security Hardening
+
+When executing untrusted QVT-O transformations (e.g. user-supplied code in a web service or multi-tenant environment), the engine provides configurable resource limits to prevent denial-of-service attacks.
+
+For the full threat model and BSI TR-03185 mapping, see [QVT-O Security Analysis](qvto-security-analysis.md).
+
+### 13.1 Configurable Limits
+
+All limits are set via `QvtoEvaluationOptions`:
+
+```java
+import java.time.Duration;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
+
+QvtoEvaluationOptions opts = QvtoEvaluationOptions.defaults()
+    .withTimeout(Duration.ofSeconds(30))       // Q-5: execution deadline
+    .withMaxLoopIterations(100_000)            // Q-4: while/for/forEach limit
+    .withMaxStackDepth(200)                    // Q-5: recursion depth
+    .withMaxDiagnostics(1_000)                 // Q-7: log/assert flooding
+    .withMaxTraceRecords(500_000);             // Q-6: trace memory growth
+```
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `timeout` | `null` (none) | Wall-clock deadline — terminates execution after elapsed time |
+| `maxLoopIterations` | 1,000,000 | Per-loop iteration cap — applies to `while`, `forEach`, `forExp` |
+| `maxStackDepth` | 1,000 | Call stack depth — limits recursive helpers/mappings |
+| `maxDiagnostics` | 10,000 | Maximum diagnostic messages before truncation |
+| `maxTraceRecords` | 1,000,000 | Maximum trace records — silently drops further records |
+
+### 13.2 Sandboxed Execution Example
+
+A typical configuration for executing untrusted transformations:
+
+```java
+import java.time.Duration;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
+import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
+import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
+
+// 1. Strict options with tight limits
+QvtoEvaluationOptions opts = QvtoEvaluationOptions.defaults()
+    .withTimeout(Duration.ofSeconds(10))
+    .withMaxLoopIterations(50_000)
+    .withMaxStackDepth(100)
+    .withMaxDiagnostics(500)
+    .withMaxTraceRecords(100_000)
+    .withOclOptions(OclEvaluationOptions.defaults()
+        .withNullHandling(OclEvaluationOptions.NullHandling.STRICT));
+
+// 2. Read-only input extent
+BasicQvtoModelExtent inExtent = new BasicQvtoModelExtent(inputObjects);
+inExtent.setReadOnly(true);
+
+// 3. Execute
+QvtoExecutionContext ctx = QvtoExecutionContext.of(inExtent, new BasicQvtoModelExtent());
+QvtoExecutionResult result = engine.execute(parsed, ctx, opts);
+
+// 4. Check result
+if (!result.isSuccess()) {
+    result.diagnostics().forEach(d -> log.warn("QVT-O: {}", d.getMessage()));
+}
+```
+
+### 13.3 How Limits Are Enforced
+
+- **Timeout**: A deadline (`System.nanoTime()`) is set at execution start. The evaluator checks the deadline at every function call entry and loop iteration (~15ns overhead per check). When exceeded, execution stops with a `"timeout"` diagnostic.
+
+- **Loop iterations**: Each `while`, `forEach`, and `forExp` loop maintains a per-loop counter. When `maxLoopIterations` is exceeded, the loop breaks with a `"Maximum loop iterations exceeded"` diagnostic.
+
+- **Stack depth**: Checked at every `callOperation`, `callMapping`, and `callConstructor`. When exceeded, the call returns with a `"Maximum stack depth exceeded"` diagnostic.
+
+- **Diagnostics**: The `log()` built-in and internal diagnostics are capped. When the limit is reached, one final `"truncated"` warning is added and further diagnostics are silently dropped.
+
+- **Trace records**: When `maxTraceRecords` is reached, further mapping trace records are silently dropped. This does not terminate execution but may affect `resolve`/`invResolve` for later mappings.
+
+### 13.4 Embedder Responsibilities
+
+The engine protects against resource exhaustion from QVT-O code, but the **host application** is responsible for:
+
+| Concern | Recommendation |
+|---------|---------------|
+| **Blackbox libraries** (Q-1) | Only register trusted libraries; review all `invoke()` implementations |
+| **Configuration properties** (Q-2) | Never pass secrets (DB passwords, API keys) as config properties |
+| **URI path traversal** (Q-3) | Validate URIs in `QvtoUnitResolver` before resolving to filesystem paths |
+| **SSRF via unit resolver** (Q-8) | Restrict `QvtoUnitResolver` to local paths; reject `http://`, `ftp://` URIs |
+| **Read-only enforcement** (Q-9) | Mark input extents as `setReadOnly(true)` |
+
+See the [Security Analysis](qvto-security-analysis.md) for the complete threat model and mitigation details.

@@ -21,8 +21,8 @@ import org.osgi.annotation.versioning.ConsumerType;
 /**
  * Extension interface for providing custom OCL operations.
  *
- * <p>Without OSGi, register providers programmatically via
- * {@link OclEngine#registerOperations(OclOperationProvider)}.
+ * <p>Without OSGi, register providers via
+ * {@link OclConfiguration.Builder#addOperationProvider(OclOperationProvider)}.
  *
  * <p>With OSGi, providers are discovered automatically via the whiteboard pattern:
  * <pre>

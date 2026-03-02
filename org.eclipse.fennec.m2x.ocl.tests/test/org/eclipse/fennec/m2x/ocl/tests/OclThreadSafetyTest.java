@@ -37,6 +37,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.InternalEObject;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
@@ -285,10 +286,10 @@ class OclThreadSafetyTest {
 		}
 	}
 
-	// --- P12: Concurrent register/unregister providers ---
+	// --- P12: Concurrent evaluation with different additionalProviders ---
 
 	@Test
-	void p12_concurrentProviderMutation() throws Exception {
+	void p12_concurrentEvalWithDifferentAdditionalProviders() throws Exception {
 		OclExpression parsed = engine.parse("self.name", personClass);
 
 		AtomicInteger evalCount = new AtomicInteger(0);
@@ -298,33 +299,19 @@ class OclThreadSafetyTest {
 		try (ExecutorService pool = Executors.newFixedThreadPool(THREAD_COUNT)) {
 			List<Future<?>> futures = new ArrayList<>();
 
-			// Half the threads evaluate
-			for (int t = 0; t < THREAD_COUNT / 2; t++) {
+			for (int t = 0; t < THREAD_COUNT; t++) {
 				final int threadId = t;
 				futures.add(pool.submit(() -> {
 					try {
 						startLatch.await();
 						for (int i = 0; i < ITERATIONS_PER_THREAD; i++) {
 							EObject person = createPerson("Eval" + threadId, 30);
-							engine.evaluate(parsed, OclContext.of(person));
-							evalCount.incrementAndGet();
-						}
-					} catch (Throwable e) {
-						errors.add(e);
-					}
-				}));
-			}
-
-			// Other half registers/unregisters providers
-			for (int t = THREAD_COUNT / 2; t < THREAD_COUNT; t++) {
-				futures.add(pool.submit(() -> {
-					try {
-						startLatch.await();
-						for (int i = 0; i < ITERATIONS_PER_THREAD / 10; i++) {
+							// Each evaluation carries its own additionalProviders (D29)
 							OclOperationProvider provider = new NoOpProvider();
-							engine.registerOperations(provider);
-							Thread.yield(); // give evaluators a chance to see it
-							engine.unregisterOperations(provider);
+							var opts = OclEvaluationOptions.strict()
+									.withAdditionalProviders(java.util.List.of(provider));
+							engine.evaluate(parsed, OclContext.of(person), opts);
+							evalCount.incrementAndGet();
 						}
 					} catch (Throwable e) {
 						errors.add(e);
@@ -341,7 +328,7 @@ class OclThreadSafetyTest {
 		assertTrue(evalCount.get() > 0, "At least some evaluations should have completed");
 
 		if (!errors.isEmpty()) {
-			fail("Concurrent provider mutation failed with " + errors.size()
+			fail("Concurrent eval with additionalProviders failed with " + errors.size()
 					+ " errors: " + errors.get(0));
 		}
 	}

@@ -92,7 +92,9 @@ public class OclEngineImpl implements OclEngine {
 	private final OclExpressionParser parser;
 	private final OclExpressionCache expressionCache;
 	private final PropertyAccessorCache accessorCache;
-	private final List<OclOperationProvider> operationProviders = new CopyOnWriteArrayList<>();
+	private final List<OclOperationProvider> configProviders;
+	private final boolean configCustomOpsEnabled;
+	private final List<OclOperationProvider> defProviders = new CopyOnWriteArrayList<>();
 	private final List<CompleteOclContribution> oclContributions = new CopyOnWriteArrayList<>();
 	private final Map<DefKey, DefEntry> defProperties = new ConcurrentHashMap<>();
 	private volatile OclEvaluationOptions delegateOptions = OclEvaluationOptions.strict();
@@ -111,7 +113,8 @@ public class OclEngineImpl implements OclEngine {
 		this.parser = config.parser();
 		this.expressionCache = config.expressionCache();
 		this.accessorCache = new PropertyAccessorCache();
-		this.operationProviders.addAll(config.operationProviders());
+		this.configProviders = List.copyOf(config.operationProviders());
+		this.configCustomOpsEnabled = config.customOperationsEnabled();
 	}
 
 	/**
@@ -216,7 +219,7 @@ public class OclEngineImpl implements OclEngine {
 		AnyType returnType = OclFactory.eINSTANCE.createAnyType();
 
 		OclOperation op = new OclOperation(opName, ownerType, List.of(), returnType, impl);
-		registerOperations(() -> List.of(op));
+		defProviders.add(() -> List.of(op));
 	}
 
 	// --- Evaluation ---
@@ -248,7 +251,7 @@ public class OclEngineImpl implements OclEngine {
 		Objects.requireNonNull(options, "options must not be null");
 
 		OclEvalEnvironment env = OclEvalEnvironment.root(context);
-		OclEvaluator evaluator = new OclEvaluator(env, options, getOperationProviders(), accessorCache);
+		OclEvaluator evaluator = new OclEvaluator(env, options, getOperationProviders(options), accessorCache);
 		evaluator.setDefProperties(defProperties);
 		return evaluator.evaluate(expression);
 	}
@@ -262,20 +265,6 @@ public class OclEngineImpl implements OclEngine {
 
 		// TODO: implement expression validation (step 5+)
 		return List.of();
-	}
-
-	// --- Extension: Custom Operations ---
-
-	@Override
-	public void registerOperations(OclOperationProvider provider) {
-		Objects.requireNonNull(provider, "provider must not be null");
-		operationProviders.add(provider);
-	}
-
-	@Override
-	public void unregisterOperations(OclOperationProvider provider) {
-		Objects.requireNonNull(provider, "provider must not be null");
-		operationProviders.remove(provider);
 	}
 
 	// --- Extension: Complete OCL Documents ---
@@ -302,7 +291,7 @@ public class OclEngineImpl implements OclEngine {
 	public Object evaluatePostcondition(OclExpression expression, OclContext context,
 			PreStateSnapshot snapshot) {
 		OclEvalEnvironment env = OclEvalEnvironment.root(context);
-		OclEvaluator evaluator = new OclEvaluator(env, delegateOptions, getOperationProviders(), accessorCache);
+		OclEvaluator evaluator = new OclEvaluator(env, delegateOptions, getOperationProviders(delegateOptions), accessorCache);
 		evaluator.setDefProperties(defProperties);
 		evaluator.setPreStateSnapshot(snapshot);
 		OclResult result = evaluator.evaluate(expression);
@@ -451,12 +440,24 @@ public class OclEngineImpl implements OclEngine {
 	// --- Internal accessors for subclasses and evaluator ---
 
 	/**
-	 * Returns the registered operation providers.
+	 * Returns the effective operation providers for a given evaluation.
 	 *
-	 * @return unmodifiable snapshot of operation providers
+	 * <p>Def-providers (from {@link #loadDocument(String)}) and additional providers
+	 * (from {@link OclEvaluationOptions#additionalProviders()}) are always active.
+	 * Config-registered providers are only active when both
+	 * {@code configCustomOpsEnabled} and {@code options.customOperationsEnabled()}
+	 * are {@code true}.
+	 *
+	 * @param options the evaluation options for this evaluation
+	 * @return unmodifiable list of active operation providers
 	 */
-	public List<OclOperationProvider> getOperationProviders() {
-		return List.copyOf(operationProviders);
+	public List<OclOperationProvider> getOperationProviders(OclEvaluationOptions options) {
+		List<OclOperationProvider> result = new ArrayList<>(defProviders);
+		result.addAll(options.additionalProviders());
+		if (configCustomOpsEnabled && options.customOperationsEnabled()) {
+			result.addAll(configProviders);
+		}
+		return List.copyOf(result);
 	}
 
 	/**

@@ -26,7 +26,6 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
@@ -157,7 +156,6 @@ abstract class AbstractComparisonTest {
 	 * - Collections are converted to sorted lists for stable comparison
 	 * - Numbers are normalized (Integer vs Long, etc.)
 	 */
-	@SuppressWarnings("unchecked")
 	static Object normalize(Object value) {
 		if (value == null) {
 			return null;

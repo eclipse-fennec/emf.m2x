@@ -44,11 +44,13 @@ public final class OclConfiguration {
 	private final OclExpressionParser parser;
 	private final OclExpressionCache expressionCache;
 	private final List<OclOperationProvider> operationProviders;
+	private final boolean customOperationsEnabled;
 
 	private OclConfiguration(Builder builder) {
 		this.parser = builder.parser;
 		this.expressionCache = builder.expressionCache;
 		this.operationProviders = Collections.unmodifiableList(new ArrayList<>(builder.operationProviders));
+		this.customOperationsEnabled = builder.customOperationsEnabled;
 	}
 
 	/**
@@ -72,13 +74,25 @@ public final class OclConfiguration {
 	/**
 	 * Returns the pre-configured operation providers.
 	 *
-	 * <p>Additional providers can still be registered at runtime via
-	 * {@link OclEngine#registerOperations(OclOperationProvider)}.
+	 * <p>These providers are only active when both
+	 * {@link #customOperationsEnabled()} is {@code true} on the config AND
+	 * {@link OclEvaluationOptions#customOperationsEnabled()} is {@code true}
+	 * on the evaluation options.
 	 *
 	 * @return unmodifiable list of operation providers, never {@code null}
 	 */
 	public List<OclOperationProvider> operationProviders() {
 		return operationProviders;
+	}
+
+	/**
+	 * Returns whether config-registered custom operations are enabled.
+	 * Defaults to {@code false} (D29: disabled by default).
+	 *
+	 * @return {@code true} if custom operations are enabled
+	 */
+	public boolean customOperationsEnabled() {
+		return customOperationsEnabled;
 	}
 
 	/**
@@ -99,6 +113,7 @@ public final class OclConfiguration {
 		private final OclExpressionParser parser;
 		private OclExpressionCache expressionCache;
 		private final List<OclOperationProvider> operationProviders = new ArrayList<>();
+		private boolean customOperationsEnabled;
 
 		private Builder(OclExpressionParser parser) {
 			this.parser = Objects.requireNonNull(parser, "parser must not be null");
@@ -124,6 +139,18 @@ public final class OclConfiguration {
 		 */
 		public Builder addOperationProvider(OclOperationProvider provider) {
 			this.operationProviders.add(Objects.requireNonNull(provider, "provider must not be null"));
+			return this;
+		}
+
+		/**
+		 * Enables or disables config-registered custom operations (D29).
+		 * Defaults to {@code false}.
+		 *
+		 * @param enabled whether custom operations are enabled
+		 * @return this builder
+		 */
+		public Builder customOperationsEnabled(boolean enabled) {
+			this.customOperationsEnabled = enabled;
 			return this;
 		}
 

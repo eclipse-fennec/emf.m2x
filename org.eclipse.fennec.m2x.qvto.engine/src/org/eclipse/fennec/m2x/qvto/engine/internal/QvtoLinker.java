@@ -64,15 +64,21 @@ public class QvtoLinker {
 	private final List<QvtoUnitResolver> unitResolvers;
 	private final EPackage.Registry packageRegistry;
 	private final QvtoBlackboxRegistry blackboxRegistry;
+	private final Set<String> allowedBlackboxModules;
+	private final Set<String> allowedUnitModules;
 
 	public QvtoLinker(QvtoParserSupport parserSupport,
 			List<QvtoUnitResolver> unitResolvers,
 			EPackage.Registry packageRegistry,
-			QvtoBlackboxRegistry blackboxRegistry) {
+			QvtoBlackboxRegistry blackboxRegistry,
+			Set<String> allowedBlackboxModules,
+			Set<String> allowedUnitModules) {
 		this.parserSupport = Objects.requireNonNull(parserSupport);
 		this.unitResolvers = Objects.requireNonNull(unitResolvers);
 		this.packageRegistry = Objects.requireNonNull(packageRegistry);
 		this.blackboxRegistry = blackboxRegistry; // nullable
+		this.allowedBlackboxModules = Objects.requireNonNull(allowedBlackboxModules);
+		this.allowedUnitModules = Objects.requireNonNull(allowedUnitModules);
 	}
 
 	/**
@@ -96,13 +102,27 @@ public class QvtoLinker {
 
 	private void linkModule(Module module, Set<String> visited,
 			Map<Module, Module> stubToResolved) throws QvtoParseException {
+		// Build index of inline-defined (non-stub) modules for local resolution.
+		// When the parser encounters "library Foo() { ... }" and "access Foo" in
+		// the same compilation unit, it creates both an inline Library AND a stub.
+		// The stub must be resolved to the inline Library before trying external resolvers.
+		Map<String, Module> inlineModules = new HashMap<>();
+		for (ModuleImport imp : module.getModuleImport()) {
+			Module imported = imp.getImportedModule();
+			if (imported != null && !isLinkerStub(imported) && imported.getName() != null) {
+				inlineModules.put(imported.getName(), imported);
+			}
+		}
+
 		for (ModuleImport imp : module.getModuleImport()) {
 			Module imported = imp.getImportedModule();
 			if (imported == null) {
 				continue;
 			}
-			// Stub modules have a name but no classifiers (empty module)
-			if (!imported.getEClassifiers().isEmpty()) {
+			// Only stub modules (created by the parser for external imports) carry
+			// the linker-stub annotation. Inline-defined modules (forward declarations,
+			// libraries with body) do NOT have this annotation and are already resolved.
+			if (!isLinkerStub(imported)) {
 				// Already resolved (e.g. inline library from same parse unit)
 				String name = imported.getName();
 				if (name != null && visited.add(name)) {
@@ -122,8 +142,13 @@ public class QvtoLinker {
 						"Circular import detected: " + qualifiedName);
 			}
 
-			// Try unit resolvers first
-			Module resolved = resolveModule(qualifiedName);
+			// Try inline-defined modules first (same compilation unit)
+			Module resolved = inlineModules.get(qualifiedName);
+
+			// Try unit resolvers
+			if (resolved == null) {
+				resolved = resolveModule(qualifiedName);
+			}
 
 			// Fallback: try blackbox registry
 			if (resolved == null) {
@@ -170,6 +195,10 @@ public class QvtoLinker {
 	}
 
 	private Module resolveModule(String qualifiedName) throws QvtoParseException {
+		// D29: Allow-list enforcement for unit modules
+		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(qualifiedName)) {
+			return null;
+		}
 		for (QvtoUnitResolver resolver : unitResolvers) {
 			Optional<QvtoUnit> unit = resolver.resolveUnit(qualifiedName);
 			if (unit.isPresent()) {
@@ -185,6 +214,10 @@ public class QvtoLinker {
 	 */
 	private Module resolveBlackboxModule(String qualifiedName) {
 		if (blackboxRegistry == null) {
+			return null;
+		}
+		// D29: Allow-list enforcement for blackbox modules
+		if (!allowedBlackboxModules.isEmpty() && !allowedBlackboxModules.contains(qualifiedName)) {
 			return null;
 		}
 		Optional<QvtoBlackboxLibrary> optLib = blackboxRegistry.getLibrary(qualifiedName);
@@ -255,5 +288,9 @@ public class QvtoLinker {
 			}
 		}
 		return module;
+	}
+
+	private static boolean isLinkerStub(Module module) {
+		return module.getEAnnotation(QvtoParserSupport.LINKER_STUB_ANNOTATION) != null;
 	}
 }

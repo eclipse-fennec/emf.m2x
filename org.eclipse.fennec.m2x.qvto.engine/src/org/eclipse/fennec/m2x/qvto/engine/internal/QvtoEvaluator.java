@@ -79,8 +79,9 @@ import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.util.QvtOperationalSwitch;
 import org.eclipse.fennec.m2x.model.trace.Trace;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclOperation;
+import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
@@ -123,11 +124,14 @@ public class QvtoEvaluator {
 	private final QvtoEvaluationOptions options;
 	private final OperationalTransformation transformation;
 	private final QvtoExtentManager extentManager;
-	private final QvtoTraceManager traceManager = new QvtoTraceManager();
+	private final QvtoTraceManager traceManager;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
 	private final ImperativeDispatch imperativeSwitch = new ImperativeDispatch();
 	private final QvtOpDispatch qvtOpSwitch = new QvtOpDispatch();
 	private int stackDepth;
+
+	/** Deadline for timeout enforcement (nanoseconds), or 0 if no timeout. */
+	private long deadlineNanos;
 
 	// §8.1.10: Intermediate property storage — per-instance values for ContextualProperty
 	private final QvtoIntermediatePropertyStore intermediateStore;
@@ -140,6 +144,9 @@ public class QvtoEvaluator {
 	private final QvtoModelOperations modelOperations;
 	private final QvtoEngineImpl engine;
 	private Map<String, Object> configProps = Map.of();
+
+	// D29: Per-evaluation additional providers (QVT-O↔OCL bridge)
+	private List<OclOperationProvider> additionalProviders = List.of();
 
 	// Late resolve support
 	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
@@ -162,6 +169,7 @@ public class QvtoEvaluator {
 		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
 		this.extentManager = Objects.requireNonNull(extentManager, "extentManager must not be null");
 		this.engine = engine; // nullable for backward compatibility in tests
+		this.traceManager = new QvtoTraceManager(options.maxTraceRecords());
 		this.intermediateStore = new QvtoIntermediatePropertyStore(transformation, this::eval);
 		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager);
 		this.tagRegistry = new QvtoTagRegistry(transformation);
@@ -175,6 +183,11 @@ public class QvtoEvaluator {
 	 * @return the collected diagnostics
 	 */
 	public List<Diagnostic> execute() {
+		// Set timeout deadline (Q-5 / M-3)
+		if (options.timeout() != null) {
+			deadlineNanos = System.nanoTime() + options.timeout().toNanos();
+		}
+
 		// Bind model parameters as variables (e.g. 'in s : SRC' → extent)
 		EList<ModelParameter> modelParams = transformation.getModelParameter();
 		for (int i = 0; i < modelParams.size(); i++) {
@@ -340,7 +353,8 @@ public class QvtoEvaluator {
 			// Try custom operation providers — use fallback pattern (AnyType catch-all)
 			// to avoid invoking multiple matching ops with side effects
 			OclOperation fallback = null;
-			for (var provider : oclEngine.getOperationProviders()) {
+			for (var provider : oclEngine.getOperationProviders(
+				OclEvaluationOptions.lenient().withAdditionalProviders(additionalProviders))) {
 				for (var op : provider.getOperations()) {
 					if (!op.name().equals(opName)) {
 						continue;
@@ -556,7 +570,9 @@ public class QvtoEvaluator {
 					: OclContext.of(vars);
 		}
 		// Use LENIENT null handling for QVT-O — module-level operations have no self
-		OclEvaluationOptions oclOpts = OclEvaluationOptions.lenient();
+		// D29: Pass additionalProviders (QVT-O bridge) so they are always active
+		OclEvaluationOptions oclOpts = OclEvaluationOptions.lenient()
+				.withAdditionalProviders(additionalProviders);
 		OclResult oclResult = oclEngine.evaluateWithDiagnostics(expr, oclCtx, oclOpts);
 		diagnostics.addAll(oclResult.diagnostics());
 		return oclResult.value();
@@ -580,6 +596,11 @@ public class QvtoEvaluator {
 		if (++stackDepth > options.maxStackDepth()) {
 			--stackDepth;
 			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
+			return null;
+		}
+		if (checkTimeout()) {
+			--stackDepth;
+			addError("Execution timeout exceeded");
 			return null;
 		}
 		try {
@@ -631,6 +652,11 @@ public class QvtoEvaluator {
 			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
 			return null;
 		}
+		if (checkTimeout()) {
+			--stackDepth;
+			addError("Execution timeout exceeded");
+			return null;
+		}
 		try {
 			env.pushScope();
 			bindOperationParams(mappingOp, self, args);
@@ -669,6 +695,11 @@ public class QvtoEvaluator {
 		if (++stackDepth > options.maxStackDepth()) {
 			--stackDepth;
 			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
+			return null;
+		}
+		if (checkTimeout()) {
+			--stackDepth;
+			addError("Execution timeout exceeded");
 			return null;
 		}
 		try {
@@ -945,6 +976,15 @@ public class QvtoEvaluator {
 		this.configProps = configProperties != null ? configProperties : Map.of();
 	}
 
+	/**
+	 * Sets the additional OCL operation providers for this evaluation (D29).
+	 * These providers are passed through to every OCL sub-evaluation via
+	 * {@link OclEvaluationOptions#additionalProviders()}.
+	 */
+	public void setAdditionalProviders(List<OclOperationProvider> providers) {
+		this.additionalProviders = providers != null ? List.copyOf(providers) : List.of();
+	}
+
 
 
 	/**
@@ -978,6 +1018,11 @@ public class QvtoEvaluator {
 		if (++stackDepth > options.maxStackDepth()) {
 			--stackDepth;
 			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
+			return;
+		}
+		if (checkTimeout()) {
+			--stackDepth;
+			addError("Execution timeout exceeded");
 			return;
 		}
 		try {
@@ -1019,15 +1064,40 @@ public class QvtoEvaluator {
 	}
 
 	private void addError(String message) {
-		diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0, message, null));
+		addDiagnostic(Diagnostic.ERROR, message);
 	}
 
 	private void addWarning(String message) {
-		diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0, message, null));
+		addDiagnostic(Diagnostic.WARNING, message);
 	}
 
 	private void addInfo(String message) {
-		diagnostics.add(new BasicDiagnostic(Diagnostic.INFO, SOURCE_ID, 0, message, null));
+		addDiagnostic(Diagnostic.INFO, message);
+	}
+
+	/**
+	 * Adds a diagnostic entry, respecting {@code maxDiagnostics} limit (M-4b / Q-7).
+	 */
+	private void addDiagnostic(int severity, String message) {
+		if (diagnostics.size() >= options.maxDiagnostics()) {
+			if (diagnostics.size() == options.maxDiagnostics()) {
+				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
+						"Maximum diagnostics limit reached (" + options.maxDiagnostics()
+								+ "), further diagnostics truncated", null));
+			}
+			return;
+		}
+		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, 0, message, null));
+	}
+
+	/**
+	 * Checks the timeout deadline (M-3 / Q-5). Called at every stack-depth
+	 * check point and in loop iterations for timely termination.
+	 *
+	 * @return {@code true} if the deadline has been exceeded
+	 */
+	private boolean checkTimeout() {
+		return deadlineNanos != 0 && System.nanoTime() > deadlineNanos;
 	}
 
 	/**
@@ -1464,7 +1534,16 @@ public class QvtoEvaluator {
 		@Override
 		public Object caseWhileExp(WhileExp exp) {
 			// §8.2.2.4: WhileExp returns null
+			int iterations = 0;
 			while (true) {
+				if (++iterations > options.maxLoopIterations()) {
+					addError("Maximum loop iterations exceeded: " + options.maxLoopIterations());
+					break;
+				}
+				if (checkTimeout()) {
+					addError("Execution timeout exceeded");
+					break;
+				}
 				Object condition = eval(exp.getCondition());
 				if (!Boolean.TRUE.equals(condition)) {
 					break;
@@ -1502,7 +1581,16 @@ public class QvtoEvaluator {
 			OclExpression body = exp.getOwnedBody();
 			boolean isForOne = "forOne".equals(exp.getName());
 
+			int iterations = 0;
 			for (Object element : iterable) {
+				if (++iterations > options.maxLoopIterations()) {
+					addError("Maximum loop iterations exceeded: " + options.maxLoopIterations());
+					break;
+				}
+				if (checkTimeout()) {
+					addError("Execution timeout exceeded");
+					break;
+				}
 				env.pushScope();
 				try {
 					env.define(iterName, element);
@@ -1554,7 +1642,16 @@ public class QvtoEvaluator {
 				env.define(target.getName(), targetValue);
 			}
 
+			int iterations = 0;
 			for (Object element : coll) {
+				if (++iterations > options.maxLoopIterations()) {
+					addError("Maximum loop iterations exceeded: " + options.maxLoopIterations());
+					break;
+				}
+				if (checkTimeout()) {
+					addError("Execution timeout exceeded");
+					break;
+				}
 				env.pushScope();
 				try {
 					env.define(iterName, element);
