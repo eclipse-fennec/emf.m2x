@@ -17,7 +17,7 @@
 | D7 | `enableEMF` library for EMF buildpath | Consistent EMF dependency management via bnd |
 | D8 | Two-phase parsing (ANTLR4 parse tree -> EMF AST) | Clean separation of syntax and semantics. Parser resolves types during AST construction for hot-path performance. |
 | D9 | OSGi-optional (works without OSGi) | Pure Java core usable anywhere, OSGi DS adapter for service discovery |
-| D10 | Whiteboard pattern for extensions | QVT blackboxes, custom operations, M2T services - dynamic in OSGi, programmatic without |
+| D10 | Whiteboard / single @Reference for extensions | QVT blackboxes, M2T services: whiteboard (MULTIPLE, DYNAMIC). OCL custom operations: single mandatory `@Reference` + target (see §12.2). Programmatic without OSGi |
 | D11 | EMF delegate integration | OCL in EAnnotations for validation/setting/invocation delegates. See [OCL Architecture §8](ocl-architecture.md#8-emf-delegate-integration) |
 | D12 | fennec emf.osgi compatibility | Automatic model registration, future delegate registry support |
 | D13 | OCL v2.5 (backward compatible with v2.4) | v2.4 is the formal OMG spec; v2.5 features (Map, safe navigation, OclComparable) added without breaking v2.4 |
@@ -365,7 +365,13 @@ These are trust boundaries: a malicious provider/library/resolver has full JVM a
 
 **Threat:** In multi-tenant or plugin-based environments (OSGi whiteboard, ServiceLoader), an attacker could register a malicious extension that gets automatically discovered and invoked.
 
-**Decision:** All extension points are **disabled by default** and require explicit opt-in. Two enforcement levels (AND-linked):
+**Decision:** All extension points are **disabled by default** and require explicit opt-in. Two enforcement levels (AND-linked).
+
+**OCL operation provider wiring:** Instead of a whiteboard (MULTIPLE, DYNAMIC), the `OclEngineComponent`
+uses a **single mandatory `@Reference(name="operationProvider")`** with a configurable target filter.
+The deployer explicitly selects which provider is bound via `operationProvider.target`. A built-in
+`NoOpOclOperationProvider` (empty list) is bound by default. If multiple providers are needed,
+a compound provider aggregating them must be registered as a single service.
 
 #### OCL: Boolean Enable Flag
 

@@ -58,5 +58,6 @@ javac.target: 21
  	name = EMFCompare
 
 -fixupmessages: \
+	"jpms.jarname calculated module";is:=ignore,\
 	"No translation";is:=ignore,\
 	"The .classpath contains";is:=ignore

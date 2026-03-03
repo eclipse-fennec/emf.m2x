@@ -52,7 +52,7 @@ import org.osgi.service.component.annotations.Reference;
 		property = {
 				"emf.configuratorName=" + OclDelegateUtil.DELEGATE_URI,
 				"emf.name=fennec-ocl",
-				"configuratorType=VALIDATION_DELEGATE"
+				"emf.configuratorType=VALIDATION_DELEGATE"
 		})
 public class OclValidationDelegateFactory implements EValidator.ValidationDelegate {
 

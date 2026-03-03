@@ -189,7 +189,15 @@ public record OclEvaluationOptions(
 public interface OclOperationProvider {
     List<OclOperation> getOperations();
 }
+```
 
+**OSGi wiring:** `OclEngineComponent` injects exactly one `OclOperationProvider` via
+`@Reference(name="operationProvider")`. The default is `NoOpOclOperationProvider` (empty list).
+To use a custom provider, register it as a DS component and configure
+`operationProvider.target` on the engine (see [User Guide §11.3](ocl-user-guide.md#113-osgi-registration)).
+The D29 `customOperationsEnabled` gate must also be enabled.
+
+```java
 @ConsumerType
 public interface CompleteOclContribution {
     URI getDocumentUri();
@@ -631,10 +639,15 @@ emf.osgi whiteboard pattern:
 |----------|-------|
 | `emf.configuratorName` | `http://www.eclipse.org/fennec/m2x/ocl/1.0` |
 | `emf.name` | `fennec-ocl` |
-| `configuratorType` | `OPERATION_INVOCATION_FACTORY` / `SETTING_DELEGATE_FACTORY` / `VALIDATION_DELEGATE` |
+| `emf.configuratorType` | `OPERATION_INVOCATION_FACTORY` / `SETTING_DELEGATE_FACTORY` / `VALIDATION_DELEGATE` |
 
 The emf.osgi delegate registry whiteboard components pick up these services automatically —
 no manual `installDelegates()` call needed.
+
+Each delegate factory injects `OclEngineImpl` via `@Reference` (not the `OclEngine` API
+interface) because delegates need internal methods (`getDelegateOptions()`,
+`evaluatePostcondition()`). The `OclEngineComponent` registers as both `OclEngine` and
+`OclEngineImpl` services to support this.
 
 ### 8.8 emf.osgi Delegate Registry Analysis
 
@@ -688,17 +701,25 @@ engine.installDelegates();
 │  Shared across all engine instances by default              │
 └──────────────┬──────────────────────────────────────────────┘
                │ @Reference(name="expressionCache")
+               │
+┌──────────────────────────────────────────────────────────────┐
+│  NoOpOclOperationProvider (SINGLETON, default)               │
+│  → OclOperationProvider service (returns empty list)         │
+│  Bound by default when no custom provider is registered     │
+└──────────────┬──────────────────────────────────────────────┘
+               │ @Reference(name="operationProvider")
 ┌──────────────▼──────────────────────────────────────────────┐
 │  OclEngineComponent (PROTOTYPE)                             │
-│  → OclEngine service                                        │
+│  → OclEngine + OclEngineImpl services                       │
 │  @Designate(ocd = OclEngineConfiguration.class)             │
 │  Each consumer gets its own engine instance with:           │
 │  - own PropertyAccessorCache (per-engine, not shared)       │
 │  - own OclParserSupport instance (PROTOTYPE_REQUIRED)       │
 │  - shared OclExpressionCache (via @Reference target)        │
+│  - single OclOperationProvider (via @Reference target)      │
 │  Engine-wide defaults from ConfigAdmin (ocl.* properties)   │
 └──────────────┬──────────────────────────────────────────────┘
-               │
+               │ @Reference OclEngineImpl
 ┌──────────────▼──────────────────────────────────────────────┐
 │  EMF Delegates (emf.osgi whiteboard, see §8.7)              │
 └─────────────────────────────────────────────────────────────┘
@@ -709,6 +730,7 @@ engine.installDelegates();
 | Component | Scope | Instances | Rationale |
 |-----------|-------|-----------|-----------|
 | `OclParserSupport` | PROTOTYPE | One per engine | ANTLR4 parser is lightweight; each engine gets its own instance via `PROTOTYPE_REQUIRED` |
+| `NoOpOclOperationProvider` | SINGLETON | One (default) | No-op default; replaced by custom provider via `operationProvider.target` |
 | `OclEngineComponent` | PROTOTYPE | One per consumer | Each `@Reference OclEngine` injection creates a fresh engine with isolated `PropertyAccessorCache` |
 | `DefaultOclExpressionCacheComponent` | SINGLETON | One per config (shared) | Parse cache is thread-safe and expensive to warm; shared across all engines by default |
 
@@ -720,7 +742,8 @@ engine.installDelegates();
 - `OclEngineConfiguration` — `@ObjectClassDefinition` annotation with `ocl.*` prefixed properties
 - `OclConfigurationHelper` — maps `OclEngineConfiguration` to `OclConfiguration`
 - `DefaultOclExpressionCacheComponent` — SINGLETON, provides default LRU cache (1024 entries)
-- Delegate factories — separate `@Component` services with emf.osgi properties
+- `NoOpOclOperationProvider` — SINGLETON default `OclOperationProvider` (empty operations list)
+- Delegate factories — separate `@Component` services with emf.osgi properties, inject `OclEngineImpl`
 
 ### 9.4 Engine-Wide Defaults via ConfigAdmin
 

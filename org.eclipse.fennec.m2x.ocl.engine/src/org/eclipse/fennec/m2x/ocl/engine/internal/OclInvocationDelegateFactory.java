@@ -59,7 +59,7 @@ import org.osgi.service.component.annotations.Reference;
 		property = {
 				"emf.configuratorName=" + OclDelegateUtil.DELEGATE_URI,
 				"emf.name=fennec-ocl",
-				"configuratorType=OPERATION_INVOCATION_FACTORY"
+				"emf.configuratorType=OPERATION_INVOCATION_FACTORY"
 		})
 public class OclInvocationDelegateFactory implements EOperation.Internal.InvocationDelegate.Factory {
 

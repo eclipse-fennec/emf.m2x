@@ -24,13 +24,27 @@ import org.osgi.annotation.versioning.ConsumerType;
  * <p>Without OSGi, register providers via
  * {@link OclConfiguration.Builder#addOperationProvider(OclOperationProvider)}.
  *
- * <p>With OSGi, providers are discovered automatically via the whiteboard pattern:
+ * <p>With OSGi, the {@code OclEngineComponent} binds exactly one
+ * {@code OclOperationProvider} via a mandatory {@code @Reference}.
+ * A default no-op provider is always available. To supply custom
+ * operations, register a component and configure the target filter:
  * <pre>
- * {@literal @}Component(service = OclOperationProvider.class)
+ * {@literal @}Component(service = OclOperationProvider.class,
+ *            property = "provider.name=myProvider")
  * public class MyOperations implements OclOperationProvider {
  *     ...
  * }
  * </pre>
+ * Then configure the engine to select it:
+ * <pre>
+ * "DefaultOclEngine": {
+ *     "operationProvider.target": "(provider.name=myProvider)",
+ *     "ocl.customOperationsEnabled": true
+ * }
+ * </pre>
+ *
+ * <p>If multiple providers are needed, implement a compound provider
+ * that delegates to multiple underlying providers.
  *
  * @author Data In Motion Consulting
  * @since 1.0

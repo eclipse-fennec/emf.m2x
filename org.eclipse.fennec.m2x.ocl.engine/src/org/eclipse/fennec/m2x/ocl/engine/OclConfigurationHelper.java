@@ -19,6 +19,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.ErrorRecovery;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
+import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 
 /**
  * Maps an {@link OclEngineConfiguration} (OSGi Metatype) to an
@@ -44,6 +45,29 @@ public final class OclConfigurationHelper {
 	 */
 	public static OclConfiguration from(OclEngineConfiguration config,
 			OclExpressionParser parser, OclExpressionCache cache) {
+		return buildCommon(config, parser, cache).build();
+	}
+
+	/**
+	 * Creates an {@link OclConfiguration} from the given OSGi configuration
+	 * annotation, parser, cache, and operation provider.
+	 *
+	 * @param config            the OSGi configuration annotation
+	 * @param parser            the OCL expression parser
+	 * @param cache             the expression cache, or {@code null}
+	 * @param operationProvider the custom operation provider
+	 * @return the configuration
+	 */
+	public static OclConfiguration from(OclEngineConfiguration config,
+			OclExpressionParser parser, OclExpressionCache cache,
+			OclOperationProvider operationProvider) {
+		return buildCommon(config, parser, cache)
+				.addOperationProvider(operationProvider)
+				.build();
+	}
+
+	private static OclConfiguration.Builder buildCommon(OclEngineConfiguration config,
+			OclExpressionParser parser, OclExpressionCache cache) {
 		return OclConfiguration.builder(parser)
 				.expressionCache(cache)
 				.customOperationsEnabled(config.customOperationsEnabled())
@@ -53,7 +77,6 @@ public final class OclConfigurationHelper {
 				.timeoutMs(config.timeout())
 				.maxCollectionSize(config.maxCollectionSize())
 				.maxClosureIterations(config.maxClosureIterations())
-				.maxRegexLength(config.maxRegexLength())
-				.build();
+				.maxRegexLength(config.maxRegexLength());
 	}
 }

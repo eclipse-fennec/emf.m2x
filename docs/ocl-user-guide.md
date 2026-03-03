@@ -588,7 +588,14 @@ In your `.ecore` model, add annotations with this delegate URI:
 
 ### 9.4 OSGi
 
-In OSGi, the delegate factories are registered automatically as DS components. No manual `installDelegates()` call needed.
+In OSGi, the delegate factories (`OclInvocationDelegateFactory`, `OclSettingDelegateFactory`,
+`OclValidationDelegateFactory`) are registered automatically as DS components with
+emf.osgi whiteboard properties. The emf.osgi delegate registry components discover
+them and populate the global EMF registries. No manual `installDelegates()` call needed.
+
+Each delegate factory injects `OclEngineImpl` via `@Reference` to access both the
+public API methods (`parse`, `evaluate`) and internal delegate methods
+(`getDelegateOptions`, `evaluatePostcondition`).
 
 ---
 
@@ -711,8 +718,16 @@ OclEngine engine = new OclEngineImpl(config);
 
 ### 11.3 OSGi Registration
 
+In OSGi, the `OclEngineComponent` injects exactly one `OclOperationProvider` via a
+mandatory `@Reference`. By default, the built-in `NoOpOclOperationProvider` is bound
+(returns an empty list — no custom operations).
+
+To provide custom operations, register your provider as a DS component and configure
+the engine to select it via `operationProvider.target`:
+
 ```java
-@Component(service = OclOperationProvider.class)
+@Component(service = OclOperationProvider.class,
+           property = "provider.name=myProvider")
 public class MyOperations implements OclOperationProvider {
     @Override
     public List<OclOperation> getOperations() {
@@ -721,7 +736,23 @@ public class MyOperations implements OclOperationProvider {
 }
 ```
 
-Operations registered this way are automatically discovered by the engine.
+Then configure `OclEngineComponent` via ConfigAdmin or OSGi Configurator:
+
+```json
+{
+    "DefaultOclEngine": {
+        "operationProvider.target": "(provider.name=myProvider)",
+        "ocl.customOperationsEnabled": true
+    }
+}
+```
+
+Both `operationProvider.target` and `customOperationsEnabled` are required —
+the target selects the provider, and the D29 gate enables operation resolution
+at evaluation time (see §14 Security).
+
+If you need multiple providers combined, create a compound provider that
+aggregates them and register it as a single service.
 
 ### 11.4 Using OclConfiguration
 

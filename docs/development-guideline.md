@@ -656,7 +656,7 @@ Each of our `.model` bundles must register its EPackages. Each `.parser` bundle 
 
 | Extension | Eclipse extension point | Without OSGi | With OSGi |
 |---|---|---|---|
-| **OCL Custom Operations** | `org.eclipse.ocl.pivot.standard_library` | `OclConfiguration.builder(parser).operationProviders(...).customOperationsEnabled(true)` (D29: disabled by default) | DS whiteboard: `@Component(service = OclOperationProvider.class)` |
+| **OCL Custom Operations** | `org.eclipse.ocl.pivot.standard_library` | `OclConfiguration.builder(parser).addOperationProvider(...).customOperationsEnabled(true)` (D29: disabled by default) | Single `@Reference(name="operationProvider")` on `OclEngineComponent` — default: `NoOpOclOperationProvider`; custom: register `@Component(service = OclOperationProvider.class, property = "provider.name=myProvider")` and set `operationProvider.target=(provider.name=myProvider)` via ConfigAdmin |
 | **OCL Standard Library** | `org.eclipse.ocl.pivot.standard_library` | Built-in, loaded at startup | DS whiteboard: `@Component(service = OclStandardLibraryContribution.class)` |
 | **Complete OCL Documents** | `org.eclipse.ocl.pivot.complete_ocl_registry` | `OclEngine.registerCompleteOclDocument(contribution)` / `unregisterCompleteOclDocument(contribution)` | DS whiteboard: `@Component(service = CompleteOclContribution.class)` |
 | **Model Extents / Resource Providers** | N/A (programmatic in Eclipse too) | Pass `Resource` / `ResourceSet` directly | DS `@Reference` |
