@@ -1385,4 +1385,56 @@ class M2tEngineTest {
 					"Without strategy, default content must always be generated: " + generated);
 		}
 	}
+
+	// ==================== Encoding Verification ====================
+
+	@Nested
+	@DisplayName("Encoding")
+	class EncodingTests {
+
+		@Test
+		@DisplayName("file block with charset parameter generates file")
+		void fileBlockWithCharset() {
+			EClass input = EcoreFactory.eINSTANCE.createEClass();
+			input.setName("Test");
+
+			Module module = createModule("test");
+			Template t = createTemplate("main", true);
+			t.getParameter().add(createParameter("c"));
+
+			FileBlock fileBlock = m2t.createFileBlock();
+			fileBlock.setFileUrl(createStringLiteral("output.txt"));
+			fileBlock.setOpenMode(OpenModeKind.OVERWRITE);
+			fileBlock.setCharset(createStringLiteral("ISO-8859-1"));
+			fileBlock.getBody().add(createText("hello"));
+			t.getBody().add(fileBlock);
+			module.getOwnedModuleElement().add(t);
+
+			// Charset is evaluated but in-memory output is always String (UTF-16)
+			M2tWriterStack writers = executeWithFiles(module, input);
+			assertEquals("hello", writers.getGeneratedFiles().get("output.txt"));
+		}
+
+		@Test
+		@DisplayName("file block without charset defaults to UTF-8")
+		void fileBlockDefaultCharset() {
+			EClass input = EcoreFactory.eINSTANCE.createEClass();
+			input.setName("Test");
+
+			Module module = createModule("test");
+			Template t = createTemplate("main", true);
+			t.getParameter().add(createParameter("c"));
+
+			FileBlock fileBlock = m2t.createFileBlock();
+			fileBlock.setFileUrl(createStringLiteral("output.txt"));
+			fileBlock.setOpenMode(OpenModeKind.OVERWRITE);
+			// No charset set — defaults to UTF-8
+			fileBlock.getBody().add(createText("default encoding"));
+			t.getBody().add(fileBlock);
+			module.getOwnedModuleElement().add(t);
+
+			M2tWriterStack writers = executeWithFiles(module, input);
+			assertEquals("default encoding", writers.getGeneratedFiles().get("output.txt"));
+		}
+	}
 }

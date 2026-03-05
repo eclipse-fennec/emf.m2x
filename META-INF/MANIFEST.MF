@@ -1,0 +1,50 @@
+Manifest-Version: 1.0
+Bnd-LastModified: 1772738664978
+Bundle-ContactAddress: info@datainmotion.com
+Bundle-Copyright: Data In Motion Consulting GmbH - All rights reserved
+Bundle-Description: ANTLR4-based parser for OCL v2.5 expressions and C
+ omplete OCL documents
+Bundle-Developers: jalbert;email="j.albert@datainmotion.com";name="Jue
+ rgen Albert";organization="Data In Motion";organizationUrl="https://w
+ ww.datainmotion.com";roles="architect,developer",mhoffmann;email="m.h
+ offmann@datainmotion.com";name="Mark Hoffmann";organization="Data In 
+ Motion";organizationUrl="https://www.datainmotion.com";roles="develop
+ er,architect";url="https://www.datainmotion.com"
+Bundle-DocURL: https://github.com/eclipse-fennec/emf.m2x
+Bundle-License: Eclipse Public License 2.0
+Bundle-ManifestVersion: 2
+Bundle-Name: Fennec OCL Parser
+Bundle-SCM: url=https://github.com/eclipse-fennec/emf.m2x,connection=s
+ cm:git:https://github.com/eclipse-fennec/emf.m2x.git,developerConnect
+ ion=scm:git:git@github.com:eclipse-fennec/emf.m2x.git
+Bundle-SymbolicName: org.eclipse.fennec.m2x.ocl.parser
+Bundle-Vendor: Eclipse Foundation
+Bundle-Version: 0.1.0.202603051924-SNAPSHOT
+Created-By: 21.0.10 (Ubuntu)
+Export-Package: org.eclipse.fennec.m2x.ocl.parser;version="1.0";uses:=
+ "org.antlr.v4.runtime,org.antlr.v4.runtime.atn,org.antlr.v4.runtime.d
+ fa,org.antlr.v4.runtime.tree,org.eclipse.emf.common.notify.impl,org.e
+ clipse.emf.ecore,org.eclipse.emf.ecore.resource,org.eclipse.fennec.m2
+ x.model.ocl,org.eclipse.fennec.m2x.ocl.api"
+Import-Package: java.lang,java.lang.invoke,java.util,java.util.functio
+ n,java.util.logging,java.util.stream,org.antlr.v4.runtime;version="[4
+ .13,5)",org.antlr.v4.runtime.atn;version="[4.13,5)",org.antlr.v4.runt
+ ime.dfa;version="[4.13,5)",org.antlr.v4.runtime.tree;version="[4.13,5
+ )",org.eclipse.emf.common.notify;version="[2.44,3)",org.eclipse.emf.c
+ ommon.notify.impl;version="[2.44,3)",org.eclipse.emf.common.util;vers
+ ion="[2.44,3)",org.eclipse.emf.ecore;version="[2.41,3)",org.eclipse.e
+ mf.ecore.resource;version="[2.41,3)",org.eclipse.fennec.m2x.model.ocl
+ ;version="[1.0,2)",org.eclipse.fennec.m2x.ocl.api;version="[1.0,1.1)"
+ ,org.eclipse.fennec.m2x.ocl.parser;version="[1.0,2)"
+Private-Package: grammar
+Provide-Capability: osgi.service;objectClass:List<String>="org.eclipse
+ .fennec.m2x.ocl.api.OclExpressionParser";uses:="org.eclipse.fennec.m2
+ x.ocl.api",org.eclipse.fennec.m2x;implementation=antlr4;org.eclipse.f
+ ennec.m2x="ocl.parser";provider=eclipse-fennec;version:Version="1.0"
+Require-Capability: osgi.extender;filter:="(&(osgi.extender=osgi.compo
+ nent)(version>=1.5.0)(!(version>=2.0.0)))",osgi.ee;filter:="(&(osgi.e
+ e=JavaSE)(version=21))"
+Service-Component: OSGI-INF/org.eclipse.fennec.m2x.ocl.parser.OclParse
+ rSupport.xml
+Tool: Bnd-7.2.1.202601121903
+

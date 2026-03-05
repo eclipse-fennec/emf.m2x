@@ -806,9 +806,9 @@ See [OCL Architecture](ocl-architecture.md) and [OCL Spec Compliance](ocl-spec-c
 
 See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Plan](qvto-test-plan.md) for spec-conformance tracking, and [QVT-O Spec Gap Analysis](qvto-spec-gap-analysis.md) for detailed gap documentation.
 
-### Phase 3: Acceleo/MOFM2T (with OCL expressions + cherry-picked extensions) — In Progress
+### Phase 3: Acceleo/MOFM2T (with OCL expressions + cherry-picked extensions) — ✅ Complete
 
-**Status:** P3-0 through P3-5 ✅ Complete (176 tests, 0 failures). Next: P3-6 (Polishing).
+**Status:** P3-0 through P3-6 ✅ Complete (195 tests, 0 failures).
 
 **Implementation Plan:** See [`m2t-implementation-plan.md`](m2t-implementation-plan.md) for detailed sub-phases.
 
@@ -820,7 +820,7 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 | P3-3 | `m2t.engine` | Evaluator gap fixes, standard library (§8.3), protected area merge (D31) | ✅ Done |
 | P3-4 | `m2t.engine` | Module composition (import/extends), overrides/super, visibility, linking | ✅ Done |
 | P3-5 | `m2t.parser`, `m2t.engine` | Whitespace handling (§8.4), WhitespaceMode (D32), indent-propagation | ✅ Done |
-| P3-6 | `m2t.engine` | Polishing, encoding, end-to-end tests, regression check | TODO |
+| P3-6 | `m2t.tests` | Exact whitespace verification, spec §7 E2E tests, encoding, regression | ✅ Done |
 
 ### Phase 4: QVT-Declarative (Relations + Core)
 

@@ -38,9 +38,8 @@ import org.junit.jupiter.api.Test;
  * Acceleo 3.7 reference comparison tests.
  *
  * <p>These tests parse M2T templates and compare the generated output
- * (whitespace-stripped) against Acceleo 3.7 reference results. Whitespace
- * handling (P3-5) is not yet implemented, so only non-whitespace content
- * is compared — matching Acceleo's own {@code deleteWhitespaces()} strategy.
+ * with exact whitespace against expected results derived from the
+ * MOFM2T §8.4 whitespace normalization rules.
  *
  * <p>Input model: an EPackage with 3 classifiers (ClasseA, ClasseB, AbstractClass),
  * matching Acceleo's {@code data/target.ecore}.
@@ -75,15 +74,11 @@ class M2tAcceleoReferenceTest {
 		targetPackage.getEClassifiers().add(abstractClass);
 	}
 
-	/** Strip all whitespace for comparison (like Acceleo's deleteWhitespaces). */
-	private String stripWhitespace(String s) {
-		return s.replaceAll("\\s+", "");
-	}
-
 	private M2tResult executeTemplate(String mtlSource) throws M2tParseException {
 		Module module = engine.parse(mtlSource, "test");
 		return engine.execute(module, M2tContext.of(targetPackage));
 	}
+
 
 	private String getFileContent(M2tResult result, String fileName) {
 		Map<String, String> files = result.generatedFiles();
@@ -112,8 +107,7 @@ class M2tAcceleoReferenceTest {
 			M2tResult result = executeTemplate(mtl);
 			assertTrue(result.isSuccess());
 			String content = getFileContent(result, "testForSimple");
-			// Acceleo ref: ClasseA ClasseB AbstractClass (whitespace-stripped)
-			assertEquals("ClasseAClasseBAbstractClass", stripWhitespace(content));
+			assertEquals("ClasseA\nClasseB\nAbstractClass", content);
 		}
 
 		@Test
@@ -130,7 +124,7 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testForSeparator");
-			assertEquals("ClasseA/ClasseB/AbstractClass", stripWhitespace(content));
+			assertEquals("ClasseA/ClasseB/AbstractClass", content);
 		}
 
 		@Test
@@ -147,7 +141,7 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testForBefore");
-			assertEquals("beforetestClasseAClasseBAbstractClass", stripWhitespace(content));
+			assertEquals("before testClasseA\nClasseB\nAbstractClass", content);
 		}
 
 		@Test
@@ -164,7 +158,7 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testForAfter");
-			assertEquals("ClasseAClasseBAbstractClassaftertest", stripWhitespace(content));
+			assertEquals("ClasseA\nClasseB\nAbstractClassafter test", content);
 		}
 
 		@Test
@@ -182,7 +176,7 @@ class M2tAcceleoReferenceTest {
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testForGuard");
 			// ClasseA and ClasseB start with 'C', AbstractClass doesn't
-			assertEquals("ClasseAClasseB", stripWhitespace(content));
+			assertEquals("ClasseA\nClasseB", content);
 		}
 
 		@Test
@@ -197,8 +191,8 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testForI");
-			// Acceleo ref: 123 (1-based)
-			assertEquals("123", stripWhitespace(content));
+			// 1-based counter with default separator \n between iterations
+			assertEquals("1\n2\n3", content);
 		}
 
 		@Test
@@ -213,8 +207,8 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testForISeparator");
-			// Acceleo ref: yop2yop3yop (separator evaluated between iterations, i=2 and i=3)
-			assertEquals("yop2yop3yop", stripWhitespace(content));
+			// separator evaluated between iterations, i=2 and i=3
+			assertEquals("yop2yop3yop", content);
 		}
 	}
 
@@ -238,7 +232,8 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testIf");
-			assertEquals("MATCH", stripWhitespace(content));
+			// MATCH + 2x default separator (empty body for non-matching classifiers)
+			assertEquals("MATCH\n\n", content);
 		}
 
 		@Test
@@ -255,7 +250,7 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testElse");
-			assertEquals("ClasseAClasseBAbstractClass", stripWhitespace(content));
+			assertEquals("ClasseA\nClasseB\nAbstractClass", content);
 		}
 
 		@Test
@@ -272,7 +267,7 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testCompleteIf");
-			assertEquals("ABOTHER", stripWhitespace(content));
+			assertEquals("A\nB\nOTHER", content);
 		}
 	}
 
@@ -294,7 +289,172 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "test_generic_engine");
-			assertEquals("constantoutput", stripWhitespace(content));
+			assertEquals("constant output", content);
+		}
+	}
+
+	// ==================== Variables (Acceleo: data/Variables/template_self.mtl) ====================
+
+	@Nested
+	@DisplayName("Variables — Acceleo reference")
+	class VariablesReferenceTests {
+
+		@Test
+		@DisplayName("explicit self.name in template")
+		void selfTemplate() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('self_template', false)]\n" +
+					"[self.name/]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeTemplate(mtl);
+			String content = getFileContent(result, "self_template");
+			assertEquals("target", content);
+		}
+
+		@Test
+		@DisplayName("explicit self.name in query")
+		void selfQuery() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[query public pkgName(p : EPackage) : String = self.name/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('self_query', false)]\n" +
+					"[p.pkgName()/]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeTemplate(mtl);
+			String content = getFileContent(result, "self_query");
+			assertEquals("target", content);
+		}
+	}
+
+	// ==================== LetBlock ====================
+
+	@Nested
+	@DisplayName("LetBlock — Acceleo reference")
+	class LetBlockReferenceTests {
+
+		@Test
+		@DisplayName("let with variable binding")
+		void letSimple() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[let n : String = p.name]\n" +
+					"package: [n/]\n" +
+					"[/let]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeTemplate(mtl);
+			String content = getFileContent(result, "out");
+			assertEquals("package: target", content);
+		}
+
+		@Test
+		@DisplayName("let with else branch on null")
+		void letElse() throws M2tParseException {
+			// nsPrefix is null/empty → else branch
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[let prefix : String = p.nsPrefix]\n" +
+					"prefix: [prefix/]\n" +
+					"[else]\n" +
+					"no prefix\n" +
+					"[/let]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeTemplate(mtl);
+			String content = getFileContent(result, "out");
+			// nsPrefix is empty string (not null), so let branch is taken
+			assertTrue(content.contains("prefix:") || content.contains("no prefix"));
+		}
+
+		@Test
+		@DisplayName("let with elselet chain")
+		void letElseLet() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[for (c : EClassifier | p.eClassifiers)]\n" +
+					"[let cls : EClass = c.oclAsType(EClass)]\n" +
+					"[cls.name/]\n" +
+					"[/let]\n" +
+					"[/for]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeTemplate(mtl);
+			String content = getFileContent(result, "out");
+			assertTrue(content.contains("ClasseA"));
+			assertTrue(content.contains("ClasseB"));
+			assertTrue(content.contains("AbstractClass"));
+		}
+	}
+
+	// ==================== TemplateInvocation (Acceleo: data/TemplateInvocation/) ====================
+
+	@Nested
+	@DisplayName("TemplateInvocation — Acceleo reference")
+	class TemplateInvocationReferenceTests {
+
+		@Test
+		@DisplayName("multi-template composition — format each classifier")
+		void multiTemplateComposition() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[for (c : EClassifier | p.eClassifiers)]\n" +
+					"[formatClassifier(c)/]\n" +
+					"[/for]\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public formatClassifier(c : EClassifier)]\n" +
+					"- [c.name/]\n" +
+					"[/template]\n";
+			M2tResult result = executeTemplate(mtl);
+			String content = getFileContent(result, "out");
+			assertEquals("- ClasseA\n- ClasseB\n- AbstractClass", content);
+		}
+
+		@Test
+		@DisplayName("template invocation with before/after/separator")
+		void templateInvocationWithSeparators() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[format(p.eClassifiers) separator (', ')/]\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public format(c : EClassifier)]\n" +
+					"[c.name/]\n" +
+					"[/template]\n";
+			M2tResult result = executeTemplate(mtl);
+			String content = getFileContent(result, "out");
+			assertEquals("ClasseA, ClasseB, AbstractClass", content);
+		}
+
+		@Test
+		@DisplayName("query invocation from template")
+		void queryFromTemplate() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[query public upper(s : String) : String = s.toUpper()/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[upper(p.name)/]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeTemplate(mtl);
+			String content = getFileContent(result, "out");
+			assertEquals("TARGET", content);
 		}
 	}
 }

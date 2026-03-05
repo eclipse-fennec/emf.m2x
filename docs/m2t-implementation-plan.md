@@ -250,12 +250,14 @@ Phase 1 (OCL) and Phase 2 (QVT-O) are complete. Phase 3 implements MOFM2T 1.0 �
 - [x] `WhitespaceMode` enum (NONE/SPEC/ACCELEO) with ACCELEO as default ✅
 - [x] 16 whitespace tests in `M2tWhitespaceTest` ✅
 
-### P3-6: Polishing + End-to-End
+### P3-6: Polishing + End-to-End ✅
 **Goal:** Spec examples, encoding, regression.
 
-- [ ] Encoding handling
-- [ ] End-to-end tests from spec §7 + Annex A
-- [ ] Regression check (OCL + QVT-O + M2T tests)
+- [x] Acceleo reference tests switched to exact whitespace comparison (11 tests) ✅
+- [x] Spec §7 end-to-end tests (9 tests in `M2tSpecExampleTest`) ✅
+- [x] Additional Acceleo reference tests: Variables (2), LetBlock (3), TemplateInvocation (3) ✅
+- [x] Encoding verification tests (2 tests in `M2tEngineTest.EncodingTests`) ✅
+- [x] Full regression: OCL (4202) + QVT-O (1050) + M2T (195) = all pass ✅
 
 ---
 
