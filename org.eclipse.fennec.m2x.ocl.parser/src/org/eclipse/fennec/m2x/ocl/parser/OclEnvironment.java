@@ -32,7 +32,7 @@ import org.eclipse.fennec.m2x.model.ocl.Variable;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-class OclEnvironment {
+public class OclEnvironment {
 
 	private final OclEnvironment parent;
 	private final Map<String, Variable> variables;
@@ -52,7 +52,7 @@ class OclEnvironment {
 	 * @param selfVariable the variable representing {@code self}
 	 * @return a new root environment
 	 */
-	static OclEnvironment root(Variable selfVariable) {
+	public static OclEnvironment root(Variable selfVariable) {
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		vars.put("self", selfVariable);
 		return new OclEnvironment(null, vars, null);
@@ -64,7 +64,7 @@ class OclEnvironment {
 	 * @param variable the variable to add
 	 * @return a new child environment
 	 */
-	OclEnvironment nested(Variable variable) {
+	public OclEnvironment nested(Variable variable) {
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		vars.put(variable.getName(), variable);
 		return new OclEnvironment(this, vars, null);
@@ -76,7 +76,7 @@ class OclEnvironment {
 	 * @param additionalVariables the variables to add
 	 * @return a new child environment
 	 */
-	OclEnvironment nested(Iterable<Variable> additionalVariables) {
+	public OclEnvironment nested(Iterable<Variable> additionalVariables) {
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		for (Variable v : additionalVariables) {
 			vars.put(v.getName(), v);
@@ -91,7 +91,7 @@ class OclEnvironment {
 	 * @param iterVar the implicit iterator variable
 	 * @return a new child environment with implicit source
 	 */
-	OclEnvironment nestedImplicit(Variable iterVar) {
+	public OclEnvironment nestedImplicit(Variable iterVar) {
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		vars.put(iterVar.getName(), iterVar);
 		return new OclEnvironment(this, vars, iterVar);
@@ -103,7 +103,7 @@ class OclEnvironment {
 	 * @param name the variable name
 	 * @return the variable, or empty if not found
 	 */
-	Optional<Variable> lookup(String name) {
+	public Optional<Variable> lookup(String name) {
 		Variable local = variables.get(name);
 		if (local != null) {
 			return Optional.of(local);
@@ -119,7 +119,7 @@ class OclEnvironment {
 	 * Used by {@code resolveImplicitProperty} to resolve unqualified names
 	 * against the iterator element type before falling back to {@code self}.
 	 */
-	Optional<Variable> lookupImplicitIterator() {
+	public Optional<Variable> lookupImplicitIterator() {
 		if (implicitIterator != null) {
 			return Optional.of(implicitIterator);
 		}

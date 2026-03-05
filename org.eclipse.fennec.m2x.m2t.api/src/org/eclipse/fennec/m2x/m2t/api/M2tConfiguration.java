@@ -41,11 +41,13 @@ public final class M2tConfiguration {
 	private final OclConfiguration oclConfiguration;
 	private final M2tGenerationStrategy generationStrategy;
 	private final Charset defaultCharset;
+	private final WhitespaceMode whitespaceMode;
 
 	private M2tConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
 		this.generationStrategy = builder.generationStrategy;
 		this.defaultCharset = builder.defaultCharset;
+		this.whitespaceMode = builder.whitespaceMode;
 	}
 
 	public OclConfiguration oclConfiguration() {
@@ -67,6 +69,16 @@ public final class M2tConfiguration {
 		return defaultCharset;
 	}
 
+	/**
+	 * Returns the whitespace handling mode.
+	 * Defaults to {@link WhitespaceMode#ACCELEO}.
+	 *
+	 * @see WhitespaceMode
+	 */
+	public WhitespaceMode whitespaceMode() {
+		return whitespaceMode;
+	}
+
 	public static Builder builder(OclConfiguration oclConfiguration) {
 		return new Builder(oclConfiguration);
 	}
@@ -76,6 +88,7 @@ public final class M2tConfiguration {
 		private final OclConfiguration oclConfiguration;
 		private M2tGenerationStrategy generationStrategy;
 		private Charset defaultCharset = StandardCharsets.UTF_8;
+		private WhitespaceMode whitespaceMode = WhitespaceMode.ACCELEO;
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
@@ -100,6 +113,17 @@ public final class M2tConfiguration {
 		 */
 		public Builder defaultCharset(Charset charset) {
 			this.defaultCharset = Objects.requireNonNull(charset, "charset must not be null");
+			return this;
+		}
+
+		/**
+		 * Sets the whitespace handling mode.
+		 *
+		 * @param mode the whitespace mode (default: {@link WhitespaceMode#ACCELEO})
+		 * @return this builder
+		 */
+		public Builder whitespaceMode(WhitespaceMode mode) {
+			this.whitespaceMode = Objects.requireNonNull(mode, "mode must not be null");
 			return this;
 		}
 

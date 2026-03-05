@@ -19,8 +19,12 @@ import java.util.Objects;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
+import org.eclipse.fennec.m2x.model.m2t.Module;
 
 /**
  * Entry point for MOFM2T template parsing. Parses a MOFM2T template source
@@ -73,6 +77,70 @@ public class M2tParserSupport {
 		parser.addErrorListener(errorListener);
 
 		return errorListener;
+	}
+
+	/**
+	 * Parses a MOFM2T template source into an EMF Module AST.
+	 *
+	 * @param source the MOFM2T template source text, must not be {@code null}
+	 * @param unitName the logical unit name for diagnostics
+	 * @return the parsed Module
+	 * @throws M2tParseException if the source contains syntax errors
+	 */
+	public Module buildModule(String source, String unitName) throws M2tParseException {
+		return buildModule(source, unitName, EcorePackage.eINSTANCE.getEObject(), null);
+	}
+
+	/**
+	 * Parses a MOFM2T template source into an EMF Module AST with the given context.
+	 *
+	 * @param source the MOFM2T template source text
+	 * @param unitName the logical unit name
+	 * @param contextType the default context type for OCL expressions
+	 * @param packageRegistry optional package registry for type resolution
+	 * @return the parsed Module
+	 * @throws M2tParseException if the source contains syntax errors
+	 */
+	public Module buildModule(String source, String unitName, EClassifier contextType,
+			EPackage.Registry packageRegistry) throws M2tParseException {
+		M2tParser.ModuleContext cst = parse(source);
+		M2tModuleBuilder builder = new M2tModuleBuilder(unitName, contextType, packageRegistry);
+		return builder.visitModule(cst);
+	}
+
+	/**
+	 * Parses a MOFM2T template source into a {@link M2tParseResult} containing
+	 * the Module AST plus unresolved name references for linking.
+	 *
+	 * @param source the MOFM2T template source text
+	 * @param unitName the logical unit name
+	 * @return the parse result with pending references
+	 * @throws M2tParseException if the source contains syntax errors
+	 */
+	public M2tParseResult buildModuleWithPending(String source, String unitName)
+			throws M2tParseException {
+		return buildModuleWithPending(source, unitName,
+				EcorePackage.eINSTANCE.getEObject(), null);
+	}
+
+	/**
+	 * Parses a MOFM2T template source into a {@link M2tParseResult} with
+	 * the given context type and package registry.
+	 *
+	 * @param source the MOFM2T template source text
+	 * @param unitName the logical unit name
+	 * @param contextType the default context type for OCL expressions
+	 * @param packageRegistry optional package registry for type resolution
+	 * @return the parse result with pending references
+	 * @throws M2tParseException if the source contains syntax errors
+	 */
+	public M2tParseResult buildModuleWithPending(String source, String unitName,
+			EClassifier contextType, EPackage.Registry packageRegistry)
+			throws M2tParseException {
+		M2tParser.ModuleContext cst = parse(source);
+		M2tModuleBuilder builder = new M2tModuleBuilder(unitName, contextType, packageRegistry);
+		builder.visitModule(cst);
+		return builder.getParseResult();
 	}
 
 	private void checkErrors(M2tErrorListener errorListener, String input)

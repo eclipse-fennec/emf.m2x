@@ -87,6 +87,7 @@ signature
 visibility
     : KW_PUBLIC
     | KW_PRIVATE
+    | KW_PROTECTED
     ;
 
 overridesDecl

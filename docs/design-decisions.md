@@ -38,6 +38,8 @@
 | D28 | QVT-O v1.3, Eclipse feature scope | Implement what Eclipse implements, document gaps for later |
 | D29 | Extension Security Controls | Custom ops / blackbox / unit resolvers disabled by default, opt-in with allow-lists |
 | D30 | Resource Integrity Service (Future) | Build-time SHA-256 hashing of arbitrary resources (scripts, ecore, files) with optional runtime verification |
+| D31 | M2T Protected Area Merge: opt-in + hash-based smart merge | Merge only when `M2tGenerationStrategy.readExistingContent()` is provided (opt-in). When active, engine emits a hash of the default content in the marker comment. On re-generation, merger compares existing content against hash: if unchanged → overwrite with new template default; if user-modified → preserve user content. Spec-compatible (§8.1.7 defines markers as implementation-specific). |
+| D32 | M2T Whitespace: `WhitespaceMode` enum + hybrid normalizer | Three-tier `WhitespaceMode` (NONE/SPEC/ACCELEO, default ACCELEO). `M2tWhitespaceNormalizer` runs post-link as AST transformation. Body-trimming, standalone-block detection, BOL indicator at parse-time; indent-propagation at eval-time via `fitIndentationTo()`. Inline LetBlocks excluded from standalone detection. |
 
 ---
 
@@ -527,3 +529,50 @@ Fits the existing build model: `src-gen/` is generated code, bnd compiles and pa
 **Implementation priority:** Levels 2–4 are our responsibility. Level 1 is the deployer's responsibility and provides the strongest single protection.
 
 **Status:** Future requirement. Implementation deferred until Phase 5 (Language Servers / Production Hardening).
+
+---
+
+### DR-D32: M2T Whitespace Handling — WhitespaceMode + Hybrid Normalizer
+
+**Context:** MOFM2T §8.4 defines 5 whitespace rules that transform raw template text into normalized output. Without normalization, template output contains unwanted leading/trailing newlines and indentation artifacts from the template structure itself. The rules must be applied consistently across all block types (Template, ForBlock, IfBlock, LetBlock, FileBlock).
+
+**Decision:** Three-tier `WhitespaceMode` enum controlling §8.4 behavior:
+
+| Mode | Behavior |
+|------|----------|
+| `NONE` | No normalization — raw template output |
+| `SPEC` | Strict MOFM2T §8.4 (all 5 rules) |
+| `ACCELEO` | Default — currently identical to SPEC, reserved for future Acceleo-specific differences |
+
+**Architecture:** Hybrid parse-time + eval-time approach:
+
+| Concern | When | Why |
+|---------|------|-----|
+| Body-trimming (leading/trailing newlines) | Parse-time | Statically derivable from AST structure |
+| Standalone-block detection + WS-strip | Parse-time | Statically derivable from TextExpression contents |
+| Default `\n` separator injection (standalone for) | Parse-time | Can be set as StringLiteralExp in AST |
+| BOL indicator `^` processing | Parse-time | Pure text transformation on TextExpression.value |
+| Indent-propagation (template invocations) | Eval-time | Depends on runtime output via `fitIndentationTo()` |
+
+**Key implementation details:**
+
+1. **`M2tWhitespaceNormalizer`** (`m2t.parser`): AST transformation that runs **after linking** in `M2tEngineImpl.execute()`. Must run post-link because the linker replaces inline `__inline__` LetBlocks with actual `TemplateInvocation` objects — the normalizer needs the final AST to correctly extract indentation for standalone invocations.
+
+2. **Inline LetBlock exclusion:** The parser wraps inline expressions `[expr/]` as LetBlocks with synthetic `__inline__` variable names. These must be excluded from standalone-block detection and body-trimming, as they are expression wrappers, not structural blocks.
+
+3. **Indent-propagation:** `M2tEvaluator.caseTemplateInvocation()` checks the `indentationMap` (populated by the normalizer). If an indent is found, it pushes a nested StringWriter, executes the template, pops the result, and applies `fitIndentationTo()` which inserts the indent string after every newline (first line is NOT indented).
+
+4. **Default separator:** Both SPEC and ACCELEO modes inject `\n` as default separator for standalone for-blocks without explicit separator. This is fundamental standalone-block behavior per §8.4.
+
+**Alternatives considered:**
+- *Pure parse-time:* Cannot handle indent-propagation (depends on runtime output).
+- *Pure eval-time:* Would require tracking line positions during evaluation, adding complexity to every `caseXxx()` method.
+- *Single boolean flag:* Initially implemented as `whitespaceNormalization: boolean`, refactored to enum after discovering behavioral differences between strict spec and Acceleo compatibility.
+
+**Files:**
+- `m2t.api/.../WhitespaceMode.java` — enum
+- `m2t.api/.../M2tConfiguration.java` — `whitespaceMode()` accessor
+- `m2t.parser/.../M2tWhitespaceNormalizer.java` — AST normalizer
+- `m2t.engine/.../M2tEngineImpl.java` — normalizer invocation + indentation map
+- `m2t.engine/.../internal/M2tEvaluator.java` — `fitIndentationTo()` + indent-propagation
+- `m2t.tests/.../M2tWhitespaceTest.java` — 16 tests

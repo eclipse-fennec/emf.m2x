@@ -808,19 +808,19 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 
 ### Phase 3: Acceleo/MOFM2T (with OCL expressions + cherry-picked extensions) — In Progress
 
-**Status:** P3-0 (Metamodel + Infrastructure) ✅ Complete. Next: P3-1 (Parser).
+**Status:** P3-0 through P3-5 ✅ Complete (176 tests, 0 failures). Next: P3-6 (Polishing).
 
 **Implementation Plan:** See [`m2t-implementation-plan.md`](m2t-implementation-plan.md) for detailed sub-phases.
 
 | Sub-Phase | Module | Description | Status |
 |-----------|--------|-------------|--------|
 | P3-0 | `m2t.model`, `m2t.api` | EMF metamodel (2 enums, 17 EClasses), public API interfaces, bundle infrastructure | ✅ Done |
-| P3-1 | `m2t.parser` | ANTLR4 grammar (`M2t.g4`, imports `Ocl.g4`, text_explicit + code_explicit modes) | TODO |
-| P3-2 | `m2t.engine` | Core engine (template eval, for/if/let, whitespace handling, query invocation) | TODO |
-| P3-3 | `m2t.engine` | FileBlock + writer stack (file output, stdout, charset) | TODO |
-| P3-4 | `m2t.engine` | Module composition (import/extends), protected areas, trace block | TODO |
-| P3-5 | `m2t.engine` | Macros + MOFM2T standard library (15 string operations) | TODO |
-| P3-6 | `m2t.engine` | Post-expression, encoding, end-to-end tests, regression check | TODO |
+| P3-1 | `m2t.parser` | ANTLR4 grammar (`M2t.g4`, imports `Ocl.g4`, text_explicit mode), CST→AST builder | ✅ Done |
+| P3-2 | `m2t.engine` | Core engine (template eval, for/if/let, query invocation, writer stack) | ✅ Done |
+| P3-3 | `m2t.engine` | Evaluator gap fixes, standard library (§8.3), protected area merge (D31) | ✅ Done |
+| P3-4 | `m2t.engine` | Module composition (import/extends), overrides/super, visibility, linking | ✅ Done |
+| P3-5 | `m2t.parser`, `m2t.engine` | Whitespace handling (§8.4), WhitespaceMode (D32), indent-propagation | ✅ Done |
+| P3-6 | `m2t.engine` | Polishing, encoding, end-to-end tests, regression check | TODO |
 
 ### Phase 4: QVT-Declarative (Relations + Core)
 

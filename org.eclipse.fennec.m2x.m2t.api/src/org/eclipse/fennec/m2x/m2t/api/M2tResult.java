@@ -23,17 +23,27 @@ import org.eclipse.emf.common.util.Diagnostic;
 /**
  * Result of a MOFM2T template execution.
  *
- * <p>Contains the collected diagnostics and the generated file contents
- * (when using in-memory generation).
+ * <p>Contains the collected diagnostics, the generated file contents
+ * (when using in-memory generation), and optional file unique IDs
+ * for tracking renamed files across regenerations (§8.1.17).
  *
  * @param diagnostics collected diagnostics during execution, never {@code null}
  * @param generatedFiles map of file path to generated content (for in-memory mode)
+ * @param fileUniqueIds map of file path to unique ID (for file-rename tracking, §8.1.17)
  * @author Data In Motion Consulting
  * @since 1.0
  */
 public record M2tResult(
 		List<Diagnostic> diagnostics,
-		Map<String, String> generatedFiles) {
+		Map<String, String> generatedFiles,
+		Map<String, String> fileUniqueIds) {
+
+	/**
+	 * Convenience constructor without unique IDs.
+	 */
+	public M2tResult(List<Diagnostic> diagnostics, Map<String, String> generatedFiles) {
+		this(diagnostics, generatedFiles, Map.of());
+	}
 
 	public M2tResult {
 		Objects.requireNonNull(diagnostics, "diagnostics must not be null");
@@ -41,6 +51,9 @@ public record M2tResult(
 		generatedFiles = generatedFiles == null
 				? Map.of()
 				: Map.copyOf(generatedFiles);
+		fileUniqueIds = fileUniqueIds == null
+				? Map.of()
+				: Map.copyOf(fileUniqueIds);
 	}
 
 	/**

@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.m2t.api;
 
 import java.net.URI;
+import java.util.List;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.osgi.annotation.versioning.ProviderType;
@@ -74,4 +75,19 @@ public interface M2tEngine {
 	 * @return the execution result with diagnostics and generated files
 	 */
 	M2tResult execute(Module module, M2tContext context);
+
+	// --- Linking ---
+
+	/**
+	 * Links multiple parsed modules, resolving cross-module references
+	 * (extends, imports, overrides, invocations).
+	 *
+	 * <p>Call this after parsing all modules and before executing.
+	 * For single-module scenarios, linking happens automatically during
+	 * {@link #execute(Module, M2tContext)}.
+	 *
+	 * @param modules the modules to link together
+	 * @return warnings encountered during linking (empty if all references resolved)
+	 */
+	List<String> link(Module... modules);
 }
