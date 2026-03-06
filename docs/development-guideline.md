@@ -824,19 +824,21 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 
 ### Phase 4: QVT-Relations (Direct Interpretation, no QVT-C)
 
+**Status:** In Progress — P4-0 through P4-2 ✅ Complete.
+
 **Approach:** Direct QVT-R interpretation (D33). Spec-first against QVT v1.3 Ch. 7, Eclipse QVT-D as behavioral reference only (D35). No QVTr→QVTc compiler, no QVT-C engine. See [Design Decisions](design-decisions.md) D33–D38.
 
 #### Phase 4a — QVT-R Standalone
 
-| Sub-Phase | Module | Description |
-|-----------|--------|-------------|
-| P4-0 | `qvtd.model` | QVT-R metamodel: 3 EPackages (qvtbase, qvttemplate, qvtrelation), ~20 classifiers (D34) |
-| P4-1 | `qvtd.api` | `QvtdEngine` interface, `QvtdConfiguration`, `QvtdResult`, `QvtdUnitResolver` (D37), `QvtdBlackboxLibrary` (D36) |
-| P4-2 | `qvtd.parser` | ANTLR4 grammar (`QvtRelations.g4`, imports `Ocl.g4`), CST→AST builder, concrete syntax §7.13 |
-| P4-3 | `qvtd.engine` | Core engine: top relation execution, domain pattern matching, variable binding, when/where clauses |
-| P4-4 | `qvtd.engine` | Enforcement: checkonly/enforce semantics (§7.10), object creation via patterns, Key-based identity (§7.4) |
-| P4-5 | `qvtd.engine` | Traces: implicit trace generation, RelationCallExp in when/where, non-top relation invocation |
-| P4-6 | `qvtd.tests` | Spec-conformance tests, E2E tests (UML→RDBMS example from spec) |
+| Sub-Phase | Module | Description | Status |
+|-----------|--------|-------------|--------|
+| P4-0 | `qvtd.model` | QVT-R metamodel: 3 EPackages (qvtbase, qvttemplate, qvtrelation), ~20 classifiers (D34) | ✅ Done |
+| P4-1 | `qvtd.api` | `QvtdEngine` interface, `QvtdConfiguration`, `QvtdResult`, `QvtdUnitResolver` (D37), `QvtdBlackboxLibrary` (D36) | ✅ Done |
+| P4-2 | `qvtd.parser` | ANTLR4 grammar (`QvtR.g4`, imports `Ocl.g4`), CST→AST builder, concrete syntax §7.13 | ✅ Done |
+| P4-3 | `qvtd.engine` | Core engine: top relation execution, domain pattern matching, variable binding, when/where clauses | |
+| P4-4 | `qvtd.engine` | Enforcement: checkonly/enforce semantics (§7.10), object creation via patterns, Key-based identity (§7.4) | |
+| P4-5 | `qvtd.engine` | Traces: implicit trace generation, RelationCallExp in when/where, non-top relation invocation | |
+| P4-6 | `qvtd.tests` | Spec-conformance tests, E2E tests (UML→RDBMS example from spec) | |
 
 #### Phase 4b — QVT-R↔QVT-O Hybrid (deferred)
 
