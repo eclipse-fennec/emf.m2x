@@ -38,16 +38,39 @@ import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
  */
 public final class M2tConfiguration {
 
+	/** Default maximum number of diagnostic entries before truncation. */
+	public static final int DEFAULT_MAX_DIAGNOSTICS = 10_000;
+	/** Default maximum template invocation depth (T-1 protection). */
+	public static final int DEFAULT_MAX_TEMPLATE_DEPTH = 1_000;
+	/** Default maximum for-block iterations (T-2 protection). */
+	public static final int DEFAULT_MAX_FOR_ITERATIONS = 1_000_000;
+	/** Default maximum cross-product size for set-argument invocations (T-3 protection). */
+	public static final int DEFAULT_MAX_CROSS_PRODUCT_SIZE = 1_000_000;
+	/** Default maximum total output size in characters (T-7 protection). 10 MB ~ 10,000,000 chars. */
+	public static final long DEFAULT_MAX_OUTPUT_SIZE = 10_000_000L;
+
 	private final OclConfiguration oclConfiguration;
 	private final M2tGenerationStrategy generationStrategy;
 	private final Charset defaultCharset;
 	private final WhitespaceMode whitespaceMode;
+	private final int maxDiagnostics;
+	private final int maxTemplateDepth;
+	private final int maxForIterations;
+	private final int maxCrossProductSize;
+	private final long maxOutputSize;
+	private final boolean protectedAreaEnabled;
 
 	private M2tConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
 		this.generationStrategy = builder.generationStrategy;
 		this.defaultCharset = builder.defaultCharset;
 		this.whitespaceMode = builder.whitespaceMode;
+		this.maxDiagnostics = builder.maxDiagnostics;
+		this.maxTemplateDepth = builder.maxTemplateDepth;
+		this.maxForIterations = builder.maxForIterations;
+		this.maxCrossProductSize = builder.maxCrossProductSize;
+		this.maxOutputSize = builder.maxOutputSize;
+		this.protectedAreaEnabled = builder.protectedAreaEnabled;
 	}
 
 	public OclConfiguration oclConfiguration() {
@@ -79,6 +102,63 @@ public final class M2tConfiguration {
 		return whitespaceMode;
 	}
 
+	/**
+	 * Returns the maximum number of diagnostic entries before truncation.
+	 * Defaults to {@value #DEFAULT_MAX_DIAGNOSTICS}.
+	 */
+	public int maxDiagnostics() {
+		return maxDiagnostics;
+	}
+
+	/**
+	 * Returns the maximum template invocation depth.
+	 * Protects against T-1 (template recursion stack overflow).
+	 * Defaults to {@value #DEFAULT_MAX_TEMPLATE_DEPTH}.
+	 */
+	public int maxTemplateDepth() {
+		return maxTemplateDepth;
+	}
+
+	/**
+	 * Returns the maximum number of for-block iterations.
+	 * Protects against T-2 (for-block iteration exhaustion).
+	 * Defaults to {@value #DEFAULT_MAX_FOR_ITERATIONS}.
+	 */
+	public int maxForIterations() {
+		return maxForIterations;
+	}
+
+	/**
+	 * Returns the maximum cross-product size for set-argument invocations.
+	 * Protects against T-3 (cross-product explosion).
+	 * Defaults to {@value #DEFAULT_MAX_CROSS_PRODUCT_SIZE}.
+	 */
+	public int maxCrossProductSize() {
+		return maxCrossProductSize;
+	}
+
+	/**
+	 * Returns the maximum total output size in characters.
+	 * Protects against T-7 (output size exhaustion).
+	 * Defaults to {@value #DEFAULT_MAX_OUTPUT_SIZE} (~10 MB).
+	 * A value of {@code 0} means unlimited.
+	 */
+	public long maxOutputSize() {
+		return maxOutputSize;
+	}
+
+	/**
+	 * Returns whether protected area support is enabled.
+	 * When disabled, {@code [protected]} blocks emit their body content
+	 * without markers, and no merge with existing content is performed.
+	 * Defaults to {@code true}.
+	 *
+	 * <p>Disabling protected areas mitigates T-6 (protected area marker injection).
+	 */
+	public boolean protectedAreaEnabled() {
+		return protectedAreaEnabled;
+	}
+
 	public static Builder builder(OclConfiguration oclConfiguration) {
 		return new Builder(oclConfiguration);
 	}
@@ -89,6 +169,12 @@ public final class M2tConfiguration {
 		private M2tGenerationStrategy generationStrategy;
 		private Charset defaultCharset = StandardCharsets.UTF_8;
 		private WhitespaceMode whitespaceMode = WhitespaceMode.ACCELEO;
+		private int maxDiagnostics = DEFAULT_MAX_DIAGNOSTICS;
+		private int maxTemplateDepth = DEFAULT_MAX_TEMPLATE_DEPTH;
+		private int maxForIterations = DEFAULT_MAX_FOR_ITERATIONS;
+		private int maxCrossProductSize = DEFAULT_MAX_CROSS_PRODUCT_SIZE;
+		private long maxOutputSize = DEFAULT_MAX_OUTPUT_SIZE;
+		private boolean protectedAreaEnabled = true;
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
@@ -124,6 +210,90 @@ public final class M2tConfiguration {
 		 */
 		public Builder whitespaceMode(WhitespaceMode mode) {
 			this.whitespaceMode = Objects.requireNonNull(mode, "mode must not be null");
+			return this;
+		}
+
+		/**
+		 * Sets the maximum number of diagnostic entries before truncation.
+		 *
+		 * @param max the maximum (must be positive, default: {@value M2tConfiguration#DEFAULT_MAX_DIAGNOSTICS})
+		 * @return this builder
+		 */
+		public Builder maxDiagnostics(int max) {
+			if (max <= 0) {
+				throw new IllegalArgumentException("maxDiagnostics must be positive: " + max);
+			}
+			this.maxDiagnostics = max;
+			return this;
+		}
+
+		/**
+		 * Sets the maximum template invocation depth (T-1 protection).
+		 *
+		 * @param max the maximum (must be positive, default: {@value M2tConfiguration#DEFAULT_MAX_TEMPLATE_DEPTH})
+		 * @return this builder
+		 */
+		public Builder maxTemplateDepth(int max) {
+			if (max <= 0) {
+				throw new IllegalArgumentException("maxTemplateDepth must be positive: " + max);
+			}
+			this.maxTemplateDepth = max;
+			return this;
+		}
+
+		/**
+		 * Sets the maximum number of for-block iterations (T-2 protection).
+		 *
+		 * @param max the maximum (must be positive, default: {@value M2tConfiguration#DEFAULT_MAX_FOR_ITERATIONS})
+		 * @return this builder
+		 */
+		public Builder maxForIterations(int max) {
+			if (max <= 0) {
+				throw new IllegalArgumentException("maxForIterations must be positive: " + max);
+			}
+			this.maxForIterations = max;
+			return this;
+		}
+
+		/**
+		 * Sets the maximum cross-product size for set-argument invocations (T-3 protection).
+		 *
+		 * @param max the maximum (must be positive, default: {@value M2tConfiguration#DEFAULT_MAX_CROSS_PRODUCT_SIZE})
+		 * @return this builder
+		 */
+		public Builder maxCrossProductSize(int max) {
+			if (max <= 0) {
+				throw new IllegalArgumentException("maxCrossProductSize must be positive: " + max);
+			}
+			this.maxCrossProductSize = max;
+			return this;
+		}
+
+		/**
+		 * Sets the maximum total output size in characters (T-7 protection).
+		 * Use {@code 0} for unlimited output.
+		 *
+		 * @param max the maximum (must be non-negative, default: {@value M2tConfiguration#DEFAULT_MAX_OUTPUT_SIZE})
+		 * @return this builder
+		 */
+		public Builder maxOutputSize(long max) {
+			if (max < 0) {
+				throw new IllegalArgumentException("maxOutputSize must be non-negative: " + max);
+			}
+			this.maxOutputSize = max;
+			return this;
+		}
+
+		/**
+		 * Enables or disables protected area support (T-6 mitigation).
+		 * When disabled, {@code [protected]} blocks emit plain body content
+		 * without markers, and no merge with existing content is performed.
+		 *
+		 * @param enabled {@code true} to enable (default), {@code false} to disable
+		 * @return this builder
+		 */
+		public Builder protectedAreaEnabled(boolean enabled) {
+			this.protectedAreaEnabled = enabled;
 			return this;
 		}
 

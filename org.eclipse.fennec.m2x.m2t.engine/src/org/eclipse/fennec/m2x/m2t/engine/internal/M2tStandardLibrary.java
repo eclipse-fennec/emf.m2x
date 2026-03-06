@@ -15,8 +15,10 @@
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.StringTokenizer;
 import java.util.WeakHashMap;
 
@@ -67,7 +69,8 @@ public class M2tStandardLibrary implements OclOperationProvider {
 	 * Stateful tokenizer cache for strtok(). Keyed by source string.
 	 * Uses WeakHashMap so entries are cleaned up when the string is GC'd.
 	 */
-	private final Map<String, StringTokenizer> tokenizerCache = new WeakHashMap<>();
+	private final Map<String, StringTokenizer> tokenizerCache =
+			Collections.synchronizedMap(new WeakHashMap<>());
 
 	@Override
 	public List<OclOperation> getOperations() {
@@ -77,9 +80,9 @@ public class M2tStandardLibrary implements OclOperationProvider {
 		ops.add(new OclOperation("substitute", STRING_TYPE,
 				List.of(STRING_TYPE, STRING_TYPE), STRING_TYPE,
 				(self, args) -> {
-					String s = self.toString();
-					String r = args[0].toString();
-					String t = args[1].toString();
+					String s = Objects.toString(self, "");
+					String r = Objects.toString(args[0], "");
+					String t = Objects.toString(args[1], "");
 					return s.replace(r, t);
 				}));
 
@@ -87,8 +90,8 @@ public class M2tStandardLibrary implements OclOperationProvider {
 		ops.add(new OclOperation("index", STRING_TYPE,
 				List.of(STRING_TYPE), INTEGER_TYPE,
 				(self, args) -> {
-					String s = self.toString();
-					String r = args[0].toString();
+					String s = Objects.toString(self, "");
+					String r = Objects.toString(args[0], "");
 					int idx = s.indexOf(r);
 					return idx < 0 ? (long) -1 : (long) (idx + 1);
 				}));
@@ -97,8 +100,8 @@ public class M2tStandardLibrary implements OclOperationProvider {
 		ops.add(new OclOperation("first", STRING_TYPE,
 				List.of(INTEGER_TYPE), STRING_TYPE,
 				(self, args) -> {
-					String s = self.toString();
-					int n = ((Number) args[0]).intValue();
+					String s = Objects.toString(self, "");
+					int n = Math.max(0, ((Number) args[0]).intValue());
 					return n >= s.length() ? s : s.substring(0, n);
 				}));
 
@@ -106,30 +109,30 @@ public class M2tStandardLibrary implements OclOperationProvider {
 		ops.add(new OclOperation("last", STRING_TYPE,
 				List.of(INTEGER_TYPE), STRING_TYPE,
 				(self, args) -> {
-					String s = self.toString();
-					int n = ((Number) args[0]).intValue();
+					String s = Objects.toString(self, "");
+					int n = Math.max(0, ((Number) args[0]).intValue());
 					return n >= s.length() ? s : s.substring(s.length() - n);
 				}));
 
 		// strstr(r) : Boolean
 		ops.add(new OclOperation("strstr", STRING_TYPE,
 				List.of(STRING_TYPE), BOOLEAN_TYPE,
-				(self, args) -> self.toString().contains(args[0].toString())));
+				(self, args) -> Objects.toString(self, "").contains(Objects.toString(args[0], ""))));
 
 		// toUpper() : String
 		ops.add(OclOperation.of("toUpper", STRING_TYPE, STRING_TYPE,
-				(self, args) -> self.toString().toUpperCase()));
+				(self, args) -> Objects.toString(self, "").toUpperCase()));
 
 		// toLower() : String
 		ops.add(OclOperation.of("toLower", STRING_TYPE, STRING_TYPE,
-				(self, args) -> self.toString().toLowerCase()));
+				(self, args) -> Objects.toString(self, "").toLowerCase()));
 
 		// strtok(s1, flag) : String — flag=0 first call, flag=1 subsequent
 		ops.add(new OclOperation("strtok", STRING_TYPE,
 				List.of(STRING_TYPE, INTEGER_TYPE), STRING_TYPE,
 				(self, args) -> {
-					String s = self.toString();
-					String delims = args[0].toString();
+					String s = Objects.toString(self, "");
+					String delims = Objects.toString(args[0], "");
 					int flag = ((Number) args[1]).intValue();
 					StringTokenizer tokenizer;
 					if (flag == 0) {
@@ -147,26 +150,26 @@ public class M2tStandardLibrary implements OclOperationProvider {
 		// strcmp(s1) : Integer
 		ops.add(new OclOperation("strcmp", STRING_TYPE,
 				List.of(STRING_TYPE), INTEGER_TYPE,
-				(self, args) -> (long) self.toString().compareTo(args[0].toString())));
+				(self, args) -> (long) Objects.toString(self, "").compareTo(Objects.toString(args[0], ""))));
 
 		// isAlpha() : Boolean
 		ops.add(OclOperation.of("isAlpha", STRING_TYPE, BOOLEAN_TYPE,
 				(self, args) -> {
-					String s = self.toString();
+					String s = Objects.toString(self, "");
 					return !s.isEmpty() && s.chars().allMatch(Character::isLetter);
 				}));
 
 		// isAlphanum() : Boolean
 		ops.add(OclOperation.of("isAlphanum", STRING_TYPE, BOOLEAN_TYPE,
 				(self, args) -> {
-					String s = self.toString();
+					String s = Objects.toString(self, "");
 					return !s.isEmpty() && s.chars().allMatch(Character::isLetterOrDigit);
 				}));
 
 		// toUpperFirst() : String
 		ops.add(OclOperation.of("toUpperFirst", STRING_TYPE, STRING_TYPE,
 				(self, args) -> {
-					String s = self.toString();
+					String s = Objects.toString(self, "");
 					if (s.isEmpty()) return s;
 					return Character.toUpperCase(s.charAt(0)) + s.substring(1);
 				}));
@@ -174,7 +177,7 @@ public class M2tStandardLibrary implements OclOperationProvider {
 		// toLowerFirst() : String
 		ops.add(OclOperation.of("toLowerFirst", STRING_TYPE, STRING_TYPE,
 				(self, args) -> {
-					String s = self.toString();
+					String s = Objects.toString(self, "");
 					if (s.isEmpty()) return s;
 					return Character.toLowerCase(s.charAt(0)) + s.substring(1);
 				}));

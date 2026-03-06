@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.m2t.api;
 
+import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.Charset;
 
@@ -53,8 +54,8 @@ public interface M2tGenerationStrategy {
 	default void closeWriter(String filePath, Writer writer) {
 		try {
 			writer.close();
-		} catch (java.io.IOException e) {
-			// ignore close errors
+		} catch (IOException e) {
+			// Close errors are non-fatal — file content was already flushed
 		}
 	}
 

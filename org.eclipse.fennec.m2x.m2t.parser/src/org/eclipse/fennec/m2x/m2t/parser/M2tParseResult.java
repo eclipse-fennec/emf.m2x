@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.m2t.parser;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
@@ -51,6 +52,7 @@ public record M2tParseResult(
 	 * Creates a parse result with defensive copies.
 	 */
 	public M2tParseResult {
+		Objects.requireNonNull(module, "module must not be null");
 		extendsNames = List.copyOf(extendsNames);
 		importNames = List.copyOf(importNames);
 		overrideNames = Map.copyOf(overrideNames);

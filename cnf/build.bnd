@@ -56,6 +56,11 @@ javac.target: 21
  	aQute.bnd.repository.p2.provider.P2Repository; \
  	url = https://download.eclipse.org/modeling/emf/compare/updates/releases/latest/; \
  	name = EMFCompare
+ 	
+-plugin.3.EclipseMDT-UML2: \
+ 	aQute.bnd.repository.p2.provider.P2Repository; \
+ 	url = https://download.eclipse.org/modeling/mdt/uml2/updates/releases/; \
+ 	name = EclipseMDT-UML2
 
 -fixupmessages: \
 	"jpms.jarname calculated module";is:=ignore,\

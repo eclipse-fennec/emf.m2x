@@ -43,12 +43,26 @@ public class M2tWriterStack {
 	private final Deque<WriterEntry> stack = new ArrayDeque<>();
 	private final Map<String, String> generatedFiles = new LinkedHashMap<>();
 	private final Map<String, String> fileUniqueIds = new LinkedHashMap<>();
+	private final long maxOutputSize;
+	private long totalOutputSize;
+	private boolean outputLimitExceeded;
 
 	/**
 	 * Creates a new writer stack with a default string writer for stdout.
+	 *
+	 * @param maxOutputSize maximum total output size in characters (T-7 protection),
+	 *        or {@code 0} for unlimited
+	 */
+	public M2tWriterStack(long maxOutputSize) {
+		this.maxOutputSize = maxOutputSize;
+		stack.push(new WriterEntry(null, new StringBuilder()));
+	}
+
+	/**
+	 * Creates a new writer stack with unlimited output size.
 	 */
 	public M2tWriterStack() {
-		stack.push(new WriterEntry(null, new StringBuilder()));
+		this(0);
 	}
 
 	/**
@@ -97,11 +111,32 @@ public class M2tWriterStack {
 	 * Appends text to the current (topmost) writer.
 	 *
 	 * @param text the text to append
+	 * @return {@code true} if text was appended, {@code false} if the output size
+	 *         limit was exceeded (T-7)
 	 */
-	public void append(String text) {
-		if (text != null) {
-			stack.peek().buffer.append(text);
+	public boolean append(String text) {
+		if (text == null) {
+			return true;
 		}
+		if (outputLimitExceeded) {
+			return false;
+		}
+		if (maxOutputSize > 0) {
+			totalOutputSize += text.length();
+			if (totalOutputSize > maxOutputSize) {
+				outputLimitExceeded = true;
+				return false;
+			}
+		}
+		stack.peek().buffer.append(text);
+		return true;
+	}
+
+	/**
+	 * Returns {@code true} if the output size limit has been exceeded.
+	 */
+	public boolean isOutputLimitExceeded() {
+		return outputLimitExceeded;
 	}
 
 	/**

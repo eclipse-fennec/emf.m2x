@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
@@ -332,6 +333,273 @@ class M2tSpecExampleTest {
 			assertTrue(content.contains("user_code"), "protected area id");
 			assertTrue(content.contains("[/protected]"), "protected area end marker");
 			assertTrue(content.contains("// user code here"), "protected body content");
+		}
+	}
+
+	// ==================== Template Invocation (Aufruf anderer Templates) ====================
+
+	@Nested
+	@DisplayName("Template Invocation — ein Template ruft andere auf")
+	class TemplateInvocationExamples {
+
+		@Test
+		@DisplayName("main ruft helper-Template auf — einfache Delegation")
+		void mainCallsHelper() throws M2tParseException {
+			// Ein main-Template delegiert die Attribut-Generierung an ein helper-Template
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public genAttribute(a : EAttribute)]\n" +
+					"private [a.eType.name/] [a.name/];\n" +
+					"[/template]\n" +
+					"[template public main(c : EClass)]\n" +
+					"[file (c.name.concat('.java'), false)]\n" +
+					"public class [c.name/] {\n" +
+					"[for (a : EAttribute | c.eAttributes)]\n" +
+					"  [genAttribute(a)/]\n" +
+					"[/for]\n" +
+					"}\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeOnClass(mtl);
+			String content = getFile(result, "Employee.java");
+			assertTrue(content.contains("public class Employee {"), "class header");
+			assertTrue(content.contains("private EString name;"), "name attribute");
+			assertTrue(content.contains("private EDouble salary;"), "salary attribute");
+		}
+
+		@Test
+		@DisplayName("dreistufige Template-Kette — main → classGen → attrGen")
+		void threeLayerTemplateChain() throws M2tParseException {
+			// main ruft classGen auf, das wiederum attrGen aufruft
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public attrGen(a : EAttribute)]\n" +
+					"[a.eType.name/] [a.name/]\n" +
+					"[/template]\n" +
+					"[template public classGen(c : EClass)]\n" +
+					"class [c.name/]([for (a : EAttribute | c.eAttributes) separator (', ')][attrGen(a)/][/for])\n" +
+					"[/template]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[for (c : EClassifier | p.eClassifiers)]\n" +
+					"[classGen(c.oclAsType(EClass))/]\n" +
+					"[/for]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeOnPackage(mtl);
+			String content = getFile(result, "out");
+			assertTrue(content.contains("class Employee("), "class with constructor params");
+			assertTrue(content.contains("EString name"), "name param");
+			assertTrue(content.contains("EDouble salary"), "salary param");
+		}
+
+		@Test
+		@DisplayName("Template mit Query-Aufruf — wiederverwendbare Logik")
+		void templateWithQueryCall() throws M2tParseException {
+			// Query berechnet einen Wert, Template nutzt ihn
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[query public fieldCount(c : EClass) : Integer = c.eAttributes->size()/]\n" +
+					"[template public genSummary(c : EClass)]\n" +
+					"[c.name/] ([c.fieldCount()/] fields)\n" +
+					"[/template]\n" +
+					"[template public main(c : EClass)]\n" +
+					"[file ('out', false)]\n" +
+					"Summary: [genSummary(c)/]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeOnClass(mtl);
+			String content = getFile(result, "out");
+			// genSummary liefert "Employee (2 fields)", main wraps it with "Summary: "
+			assertTrue(content.contains("Summary:"), "prefix");
+			assertTrue(content.contains("Employee"), "class name");
+			assertTrue(content.contains("2 fields"), "field count");
+		}
+	}
+
+	// ==================== Mehrere Inputs (Multi-Parameter Templates) ====================
+
+	@Nested
+	@DisplayName("Multi-Parameter — mehrere Inputs für ein Template")
+	class MultiParameterExamples {
+
+		@Test
+		@DisplayName("Template mit zwei Parametern — Klasse + Package")
+		void twoParameterTemplate() throws M2tParseException {
+			// main nimmt sowohl EPackage als auch EClass als Parameter
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage, c : EClass)]\n" +
+					"[file ('out', false)]\n" +
+					"package [p.name/];\n" +
+					"class [c.name/] {}\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			Module module = engine.parse(mtl, "spec_test");
+			// Zwei Input-Elemente: Package + Class
+			M2tResult result = engine.execute(module,
+					M2tContext.of(List.of(pkg, employeeClass), null));
+			String content = getFile(result, "out");
+			assertEquals("package company;\nclass Employee {}", content);
+		}
+
+		@Test
+		@DisplayName("Template greift auf referenziertes Modell-Element zu")
+		void navigateToReferencedElement() throws M2tParseException {
+			// Ein EClass-Template navigiert zum übergeordneten EPackage
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(c : EClass)]\n" +
+					"[file (c.name.concat('.java'), false)]\n" +
+					"package [c.ePackage.name/];\n" +
+					"class [c.name/] {\n" +
+					"[for (a : EAttribute | c.eAttributes)]\n" +
+					"  [a.eType.name/] [a.name/];\n" +
+					"[/for]\n" +
+					"}\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeOnClass(mtl);
+			String content = getFile(result, "Employee.java");
+			// Navigiert von EClass zu EPackage.name
+			assertTrue(content.contains("package company;"), "package from ePackage.name");
+			assertTrue(content.contains("class Employee {"), "class name");
+		}
+
+		@Test
+		@DisplayName("Helper-Template empfängt zwei Parameter")
+		void helperWithTwoParameters() throws M2tParseException {
+			// Ein Helper-Template bekommt Klasse und Prefix als Parameter
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public genField(a : EAttribute, prefix : EString)]\n" +
+					"[prefix/]_[a.name/] : [a.eType.name/]\n" +
+					"[/template]\n" +
+					"[template public main(c : EClass)]\n" +
+					"[file ('out', false)]\n" +
+					"[for (a : EAttribute | c.eAttributes) separator ('\\n')]\n" +
+					"[genField(a, c.name)/]\n" +
+					"[/for]\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			M2tResult result = executeOnClass(mtl);
+			String content = getFile(result, "out");
+			assertTrue(content.contains("Employee_name : EString"), "prefixed name field");
+			assertTrue(content.contains("Employee_salary : EDouble"), "prefixed salary field");
+		}
+	}
+
+	// ==================== Mehrere Output-Files ====================
+
+	@Nested
+	@DisplayName("Multiple Output Files — verschiedene Dateien generieren")
+	class MultipleOutputFiles {
+
+		@Test
+		@DisplayName("eine Datei pro Klasse im Package")
+		void oneFilePerClass() throws M2tParseException {
+			// Zweite Klasse hinzufügen
+			EClass managerClass = EcoreFactory.eINSTANCE.createEClass();
+			managerClass.setName("Manager");
+			pkg.getEClassifiers().add(managerClass);
+
+			var deptAttr = EcoreFactory.eINSTANCE.createEAttribute();
+			deptAttr.setName("department");
+			deptAttr.setEType(EcorePackage.Literals.ESTRING);
+			managerClass.getEStructuralFeatures().add(deptAttr);
+
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public genClass(c : EClass)]\n" +
+					"[file (c.name.concat('.java'), false)]\n" +
+					"public class [c.name/] {\n" +
+					"[for (a : EAttribute | c.eAttributes)]\n" +
+					"  private [a.eType.name/] [a.name/];\n" +
+					"[/for]\n" +
+					"}\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[for (c : EClassifier | p.eClassifiers)]\n" +
+					"[genClass(c.oclAsType(EClass))/]\n" +
+					"[/for]\n" +
+					"[/template]\n";
+			M2tResult result = executeOnPackage(mtl);
+			Map<String, String> files = result.generatedFiles();
+
+			// Zwei separate Java-Dateien erzeugt
+			assertEquals(2, files.size(), "two files generated: " + files.keySet());
+
+			String empContent = getFile(result, "Employee.java");
+			assertTrue(empContent.contains("public class Employee"), "Employee class");
+			assertTrue(empContent.contains("private EString name"), "Employee.name");
+			assertTrue(empContent.contains("private EDouble salary"), "Employee.salary");
+
+			String mgrContent = getFile(result, "Manager.java");
+			assertTrue(mgrContent.contains("public class Manager"), "Manager class");
+			assertTrue(mgrContent.contains("private EString department"), "Manager.department");
+		}
+
+		@Test
+		@DisplayName("Java-Datei + Manifest — unterschiedliche Dateitypen")
+		void javaFileAndManifest() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('MANIFEST.MF', false)]\n" +
+					"Bundle-Name: [p.name/]\n" +
+					"Bundle-SymbolicName: [p.nsURI/]\n" +
+					"[/file]\n" +
+					"[for (c : EClassifier | p.eClassifiers)]\n" +
+					"[file (c.name.concat('.java'), false)]\n" +
+					"package [p.name/];\n" +
+					"public class [c.name/] {}\n" +
+					"[/file]\n" +
+					"[/for]\n" +
+					"[/template]\n";
+			M2tResult result = executeOnPackage(mtl);
+			Map<String, String> files = result.generatedFiles();
+
+			// Manifest + Java-Dateien
+			assertTrue(files.size() >= 2, "at least manifest + 1 java file");
+
+			String manifest = getFile(result, "MANIFEST.MF");
+			assertTrue(manifest.contains("Bundle-Name: company"), "bundle name");
+			assertTrue(manifest.contains("Bundle-SymbolicName: http://company"), "symbolic name");
+
+			String javaFile = getFile(result, "Employee.java");
+			assertTrue(javaFile.contains("package company;"), "package decl");
+			assertTrue(javaFile.contains("public class Employee {}"), "class decl");
+		}
+
+		@Test
+		@DisplayName("Java-Datei + Log (append-Modus)")
+		void javaFileAndAppendLog() throws M2tParseException {
+			EClass managerClass = EcoreFactory.eINSTANCE.createEClass();
+			managerClass.setName("Manager");
+			pkg.getEClassifiers().add(managerClass);
+
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[for (c : EClassifier | p.eClassifiers)]\n" +
+					"[file (c.name.concat('.java'), false)]\n" +
+					"class [c.name/] {}\n" +
+					"[/file]\n" +
+					"[file ('generation.log', true)]\n" +
+					"Generated: [c.name/]\n" +
+					"[/file]\n" +
+					"[/for]\n" +
+					"[/template]\n";
+			M2tResult result = executeOnPackage(mtl);
+
+			// Java files + log
+			assertEquals("class Employee {}", getFile(result, "Employee.java"));
+			assertEquals("class Manager {}", getFile(result, "Manager.java"));
+
+			String log = getFile(result, "generation.log");
+			assertTrue(log.contains("Generated: Employee"), "log entry for Employee");
+			assertTrue(log.contains("Generated: Manager"), "log entry for Manager");
 		}
 	}
 }

@@ -103,6 +103,8 @@ public class M2tParserSupport {
 	 */
 	public Module buildModule(String source, String unitName, EClassifier contextType,
 			EPackage.Registry packageRegistry) throws M2tParseException {
+		Objects.requireNonNull(unitName, "unitName must not be null");
+		Objects.requireNonNull(contextType, "contextType must not be null");
 		M2tParser.ModuleContext cst = parse(source);
 		M2tModuleBuilder builder = new M2tModuleBuilder(unitName, contextType, packageRegistry);
 		return builder.visitModule(cst);
@@ -137,6 +139,8 @@ public class M2tParserSupport {
 	public M2tParseResult buildModuleWithPending(String source, String unitName,
 			EClassifier contextType, EPackage.Registry packageRegistry)
 			throws M2tParseException {
+		Objects.requireNonNull(unitName, "unitName must not be null");
+		Objects.requireNonNull(contextType, "contextType must not be null");
 		M2tParser.ModuleContext cst = parse(source);
 		M2tModuleBuilder builder = new M2tModuleBuilder(unitName, contextType, packageRegistry);
 		builder.visitModule(cst);

@@ -29,6 +29,7 @@ import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.m2t.VisibilityKind;
+import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
@@ -85,9 +86,9 @@ class M2tStandardLibraryTest {
 		fb.setOpenMode(OpenModeKind.OVERWRITE);
 
 		// Parse the OCL expression and wrap in an inline let block
-		org.eclipse.fennec.m2x.model.ocl.OclExpression expr;
 		try {
-			expr = engine.parse("[module m(UML)/]\n[template public main(c : EClass)]\n[file ('out.txt', false, 'UTF-8')]\n[" + oclExpr + "/]\n[/file]\n[/template]\n", "test")
+			@SuppressWarnings("unused")
+			OclExpression expr = engine.parse("[module m(UML)/]\n[template public main(c : EClass)]\n[file ('out.txt', false, 'UTF-8')]\n[" + oclExpr + "/]\n[/file]\n[/template]\n", "test")
 					.getOwnedModuleElement().stream()
 					.filter(e -> e instanceof Template)
 					.map(e -> (Template) e)

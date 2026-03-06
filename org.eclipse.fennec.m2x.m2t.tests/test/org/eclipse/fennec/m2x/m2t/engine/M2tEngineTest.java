@@ -56,7 +56,6 @@ import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
 import org.eclipse.fennec.m2x.model.m2t.TextExpression;
 import org.eclipse.fennec.m2x.model.m2t.VisibilityKind;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
-import org.eclipse.fennec.m2x.model.ocl.IntegerLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
@@ -75,6 +74,7 @@ import org.junit.jupiter.api.Test;
  * <p>Tests construct M2T AST nodes via {@link M2tFactory} and evaluate them
  * using the {@link M2tEvaluator} directly.
  */
+@SuppressWarnings("restriction")
 class M2tEngineTest {
 
 	private OclEngineImpl oclEngine;

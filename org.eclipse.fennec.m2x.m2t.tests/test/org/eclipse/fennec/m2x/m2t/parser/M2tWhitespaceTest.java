@@ -228,12 +228,13 @@ class M2tWhitespaceTest {
 	// ==================== BOL Indicator (§8.4 Rule 5) ====================
 
 	@Nested
-	@DisplayName("BOL Indicator")
+	@DisplayName("BOL Indicator — SPEC mode only")
 	class BolIndicatorTests {
 
 		@Test
-		@DisplayName("BOL indicator strips leading whitespace on line")
+		@DisplayName("SPEC: BOL indicator strips leading whitespace on line")
 		void bolIndicatorStripsLeadingWhitespace() throws M2tParseException {
+			M2tEngineImpl specEngine = engineWithMode(WhitespaceMode.SPEC);
 			String mtl =
 					"[module m(Ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
@@ -241,12 +242,13 @@ class M2tWhitespaceTest {
 					"    ^content\n" +
 					"[/file]\n" +
 					"[/template]\n";
-			assertEquals("content", execute(mtl));
+			assertEquals("content", execute(specEngine, mtl));
 		}
 
 		@Test
-		@DisplayName("BOL indicator mid-line")
+		@DisplayName("SPEC: BOL indicator mid-line")
 		void bolIndicatorMidLine() throws M2tParseException {
+			M2tEngineImpl specEngine = engineWithMode(WhitespaceMode.SPEC);
 			String mtl =
 					"[module m(Ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
@@ -255,7 +257,21 @@ class M2tWhitespaceTest {
 					"    ^line2\n" +
 					"[/file]\n" +
 					"[/template]\n";
-			assertEquals("line1\nline2", execute(mtl));
+			assertEquals("line1\nline2", execute(specEngine, mtl));
+		}
+
+		@Test
+		@DisplayName("ACCELEO: caret is passed through as literal text")
+		void acceleoCaretPassedThrough() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"    ^content\n" +
+					"[/file]\n" +
+					"[/template]\n";
+			// ACCELEO mode (default): ^ is not processed, kept as literal text
+			assertEquals("    ^content", execute(mtl));
 		}
 	}
 

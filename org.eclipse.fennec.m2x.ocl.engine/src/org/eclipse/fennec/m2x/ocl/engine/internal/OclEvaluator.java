@@ -434,6 +434,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 		Object source = eval(exp.getOwnedSource());
 		String opName = exp.getName();
 
+		// Implicit self: when source expression is null (bare operation call like toUpper()),
+		// resolve 'self' from the environment — supports post expressions in M2T templates
+		// and other contexts where self is a non-EObject value (e.g., String).
+		if (source == null && exp.getOwnedSource() == null && env.contains("self")) {
+			source = env.lookup("self");
+		}
+
 		// @pre support: return captured pre-state value
 		if (exp.isIsPre() && preStateSnapshot.hasPreValue(exp)) {
 			return wrapNull(preStateSnapshot.getPreValue(exp));

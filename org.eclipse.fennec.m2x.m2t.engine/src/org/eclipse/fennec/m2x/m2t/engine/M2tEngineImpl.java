@@ -19,6 +19,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.LinkedHashMap;
@@ -73,16 +74,20 @@ public class M2tEngineImpl implements M2tEngine {
 	private final M2tParserSupport parserSupport;
 
 	/** Cache of parse results keyed by module identity, for auto-linking. */
-	private final Map<Module, M2tParseResult> parseResultCache = new IdentityHashMap<>();
+	private final Map<Module, M2tParseResult> parseResultCache =
+			Collections.synchronizedMap(new IdentityHashMap<>());
 
 	/** Tracks which modules have been linked to avoid re-linking. */
-	private final Set<Module> linkedModules = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+	private final Set<Module> linkedModules =
+			Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
 
 	/** Tracks which modules have been whitespace-normalized. */
-	private final Set<Module> normalizedModules = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+	private final Set<Module> normalizedModules =
+			Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
 
 	/** Indentation map for standalone template invocations (§8.4). */
-	private final Map<TemplateInvocation, String> globalIndentationMap = new IdentityHashMap<>();
+	private final Map<TemplateInvocation, String> globalIndentationMap =
+			Collections.synchronizedMap(new IdentityHashMap<>());
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -123,7 +128,7 @@ public class M2tEngineImpl implements M2tEngine {
 			String unitName = Path.of(moduleUri).getFileName().toString();
 			return parse(source, unitName);
 		} catch (IOException e) {
-			throw new M2tParseException("Failed to read module: " + moduleUri, List.of());
+			throw new M2tParseException("Failed to read module: " + moduleUri, e, List.of());
 		}
 	}
 
@@ -143,6 +148,7 @@ public class M2tEngineImpl implements M2tEngine {
 		Objects.requireNonNull(modules, "modules must not be null");
 		List<M2tParseResult> results = new ArrayList<>();
 		for (Module m : modules) {
+			Objects.requireNonNull(m, "module element must not be null");
 			M2tParseResult pr = parseResultCache.get(m);
 			if (pr != null) {
 				results.add(pr);
@@ -177,9 +183,11 @@ public class M2tEngineImpl implements M2tEngine {
 		}
 
 		M2tEvalEnvironment env = M2tEvalEnvironment.root(context);
-		M2tWriterStack writers = new M2tWriterStack();
+		M2tWriterStack writers = new M2tWriterStack(config.maxOutputSize());
 		M2tEvaluator evaluator = new M2tEvaluator(oclEngine, env, writers, module,
-				getAllLinkedModules(module), globalIndentationMap);
+				getAllLinkedModules(module), globalIndentationMap, config.maxDiagnostics(),
+				config.maxTemplateDepth(), config.maxForIterations(), config.maxCrossProductSize(),
+				config.protectedAreaEnabled());
 
 		Template main = findMainTemplate(module);
 		if (main == null) {
@@ -190,13 +198,18 @@ public class M2tEngineImpl implements M2tEngine {
 		List<EObject> inputElements = context.inputElements();
 		evaluator.execute(main, inputElements);
 
+		// Check output size limit (T-7)
+		if (writers.isOutputLimitExceeded()) {
+			evaluator.addOutputLimitError(config.maxOutputSize());
+		}
+
 		// Collect generated files and unique IDs
 		Map<String, String> generatedFiles = writers.getGeneratedFiles();
 		Map<String, String> fileUniqueIds = writers.getFileUniqueIds();
 
-		// Apply protected area merging if strategy is configured (D31)
+		// Apply protected area merging if strategy is configured AND protected areas enabled (D31, T-6)
 		M2tGenerationStrategy strategy = config.generationStrategy();
-		if (strategy != null) {
+		if (strategy != null && config.protectedAreaEnabled()) {
 			M2tProtectedAreaMerger merger = new M2tProtectedAreaMerger();
 			Map<String, String> mergedFiles = new LinkedHashMap<>(generatedFiles);
 			for (Map.Entry<String, String> entry : mergedFiles.entrySet()) {

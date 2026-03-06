@@ -15,16 +15,20 @@
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
 import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
@@ -75,12 +79,19 @@ import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
  */
 public class M2tEvaluator {
 
+	private static final String SOURCE_ID = "m2t.engine";
 	private static final Object WRAPPED_NULL = new Object();
 
 	private final OclEngineImpl oclEngine;
 	private final M2tEvalEnvironment env;
 	private final M2tWriterStack writers;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
+	private final int maxDiagnostics;
+	private final int maxTemplateDepth;
+	private final int maxForIterations;
+	private final int maxCrossProductSize;
+	private final boolean protectedAreaEnabled;
+	private int templateDepth;
 
 	/** Maps overridden template → list of overriding templates. */
 	private final Map<Template, List<Template>> overrideIndex = new IdentityHashMap<>();
@@ -102,14 +113,26 @@ public class M2tEvaluator {
 	 * @param module the module being executed
 	 * @param allLinkedModules all modules in the link set (for override resolution)
 	 * @param indentationMap standalone invocation indentation map (§8.4)
+	 * @param maxDiagnostics maximum diagnostic entries before truncation
+	 * @param maxTemplateDepth maximum template invocation depth (T-1)
+	 * @param maxForIterations maximum for-block iterations (T-2)
+	 * @param maxCrossProductSize maximum cross-product size (T-3)
+	 * @param protectedAreaEnabled whether to emit protected area markers (T-6)
 	 */
 	public M2tEvaluator(OclEngineImpl oclEngine, M2tEvalEnvironment env,
 			M2tWriterStack writers, Module module, Collection<Module> allLinkedModules,
-			Map<TemplateInvocation, String> indentationMap) {
+			Map<TemplateInvocation, String> indentationMap, int maxDiagnostics,
+			int maxTemplateDepth, int maxForIterations, int maxCrossProductSize,
+			boolean protectedAreaEnabled) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.writers = Objects.requireNonNull(writers, "writers must not be null");
 		this.indentationMap = Objects.requireNonNull(indentationMap, "indentationMap must not be null");
+		this.maxDiagnostics = maxDiagnostics;
+		this.maxTemplateDepth = maxTemplateDepth;
+		this.maxForIterations = maxForIterations;
+		this.maxCrossProductSize = maxCrossProductSize;
+		this.protectedAreaEnabled = protectedAreaEnabled;
 		Objects.requireNonNull(module, "module must not be null");
 		buildOverrideIndex(allLinkedModules);
 	}
@@ -119,7 +142,7 @@ public class M2tEvaluator {
 	 */
 	public M2tEvaluator(OclEngineImpl oclEngine, M2tEvalEnvironment env,
 			M2tWriterStack writers, Module module, Collection<Module> allLinkedModules) {
-		this(oclEngine, env, writers, module, allLinkedModules, Map.of());
+		this(oclEngine, env, writers, module, allLinkedModules, Map.of(), 10_000, 1_000, 1_000_000, 1_000_000, true);
 	}
 
 	/**
@@ -152,6 +175,12 @@ public class M2tEvaluator {
 	public String execute(Template template, List<? extends EObject> args) {
 		Objects.requireNonNull(template, "template must not be null");
 
+		if (templateDepth >= maxTemplateDepth) {
+			addError("Maximum template depth exceeded (" + maxTemplateDepth
+					+ ") — possible infinite recursion in template '" + template.getName() + "'");
+			return "";
+		}
+		templateDepth++;
 		env.pushScope();
 		try {
 			// Bind template parameters
@@ -197,6 +226,7 @@ public class M2tEvaluator {
 			return result;
 		} finally {
 			env.popScope();
+			templateDepth--;
 		}
 	}
 
@@ -249,7 +279,13 @@ public class M2tEvaluator {
 				writers.append(asString(evaluateOcl(block.getBefore())));
 			}
 
+			int iterLimit = Math.min(items.size(), maxForIterations);
 			for (int i = 0; i < items.size(); i++) {
+				if (i >= iterLimit) {
+					addError("Maximum for-block iterations exceeded (" + maxForIterations
+							+ ") — loop terminated early");
+					break;
+				}
 				env.pushScope();
 				try {
 					String varName = block.getLoopVariable() != null
@@ -339,9 +375,15 @@ public class M2tEvaluator {
 		public Object caseFileBlock(FileBlock block) {
 			String filePath = asString(evaluateOcl(block.getFileUrl()));
 			OpenModeKind mode = block.getOpenMode();
-			Charset charset = block.getCharset() != null
-					? Charset.forName(asString(evaluateOcl(block.getCharset())))
-					: StandardCharsets.UTF_8;
+			Charset charset = StandardCharsets.UTF_8;
+			if (block.getCharset() != null) {
+				String charsetName = asString(evaluateOcl(block.getCharset()));
+				try {
+					charset = Charset.forName(charsetName);
+				} catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
+					addWarning("Unknown charset '" + charsetName + "', using UTF-8");
+				}
+			}
 
 			// §8.1.17: Evaluate optional uniqId for file-rename tracking
 			if (block.getUniqId() != null) {
@@ -358,6 +400,12 @@ public class M2tEvaluator {
 
 		@Override
 		public Object caseProtectedAreaBlock(ProtectedAreaBlock block) {
+			if (!protectedAreaEnabled) {
+				// T-6: Protected areas disabled — emit body content without markers
+				executeBody(block);
+				return WRAPPED_NULL;
+			}
+
 			String markerId = asString(evaluateOcl(block.getMarker()));
 
 			// Execute body first to capture default content and compute hash (D31)
@@ -399,7 +447,7 @@ public class M2tEvaluator {
 			if (invocation.isSuper()) {
 				SuperContext ctx = superStack.peek();
 				if (ctx == null) {
-					addWarning("[super/] called outside of an override context");
+					addError("[super/] called outside of an override context");
 					return WRAPPED_NULL;
 				}
 				Template overridden = ctx.overridden;
@@ -420,7 +468,7 @@ public class M2tEvaluator {
 
 			Template target = invocation.getDefinition();
 			if (target == null) {
-				addWarning("Template invocation target is null");
+				addError("Unresolved template invocation — definition is null");
 				return WRAPPED_NULL;
 			}
 
@@ -450,6 +498,16 @@ public class M2tEvaluator {
 			}
 
 			if (hasSetIteration) {
+				// T-3: Check cross-product size before computing
+				long productSize = 1;
+				for (List<?> setArg : setArgs) {
+					productSize *= setArg.size();
+					if (productSize > maxCrossProductSize) {
+						addError("Cross-product size exceeds limit (" + maxCrossProductSize
+								+ ") — template invocation skipped");
+						return WRAPPED_NULL;
+					}
+				}
 				List<List<Object>> crossProduct = crossProduct(setArgs);
 
 				String before = invocation.getBefore() != null
@@ -478,20 +536,23 @@ public class M2tEvaluator {
 		public Object caseQueryInvocation(QueryInvocation invocation) {
 			Query query = invocation.getDefinition();
 			if (query == null) {
-				addWarning("Query invocation target is null");
+				addError("Unresolved query invocation — definition is null");
 				return WRAPPED_NULL;
 			}
 
 			env.pushScope();
 			try {
+				// Evaluate all arguments once
 				List<Variable> params = query.getParameter();
-				for (int i = 0; i < params.size() && i < invocation.getArgument().size(); i++) {
-					Object argVal = evaluateOcl(invocation.getArgument().get(i));
-					env.define(params.get(i).getName(), argVal);
+				List<Object> evalArgs = new ArrayList<>();
+				for (int i = 0; i < invocation.getArgument().size(); i++) {
+					evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
 				}
-				if (!invocation.getArgument().isEmpty()) {
-					Object firstArgVal = evaluateOcl(invocation.getArgument().get(0));
-					env.define("self", firstArgVal);
+				for (int i = 0; i < params.size() && i < evalArgs.size(); i++) {
+					env.define(params.get(i).getName(), evalArgs.get(i));
+				}
+				if (!evalArgs.isEmpty()) {
+					env.define("self", evalArgs.get(0));
 				}
 
 				Object result = evaluateOcl(query.getExpression());
@@ -507,20 +568,23 @@ public class M2tEvaluator {
 		public Object caseMacroInvocation(MacroInvocation invocation) {
 			Macro macro = invocation.getDefinition();
 			if (macro == null) {
-				addWarning("Macro invocation target is null");
+				addError("Unresolved macro invocation — definition is null");
 				return WRAPPED_NULL;
 			}
 
 			env.pushScope();
 			try {
+				// Evaluate all arguments once
 				List<Variable> params = macro.getParameter();
-				for (int i = 0; i < params.size() && i < invocation.getArgument().size(); i++) {
-					Object argVal = evaluateOcl(invocation.getArgument().get(i));
-					env.define(params.get(i).getName(), argVal);
+				List<Object> evalArgs = new ArrayList<>();
+				for (int i = 0; i < invocation.getArgument().size(); i++) {
+					evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
 				}
-				if (!invocation.getArgument().isEmpty()) {
-					Object firstArgVal = evaluateOcl(invocation.getArgument().get(0));
-					env.define("self", firstArgVal);
+				for (int i = 0; i < params.size() && i < evalArgs.size(); i++) {
+					env.define(params.get(i).getName(), evalArgs.get(i));
+				}
+				if (!evalArgs.isEmpty()) {
+					env.define("self", evalArgs.get(0));
 				}
 
 				if (macro.getInit() != null) {
@@ -616,8 +680,8 @@ public class M2tEvaluator {
 
 		try {
 			return oclEngine.evaluate(expression, oclContext);
-		} catch (Exception e) {
-			addWarning("OCL evaluation error: " + e.getMessage());
+		} catch (RuntimeException e) {
+			addError("OCL evaluation error [" + e.getClass().getSimpleName() + "]: " + e.getMessage());
 			return null;
 		}
 	}
@@ -654,6 +718,15 @@ public class M2tEvaluator {
 	 * <p>MOFM2T §8.1.3: Override parameters must be type-compatible (same or narrower).
 	 */
 	private Template resolveOverride(Template target, List<Object> evalArgs) {
+		Set<Template> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+		return resolveOverride(target, evalArgs, visited);
+	}
+
+	private Template resolveOverride(Template target, List<Object> evalArgs,
+			Set<Template> visited) {
+		if (!visited.add(target)) {
+			return target; // cycle detected — stop resolution
+		}
 		List<Template> overrides = overrideIndex.get(target);
 		if (overrides == null || overrides.isEmpty()) {
 			return target;
@@ -661,8 +734,7 @@ public class M2tEvaluator {
 
 		for (Template override : overrides) {
 			if (isOverrideApplicable(override, evalArgs)) {
-				// Recursively resolve: if this override is itself overridden, find the end of chain
-				return resolveOverride(override, evalArgs);
+				return resolveOverride(override, evalArgs, visited);
 			}
 		}
 
@@ -733,6 +805,12 @@ public class M2tEvaluator {
 	 * to argument values and executes the template body.
 	 */
 	private void invokeTemplate(Template target, List<Object> argValues) {
+		if (templateDepth >= maxTemplateDepth) {
+			addError("Maximum template depth exceeded (" + maxTemplateDepth
+					+ ") — possible infinite recursion in template '" + target.getName() + "'");
+			return;
+		}
+		templateDepth++;
 		env.pushScope();
 		try {
 			List<Variable> params = target.getParameter();
@@ -761,9 +839,20 @@ public class M2tEvaluator {
 				}
 			}
 
-			executeBody(target);
+			// Apply post-processing if present (Acceleo extension)
+			if (target.getPost() != null) {
+				writers.pushStringWriter();
+				executeBody(target);
+				String result = writers.popWriter();
+				env.define("self", result);
+				Object postResult = evaluateOcl(target.getPost());
+				writers.append(asString(postResult));
+			} else {
+				executeBody(target);
+			}
 		} finally {
 			env.popScope();
+			templateDepth--;
 		}
 	}
 
@@ -799,8 +888,38 @@ public class M2tEvaluator {
 		return Boolean.TRUE.equals(value);
 	}
 
+	/**
+	 * Adds an output size limit error diagnostic. Called by the engine after execution
+	 * when the writer stack's output limit was exceeded (T-7).
+	 *
+	 * @param maxOutputSize the configured limit
+	 */
+	public void addOutputLimitError(long maxOutputSize) {
+		addError("Maximum output size exceeded (" + maxOutputSize
+				+ " characters) — output truncated");
+	}
+
+	private void addError(String message) {
+		addDiagnostic(Diagnostic.ERROR, message);
+	}
+
 	private void addWarning(String message) {
-		diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, "m2t.engine", 0, message, null));
+		addDiagnostic(Diagnostic.WARNING, message);
+	}
+
+	/**
+	 * Adds a diagnostic entry, respecting {@code maxDiagnostics} limit.
+	 */
+	private void addDiagnostic(int severity, String message) {
+		if (diagnostics.size() >= maxDiagnostics) {
+			if (diagnostics.size() == maxDiagnostics) {
+				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
+						"Maximum diagnostics limit reached (" + maxDiagnostics
+								+ "), further diagnostics truncated", null));
+			}
+			return;
+		}
+		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, 0, message, null));
 	}
 
 	/**

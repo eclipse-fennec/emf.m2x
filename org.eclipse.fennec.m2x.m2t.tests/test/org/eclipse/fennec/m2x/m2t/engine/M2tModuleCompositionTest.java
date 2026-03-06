@@ -33,7 +33,6 @@ import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParserSupport;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
-import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,18 +81,6 @@ class M2tModuleCompositionTest {
 
 		EPackage.Registry.INSTANCE.put(testPkg.getNsURI(), testPkg);
 		EPackage.Registry.INSTANCE.put("test", testPkg);
-	}
-
-	private EObject createElement(String name) {
-		EObject obj = testPkg.getEFactoryInstance().create(elementClass);
-		obj.eSet(elementClass.getEStructuralFeatures().get(0), name);
-		return obj;
-	}
-
-	private EObject createSpecial(String name) {
-		EObject obj = testPkg.getEFactoryInstance().create(specialClass);
-		obj.eSet(elementClass.getEStructuralFeatures().get(0), name);
-		return obj;
 	}
 
 	// ==================== Parser: Pending References ====================

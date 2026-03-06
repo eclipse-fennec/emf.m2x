@@ -76,6 +76,8 @@ public class M2tModuleLinker {
 	public List<String> link(List<M2tParseResult> results) {
 		Objects.requireNonNull(results, "results must not be null");
 		warnings.clear();
+		moduleIndex.clear();
+		parseResults.clear();
 
 		// Phase 1: Build module index
 		for (M2tParseResult result : results) {

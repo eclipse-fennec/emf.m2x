@@ -45,10 +45,14 @@ public enum WhitespaceMode {
 	/**
 	 * Acceleo 3.7 compatible mode (default).
 	 *
-	 * <p>Currently identical to {@link #SPEC}. Reserved for future Acceleo-specific
-	 * whitespace behavior differences (e.g. trailing whitespace handling).
+	 * <p>Identical to {@link #SPEC} except:
+	 * <ul>
+	 *   <li><b>BOL indicator {@code ^}</b>: Not supported — the caret is passed through as
+	 *       literal text. In SPEC mode, {@code ^} at the beginning of a line strips leading
+	 *       whitespace (§8.4).</li>
+	 * </ul>
 	 *
-	 * <p>This is the recommended default for compatibility with existing templates.
+	 * <p>This is the recommended default for compatibility with existing Acceleo 3.7 templates.
 	 */
 	ACCELEO
 }

@@ -20,6 +20,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -68,6 +69,7 @@ public class M2tProtectedAreaMerger {
 	 * @return the merged content
 	 */
 	public String merge(String newContent, String existingContent) {
+		Objects.requireNonNull(newContent, "newContent must not be null");
 		if (existingContent == null || existingContent.isEmpty()) {
 			return newContent;
 		}
@@ -155,6 +157,8 @@ public class M2tProtectedAreaMerger {
 	 * @return the start marker line including hash
 	 */
 	public static String startMarker(String markerId, String defaultContent) {
+		Objects.requireNonNull(markerId, "markerId must not be null");
+		Objects.requireNonNull(defaultContent, "defaultContent must not be null");
 		String hash = contentHash(defaultContent);
 		return startMarkerLine(markerId, hash);
 	}

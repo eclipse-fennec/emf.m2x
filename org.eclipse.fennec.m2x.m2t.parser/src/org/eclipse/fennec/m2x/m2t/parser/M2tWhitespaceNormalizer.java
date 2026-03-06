@@ -73,6 +73,10 @@ public class M2tWhitespaceNormalizer {
 	 * @return the indentation map for standalone template invocations
 	 */
 	public Map<TemplateInvocation, String> normalize(Module module) {
+		Objects.requireNonNull(module, "module must not be null");
+		if (mode == WhitespaceMode.NONE) {
+			return Map.of();
+		}
 		for (ModuleElement element : module.getOwnedModuleElement()) {
 			if (element instanceof Template template) {
 				trimBody(template);
@@ -159,10 +163,12 @@ public class M2tWhitespaceNormalizer {
 			}
 		}
 
-		// Third pass: BOL indicator processing
-		for (TemplateExpression expr : body) {
-			if (expr instanceof TextExpression text) {
-				processBolIndicator(text);
+		// Third pass: BOL indicator processing (SPEC mode only — Acceleo 3.7 does not support ^)
+		if (mode == WhitespaceMode.SPEC) {
+			for (TemplateExpression expr : body) {
+				if (expr instanceof TextExpression text) {
+					processBolIndicator(text);
+				}
 			}
 		}
 	}
