@@ -135,9 +135,9 @@ Phase 1 (OCL) and Phase 2 (QVT-O) are complete. Phase 3 implements MOFM2T 1.0 �
 | Standalone block: strip whitespace before head | ✅ | Standalone block detection + whitespace stripping |
 | Multi-line for: default separator = newline | ✅ | `\n` separator injected for standalone for-blocks without explicit separator |
 | Standalone template invocation: indent propagation | ✅ | Indent extracted at parse-time, applied at eval-time via `fitIndentationTo()` |
-| BOL indicator `^` | ✅ | `^` marker strips leading whitespace on that line |
+| BOL indicator `^` | ✅ | SPEC mode: `^` marker strips leading whitespace on that line. ACCELEO mode: `^` passed through as literal text (Acceleo 3.7 does not support BOL) |
 
-16 tests in `M2tWhitespaceTest` (body-trimming 3, standalone-block 6, BOL 2, indent-propagation 3, SPEC-mode 1, NONE-mode 1).
+17 tests in `M2tWhitespaceTest` (body-trimming 3, standalone-block 6, BOL 3 (2 SPEC + 1 ACCELEO), indent-propagation 3, SPEC-mode 1, NONE-mode 1).
 
 ---
 
@@ -182,10 +182,10 @@ Phase 1 (OCL) and Phase 2 (QVT-O) are complete. Phase 3 implements MOFM2T 1.0 �
 
 **GAP-M2T-7: Whitespace Handling** (§8.4) → ✅ FIXED in P3-5
 - `M2tWhitespaceNormalizer`: body-trimming, standalone block detection, BOL indicator `^`, indent extraction
-- `WhitespaceMode` enum: `NONE` (raw), `SPEC` (strict §8.4), `ACCELEO` (default, currently identical to SPEC)
+- `WhitespaceMode` enum: `NONE` (raw), `SPEC` (strict §8.4 incl. BOL `^`), `ACCELEO` (default, like SPEC but without BOL `^` — passed through as literal)
 - Normalizer runs after linking in `M2tEngineImpl.execute()` (needs resolved TemplateInvocations)
 - Indent-propagation via `fitIndentationTo()` in `M2tEvaluator.caseTemplateInvocation()`
-- 16 tests in `M2tWhitespaceTest` — see D32
+- 17 tests in `M2tWhitespaceTest` — see D32
 
 ### Priority 3 — Deferred (low priority)
 
@@ -246,9 +246,9 @@ Phase 1 (OCL) and Phase 2 (QVT-O) are complete. Phase 3 implements MOFM2T 1.0 �
 - [x] **GAP-M2T-7** Standalone block detection + whitespace stripping ✅
 - [x] Default newline separator for standalone for-blocks ✅
 - [x] Indent propagation for standalone template invocations ✅
-- [x] BOL indicator `^` ✅
+- [x] BOL indicator `^` (SPEC mode only — ACCELEO passes `^` through as literal) ✅
 - [x] `WhitespaceMode` enum (NONE/SPEC/ACCELEO) with ACCELEO as default ✅
-- [x] 16 whitespace tests in `M2tWhitespaceTest` ✅
+- [x] 17 whitespace tests in `M2tWhitespaceTest` ✅
 
 ### P3-6: Polishing + End-to-End ✅
 **Goal:** Spec examples, encoding, regression.

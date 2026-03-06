@@ -542,7 +542,7 @@ Fits the existing build model: `src-gen/` is generated code, bnd compiles and pa
 |------|----------|
 | `NONE` | No normalization — raw template output |
 | `SPEC` | Strict MOFM2T §8.4 (all 5 rules) |
-| `ACCELEO` | Default — currently identical to SPEC, reserved for future Acceleo-specific differences |
+| `ACCELEO` | Default — like SPEC but without BOL `^` indicator (passed through as literal text; Acceleo 3.7 does not implement `^`) |
 
 **Architecture:** Hybrid parse-time + eval-time approach:
 
@@ -551,7 +551,7 @@ Fits the existing build model: `src-gen/` is generated code, bnd compiles and pa
 | Body-trimming (leading/trailing newlines) | Parse-time | Statically derivable from AST structure |
 | Standalone-block detection + WS-strip | Parse-time | Statically derivable from TextExpression contents |
 | Default `\n` separator injection (standalone for) | Parse-time | Can be set as StringLiteralExp in AST |
-| BOL indicator `^` processing | Parse-time | Pure text transformation on TextExpression.value |
+| BOL indicator `^` processing (SPEC only) | Parse-time | Pure text transformation on TextExpression.value; skipped in ACCELEO mode |
 | Indent-propagation (template invocations) | Eval-time | Depends on runtime output via `fitIndentationTo()` |
 
 **Key implementation details:**
@@ -575,4 +575,4 @@ Fits the existing build model: `src-gen/` is generated code, bnd compiles and pa
 - `m2t.parser/.../M2tWhitespaceNormalizer.java` — AST normalizer
 - `m2t.engine/.../M2tEngineImpl.java` — normalizer invocation + indentation map
 - `m2t.engine/.../internal/M2tEvaluator.java` — `fitIndentationTo()` + indent-propagation
-- `m2t.tests/.../M2tWhitespaceTest.java` — 16 tests
+- `m2t.tests/.../M2tWhitespaceTest.java` — 17 tests
