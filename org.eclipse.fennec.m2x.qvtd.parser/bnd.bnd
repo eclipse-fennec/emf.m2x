@@ -1,0 +1,42 @@
+Bundle-Name: Fennec QVT-R Parser
+Bundle-Description: ANTLR4-based parser for QVT-Relations v1.3 transformations
+
+-library: enableEMF
+
+src=${^src},src-gen
+
+antlr4-version = 4.13.2
+
+antlr4.tool.cp = \
+	${repo;org.antlr:antlr4;${antlr4-version}}:\
+	${repo;org.antlr:antlr4-runtime;${antlr4-version}}:\
+	${repo;org.antlr:antlr-runtime;3.5.3}:\
+	${repo;org.antlr:ST4;4.3.4}:\
+	${repo;org.abego.treelayout:org.abego.treelayout.core;1.0.3}:\
+	${repo;com.ibm.icu:icu4j;72.1}
+
+# Generate grammar on demand (manual step)
+#-generate: \
+#	grammar/QvtR.g4; \
+#		output=src-gen; \
+#		system='java -cp ${antlr4.tool.cp} org.antlr.v4.Tool \
+#			-visitor -no-listener \
+#			-lib ${project}/../org.eclipse.fennec.m2x.ocl.parser/grammar \
+#			-package org.eclipse.fennec.m2x.qvtd.parser \
+#			-o src-gen/org/eclipse/fennec/m2x/qvtd/parser \
+#			${project}/grammar/QvtR.g4'
+
+# Include grammar file for downstream import
+-includeresource.grammar: grammar=grammar
+
+# Suppress deprecation warnings from ANTLR4-generated code (tokenNames -> VOCABULARY)
+javac.deprecation = false
+
+-buildpath: \
+	org.antlr.antlr4-runtime;version=latest,\
+	org.eclipse.fennec.m2x.ocl.api;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.parser;version=latest,\
+	org.eclipse.fennec.m2x.qvtd.api;version=latest,\
+	org.eclipse.fennec.m2x.qvtd.model;version=latest,\
+	org.osgi.service.condition;version=latest

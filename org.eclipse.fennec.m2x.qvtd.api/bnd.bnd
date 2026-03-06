@@ -1,0 +1,10 @@
+Bundle-Name: Fennec QVT-R API
+Bundle-Description: Public API interfaces for the Fennec QVT-R (Relations) transformation engine
+
+-library: enableEMF
+
+-buildpath: \
+	org.eclipse.fennec.m2x.ocl.api;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=latest,\
+	org.eclipse.fennec.m2x.qvtd.model;version=latest,\
+	org.osgi.service.condition;version=latest
