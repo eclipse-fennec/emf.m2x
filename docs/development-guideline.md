@@ -808,7 +808,7 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 
 ### Phase 3: Acceleo/MOFM2T (with OCL expressions + cherry-picked extensions) — ✅ Complete
 
-**Status:** P3-0 through P3-6 ✅ Complete (195 tests, 0 failures).
+**Status:** P3-0 through P3-6 ✅ Complete (229 tests, 0 failures).
 
 **Implementation Plan:** See [`m2t-implementation-plan.md`](m2t-implementation-plan.md) for detailed sub-phases.
 
@@ -822,19 +822,32 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 | P3-5 | `m2t.parser`, `m2t.engine` | Whitespace handling (§8.4), WhitespaceMode (D32), indent-propagation | ✅ Done |
 | P3-6 | `m2t.tests` | Exact whitespace verification, spec §7 E2E tests, encoding, regression | ✅ Done |
 
-### Phase 4: QVT-Declarative (Relations + Core)
+### Phase 4: QVT-Relations (Direct Interpretation, no QVT-C)
 
-| Step | Module | Description |
-|------|--------|-------------|
-| 4.1 | `qvtd.model` | QVT-R metamodel (Relation, RelationDomain, DomainPattern, Key, Template) + QVT-C metamodel (CoreModel, Area, Mapping, Guard, Assignment) |
-| 4.2 | `qvtd.api` | `QvtdEngine` interface, `QvtdKeyProvider` extension interface, public API |
-| 4.3 | `qvtd.parser` | ANTLR4 grammar (`QvtRelations.g4`, imports `Ocl.g4`). QVT-Core is primarily a compilation target, no separate parser unless needed. |
-| 4.4 | `qvtd.engine` | Declarative transformation engine: relation matching, pattern matching, domain enforcement, `checkonly`/`enforce` semantics, optional QVTr→QVTc compilation |
-| 4.5 | `qvtd.tests` | Relation tests, domain tests, pattern matching tests |
+**Approach:** Direct QVT-R interpretation (D33). Spec-first against QVT v1.3 Ch. 7, Eclipse QVT-D as behavioral reference only (D35). No QVTr→QVTc compiler, no QVT-C engine. See [Design Decisions](design-decisions.md) D33–D38.
 
-**Deferred QVT-O Gaps (require QVT-R metamodel):**
-- **GAP-6** (`refined`, `relation`, `refinedRelation`) — `OperationalTransformation.refined: Transformation[0..1]`, `MappingOperation.refinedRelation` require QVT-R metamodel types (§8.2.1.1, §8.2.1.11)
-- **GAP-13 Semantik** (`refines` pattern inheritance) — Parser support ✅ (6 tests), but semantic execution of `refines` requires relation refinement logic from QVT-R
+#### Phase 4a — QVT-R Standalone
+
+| Sub-Phase | Module | Description |
+|-----------|--------|-------------|
+| P4-0 | `qvtd.model` | QVT-R metamodel: 3 EPackages (qvtbase, qvttemplate, qvtrelation), ~20 classifiers (D34) |
+| P4-1 | `qvtd.api` | `QvtdEngine` interface, `QvtdConfiguration`, `QvtdResult`, `QvtdUnitResolver` (D37), `QvtdBlackboxLibrary` (D36) |
+| P4-2 | `qvtd.parser` | ANTLR4 grammar (`QvtRelations.g4`, imports `Ocl.g4`), CST→AST builder, concrete syntax §7.13 |
+| P4-3 | `qvtd.engine` | Core engine: top relation execution, domain pattern matching, variable binding, when/where clauses |
+| P4-4 | `qvtd.engine` | Enforcement: checkonly/enforce semantics (§7.10), object creation via patterns, Key-based identity (§7.4) |
+| P4-5 | `qvtd.engine` | Traces: implicit trace generation, RelationCallExp in when/where, non-top relation invocation |
+| P4-6 | `qvtd.tests` | Spec-conformance tests, E2E tests (UML→RDBMS example from spec) |
+
+#### Phase 4b — QVT-R↔QVT-O Hybrid (deferred)
+
+| Sub-Phase | Description |
+|-----------|-------------|
+| P4-7 | GAP-6: `OperationalTransformation.refined`, `MappingOperation.refinedRelation` (§8.2.1.1, §8.2.1.11) |
+| P4-8 | §7.8: Blackbox/QVT-O implementation for Relations |
+
+**Deferred QVT-O Gaps (unlocked by Phase 4):**
+- **GAP-6** (`refined`, `relation`, `refinedRelation`) — QVT-O transformation refines a QVT-R transformation → Phase 4b
+- **GAP-13 Semantik** (`refines` pattern inheritance) — Parser support ✅ (6 tests), semantic execution requires relation refinement logic → Phase 4b
 
 ### Phase 5: Language Servers (Future)
 

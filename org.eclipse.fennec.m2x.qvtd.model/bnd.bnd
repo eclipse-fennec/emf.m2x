@@ -1,0 +1,17 @@
+Bundle-Name: Fennec QVT-R Model
+Bundle-Description: QVT-Relations v1.3 EMF metamodel (3 EPackages, 21 classifiers)
+
+-library: enableEMF
+
+# Modify model only on demand
+-generate:\
+	model/qvtd.genmodel;\
+		generate=fennecEMF;\
+		genmodel=model/qvtd.genmodel;\
+		output=src
+
+-includeresource.model: model=model
+
+-buildpath: \
+	org.eclipse.fennec.m2x.ocl.model;version=latest,\
+	org.osgi.service.condition;version=latest

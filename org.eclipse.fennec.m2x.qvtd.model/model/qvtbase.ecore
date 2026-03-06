@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="qvtbase" nsURI="http://www.eclipse.org/fennec/m2x/qvtd/qvtbase/1.0"
+    nsPrefix="qvtbase">
+  <eAnnotations source="Version">
+    <details key="value" value="1.0"/>
+  </eAnnotations>
+  <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+    <details key="complianceLevel" value="21.0"/>
+    <details key="oSGiCompatible" value="true"/>
+    <details key="basePackage" value="org.eclipse.fennec.m2x.model"/>
+    <details key="resource" value="XMI"/>
+    <details key="copyrightText" value="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"/>
+  </eAnnotations>
+  <eClassifiers xsi:type="ecore:EClass" name="Transformation" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EPackage">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A transformation defines how one set of models can be transformed into another. It contains a set of rules that specify its execution behavior. Syntactically extends EPackage for namespace semantics (QVT v1.3 §7.11.1.1)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="modelParameter" upperBound="-1"
+        eType="#//TypedModel" containment="true" eOpposite="#//TypedModel/transformation">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The set of typed models, which specify the types of models that may participate in the transformation."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="rule" upperBound="-1" eType="#//Rule"
+        containment="true" eOpposite="#//Rule/transformation">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The rules owned by the transformation, which together specify the execution behavior of the transformation."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="ownedTag" upperBound="-1"
+        eType="#//Tag" containment="true" eOpposite="#//Tag/owner">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The set of tags associated with the transformation whose values may be used to configure its runtime environment."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="extends" eType="#//Transformation">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="A transformation can extend another transformation. The rules of the extended transformation are included in the extending transformation. Extension is transitive."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="TypedModel" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//ENamedElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A typed model specifies a typed parameter of a transformation. At runtime, a model that is passed to the transformation by this name is constrained to contain only those model elements whose types are specified in the set of model packages (QVT v1.3 §7.11.1.2)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="transformation" lowerBound="1"
+        eType="#//Transformation" eOpposite="#//Transformation/modelParameter">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The transformation that owns the typed model."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="usedPackage" lowerBound="1"
+        upperBound="-1" eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EPackage">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The metamodel packages that specify the types for the model elements of conforming models."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="dependsOn" upperBound="-1"
+        eType="#//TypedModel">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The set of typed models that this typed model declares a dependency on."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Domain" abstract="true" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//ENamedElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A domain specifies a set of model elements of a typed model that are of interest to a rule. Abstract — concrete subclass is RelationDomain (QVT v1.3 §7.11.1.3)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="isCheckable" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Indicates that the domain is checkable."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="isEnforceable" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Indicates that the domain is enforceable."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="rule" lowerBound="1" eType="#//Rule"
+        eOpposite="#//Rule/domain">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The rule that owns the domain."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="typedModel" eType="#//TypedModel">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The typed model that contains the types of the model elements specified by the domain."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Rule" abstract="true" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//ENamedElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A rule specifies how the model elements specified by its domains are related with each other. Abstract — concrete subclass is Relation (QVT v1.3 §7.11.1.4)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="isAbstract" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
+        defaultValueLiteral="false">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Indicates that the rule is abstract. An abstract rule is never matched directly. Default is false."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="domain" upperBound="-1"
+        eType="#//Domain" containment="true" eOpposite="#//Domain/rule">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The domains owned by this rule."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="transformation" eType="#//Transformation"
+        eOpposite="#//Transformation/rule">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The transformation that owns this rule."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="overrides" eType="#//Rule">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The rule that this rule overrides. The overriding rule is executed in place of the overridden rule when the overriding conditions are satisfied."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Function" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EOperation">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A function is a side-effect-free operation owned by a transformation. Often called a query. May be specified by an OCL expression or have a black-box implementation (QVT v1.3 §7.11.1.5)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="queryExpression" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The OCL expression that specifies the function. If absent, a black-box implementation is assumed."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="FunctionParameter" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EParameter">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A function parameter specifies the parameters of a function. Extends EParameter only — Variable semantics handled by engine (QVT v1.3 §7.11.1.6, see D22 Lesson 1)."/>
+    </eAnnotations>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Pattern" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EModelElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A pattern is a set of variable declarations and predicates, which when evaluated in the context of a model, results in a set of bindings for the variables (QVT v1.3 §7.11.1.8)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="bindsTo" upperBound="-1"
+        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The set of variables that are to be bound when the pattern is evaluated."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="predicate" upperBound="-1"
+        eType="#//Predicate" containment="true" eOpposite="#//Predicate/pattern">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The set of predicates that must evaluate to true for a valid binding."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Predicate" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EModelElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A predicate is a boolean-valued expression owned by a pattern. Specified by an OCL expression that may reference variables of the owning pattern (QVT v1.3 §7.11.1.7)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="conditionExpression" lowerBound="1"
+        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The OCL expression that specifies the predicate."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="pattern" lowerBound="1"
+        eType="#//Pattern" eOpposite="#//Pattern/predicate">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The pattern that owns the predicate."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Tag" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EModelElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A name-value pair associated with a transformation. EMOF Tag equivalent for Ecore (QVT v1.3 §7.11.1.1)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The name of the tag."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="value" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The value of the tag."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="owner" lowerBound="1" eType="#//Transformation"
+        eOpposite="#//Transformation/ownedTag">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The transformation that owns the tag."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+</ecore:EPackage>

@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="qvtrelation" nsURI="http://www.eclipse.org/fennec/m2x/qvtd/qvtrelation/1.0"
+    nsPrefix="qvtrelation">
+  <eAnnotations source="Version">
+    <details key="value" value="1.0"/>
+  </eAnnotations>
+  <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+    <details key="complianceLevel" value="21.0"/>
+    <details key="oSGiCompatible" value="true"/>
+    <details key="basePackage" value="org.eclipse.fennec.m2x.model"/>
+    <details key="resource" value="XMI"/>
+    <details key="copyrightText" value="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"/>
+  </eAnnotations>
+  <eClassifiers xsi:type="ecore:EClass" name="RelationalTransformation" eSuperTypes="qvtbase.ecore#//Transformation">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A RelationalTransformation is a specialization of a Transformation representing a transformation definition that uses the QVT-Relation formalism (QVT v1.3 §7.11.3.1)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="ownedKey" upperBound="-1"
+        eType="#//Key" containment="true" eOpposite="#//Key/transformation">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The keys defined within the transformation."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Relation" eSuperTypes="qvtbase.ecore#//Rule">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A relation is the basic unit of transformation behavior specification. It specifies a relationship that must hold between the model elements of a set of candidate models (QVT v1.3 §7.11.3.2)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="isTopLevel" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
+        defaultValueLiteral="false">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Indicates whether the relation is a top-level relation. Top-level relations must hold for all matching elements; non-top-level relations are invoked from where clauses."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="variable" upperBound="-1"
+        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The set of variables occurring in the relation. Includes all variables from domains, when and where clauses."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="when" eType="ecore:EClass qvtbase.ecore#//Pattern"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The pattern that specifies the when clause — conditions under which the relationship needs to hold."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="where" eType="ecore:EClass qvtbase.ecore#//Pattern"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The pattern that specifies the where clause — conditions that must be satisfied by all participating model elements."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="operationalImpl" upperBound="-1"
+        eType="#//RelationImplementation" containment="true" eOpposite="#//RelationImplementation/relation">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Optional black-box operational implementations to enforce domains of this relation (§7.8)."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="RelationDomain" eSuperTypes="qvtbase.ecore#//Domain">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="Specifies the domains of a relation. Has root variables that can be matched in a model and domain patterns specifying the model elements of interest (QVT v1.3 §7.11.3.3)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="rootVariable" lowerBound="1"
+        upperBound="-1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The distinguished typed variables of the relation domain that can be matched in a model."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="pattern" lowerBound="1"
+        upperBound="-1" eType="#//DomainPattern" containment="true" eOpposite="#//DomainPattern/relationDomain">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The domain patterns that specify the model elements of the relation domain."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="defaultAssignment" upperBound="-1"
+        eType="#//RelationDomainAssignment" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Assignments that set default values for domain variables during enforcement."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="DomainPattern" eSuperTypes="qvtbase.ecore#//Pattern">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A domain pattern specifies an arbitrarily complex pattern graph in terms of template expressions. Has a distinguished root template expression bound to the root variable (QVT v1.3 §7.11.3.4)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="templateExpression" eType="ecore:EClass qvttemplate.ecore#//TemplateExp"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The root template expression of the domain pattern. Must be bound to the root variable of the owning relation domain."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="relationDomain" lowerBound="1"
+        eType="#//RelationDomain" eOpposite="#//RelationDomain/pattern">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The relation domain that owns this domain pattern."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Key" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EModelElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A key defines a set of properties of a class that uniquely identify an instance. Used during enforcement to determine whether to create a new object or update an existing one (QVT v1.3 §7.11.3.5)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="identifies" lowerBound="1"
+        eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClass">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The class that is identified by the key."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="part" upperBound="-1" eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EStructuralFeature">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Properties of the class that make up the key."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="oppositePart" upperBound="-1"
+        eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EStructuralFeature">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Opposite properties of the class that make up the key."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="transformation" lowerBound="1"
+        eType="#//RelationalTransformation" eOpposite="#//RelationalTransformation/ownedKey">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The relational transformation that owns this key."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="RelationImplementation" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EModelElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="Specifies an optional black-box operational implementation to enforce a domain of a relation. Invoked when the relation evaluates to false during enforcement (QVT v1.3 §7.11.3.6)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="impl" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EOperation">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The operation that implements the relation in the given direction."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="inDirectionOf" lowerBound="1"
+        eType="ecore:EClass qvtbase.ecore#//TypedModel">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The direction of the relation being implemented."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="relation" lowerBound="1"
+        eType="#//Relation" eOpposite="#//Relation/operationalImpl">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The relation being implemented."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="RelationDomainAssignment" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EModelElement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="Sets the value of a domain variable by evaluating an associated expression. Used for default value assignments during enforcement (QVT v1.3 §7.11.3.7)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="variable" lowerBound="1"
+        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The variable being assigned."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="valueExp" lowerBound="1"
+        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The expression that provides the value of the variable."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="RelationCallExp" eSuperTypes="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A relation call expression specifies the invocation of a relation from a when or where clause. Arguments correspond to the root variables of the called relation's domains (QVT v1.3 §7.11.3.8)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="argument" lowerBound="2"
+        upperBound="-1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Arguments to the relation call, ordered by domain order then pattern order."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="referredRelation" lowerBound="1"
+        eType="#//Relation">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The relation being invoked."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+</ecore:EPackage>

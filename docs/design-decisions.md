@@ -40,6 +40,13 @@
 | D30 | Resource Integrity Service (Future) | Build-time SHA-256 hashing of arbitrary resources (scripts, ecore, files) with optional runtime verification |
 | D31 | M2T Protected Area Merge: opt-in + hash-based smart merge | Merge only when `M2tGenerationStrategy.readExistingContent()` is provided (opt-in). When active, engine emits a hash of the default content in the marker comment. On re-generation, merger compares existing content against hash: if unchanged → overwrite with new template default; if user-modified → preserve user content. Spec-compatible (§8.1.7 defines markers as implementation-specific). |
 | D32 | M2T Whitespace: `WhitespaceMode` enum + hybrid normalizer | Three-tier `WhitespaceMode` (NONE/SPEC/ACCELEO, default ACCELEO). `M2tWhitespaceNormalizer` runs post-link as AST transformation. Body-trimming, standalone-block detection, BOL indicator at parse-time; indent-propagation at eval-time via `fitIndentationTo()`. Inline LetBlocks excluded from standalone detection. |
+| D33 | QVT-R: Direkte Interpretation (kein QVT-C) | QVT-R Relations werden direkt ausgewertet. Kein QVTr→QVTc Compiler, kein QVT-C Engine. Traces implizit in der Engine. QVT-C kann später als Optimierung ergänzt werden. |
+| D34 | QVT-R: 3 EPackages in einem `qvtd.model` Bundle | `qvtbase` (Transformation, TypedModel, Domain, Rule, Pattern), `qvttemplate` (TemplateExp, ObjectTemplateExp, CollectionTemplateExp), `qvtrelation` (Relation, RelationDomain, DomainPattern, Key). Kein QVTCore-Package zunächst. |
+| D35 | QVT-R: Spec-first, Eclipse als Verhaltensreferenz | Implementierung gegen QVT v1.3 Spec Ch. 7. Eclipse QVT-D nur als Verhaltensreferenz, nicht als Architektur-Vorlage (deren Xtext/Pivot/QVTr→QVTc Stack ist inkompatibel mit unserem Ansatz). |
+| D36 | QVT-R: Evaluator-Komposition wie D25 | `QvtdEvaluator → OclEvaluator` Komposition für OCL in when/where. Blackbox via Interface-Pattern wie D24. QVT-O→QVT-R Brücke (GAP-6) deferred bis QVT-R standalone läuft. |
+| D37 | QVT-R: Unit Resolver wiederverwenden | Gemeinsames `TransformationUnitResolver`-Konzept für QVT-R und QVT-O. Gleiche Patterns: ServiceLoader (standalone), Whiteboard (OSGi), Security Controls (D29). |
+| D38 | QVT-R: Phasenplan — QVT-R standalone zuerst, dann QVT-O Brücke | Phase 4a: QVT-R standalone (Metamodell, Parser, Engine). Phase 4b: QVT-R↔QVT-O Hybrid (GAP-6 `refined`, §7.8 Blackbox-Delegation). QVT-C bleibt optional für spätere Optimierung. |
+| D39 | QVT-R: Modul-Abhängigkeiten — keine Zyklen durch Interface-Entkopplung | `qvtd.model` und `qvto.model` bleiben unabhängig (kein Refactoring). Hybrid-Brücke über Interfaces in `qvtd.api` (`QvtdEngine`, `RelationImplementationProvider`). `qvto.engine → qvtd.api` (nicht qvtd.engine). `qvtd.engine` kennt QVT-O nicht. |
 
 ---
 
@@ -576,3 +583,238 @@ Fits the existing build model: `src-gen/` is generated code, bnd compiles and pa
 - `m2t.engine/.../M2tEngineImpl.java` — normalizer invocation + indentation map
 - `m2t.engine/.../internal/M2tEvaluator.java` — `fitIndentationTo()` + indent-propagation
 - `m2t.tests/.../M2tWhitespaceTest.java` — 17 tests
+
+---
+
+### DR-D33: QVT-R Direkte Interpretation (kein QVT-C)
+
+**Context:** Die QVT v1.3 Spec definiert eine Zweischicht-Architektur: QVT-R (Relations, Ch. 7) als High-Level-Sprache und QVT-C (Core, Ch. 9) als Low-Level-"Bytecode". Die Spec beschreibt eine QVTr→QVTc Transformation (Ch. 10, ~30 Seiten Mapping-Regeln), die Relations in flache Core-Mappings mit expliziten Trace-Klassen übersetzt. Eclipse QVT-D implementiert diesen Compiler-Ansatz.
+
+**Options considered:**
+- (A) QVTr→QVTc Compiler + QVTc Engine (wie Eclipse) — formale Semantik über QVT-C definiert, inkrementelle Updates einfacher durch explizite Traces, aber Compiler selbst ist komplex (~30 Seiten Transformationsregeln)
+- (B) Direkte QVT-R Interpretation — Engine wertet Relations direkt aus, implizite Traces, kein QVT-C nötig
+- (C) Beides — QVT-R Interpreter + optionaler QVTr→QVTc Compiler für Optimierung
+
+**Decision:** Option B — direkte QVT-R Interpretation. Die Engine wertet Relations, Domain-Patterns und when/where-Klauseln direkt aus. Trace-Objekte werden implizit von der Engine erzeugt und verwaltet (wie QVT-R es vorsieht). Kein QVT-C Metamodell, kein Compiler.
+
+**Rationale:**
+- Der QVTr→QVTc Compiler ist ein eigenständiges Großprojekt (Eclipse hat Jahre dafür gebraucht)
+- QVT-C existiert primär als formale Semantik-Referenz und als Kompilationsziel — niemand schreibt QVT-C direkt
+- Direkte Interpretation ist konzeptionell einfacher: ein Ausführungsmodell statt zwei + Compiler dazwischen
+- QVT-C kann später als Optimierung ergänzt werden (Option C), ohne die QVT-R API zu ändern
+- Für den hybriden QVT-R↔QVT-O Ansatz (GAP-6) ist kein QVT-C erforderlich
+
+**Konsequenzen:**
+- Inkrementelle Updates müssen direkt in der QVT-R Engine gelöst werden (kein "geschenktes" Trace-Modell aus QVT-C)
+- Die formale Enforcement-Semantik (§9.10) muss direkt in der Engine umgesetzt werden, nicht über QVT-C Patterns
+- `qvtd.model` enthält kein `qvtcore` EPackage (kann bei Bedarf ergänzt werden)
+
+---
+
+### DR-D34: QVT-R Metamodell — 3 EPackages in einem Bundle
+
+**Context:** Die QVT v1.3 Spec definiert drei Metamodell-Packages für den deklarativen Teil (§6.4, §7.11):
+
+```
+EMOF ──── EssentialOCL
+  │            │
+QVTBase ──── QVTTemplate
+  │               │
+QVTCore      QVTRelation
+```
+
+- **QVTBase** (§7.11.1): gemeinsame Basis — `Transformation`, `TypedModel`, `Domain`, `Rule`, `Function`, `Pattern`, `Predicate`
+- **QVTTemplate** (§7.11.2): Template-Expressions für Pattern Matching — `TemplateExp`, `ObjectTemplateExp`, `CollectionTemplateExp`, `PropertyTemplateItem`
+- **QVTRelation** (§7.11.3): Relations-spezifisch — `RelationalTransformation`, `Relation`, `RelationDomain`, `DomainPattern`, `Key`, `RelationCallExp`
+
+QVTCore hängt nur von QVTBase ab (nicht von QVTTemplate). QVTRelation hängt von QVTBase + QVTTemplate ab.
+
+**Decision:** Ein Bundle `qvtd.model` mit 3 EPackages: `qvtbase`, `qvttemplate`, `qvtrelation`. Kein `qvtcore` EPackage (D33). Analog zu D22 (qvto.model mit 3 EPackages).
+
+**Rationale:** QVTBase wird von QVTRelation und potentiell QVTCore geteilt — deshalb als eigenes EPackage sauber getrennt. Alle drei sind eng gekoppelt (QVTRelation referenziert QVTBase-Typen und QVTTemplate-Typen). Ein einzelnes Bundle vermeidet zirkuläre Abhängigkeiten. Falls QVT-C später ergänzt wird, kommt `qvtcore` als 4. EPackage in dasselbe Bundle.
+
+**Erwartete Classifier-Verteilung (geschätzt aus Spec §7.11):**
+
+| EPackage | Classifiers | Wichtigste Typen |
+|----------|-------------|-----------------|
+| `qvtbase` | ~8 | Transformation, TypedModel, Domain, Rule, Function, FunctionParameter, Pattern, Predicate |
+| `qvttemplate` | ~4 | TemplateExp, ObjectTemplateExp, CollectionTemplateExp, PropertyTemplateItem |
+| `qvtrelation` | ~8 | RelationalTransformation, Relation, RelationDomain, DomainPattern, Key, RelationImplementation, RelationDomainAssignment, RelationCallExp |
+| **Gesamt** | **~20** | |
+
+---
+
+### DR-D35: QVT-R Spec-First, Eclipse als Verhaltensreferenz
+
+**Context:** D28 (QVT-O) sagt "implement what Eclipse implements". Eclipse QVT-D (`org.eclipse.qvtd`) verwendet Xtext-basierte Parser, das Pivot-Metamodell und einen QVTr→QVTc Compiler — alles inkompatibel mit unserem Ansatz (ANTLR4, direktes Ecore, keine Pivot-Schicht D16, kein QVT-C D33).
+
+**Decision:** Für QVT-R gilt: **Spec-first**. Implementierung gegen QVT v1.3 Kapitel 7. Eclipse QVT-D dient als:
+- **Verhaltensreferenz:** Was soll bei einer gegebenen Transformation rauskommen? (Testdaten, Ausführungsbeispiele)
+- **Spec-Klärung:** Wenn die Spec unklar ist, zeigt Eclipse eine mögliche Interpretation
+
+Eclipse QVT-D dient **nicht** als:
+- Architektur-Vorlage (Xtext/Pivot/QVTr→QVTc passt nicht zu unserem Stack)
+- Feature-Scope-Vorgabe (D28-Ansatz "implement what Eclipse implements" greift nicht, da Eclipse QVT-D einen fundamental anderen Ausführungsweg hat)
+
+**Rationale:** Eclipse QVT-D's Architektur (Ed Willink's QVTr→QVTc→QVTi→QVTs Pipeline) ist ein Forschungsprojekt mit mehreren Zwischenstufen. Direkte QVT-R Interpretation (D33) ist ein bewusst anderer Weg. Die Spec ist die primäre Wahrheit, Eclipse ist ein Datenpunkt.
+
+---
+
+### DR-D36: QVT-R Evaluator-Komposition (D25 erweitert)
+
+**Context:** D25 etabliert das Kompositions-Pattern für QVT-O: `QvtoEvaluator` delegiert OCL-Expressions an `OclEvaluator`, Rückkanal über `QvtoOperationProvider implements OclOperationProvider`. QVT-R braucht dasselbe: OCL-Expressions in `when`/`where`-Klauseln und Domain-Patterns.
+
+**Decision:** Gleiche Architektur für QVT-R:
+
+```
+QvtdEvaluator
+  ├── handles: Relation, RelationDomain, DomainPattern, TemplateExp, Key, ...
+  ├── owns: OclEvaluator (created internally)
+  │     └── registered provider: QvtdOperationProvider
+  └── delegates: OCL expressions in when/where/patterns → OclEvaluator
+
+QvtdOperationProvider implements OclOperationProvider
+  └── recognizes QVT-R Functions (§7.11.1.5) → re-enters QvtdEvaluator
+```
+
+**Blackbox:** QVT-R §7.8 definiert Blackbox-Operationen für Relations. Gleiches Interface-Pattern wie D24 (`QvtoBlackboxLibrary`), adaptiert für QVT-R: `QvtdBlackboxLibrary` mit denselben Prinzipien (typed interface, kein Reflection, OSGi Whiteboard).
+
+**QVT-O→QVT-R Brücke (GAP-6):** Deferred bis QVT-R standalone läuft. Dann:
+
+```
+QvtoEvaluator
+  └── GAP-6: refined relation → delegates to QvtdEvaluator
+```
+
+**Rationale:** Das bestehende Kompositions-Pattern (Delegation + OclOperationProvider Callback) hat sich in QVT-O bewährt. Kein neuer Mechanismus nötig. Die dreistufige Kette (QVT-O → QVT-R → OCL) ist eine natürliche Erweiterung.
+
+---
+
+### DR-D37: QVT-R Unit Resolver — Wiederverwenden
+
+**Context:** D27 definiert `QvtoUnitResolver` für QVT-O (ServiceLoader + Whiteboard). QVT-R braucht denselben Mechanismus: Transformations-Dateien (`.qvtr`) nach qualifiziertem Namen auflösen.
+
+**Options considered:**
+- (A) Gemeinsames `TransformationUnitResolver` Interface für QVT-O und QVT-R — maximale Wiederverwendung, aber unterschiedliche Dateitypen/Parsing
+- (B) Separates `QvtdUnitResolver` mit gleichem Pattern — sauber getrennt, gleiche Architektur, unabhängig erweiterbar
+- (C) Ein Resolver der beides kann — über-engineered, vermischt Concerns
+
+**Decision:** Option B — separates `QvtdUnitResolver` Interface, gleiche Architektur wie D27:
+- Standalone: Registrierung über `QvtdConfiguration.builder().unitResolvers(...)`
+- OSGi: Whiteboard `@Reference(MULTIPLE, DYNAMIC)`
+- Security: gleiche Enable-Flag + Allow-List Patterns wie D29
+
+**Rationale:** QVT-R und QVT-O haben unterschiedliche Dateiendungen, Parser und AST-Typen. Ein gemeinsames Interface würde zu generisch. Separate Interfaces mit gleicher Architektur sind klar verständlich und unabhängig testbar. Falls die QVT-O→QVT-R Brücke (GAP-6) kommt, kann `QvtoUnitResolver` an `QvtdUnitResolver` delegieren.
+
+---
+
+### DR-D38: QVT-R Phasenplan
+
+**Context:** Phase 4 umfasst QVT-R (Relations, Spec Ch. 7). Die Spec ist umfangreich (~80 Sections). Die Arbeit muss in handhabbare Sub-Phasen zerlegt werden, analog zu Phase 2 (QVT-O, 10 Phasen) und Phase 3 (M2T, 7 Phasen).
+
+**Decision:** Zweistufiger Ansatz:
+
+**Phase 4a — QVT-R standalone:**
+
+| Sub-Phase | Modul | Inhalt |
+|-----------|-------|--------|
+| P4-0 | `qvtd.model` | Ecore-Metamodell (3 EPackages: qvtbase, qvttemplate, qvtrelation), ~20 Classifiers |
+| P4-1 | `qvtd.api` | `QvtdEngine` Interface, `QvtdConfiguration`, `QvtdResult`, `QvtdUnitResolver` |
+| P4-2 | `qvtd.parser` | ANTLR4 Grammatik `QvtRelations.g4` (importiert `Ocl.g4`), CST→AST Builder |
+| P4-3 | `qvtd.engine` | Core Engine: top relation execution, domain pattern matching, variable binding, when/where |
+| P4-4 | `qvtd.engine` | Enforcement: checkonly/enforce semantics (§7.10), object creation via patterns, Key-based identity |
+| P4-5 | `qvtd.engine` | Traces: implizite Trace-Erzeugung, RelationCallExp in when/where, non-top relation invocation |
+| P4-6 | `qvtd.tests` | Spec-Conformance Tests, E2E-Tests mit UML→RDBMS Beispiel aus Spec |
+
+**Phase 4b — QVT-R↔QVT-O Hybrid (deferred):**
+
+| Sub-Phase | Inhalt |
+|-----------|--------|
+| P4-7 | GAP-6: `OperationalTransformation.refined`, `MappingOperation.refinedRelation` |
+| P4-8 | §7.8: Blackbox/QVT-O Implementierung für Relations |
+
+**Rationale:** Phase 4a ist in sich geschlossen — QVT-R ist standalone nutzbar ohne QVT-O. Phase 4b ist optional und kann unabhängig nachgezogen werden. Die Sub-Phasen folgen dem bewährten Muster: Metamodell → API → Parser → Engine (inkrementell) → Tests.
+
+**Deferred QVT-O Gaps (unlocked durch Phase 4):**
+- **GAP-6** (`refined`, `relation`, `refinedRelation`) → Phase 4b
+- **GAP-13 Semantik** (`refines` pattern inheritance) → Phase 4b
+
+---
+
+### DR-D39: QVT-R Modul-Abhängigkeiten — keine Zyklen durch Interface-Entkopplung
+
+**Context:** Die QVT v1.3 Spec definiert bidirektionale Beziehungen zwischen QVT-R und QVT-O:
+- §8.2.1.1: QVT-O `OperationalTransformation.refined` referenziert eine QVT-R `Transformation` → QVT-O ruft QVT-R
+- §7.8: Eine QVT-R Relation kann eine Blackbox/QVT-O Implementierung haben → QVT-R ruft QVT-O
+- §6.4: "QVTOperational extends QVTRelation" (Metamodell-Hierarchie)
+
+Naiv umgesetzt ergäbe das zirkuläre Abhängigkeiten auf Model- und Engine-Ebene.
+
+**Problem auf Model-Ebene:** Die Spec sagt `QVTOperational extends QVTRelation` (gemeinsames Trace-Framework). Unser `qvto.model` (59 Classifiers, 1050 Tests) existiert bereits mit eigenständigem Trace-Modell.
+
+**Options considered:**
+- (A) `qvto.model → qvtd.model` — spec-konform, aber Breaking Change: alle QVT-O Classifiers müssten auf `qvtbase`-Supertypen umgestellt werden, Tests refactored
+- (B) Modelle unabhängig lassen — pragmatisch, kein Refactoring, Brücke über API-Interfaces
+- (C) Gemeinsames `qvtbase.model` extrahieren — sauberer als A, aber trotzdem großes Refactoring
+
+**Decision Model-Ebene:** Option B — `qvtd.model` und `qvto.model` bleiben unabhängig. Beide hängen von `ocl.model` ab, aber nicht voneinander.
+
+**Rationale Model-Ebene:**
+- `qvto.model` ist stabil und getestet. Refactoring wäre riskant und aufwändig.
+- Die "gemeinsamen" Konzepte haben unterschiedliche Features: `OperationalTransformation` hat Extents, ModelParameters, EntryOperation — `RelationalTransformation` hat Relations, Keys, ModelTypes. Sie teilen nur den abstrakten Namen.
+- Die Spec-Hierarchie ist ein formales Design, kein zwingendes Implementierungserfordernis.
+- Die Brücke (GAP-6, §7.8) funktioniert über Interfaces auf API-Ebene.
+
+**Problem auf Engine-Ebene:** Bidirektionaler Aufruf:
+- `qvto.engine` will `qvtd.engine` aufrufen (GAP-6: `refined`)
+- `qvtd.engine` will `qvto.engine` aufrufen (§7.8: Blackbox-Implementierung)
+
+**Decision Engine-Ebene:** Interface-Entkopplung über `qvtd.api`:
+
+```
+qvtd.api definiert:
+  ├── QvtdEngine                       — Engine Interface (execute, check)
+  └── RelationImplementationProvider   — §7.8 Blackbox-Callback
+        Object executeRelation(Relation, Map<Domain, EObject> bindings)
+```
+
+**Abhängigkeitsregeln:**
+
+```
+                         ocl.model
+                        ↗         ↖
+                 qvtd.model      qvto.model         (unabhängig!)
+                      ↑               ↑
+  ocl.api ←──── qvtd.api         qvto.api
+     ↑           ↑     ↖            ↑
+ ocl.engine  qvtd.engine  ───→ qvto.engine
+     ↑           ↑                   ↑
+ ocl.parser  qvtd.parser       qvto.parser
+```
+
+| Abhängigkeit | Richtung | Zweck |
+|-------------|----------|-------|
+| `qvtd.engine → ocl.engine` | ↓ | OCL-Expressions in when/where auswerten |
+| `qvto.engine → qvtd.api` | → | GAP-6: `refined` über `QvtdEngine` Interface |
+| `qvtd.engine → qvtd.api` | ↑ | Implementiert `QvtdEngine` |
+| `qvto.engine → qvtd.api` | → | Registriert sich als `RelationImplementationProvider` |
+| `qvtd.engine` → `qvto.*` | **VERBOTEN** | Kein Rückkanal — bricht den Zyklus |
+
+**Schlüsselregel:** `qvtd.engine` kennt QVT-O nicht. Für §7.8 (QVT-R ruft QVT-O auf) nutzt `qvtd.engine` das `RelationImplementationProvider` Interface aus `qvtd.api`. `qvto.engine` registriert sich als Implementierung dieses Interface — genau wie `QvtoOperationProvider implements OclOperationProvider` (D25).
+
+**Runtime-Wiring (Phase 4b):**
+
+```java
+// Standalone
+QvtdEngine qvtdEngine = new QvtdEngineImpl(qvtdConfig);
+QvtoEngine qvtoEngine = new QvtoEngineImpl(qvtoConfig, qvtdEngine);  // GAP-6
+qvtdEngine.registerImplementationProvider(qvtoEngine);                // §7.8
+
+// OSGi: automatic via DS @Reference injection
+```
+
+**Konsequenzen:**
+- Phase 4a (QVT-R standalone) hat keine Abhängigkeit auf QVT-O — sauber isoliert
+- Phase 4b fügt die Brücke hinzu, ohne qvtd.engine zu ändern — nur qvto.engine bekommt neue Dependency auf qvtd.api
+- `RelationImplementationProvider` ist auch für reine Java-Blackboxes nutzbar (ohne QVT-O)
+- Pattern ist bewährt: identisch zu OclOperationProvider (D25), QvtoBlackboxLibrary (D24)

@@ -1,0 +1,324 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ * 
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ * 
+ * SPDX-License-Identifier: EPL-2.0
+ * 
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+package org.eclipse.fennec.m2x.model.qvtbase.impl;
+
+import java.util.Collection;
+
+import org.eclipse.emf.common.notify.Notification;
+import org.eclipse.emf.common.notify.NotificationChain;
+
+import org.eclipse.emf.common.util.EList;
+
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.InternalEObject;
+
+import org.eclipse.emf.ecore.impl.ENotificationImpl;
+import org.eclipse.emf.ecore.impl.EPackageImpl;
+
+import org.eclipse.emf.ecore.util.EObjectContainmentWithInverseEList;
+import org.eclipse.emf.ecore.util.InternalEList;
+
+import org.eclipse.fennec.m2x.model.qvtbase.QvtbasePackage;
+import org.eclipse.fennec.m2x.model.qvtbase.Rule;
+import org.eclipse.fennec.m2x.model.qvtbase.Tag;
+import org.eclipse.fennec.m2x.model.qvtbase.Transformation;
+import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
+
+/**
+ * <!-- begin-user-doc -->
+ * An implementation of the model object '<em><b>Transformation</b></em>'.
+ * <!-- end-user-doc -->
+ * <p>
+ * The following features are implemented:
+ * </p>
+ * <ul>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtbase.impl.TransformationImpl#getModelParameter <em>Model Parameter</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtbase.impl.TransformationImpl#getRule <em>Rule</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtbase.impl.TransformationImpl#getOwnedTag <em>Owned Tag</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtbase.impl.TransformationImpl#getExtends <em>Extends</em>}</li>
+ * </ul>
+ *
+ * @generated
+ */
+public class TransformationImpl extends EPackageImpl implements Transformation {
+	/**
+	 * The cached value of the '{@link #getModelParameter() <em>Model Parameter</em>}' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getModelParameter()
+	 * @generated
+	 * @ordered
+	 */
+	protected EList<TypedModel> modelParameter;
+
+	/**
+	 * The cached value of the '{@link #getRule() <em>Rule</em>}' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getRule()
+	 * @generated
+	 * @ordered
+	 */
+	protected EList<Rule> rule;
+
+	/**
+	 * The cached value of the '{@link #getOwnedTag() <em>Owned Tag</em>}' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getOwnedTag()
+	 * @generated
+	 * @ordered
+	 */
+	protected EList<Tag> ownedTag;
+
+	/**
+	 * The cached value of the '{@link #getExtends() <em>Extends</em>}' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getExtends()
+	 * @generated
+	 * @ordered
+	 */
+	protected Transformation extends_;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	protected TransformationImpl() {
+		super();
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	protected EClass eStaticClass() {
+		return QvtbasePackage.Literals.TRANSFORMATION;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EList<TypedModel> getModelParameter() {
+		if (modelParameter == null) {
+			modelParameter = new EObjectContainmentWithInverseEList<TypedModel>(TypedModel.class, this, QvtbasePackage.TRANSFORMATION__MODEL_PARAMETER, QvtbasePackage.TYPED_MODEL__TRANSFORMATION);
+		}
+		return modelParameter;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EList<Rule> getRule() {
+		if (rule == null) {
+			rule = new EObjectContainmentWithInverseEList<Rule>(Rule.class, this, QvtbasePackage.TRANSFORMATION__RULE, QvtbasePackage.RULE__TRANSFORMATION);
+		}
+		return rule;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EList<Tag> getOwnedTag() {
+		if (ownedTag == null) {
+			ownedTag = new EObjectContainmentWithInverseEList<Tag>(Tag.class, this, QvtbasePackage.TRANSFORMATION__OWNED_TAG, QvtbasePackage.TAG__OWNER);
+		}
+		return ownedTag;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public Transformation getExtends() {
+		if (extends_ != null && extends_.eIsProxy()) {
+			InternalEObject oldExtends = (InternalEObject)extends_;
+			extends_ = (Transformation)eResolveProxy(oldExtends);
+			if (extends_ != oldExtends) {
+				if (eNotificationRequired())
+					eNotify(new ENotificationImpl(this, Notification.RESOLVE, QvtbasePackage.TRANSFORMATION__EXTENDS, oldExtends, extends_));
+			}
+		}
+		return extends_;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public Transformation basicGetExtends() {
+		return extends_;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setExtends(Transformation newExtends) {
+		Transformation oldExtends = extends_;
+		extends_ = newExtends;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, QvtbasePackage.TRANSFORMATION__EXTENDS, oldExtends, extends_));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public NotificationChain eInverseAdd(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
+		switch (featureID) {
+			case QvtbasePackage.TRANSFORMATION__MODEL_PARAMETER:
+				return ((InternalEList<InternalEObject>)(InternalEList<?>)getModelParameter()).basicAdd(otherEnd, msgs);
+			case QvtbasePackage.TRANSFORMATION__RULE:
+				return ((InternalEList<InternalEObject>)(InternalEList<?>)getRule()).basicAdd(otherEnd, msgs);
+			case QvtbasePackage.TRANSFORMATION__OWNED_TAG:
+				return ((InternalEList<InternalEObject>)(InternalEList<?>)getOwnedTag()).basicAdd(otherEnd, msgs);
+		}
+		return super.eInverseAdd(otherEnd, featureID, msgs);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
+		switch (featureID) {
+			case QvtbasePackage.TRANSFORMATION__MODEL_PARAMETER:
+				return ((InternalEList<?>)getModelParameter()).basicRemove(otherEnd, msgs);
+			case QvtbasePackage.TRANSFORMATION__RULE:
+				return ((InternalEList<?>)getRule()).basicRemove(otherEnd, msgs);
+			case QvtbasePackage.TRANSFORMATION__OWNED_TAG:
+				return ((InternalEList<?>)getOwnedTag()).basicRemove(otherEnd, msgs);
+		}
+		return super.eInverseRemove(otherEnd, featureID, msgs);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public Object eGet(int featureID, boolean resolve, boolean coreType) {
+		switch (featureID) {
+			case QvtbasePackage.TRANSFORMATION__MODEL_PARAMETER:
+				return getModelParameter();
+			case QvtbasePackage.TRANSFORMATION__RULE:
+				return getRule();
+			case QvtbasePackage.TRANSFORMATION__OWNED_TAG:
+				return getOwnedTag();
+			case QvtbasePackage.TRANSFORMATION__EXTENDS:
+				if (resolve) return getExtends();
+				return basicGetExtends();
+		}
+		return super.eGet(featureID, resolve, coreType);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public void eSet(int featureID, Object newValue) {
+		switch (featureID) {
+			case QvtbasePackage.TRANSFORMATION__MODEL_PARAMETER:
+				getModelParameter().clear();
+				getModelParameter().addAll((Collection<? extends TypedModel>)newValue);
+				return;
+			case QvtbasePackage.TRANSFORMATION__RULE:
+				getRule().clear();
+				getRule().addAll((Collection<? extends Rule>)newValue);
+				return;
+			case QvtbasePackage.TRANSFORMATION__OWNED_TAG:
+				getOwnedTag().clear();
+				getOwnedTag().addAll((Collection<? extends Tag>)newValue);
+				return;
+			case QvtbasePackage.TRANSFORMATION__EXTENDS:
+				setExtends((Transformation)newValue);
+				return;
+		}
+		super.eSet(featureID, newValue);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void eUnset(int featureID) {
+		switch (featureID) {
+			case QvtbasePackage.TRANSFORMATION__MODEL_PARAMETER:
+				getModelParameter().clear();
+				return;
+			case QvtbasePackage.TRANSFORMATION__RULE:
+				getRule().clear();
+				return;
+			case QvtbasePackage.TRANSFORMATION__OWNED_TAG:
+				getOwnedTag().clear();
+				return;
+			case QvtbasePackage.TRANSFORMATION__EXTENDS:
+				setExtends((Transformation)null);
+				return;
+		}
+		super.eUnset(featureID);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public boolean eIsSet(int featureID) {
+		switch (featureID) {
+			case QvtbasePackage.TRANSFORMATION__MODEL_PARAMETER:
+				return modelParameter != null && !modelParameter.isEmpty();
+			case QvtbasePackage.TRANSFORMATION__RULE:
+				return rule != null && !rule.isEmpty();
+			case QvtbasePackage.TRANSFORMATION__OWNED_TAG:
+				return ownedTag != null && !ownedTag.isEmpty();
+			case QvtbasePackage.TRANSFORMATION__EXTENDS:
+				return extends_ != null;
+		}
+		return super.eIsSet(featureID);
+	}
+
+} //TransformationImpl
