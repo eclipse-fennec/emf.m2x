@@ -1,4 +1,4 @@
-// Generated from grammar/QvtR.g4 by ANTLR 4.13.2
+// Generated from /opt/git/m2m/workspace/org.eclipse.fennec.m2x.qvtd.parser/grammar/QvtR.g4 by ANTLR 4.13.2
 package org.eclipse.fennec.m2x.qvtd.parser;
 import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
 
@@ -131,6 +131,13 @@ public class QvtRBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Q
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitObjectTemplate(QvtRParser.ObjectTemplateContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitOptionalMultiplicity(QvtRParser.OptionalMultiplicityContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *

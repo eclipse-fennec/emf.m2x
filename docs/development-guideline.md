@@ -824,7 +824,7 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 
 ### Phase 4: QVT-Relations (Direct Interpretation, no QVT-C)
 
-**Status:** In Progress — P4-0 through P4-2 ✅ Complete.
+**Status:** ✅ Phase 4a Complete — P4-0 through P4-6 ✅, all gaps implemented. **96 Tests, 0 Failures, 2 @Disabled** (GAP-10 Import, GAP-13 Change Propagation → Phase 5).
 
 **Approach:** Direct QVT-R interpretation (D33). Spec-first against QVT v1.3 Ch. 7, Eclipse QVT-D as behavioral reference only (D35). No QVTr→QVTc compiler, no QVT-C engine. See [Design Decisions](design-decisions.md) D33–D38.
 
@@ -835,10 +835,25 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 | P4-0 | `qvtd.model` | QVT-R metamodel: 3 EPackages (qvtbase, qvttemplate, qvtrelation), ~20 classifiers (D34) | ✅ Done |
 | P4-1 | `qvtd.api` | `QvtdEngine` interface, `QvtdConfiguration`, `QvtdResult`, `QvtdUnitResolver` (D37), `QvtdBlackboxLibrary` (D36) | ✅ Done |
 | P4-2 | `qvtd.parser` | ANTLR4 grammar (`QvtR.g4`, imports `Ocl.g4`), CST→AST builder, concrete syntax §7.13 | ✅ Done |
-| P4-3 | `qvtd.engine` | Core engine: top relation execution, domain pattern matching, variable binding, when/where clauses | |
-| P4-4 | `qvtd.engine` | Enforcement: checkonly/enforce semantics (§7.10), object creation via patterns, Key-based identity (§7.4) | |
-| P4-5 | `qvtd.engine` | Traces: implicit trace generation, RelationCallExp in when/where, non-top relation invocation | |
-| P4-6 | `qvtd.tests` | Spec-conformance tests, E2E tests (UML→RDBMS example from spec) | |
+| P4-3 | `qvtd.engine` | Core engine: top relation execution, domain pattern matching, variable binding, when/where clauses | ✅ Done |
+| P4-4 | `qvtd.engine` | Enforcement: checkonly/enforce semantics (§7.10), object creation via patterns, Key-based identity (§7.4) | ✅ Done |
+| P4-5 | `qvtd.engine` | Traces: implicit trace generation, RelationCallExp in when/where, non-top relation invocation | ✅ Done |
+| P4-6 | `qvtd.tests` | Spec-conformance tests, E2E tests (UML→RDBMS example from spec), gap implementation | ✅ Done |
+
+**Implemented Gaps (Phase 4a):**
+- GAP-1: CollectionTemplate Enforce (§7.11.2)
+- GAP-2: Opposite Properties (`opposite(...)`)
+- GAP-3: Default Values (`default_values { ... }`)
+- GAP-4: Abstract Relations (`abstract relation`, `overrides`)
+- GAP-5: Optional Root Variables `[?]` (Eclipse Extension — `DomainPattern` EAnnotation `qvtr.optional`)
+- GAP-7: In-place Transformations (§7.7 — `isEnforceable()` + `findByBoundVariables()`)
+- GAP-9: Blackbox Queries (QvtdBlackboxRegistry)
+- GAP-11: Transformation `extends` Inheritance (§7.11.1.1 — rule merging with `EcoreUtil.copy()`)
+- GAP-12: `implementedby` Delegation (§7.11.3.6 — `RelationImplementation` + blackbox invocation)
+
+**Deferred Gaps (→ Phase 5):**
+- GAP-10: Multi-File Import (needs file resolution infrastructure)
+- GAP-13: Change Propagation (§7.6 — semantically equivalent to full re-execution)
 
 #### Phase 4b — QVT-R↔QVT-O Hybrid (deferred)
 

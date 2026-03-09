@@ -16,15 +16,15 @@ antlr4.tool.cp = \
 	${repo;com.ibm.icu:icu4j;72.1}
 
 # Generate grammar on demand (manual step)
-#-generate: \
-#	grammar/QvtR.g4; \
-#		output=src-gen; \
-#		system='java -cp ${antlr4.tool.cp} org.antlr.v4.Tool \
-#			-visitor -no-listener \
-#			-lib ${project}/../org.eclipse.fennec.m2x.ocl.parser/grammar \
-#			-package org.eclipse.fennec.m2x.qvtd.parser \
-#			-o src-gen/org/eclipse/fennec/m2x/qvtd/parser \
-#			${project}/grammar/QvtR.g4'
+-generate: \
+	grammar/QvtR.g4; \
+		output=src-gen; \
+		system='java -cp ${antlr4.tool.cp} org.antlr.v4.Tool \
+			-visitor -no-listener \
+			-lib ${project}/../org.eclipse.fennec.m2x.ocl.parser/grammar \
+			-package org.eclipse.fennec.m2x.qvtd.parser \
+			-o src-gen/org/eclipse/fennec/m2x/qvtd/parser \
+			${project}/grammar/QvtR.g4'
 
 # Include grammar file for downstream import
 -includeresource.grammar: grammar=grammar

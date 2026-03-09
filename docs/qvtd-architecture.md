@@ -1,0 +1,199 @@
+# QVT-R Architecture Reference
+
+> Consolidated reference for the QVT-Relations (QVT-R) v1.3 implementation.
+> Covers metamodel, API, parser, engine, traces, and design decisions.
+
+## 1. Overview
+
+Direct QVT-R interpretation engine (D33 — no QVT-C lowering). Implements QVT v1.3 Chapter 7 (Relations Language). Spec-first approach (D35) with Eclipse QVT-D as behavioral reference.
+
+**Modules:**
+
+| Module | Purpose |
+|--------|---------|
+| `org.eclipse.fennec.m2x.qvtd.model` | EMF metamodel (3 EPackages) |
+| `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces |
+| `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser, CST→AST |
+| `org.eclipse.fennec.m2x.qvtd.engine` | Direct interpretation engine |
+| `org.eclipse.fennec.m2x.qvtd.tests` | Spec-conformance tests (96 tests) |
+
+## 2. Metamodel (D34)
+
+Three EPackages following the spec structure:
+
+| EPackage | Classifiers | Key Types |
+|----------|-------------|-----------|
+| `qvtbase` | 7 | `Transformation`, `TypedModel`, `Domain`, `Pattern`, `Predicate`, `Rule`, `Function` |
+| `qvtrelation` | 8 | `RelationalTransformation`, `Relation`, `RelationDomain`, `DomainPattern`, `RelationCallExp`, `RelationImplementation`, `Key`, `OppositePropertyCallExp` |
+| `qvttemplate` | 3 | `TemplateExp`, `ObjectTemplateExp` (+`PropertyTemplateItem`), `CollectionTemplateExp` |
+
+**Key relationships:**
+- `RelationalTransformation` extends `Transformation`, owns `Relation` instances and `Key` declarations
+- `Relation` extends `Rule`, has `domain : RelationDomain[*]`, `when : Pattern`, `where : Pattern`
+- `RelationDomain` extends `Domain`, has `pattern : DomainPattern`, references `TypedModel`
+- `DomainPattern` extends `Pattern`, has `templateExpression : TemplateExp`
+- `ObjectTemplateExp` has `bindsTo : Variable`, `referredClass : EClass`, `part : PropertyTemplateItem[*]`
+
+## 3. API
+
+| Interface/Class | Purpose |
+|-----------------|---------|
+| `QvtdEngine` | Main engine interface: `parse()`, `execute()` |
+| `QvtdConfiguration` | Engine config: OCL config, blackbox registry |
+| `QvtdExecutionContext` | Execution mode (enforce/checkOnly), model extents, target model |
+| `QvtdExecutionResult` | Diagnostics, success flag |
+| `QvtdModelExtent` | Wraps `Resource` contents for a typed model |
+| `QvtdBlackboxRegistry` | Registry for blackbox libraries (GAP-9, GAP-12) |
+| `QvtdBlackboxLibrary` | Individual blackbox library: `invoke(name, self, args)` |
+| `QvtdUnit` | Sealed interface: `SourceUnit` (string) / `CompiledUnit` (parsed AST) |
+| `QvtdUnitResolver` | Resolves import URIs to units (future: GAP-10) |
+| `QvtdParseException` | Parse errors with `Resource.Diagnostic` list |
+
+## 4. Parser
+
+**Grammar:** `QvtR.g4` imports `Ocl.g4` (shared OCL grammar).
+
+**Architecture:** Two-visitor composition pattern (like QVT-O):
+- `QvtrUnitBuilder` — Main CST→AST visitor. 2-pass for transformation-level constructs:
+  - Pass 1: Build all transformations, typed models, relations, domains, templates
+  - Pass 2: Resolve `extends` inheritance (rule merging with `EcoreUtil.copy()`)
+- `QvtrExpressionBuilder` — OCL expression visitor, delegates to `AbstractExpressionBuilder` (shared with OCL/QVT-O parsers)
+
+**Key grammar extensions beyond OCL:**
+- `transformationDef`, `modelDecl`, `keyDecl`, `relation`, `domain`
+- `objectTemplate`, `collectionTemplate`, `propertyTemplate`
+- `whenClause`, `whereClause`, `queryDef`
+- `optionalMultiplicity` (`[?]`) — Eclipse extension (GAP-5)
+- `implementedby` clause on domains (GAP-12)
+
+**EAnnotation conventions** (metadata without metamodel changes):
+| Annotation Source | On | Purpose |
+|---|---|---|
+| `qvtr.optional` | `DomainPattern` | Marks `[?]` optional root variable |
+| `qvtr.extends` | `RelationalTransformation` | Stores base transformation name |
+| `qvtr.implementedby.args` | `RelationImplementation` | Stores argument expression references |
+
+## 5. Engine
+
+### 5.1 Core Components
+
+| Class | Purpose |
+|-------|---------|
+| `QvtdEngineImpl` | Facade: parse + execute, OCL engine composition (D36) |
+| `QvtrEvaluator` | Main evaluator: relation execution, domain classification, enforcement |
+| `QvtrPatternMatcher` | Pattern matching: object/collection templates, variable binding |
+| `QvtrEvalEnvironment` | Variable scope stack (push/pop) |
+| `QvtrExtentManager` | Model extent management: typed model → extent mapping, `allInstances()` |
+| `QvtrTraceManager` | Implicit trace: `TraceRecord(relation, bindings)`, trace lookup for `RelationCallExp` |
+
+### 5.2 Execution Flow
+
+1. **`execute(transformation, context)`** → `QvtrEvaluator.execute()`
+2. For each **top relation** (skip abstract, skip overridden):
+   a. Evaluate **when-clause** → pre-bindings (RelationCallExp → trace lookup)
+   b. **Classify domains**: source vs. target (based on `isEnforceable()` + target model)
+   c. **Match source domains** → list of binding maps
+   d. For each source binding:
+      - Check **optional null** (`[?]`) → skip if root variable is null
+      - **Pre-compute where bindings** (query calls, computed values)
+      - **Enforce target domain** (or check-only verify)
+      - Record **trace**
+      - Evaluate **where-clause** (may invoke non-top relations)
+
+### 5.3 Domain Classification (§7.10)
+
+```
+if (!checkOnly && rd.isIsEnforceable() && isTargetModel(rd.getTypedModel()))
+    → targetDomain
+else
+    → sourceDomain
+```
+
+For **in-place** transformations (GAP-7): same TypedModel can appear in both source and target. `isIsEnforceable()` distinguishes `enforce` from `checkonly` domains.
+
+### 5.4 Enforcement (§7.10.2)
+
+1. Try **match** target domain against existing elements
+2. If no match → **create** via `ObjectTemplateExp`:
+   a. Look up by **Key** (`key T { prop1, prop2 }`) — identity-based find-or-create
+   b. Look up by **bound variables** (`findByBoundVariables()`) — for in-place
+   c. **Invoke `implementedby`** (GAP-12) — delegate to blackbox
+   d. **Instantiate** (`EcoreUtil.create()`) + set features from template
+3. For `CollectionTemplateExp` (GAP-1): create collection members
+
+### 5.5 Pattern Matching
+
+`QvtrPatternMatcher.matchDomain()`:
+- Iterates `DomainPattern.templateExpression`
+- For `ObjectTemplateExp`: bind root variable, match `PropertyTemplateItem` values
+- For `CollectionTemplateExp`: match collection members with `++` rest-variable
+- **Optional `[?]`** (GAP-5): if no instances match, bind root to `null` (vacuous match)
+- Returns `List<Map<String, Object>>` — all valid binding combinations
+
+### 5.6 Traces (§7.2.1)
+
+- `QvtrTraceManager` stores `TraceRecord(relation, Map<String, Object>)` per execution
+- `RelationCallExp` in **when-clause** → trace lookup (the called relation must have matching trace)
+- `RelationCallExp` in **where-clause** → invokes non-top relation with pre-bindings
+
+### 5.7 OCL Integration (D36)
+
+- Engine delegates OCL evaluation to `OclEngine.evaluate(expr, ctx)` via composition
+- `QvtrExpressionBuilder` shares `AbstractExpressionBuilder` with OCL parser
+- OCL context created per evaluation: `OclContext(null, null, bindings)`
+
+## 6. Implemented Features
+
+| Feature | Spec Reference | Implementation |
+|---------|---------------|----------------|
+| Top relations | §7.10.1 | Iterate + execute |
+| Non-top relations | §7.10.2 | Via where-clause `RelationCallExp` |
+| When-clause | §7.2.1 | Predicate eval + trace lookup |
+| Where-clause | §7.2.1 | Predicate eval + relation invocation |
+| Checkonly domains | §7.10 | Match-only, no enforcement |
+| Enforce domains | §7.10.2 | Find-or-create via templates |
+| Key-based identity | §7.4, §7.13.4 | `enforceObjectTemplate()` key lookup |
+| Object templates | §7.11.2 | Full property matching + binding |
+| Collection templates | §7.11.2 | Member matching with `++` rest |
+| Primitive domains | §7.11.3.10 | Variable binding only |
+| Abstract relations | §7.11.3.2 | `isAbstract` skip + `overrides` |
+| Blackbox queries | §7.11.3.6 | `QvtdBlackboxRegistry` |
+| Transformation extends | §7.11.1.1 | Rule merging with copy |
+| `implementedby` | §7.11.3.6 | `RelationImplementation` + blackbox |
+| In-place transforms | §7.7 | `isEnforceable()` + variable lookup |
+| Optional `[?]` | Eclipse ext. | `DomainPattern` EAnnotation, null binding |
+| Default values | §7.11.3 | `default_values { ... }` assignment |
+| Opposite properties | §7.11.2 | `opposite(T::prop)` in templates |
+
+## 7. Known Gaps (deferred)
+
+| Gap | Feature | Reason | Target |
+|-----|---------|--------|--------|
+| GAP-10 | Multi-file import | Needs file resolution infrastructure | Phase 5 |
+| GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution | Phase 5 |
+| GAP-6 | QVT-O `refined` relation | QVT-R↔QVT-O interop | Phase 4b |
+
+## 8. Design Decisions
+
+| ID | Decision | Rationale |
+|----|----------|-----------|
+| D33 | Direct interpretation (no QVT-C) | Simpler, no intermediate representation |
+| D34 | 3 EPackages (qvtbase/qvttemplate/qvtrelation) | Follows spec package structure |
+| D35 | Spec-first approach | QVT v1.3 Ch. 7 as primary, Eclipse as reference |
+| D36 | Evaluator composition (QvtrEvaluator → OclEngine) | Reuse OCL engine, no duplication |
+| D37 | UnitResolver for imports | Future extensibility (GAP-10) |
+| D38 | TraceManager for implicit traces | No explicit trace model needed |
+| D39 | Module independence (qvtd.model ↔ qvto.model) | No circular dependencies |
+
+## 9. Test Structure
+
+| Test Class | Focus | Tests |
+|-----------|-------|-------|
+| `QvtdEngineBasicTest` | Basic engine: parse, execute, empty | ~10 |
+| `QvtdEnginePatternTest` | Pattern matching: objects, collections, nesting | ~15 |
+| `QvtdEngineKeyTest` | Key-based identity and enforcement | ~10 |
+| `QvtdEngineTraceTest` | Traces, RelationCallExp, non-top relations | ~10 |
+| `QvtdE2EUmlToRdbmsTest` | End-to-end UML→RDBMS transformation | ~5 |
+| `QvtdSpecConformanceTest` | Systematic spec conformance (per section) | ~46 |
+
+**Total: 96 tests, 0 failures, 2 @Disabled**

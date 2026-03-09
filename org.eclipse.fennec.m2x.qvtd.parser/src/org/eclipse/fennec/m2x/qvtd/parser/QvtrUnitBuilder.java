@@ -16,14 +16,20 @@ package org.eclipse.fennec.m2x.qvtd.parser;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
@@ -35,6 +41,7 @@ import org.eclipse.fennec.m2x.model.qvtbase.FunctionParameter;
 import org.eclipse.fennec.m2x.model.qvtbase.Pattern;
 import org.eclipse.fennec.m2x.model.qvtbase.Predicate;
 import org.eclipse.fennec.m2x.model.qvtbase.QvtbaseFactory;
+import org.eclipse.fennec.m2x.model.qvtbase.Rule;
 import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.DomainPattern;
 import org.eclipse.fennec.m2x.model.qvtrelation.Key;
@@ -43,6 +50,7 @@ import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationCallExp;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomainAssignment;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationImplementation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.model.qvttemplate.CollectionTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
@@ -84,6 +92,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private final Map<String, Relation> relationMap = new HashMap<>();
 	/** Current relation being processed (for variable scope). */
 	private Relation currentRelation;
+	/** ObjectTemplateExps marked with [?] optional multiplicity (transient). */
+	private final Set<ObjectTemplateExp> optionalTemplates = new HashSet<>();
 
 	QvtrUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
@@ -99,14 +109,102 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	@Override
 	public RelationalTransformation visitCompilationUnit(QvtRParser.CompilationUnitContext ctx) {
-		// QVT-R supports multiple transformations, but we return the first one
-		// (mirrors QvtoParserSupport pattern)
 		if (ctx.transformationDef().isEmpty()) {
 			RelationalTransformation empty = REL.createRelationalTransformation();
 			empty.setName("_unnamed");
 			return empty;
 		}
-		return visitTransformationDef(ctx.transformationDef(0));
+
+		// Parse all transformations in the compilation unit
+		Map<String, RelationalTransformation> transformations = new LinkedHashMap<>();
+		for (QvtRParser.TransformationDefContext tCtx : ctx.transformationDef()) {
+			// Reset per-transformation state
+			typedModelMap.clear();
+			relationMap.clear();
+			RelationalTransformation t = visitTransformationDef(tCtx);
+			transformations.put(t.getName(), t);
+		}
+
+		// Resolve 'extends' annotations (§7.11.1.1): merge base rules into child
+		for (RelationalTransformation t : transformations.values()) {
+			EAnnotation ann = t.getEAnnotation("qvtr.extends");
+			if (ann != null) {
+				String baseName = ann.getDetails().get("name");
+				RelationalTransformation base = transformations.get(baseName);
+				if (base != null) {
+					t.setExtends(base);
+					mergeInheritedRules(t, base);
+				}
+			}
+		}
+
+		// Return the last transformation (typically the extending one)
+		RelationalTransformation last = null;
+		for (RelationalTransformation t : transformations.values()) {
+			last = t;
+		}
+		return last;
+	}
+
+	/**
+	 * Merges rules from a base transformation into the extending transformation
+	 * (§7.11.1.1). Rules that are overridden by the child are not inherited.
+	 * Extension is transitive: if the base itself extends another transformation,
+	 * its inherited rules are already merged.
+	 */
+	private void mergeInheritedRules(RelationalTransformation child,
+			RelationalTransformation base) {
+		// Collect names of child's own relations (for override detection)
+		Set<String> childRelationNames = new HashSet<>();
+		for (Rule rule : child.getRule()) {
+			childRelationNames.add(rule.getName());
+		}
+
+		// Inherit relations not overridden by child (deep copy to avoid
+		// EMF containment issues — base rules stay in their own transformation)
+		for (Rule baseRule : new ArrayList<>(base.getRule())) {
+			if (!childRelationNames.contains(baseRule.getName())) {
+				Rule copied = EcoreUtil.copy(baseRule);
+				child.getRule().add(copied);
+			}
+		}
+
+		// Inherit keys
+		for (Key baseKey : new ArrayList<>(base.getOwnedKey())) {
+			child.getOwnedKey().add(EcoreUtil.copy(baseKey));
+		}
+
+		// Inherit queries (from _queries synthetic EClass)
+		EClass baseQueries = findQueriesClass(base);
+		if (baseQueries != null) {
+			EClass childQueries = findQueriesClass(child);
+			if (childQueries == null) {
+				childQueries = org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEClass();
+				childQueries.setName("_queries");
+				child.getEClassifiers().add(childQueries);
+			}
+			Set<String> childQueryNames = new HashSet<>();
+			for (EOperation op : childQueries.getEOperations()) {
+				childQueryNames.add(op.getName());
+			}
+			for (EOperation baseOp : baseQueries.getEOperations()) {
+				if (!childQueryNames.contains(baseOp.getName())) {
+					childQueries.getEOperations().add(EcoreUtil.copy(baseOp));
+				}
+			}
+		}
+	}
+
+	/**
+	 * Finds the synthetic {@code _queries} EClass in a transformation.
+	 */
+	private EClass findQueriesClass(RelationalTransformation t) {
+		for (EClassifier cls : t.getEClassifiers()) {
+			if ("_queries".equals(cls.getName()) && cls instanceof EClass eClass) {
+				return eClass;
+			}
+		}
+		return null;
 	}
 
 	// ==================== Transformation ====================
@@ -376,11 +474,50 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 					currentRelation.getVariable().add(templateExp.getBindsTo());
 				}
 			}
+
+			// [?] optional multiplicity → mark on DomainPattern (has EModelElement)
+			if (templateExp instanceof ObjectTemplateExp ote
+					&& optionalTemplates.remove(ote)) {
+				EAnnotation ann =
+						org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEAnnotation();
+				ann.setSource("qvtr.optional");
+				pattern.getEAnnotations().add(ann);
+			}
+
 			domain.getPattern().add(pattern);
 		}
 
-		// implementedby clause
-		// (deferred — needs operation resolution context from engine)
+		// implementedby clause (§7.11.3.6)
+		if (ctx.IMPLEMENTEDBY() != null && ctx.pathName() != null && currentRelation != null) {
+			List<String> implPath = QvtrExpressionBuilder.pathNameSegments(ctx.pathName());
+			String implName = implPath.get(implPath.size() - 1);
+
+			RelationImplementation relImpl = REL.createRelationImplementation();
+			relImpl.setInDirectionOf(tm);
+
+			// Create synthetic EOperation for the impl reference
+			org.eclipse.emf.ecore.EOperation implOp =
+					org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEOperation();
+			implOp.setName(implName);
+			relImpl.setImpl(implOp);
+
+			// Store argument expressions as EAnnotation for engine evaluation
+			if (ctx.argumentList() != null) {
+				org.eclipse.emf.ecore.EAnnotation ann =
+						org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEAnnotation();
+				ann.setSource("qvtr.implementedby.args");
+				List<OclExpression> argExprs = new ArrayList<>();
+				for (QvtRParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+					argExprs.add(expressionBuilder.buildExpression(argCtx));
+				}
+				// Store arg count and attach expressions via EAnnotation references
+				ann.getDetails().put("count", String.valueOf(argExprs.size()));
+				ann.getReferences().addAll(argExprs);
+				relImpl.getEAnnotations().add(ann);
+			}
+
+			currentRelation.getOperationalImpl().add(relImpl);
+		}
 
 		// default_values clause
 		if (ctx.assignmentExp() != null) {
@@ -455,6 +592,12 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			ote.setBindsTo(bindVar);
 		}
 
+		// [?] optional multiplicity (Eclipse extension): store temporarily
+		// Will be transferred to DomainPattern.EAnnotation in visitDomain
+		if (ctx.optionalMultiplicity() != null) {
+			optionalTemplates.add(ote);
+		}
+
 		// Property template items
 		if (ctx.propertyTemplateList() != null) {
 			for (QvtRParser.PropertyTemplateContext propCtx :
@@ -496,7 +639,12 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			item.setReferredProperty(placeholder);
 		}
 
-		item.setValue(expressionBuilder.buildExpression(ctx.expression()));
+		if (ctx.template() != null) {
+			// identifier = template (nested ObjectTemplateExp / CollectionTemplateExp)
+			item.setValue(visitTemplate(ctx.template()));
+		} else {
+			item.setValue(expressionBuilder.buildExpression(ctx.expression()));
+		}
 
 		return item;
 	}

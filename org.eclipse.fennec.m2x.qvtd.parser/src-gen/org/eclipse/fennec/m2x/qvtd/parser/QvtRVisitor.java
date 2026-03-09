@@ -1,4 +1,4 @@
-// Generated from grammar/QvtR.g4 by ANTLR 4.13.2
+// Generated from /opt/git/m2m/workspace/org.eclipse.fennec.m2x.qvtd.parser/grammar/QvtR.g4 by ANTLR 4.13.2
 package org.eclipse.fennec.m2x.qvtd.parser;
 import org.antlr.v4.runtime.tree.ParseTreeVisitor;
 
@@ -112,6 +112,12 @@ public interface QvtRVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitObjectTemplate(QvtRParser.ObjectTemplateContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtRParser#optionalMultiplicity}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitOptionalMultiplicity(QvtRParser.OptionalMultiplicityContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtRParser#propertyTemplateList}.
 	 * @param ctx the parse tree

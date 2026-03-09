@@ -118,7 +118,11 @@ template
     ;
 
 objectTemplate
-    : identifier? ':' pathName '{' propertyTemplateList? '}'
+    : identifier? ':' pathName optionalMultiplicity? '{' propertyTemplateList? '}'
+    ;
+
+optionalMultiplicity
+    : '[' '?' ']'
     ;
 
 propertyTemplateList
@@ -126,7 +130,9 @@ propertyTemplateList
     ;
 
 propertyTemplate
-    : identifier '=' expression
+    : identifier '=' template
+    | identifier '=' expression
+    | 'opposite' '(' pathName '::' identifier ')' '=' template
     | 'opposite' '(' pathName '::' identifier ')' '=' expression
     ;
 

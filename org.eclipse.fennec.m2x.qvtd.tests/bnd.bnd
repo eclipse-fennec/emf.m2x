@@ -1,0 +1,20 @@
+Bundle-Name: Fennec QVT-R Tests
+Bundle-Description: Parser and engine tests for QVT-Relations
+
+-library: enableEMF
+
+src=${^src}
+
+-includeresource.model: model=model
+
+-buildpath: \
+	org.antlr.antlr4-runtime;version=latest,\
+	org.eclipse.fennec.m2x.qvtd.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.qvtd.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.qvtd.api;version=snapshot,\
+	org.eclipse.fennec.m2x.qvtd.model;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
+	org.eclipse.fennec.m2x;version=snapshot
