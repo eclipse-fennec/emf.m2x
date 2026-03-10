@@ -12,7 +12,7 @@
     <details key="resource" value="XMI"/>
     <details key="copyrightText" value="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"/>
   </eAnnotations>
-  <eClassifiers xsi:type="ecore:EClass" name="RelationalTransformation" eSuperTypes="qvtbase.ecore#//Transformation">
+  <eClassifiers xsi:type="ecore:EClass" name="RelationalTransformation" eSuperTypes="../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//Transformation">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A RelationalTransformation is a specialization of a Transformation representing a transformation definition that uses the QVT-Relation formalism (QVT v1.3 §7.11.3.1)."/>
     </eAnnotations>
@@ -23,7 +23,7 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="Relation" eSuperTypes="qvtbase.ecore#//Rule">
+  <eClassifiers xsi:type="ecore:EClass" name="Relation" eSuperTypes="../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//Rule">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A relation is the basic unit of transformation behavior specification. It specifies a relationship that must hold between the model elements of a set of candidate models (QVT v1.3 §7.11.3.2)."/>
     </eAnnotations>
@@ -40,13 +40,13 @@
         <details key="documentation" value="The set of variables occurring in the relation. Includes all variables from domains, when and where clauses."/>
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="when" eType="ecore:EClass qvtbase.ecore#//Pattern"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="when" eType="ecore:EClass ../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//Pattern"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The pattern that specifies the when clause — conditions under which the relationship needs to hold."/>
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="where" eType="ecore:EClass qvtbase.ecore#//Pattern"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="where" eType="ecore:EClass ../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//Pattern"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The pattern that specifies the where clause — conditions that must be satisfied by all participating model elements."/>
@@ -59,7 +59,7 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="RelationDomain" eSuperTypes="qvtbase.ecore#//Domain">
+  <eClassifiers xsi:type="ecore:EClass" name="RelationDomain" eSuperTypes="../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//Domain">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Specifies the domains of a relation. Has root variables that can be matched in a model and domain patterns specifying the model elements of interest (QVT v1.3 §7.11.3.3)."/>
     </eAnnotations>
@@ -82,7 +82,7 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="DomainPattern" eSuperTypes="qvtbase.ecore#//Pattern">
+  <eClassifiers xsi:type="ecore:EClass" name="DomainPattern" eSuperTypes="../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//Pattern">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A domain pattern specifies an arbitrarily complex pattern graph in terms of template expressions. Has a distinguished root template expression bound to the root variable (QVT v1.3 §7.11.3.4)."/>
     </eAnnotations>
@@ -137,7 +137,7 @@
       </eAnnotations>
     </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EReference" name="inDirectionOf" lowerBound="1"
-        eType="ecore:EClass qvtbase.ecore#//TypedModel">
+        eType="ecore:EClass ../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//TypedModel">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The direction of the relation being implemented."/>
       </eAnnotations>

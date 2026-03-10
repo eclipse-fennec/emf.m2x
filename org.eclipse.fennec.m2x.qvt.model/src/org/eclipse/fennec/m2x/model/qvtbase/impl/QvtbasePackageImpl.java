@@ -35,14 +35,6 @@ import org.eclipse.fennec.m2x.model.qvtbase.Tag;
 import org.eclipse.fennec.m2x.model.qvtbase.Transformation;
 import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 
-import org.eclipse.fennec.m2x.model.qvtrelation.QvtrelationPackage;
-
-import org.eclipse.fennec.m2x.model.qvtrelation.impl.QvtrelationPackageImpl;
-
-import org.eclipse.fennec.m2x.model.qvttemplate.QvttemplatePackage;
-
-import org.eclipse.fennec.m2x.model.qvttemplate.impl.QvttemplatePackageImpl;
-
 /**
  * <!-- begin-user-doc -->
  * An implementation of the model <b>Package</b>.
@@ -162,21 +154,11 @@ public class QvtbasePackageImpl extends EPackageImpl implements QvtbasePackage {
 		// Initialize simple dependencies
 		OclPackage.eINSTANCE.eClass();
 
-		// Obtain or create and register interdependencies
-		Object registeredPackage = EPackage.Registry.INSTANCE.getEPackage(QvtrelationPackage.eNS_URI);
-		QvtrelationPackageImpl theQvtrelationPackage = (QvtrelationPackageImpl)(registeredPackage instanceof QvtrelationPackageImpl ? registeredPackage : QvtrelationPackage.eINSTANCE);
-		registeredPackage = EPackage.Registry.INSTANCE.getEPackage(QvttemplatePackage.eNS_URI);
-		QvttemplatePackageImpl theQvttemplatePackage = (QvttemplatePackageImpl)(registeredPackage instanceof QvttemplatePackageImpl ? registeredPackage : QvttemplatePackage.eINSTANCE);
-
 		// Create package meta-data objects
 		theQvtbasePackage.createPackageContents();
-		theQvtrelationPackage.createPackageContents();
-		theQvttemplatePackage.createPackageContents();
 
 		// Initialize created meta-data
 		theQvtbasePackage.initializePackageContents();
-		theQvtrelationPackage.initializePackageContents();
-		theQvttemplatePackage.initializePackageContents();
 
 		// Mark meta-data to indicate it can't be changed
 		theQvtbasePackage.freeze();

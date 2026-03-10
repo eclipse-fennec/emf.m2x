@@ -42,6 +42,8 @@ import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.qvtbase.QvtbaseFactory;
+import org.eclipse.fennec.m2x.model.qvtbase.Transformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
 import org.eclipse.fennec.m2x.model.qvtoperational.DirectionKind;
@@ -88,6 +90,14 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 * annotation, allowing the linker to distinguish stubs from forward declarations.
 	 */
 	static final String LINKER_STUB_ANNOTATION = "qvto.linker.stub";
+
+	/**
+	 * EAnnotation source for mapping-level 'refines' clause (§8.4.7, D40).
+	 * Used on MappingOperation (key: "refinedRelation") for engine-level resolution.
+	 * Rule is abstract in qvtbase, so we cannot create a stub — the engine resolves
+	 * the name to a Relation instance from the QVT-R transformation at execution time.
+	 */
+	static final String REFINES_ANNOTATION = "http://www.eclipse.org/fennec/m2x/qvto/refines";
 
 	private record PendingExtension(MappingOperation mapping, String kind, String name) {}
 
@@ -263,13 +273,14 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 		if (ctx.transformationRefine() != null) {
 			// §8.4.7: <transformation_refine> ::= 'refines' <moduleref>
-			// Store as EAnnotation since metamodel has no 'refines' feature
+			// Create a stub Transformation with the name set (D40).
+			// The engine replaces this stub with the real QVT-R Transformation
+			// loaded via QvtdEngine.
 			QvtOParser.ModuleRefContext refCtx = ctx.transformationRefine().moduleRef();
-			String refinedName = qualifiedNameText(refCtx.qualifiedName());
-			EAnnotation ann = org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEAnnotation();
-			ann.setSource("http://www.eclipse.org/fennec/m2x/qvto/refines");
-			ann.getDetails().put("refinedModule", refinedName);
-			transformation.getEAnnotations().add(ann);
+			String refinedName = moduleRefNameText(refCtx.moduleRefName());
+			Transformation stub = QvtbaseFactory.eINSTANCE.createTransformation();
+			stub.setName(refinedName);
+			transformation.setRefined(stub);
 		}
 
 		// Set up environment with model parameters as variables
@@ -486,8 +497,14 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				}
 			} else if (extCtx.scopedName() != null) {
 				// §8.4.7: <mapping_refinement> ::= 'refines' <scoped_identifier>
+				// Store as EAnnotation for engine-level resolution (D40).
+				// The engine resolves this to MappingOperation.refinedRelation : Rule
+				// when the QVT-R transformation is loaded via QvtdEngine.
 				String refName = expressionBuilder.scopedNameText(extCtx.scopedName());
-				pendingExtensions.add(new PendingExtension(mapping, "refines", refName));
+				EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
+				ann.setSource(REFINES_ANNOTATION);
+				ann.getDetails().put("refinedRelation", refName);
+				mapping.getEAnnotations().add(ann);
 			}
 		}
 
@@ -1850,7 +1867,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			ModuleImport imp = QVTO.createModuleImport();
 			imp.setKind("extends".equals(kind) ? ImportKind.EXTENSION : ImportKind.ACCESS);
 			// Store qualified name as stub for link-time resolution
-			String qualifiedName = qualifiedNameText(refCtx.qualifiedName());
+			String qualifiedName = moduleRefNameText(refCtx.moduleRefName());
 			// Create OperationalTransformation stub so TransformationInstantiationExp
 			// can reference it (Library would fail the instanceof check in visitNewExp)
 			OperationalTransformation stub = QVTO.createOperationalTransformation();
@@ -1861,9 +1878,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			// Track for TransformationInstantiationExp detection in visitNewExp
 			importedModuleStubs.put(qualifiedName, stub);
 			// Also track simple name (last segment) for unqualified references
-			int dotIdx = qualifiedName.lastIndexOf('.');
-			if (dotIdx >= 0) {
-				importedModuleStubs.put(qualifiedName.substring(dotIdx + 1), stub);
+			int colonIdx = qualifiedName.lastIndexOf("::");
+			if (colonIdx >= 0) {
+				importedModuleStubs.put(qualifiedName.substring(colonIdx + 2), stub);
 			}
 		}
 	}
@@ -1875,16 +1892,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ModuleRefContext refCtx : ctx.moduleRefList().moduleRef()) {
 			ModuleImport imp = QVTO.createModuleImport();
 			imp.setKind(ImportKind.ACCESS);
-			String qualifiedName = qualifiedNameText(refCtx.qualifiedName());
+			String qualifiedName = moduleRefNameText(refCtx.moduleRefName());
 			OperationalTransformation stub = QVTO.createOperationalTransformation();
 			stub.setName(qualifiedName);
 			markAsLinkerStub(stub);
 			imp.setImportedModule(stub);
 			module.getModuleImport().add(imp);
 			importedModuleStubs.put(qualifiedName, stub);
-			int dotIdx = qualifiedName.lastIndexOf('.');
-			if (dotIdx >= 0) {
-				importedModuleStubs.put(qualifiedName.substring(dotIdx + 1), stub);
+			int colonIdx = qualifiedName.lastIndexOf("::");
+			if (colonIdx >= 0) {
+				importedModuleStubs.put(qualifiedName.substring(colonIdx + 2), stub);
 			}
 		}
 	}
@@ -2000,6 +2017,25 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {
 		return expressionBuilder.qualifiedNameText(ctx);
+	}
+
+	/**
+	 * Extracts the text from a moduleRefName rule, normalizing separators to '::' (spec-conform).
+	 * The grammar accepts both '::' and '.' as separators for Eclipse compatibility.
+	 */
+	private static String moduleRefNameText(QvtOParser.ModuleRefNameContext ctx) {
+		var ids = ctx.qvtoIdentifier();
+		if (ids.size() == 1) {
+			return ids.get(0).getText();
+		}
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < ids.size(); i++) {
+			if (i > 0) {
+				sb.append("::");
+			}
+			sb.append(ids.get(i).getText());
+		}
+		return sb.toString();
 	}
 
 	private static void markAsLinkerStub(Module module) {

@@ -4,5 +4,5 @@ Bundle-Description: Public API interfaces for the Fennec OCL engine
 -library: enableEMF
 
 -buildpath: \
-	org.eclipse.fennec.m2x.ocl.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.osgi.service.condition;version=latest

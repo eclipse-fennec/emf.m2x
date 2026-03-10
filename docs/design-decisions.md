@@ -818,3 +818,64 @@ qvtdEngine.registerImplementationProvider(qvtoEngine);                // §7.8
 - Phase 4b fügt die Brücke hinzu, ohne qvtd.engine zu ändern — nur qvto.engine bekommt neue Dependency auf qvtd.api
 - `RelationImplementationProvider` ist auch für reine Java-Blackboxes nutzbar (ohne QVT-O)
 - Pattern ist bewährt: identisch zu OclOperationProvider (D25), QvtoBlackboxLibrary (D24)
+
+**Update (Phase 4b):** D39 Option B wird durch D40 revidiert → `qvtbase` wird in eigenes Shared-Bundle extrahiert.
+
+---
+
+### DR-D40: QVTBase als Shared Bundle `org.eclipse.fennec.m2x.qvt.model`
+
+**Context:** Phase 4b erfordert bidirektionale Verknüpfung: `OperationalTransformation.refined : Transformation` und `MappingOperation.refinedRelation : Relation`. D39 Option B (Modelle unabhängig, Brücke über EAnnotation + Engine-Auflösung) funktioniert, erfordert aber String-basierte Indirektion im Metamodell und Runtime-Auflösung im Engine.
+
+**Problem:** `Transformation`, `Rule`, `TypedModel` etc. liegen in `qvtbase.ecore` innerhalb `qvtd.model`. Damit kann `qvto.model` keine typsicheren EReferences auf diese Typen haben, ohne D39 zu verletzen.
+
+**Options considered:**
+- (A) EAnnotation-basiert (D39 Status quo) — funktioniert, aber String-Hack, keine EMF-Typsicherheit
+- (B) `qvtbase.ecore` in eigenes Bundle `org.eclipse.fennec.m2x.qvt.model` extrahieren — sauber, spec-konform, echte EReferences möglich
+
+**Decision:** Option B — `qvtbase.ecore` wird in ein neues Shared-Bundle `org.eclipse.fennec.m2x.qvt.model` extrahiert. Dies revidiert D39 Option B auf Model-Ebene.
+
+**Rationale:**
+- Die QVT v1.3 Spec definiert QVTBase als gemeinsames Paket zwischen Relations und Operational (§6.4, §7.11.1, §8.2.1)
+- `Transformation`, `TypedModel`, `Rule`, `Domain`, `Pattern`, `Predicate`, `Function`, `FunctionParameter`, `Tag` sind genuine Shared-Konzepte
+- Echte EReferences (`refined : Transformation`, `refinedRelation : Relation`) sind typsicher und EMF-idiomatisch
+- Kein Zyklus: beide Model-Bundles hängen vom gemeinsamen Base ab
+
+**Neuer Abhängigkeitsgraph (Model-Ebene):**
+
+```
+              ocl.model
+                 ↑
+           qvt.model (qvtbase: Transformation, TypedModel, Rule, Domain, ...)
+            ↗          ↖
+     qvto.model       qvtd.model (qvtrelation + qvttemplate)
+```
+
+**Neuer Abhängigkeitsgraph (komplett):**
+
+```
+                         ocl.model
+                            ↑
+                        qvt.model
+                        ↗       ↖
+                 qvtd.model      qvto.model
+                      ↑               ↑
+  ocl.api ←──── qvtd.api         qvto.api
+     ↑           ↑     ↖            ↑
+ ocl.engine  qvtd.engine  ───→ qvto.engine
+     ↑           ↑                   ↑
+ ocl.parser  qvtd.parser       qvto.parser
+```
+
+**Änderungen:**
+1. Neues Bundle `org.eclipse.fennec.m2x.qvt.model` mit `qvtbase.ecore` (9 Classifiers: Transformation, TypedModel, Domain, Rule, Pattern, Predicate, Function, FunctionParameter, Tag)
+2. `qvtd.model`: Entfernt `qvtbase.ecore`, behält `qvtrelation.ecore` + `qvttemplate.ecore`, neue Dependency auf `qvt.model`
+3. `qvto.model`: Neue Dependency auf `qvt.model`, neue EReferences: `OperationalTransformation.refined : Transformation [0..1]`, `MappingOperation.refinedRelation : Relation [0..1]`
+4. Downstream-Bundles: Buildpath um `qvt.model` ergänzen wo nötig
+
+**D39 Engine-Ebene bleibt unverändert:** Interface-Entkopplung über `qvtd.api` (QvtdEngine, RelationImplementationProvider) gilt weiterhin. Nur die Model-Ebene wird durch D40 revidiert.
+
+**Konsequenzen:**
+- EMF-Code muss für alle drei Model-Bundles neu generiert werden
+- nsURI `http://www.eclipse.org/fennec/m2x/qvtd/qvtbase/1.0` bleibt (Abwärtskompatibilität)
+- Bestehende Tests in `qvtd.tests` müssen Imports anpassen (Package wechselt von `qvtd.model` nach `qvt.model`)

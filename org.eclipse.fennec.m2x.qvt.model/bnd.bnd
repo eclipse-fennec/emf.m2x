@@ -1,0 +1,17 @@
+Bundle-Name: Fennec QVT Base Model
+Bundle-Description: QVT v1.3 shared base metamodel (QVTBase EPackage, 9 classifiers: Transformation, TypedModel, Rule, Domain, Pattern, Predicate, Function, FunctionParameter, Tag)
+
+-library: enableEMF
+
+# Modify model only on demand
+#-generate:\
+#	model/qvt.genmodel;\
+#		generate=fennecEMF;\
+#		genmodel=model/qvt.genmodel;\
+#		output=src
+
+-includeresource.model: model=model
+
+-buildpath: \
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.osgi.service.condition;version=latest

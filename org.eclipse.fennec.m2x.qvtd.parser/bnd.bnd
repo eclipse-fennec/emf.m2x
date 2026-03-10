@@ -34,9 +34,10 @@ javac.deprecation = false
 
 -buildpath: \
 	org.antlr.antlr4-runtime;version=latest,\
-	org.eclipse.fennec.m2x.ocl.api;version=latest,\
-	org.eclipse.fennec.m2x.ocl.model;version=latest,\
-	org.eclipse.fennec.m2x.ocl.parser;version=latest,\
-	org.eclipse.fennec.m2x.qvtd.api;version=latest,\
-	org.eclipse.fennec.m2x.qvtd.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.qvtd.api;version=snapshot,\
+	org.eclipse.fennec.m2x.qvt.model;version=snapshot,\
+	org.eclipse.fennec.m2x.qvtd.model;version=snapshot,\
 	org.osgi.service.condition;version=latest

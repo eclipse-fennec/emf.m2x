@@ -30,6 +30,8 @@ import org.eclipse.fennec.m2x.model.imperativeocl.impl.ImperativeOclPackageImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 
+import org.eclipse.fennec.m2x.model.qvtbase.QvtbasePackage;
+
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
 
 import org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl;
@@ -186,6 +188,7 @@ public class TracePackageImpl extends EPackageImpl implements TracePackage {
 
 		// Initialize simple dependencies
 		OclPackage.eINSTANCE.eClass();
+		QvtbasePackage.eINSTANCE.eClass();
 
 		// Obtain or create and register interdependencies
 		Object registeredPackage = EPackage.Registry.INSTANCE.getEPackage(ImperativeOclPackage.eNS_URI);

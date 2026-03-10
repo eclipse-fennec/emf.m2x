@@ -16,15 +16,15 @@ antlr4.tool.cp = \
 	${repo;com.ibm.icu:icu4j;72.1}
 
 # Generate grammar on demand
-#-generate: \
-#	grammar/QvtO.g4; \
-#		output=src-gen; \
-#		system='java -cp ${antlr4.tool.cp} org.antlr.v4.Tool \
-#			-visitor -no-listener \
-#			-lib ${project}/../org.eclipse.fennec.m2x.ocl.parser/grammar \
-#			-package org.eclipse.fennec.m2x.qvto.parser \
-#			-o src-gen/org/eclipse/fennec/m2x/qvto/parser \
-#			${project}/grammar/QvtO.g4'
+-generate: \
+	grammar/QvtO.g4; \
+		output=src-gen; \
+		system='java -cp ${antlr4.tool.cp} org.antlr.v4.Tool \
+			-visitor -no-listener \
+			-lib ${project}/../org.eclipse.fennec.m2x.ocl.parser/grammar \
+			-package org.eclipse.fennec.m2x.qvto.parser \
+			-o src-gen/org/eclipse/fennec/m2x/qvto/parser \
+			${project}/grammar/QvtO.g4'
 
 # Include grammar file for downstream import
 -includeresource.grammar: grammar=grammar
@@ -34,8 +34,9 @@ javac.deprecation = false
 
 -buildpath: \
 	org.antlr.antlr4-runtime;version=latest,\
-	org.eclipse.fennec.m2x.ocl.api;version=latest,\
-	org.eclipse.fennec.m2x.ocl.model;version=latest,\
-	org.eclipse.fennec.m2x.qvto.api;version=latest,\
-	org.eclipse.fennec.m2x.qvto.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.qvto.api;version=snapshot,\
+	org.eclipse.fennec.m2x.qvt.model;version=snapshot,\
+	org.eclipse.fennec.m2x.qvto.model;version=snapshot,\
 	org.osgi.service.condition;version=latest

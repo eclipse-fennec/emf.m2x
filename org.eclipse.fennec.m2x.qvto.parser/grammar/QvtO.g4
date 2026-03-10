@@ -128,8 +128,14 @@ moduleRefList
     ;
 
 // §8.4.7: <moduleref> ::= <scoped_identifier> <simple_signature>?
+// Spec uses '::' (<scoped_identifier>), Eclipse uses '.' (<qualifiedName>).
+// We accept both separators for compatibility.
 moduleRef
-    : qualifiedName simpleSignature?
+    : moduleRefName simpleSignature?
+    ;
+
+moduleRefName
+    : qvtoIdentifier (('::' | '.') qvtoIdentifier)*
     ;
 
 // §8.4.7: standalone access declaration (unit-level or module-level)

@@ -13,5 +13,6 @@ Bundle-Description: QVT-Operational v1.3 EMF metamodel (3 EPackages, 59 classifi
 -includeresource.model: model=model
 
 -buildpath: \
-	org.eclipse.fennec.m2x.ocl.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.qvt.model;version=snapshot,\
 	org.osgi.service.condition;version=latest

@@ -131,6 +131,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitModuleRef(QvtOParser.ModuleRefContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#moduleRefName}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitModuleRefName(QvtOParser.ModuleRefNameContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#accessDecl}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

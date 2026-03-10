@@ -123,6 +123,12 @@
         eType="#//MappingOperation"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="merged" upperBound="-1"
         eType="#//MappingOperation"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="refinedRelation"
+        eType="ecore:EClass ../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//Rule">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The relation (Rule) being refined by this mapping operation (QVT v1.3 §8.2.1.15). Typed as Rule (from qvtbase) to avoid qvto.model→qvtd.model dependency; at runtime this is always a Relation instance."/>
+      </eAnnotations>
+    </eStructuralFeatures>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Constructor" eSuperTypes="#//ImperativeOperation">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -162,6 +168,12 @@
         eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClass"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="intermediateProperty" upperBound="-1"
         eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EStructuralFeature"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="refined"
+        eType="ecore:EClass ../../org.eclipse.fennec.m2x.qvt.model/model/qvtbase.ecore#//Transformation">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The relational transformation being refined by this operational transformation (QVT v1.3 §8.2.1.1). When set, each mapping operation may refine a specific relation."/>
+      </eAnnotations>
+    </eStructuralFeatures>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Library" eSuperTypes="#//Module">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">

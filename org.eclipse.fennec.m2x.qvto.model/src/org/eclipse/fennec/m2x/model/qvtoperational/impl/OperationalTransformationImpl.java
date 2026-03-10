@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.model.qvtoperational.impl;
 
 import java.util.Collection;
 
+import org.eclipse.emf.common.notify.Notification;
 import org.eclipse.emf.common.notify.NotificationChain;
 
 import org.eclipse.emf.common.util.EList;
@@ -24,9 +25,13 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.InternalEObject;
 
+import org.eclipse.emf.ecore.impl.ENotificationImpl;
+
 import org.eclipse.emf.ecore.util.EObjectContainmentEList;
 import org.eclipse.emf.ecore.util.EObjectResolvingEList;
 import org.eclipse.emf.ecore.util.InternalEList;
+
+import org.eclipse.fennec.m2x.model.qvtbase.Transformation;
 
 import org.eclipse.fennec.m2x.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
@@ -43,6 +48,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.OperationalTransformationImpl#getModelParameter <em>Model Parameter</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.OperationalTransformationImpl#getIntermediateClass <em>Intermediate Class</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.OperationalTransformationImpl#getIntermediateProperty <em>Intermediate Property</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.OperationalTransformationImpl#getRefined <em>Refined</em>}</li>
  * </ul>
  *
  * @generated
@@ -77,6 +83,16 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 	 * @ordered
 	 */
 	protected EList<EStructuralFeature> intermediateProperty;
+
+	/**
+	 * The cached value of the '{@link #getRefined() <em>Refined</em>}' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getRefined()
+	 * @generated
+	 * @ordered
+	 */
+	protected Transformation refined;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -142,6 +158,46 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 	 * @generated
 	 */
 	@Override
+	public Transformation getRefined() {
+		if (refined != null && refined.eIsProxy()) {
+			InternalEObject oldRefined = (InternalEObject)refined;
+			refined = (Transformation)eResolveProxy(oldRefined);
+			if (refined != oldRefined) {
+				if (eNotificationRequired())
+					eNotify(new ENotificationImpl(this, Notification.RESOLVE, QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__REFINED, oldRefined, refined));
+			}
+		}
+		return refined;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public Transformation basicGetRefined() {
+		return refined;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setRefined(Transformation newRefined) {
+		Transformation oldRefined = refined;
+		refined = newRefined;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__REFINED, oldRefined, refined));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
 		switch (featureID) {
 			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__MODEL_PARAMETER:
@@ -164,6 +220,9 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 				return getIntermediateClass();
 			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY:
 				return getIntermediateProperty();
+			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__REFINED:
+				if (resolve) return getRefined();
+				return basicGetRefined();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}
@@ -189,6 +248,9 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 				getIntermediateProperty().clear();
 				getIntermediateProperty().addAll((Collection<? extends EStructuralFeature>)newValue);
 				return;
+			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__REFINED:
+				setRefined((Transformation)newValue);
+				return;
 		}
 		super.eSet(featureID, newValue);
 	}
@@ -210,6 +272,9 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY:
 				getIntermediateProperty().clear();
 				return;
+			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__REFINED:
+				setRefined((Transformation)null);
+				return;
 		}
 		super.eUnset(featureID);
 	}
@@ -228,6 +293,8 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 				return intermediateClass != null && !intermediateClass.isEmpty();
 			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY:
 				return intermediateProperty != null && !intermediateProperty.isEmpty();
+			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__REFINED:
+				return refined != null;
 		}
 		return super.eIsSet(featureID);
 	}

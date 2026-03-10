@@ -51,6 +51,8 @@ import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 
+import org.eclipse.fennec.m2x.model.qvtbase.QvtbasePackage;
+
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
 
 import org.eclipse.fennec.m2x.model.qvtoperational.impl.QvtOperationalPackageImpl;
@@ -282,6 +284,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 
 		// Initialize simple dependencies
 		OclPackage.eINSTANCE.eClass();
+		QvtbasePackage.eINSTANCE.eClass();
 
 		// Obtain or create and register interdependencies
 		Object registeredPackage = EPackage.Registry.INSTANCE.getEPackage(QvtOperationalPackage.eNS_URI);

@@ -4,7 +4,7 @@
     modelDirectory="/org.eclipse.fennec.m2x.qvto.model/src" modelPluginID="org.eclipse.fennec.m2x.qvto.model"
     modelName="Qvto" rootExtendsClass="org.eclipse.emf.ecore.impl.MinimalEObjectImpl$Container"
     importerID="org.eclipse.emf.importer.ecore" complianceLevel="21.0" copyrightFields="false"
-    usedGenPackages="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel#//ocl"
+    usedGenPackages="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel#//ocl ../../org.eclipse.fennec.m2x.qvt.model/model/qvt.genmodel#//qvtbase"
     operationReflection="true" importOrganizing="true" oSGiCompatible="true">
   <foreignModel>imperativeocl.ecore</foreignModel>
   <foreignModel>qvtoperational.ecore</foreignModel>
@@ -149,6 +149,7 @@
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/disjunct"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/inherited"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/merged"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//MappingOperation/refinedRelation"/>
     </genClasses>
     <genClasses ecoreClass="qvtoperational.ecore#//Constructor"/>
     <genClasses ecoreClass="qvtoperational.ecore#//EntryOperation"/>
@@ -165,6 +166,7 @@
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationalTransformation/modelParameter"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationalTransformation/intermediateClass"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationalTransformation/intermediateProperty"/>
+      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference qvtoperational.ecore#//OperationalTransformation/refined"/>
     </genClasses>
     <genClasses ecoreClass="qvtoperational.ecore#//Library"/>
     <genClasses ecoreClass="qvtoperational.ecore#//ModelType">

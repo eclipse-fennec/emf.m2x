@@ -1595,13 +1595,22 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int MAPPING_OPERATION__MERGED = IMPERATIVE_OPERATION_FEATURE_COUNT + 4;
 
 	/**
+	 * The feature id for the '<em><b>Refined Relation</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int MAPPING_OPERATION__REFINED_RELATION = IMPERATIVE_OPERATION_FEATURE_COUNT + 5;
+
+	/**
 	 * The number of structural features of the '<em>Mapping Operation</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int MAPPING_OPERATION_FEATURE_COUNT = IMPERATIVE_OPERATION_FEATURE_COUNT + 5;
+	int MAPPING_OPERATION_FEATURE_COUNT = IMPERATIVE_OPERATION_FEATURE_COUNT + 6;
 
 	/**
 	 * The operation id for the '<em>Get EAnnotation</em>' operation.
@@ -2463,13 +2472,22 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY = MODULE_FEATURE_COUNT + 2;
 
 	/**
+	 * The feature id for the '<em><b>Refined</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int OPERATIONAL_TRANSFORMATION__REFINED = MODULE_FEATURE_COUNT + 3;
+
+	/**
 	 * The number of structural features of the '<em>Operational Transformation</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int OPERATIONAL_TRANSFORMATION_FEATURE_COUNT = MODULE_FEATURE_COUNT + 3;
+	int OPERATIONAL_TRANSFORMATION_FEATURE_COUNT = MODULE_FEATURE_COUNT + 4;
 
 	/**
 	 * The operation id for the '<em>Get EAnnotation</em>' operation.
@@ -4468,6 +4486,17 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getMappingOperation_Merged();
 
 	/**
+	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation#getRefinedRelation <em>Refined Relation</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the reference '<em>Refined Relation</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation#getRefinedRelation()
+	 * @see #getMappingOperation()
+	 * @generated
+	 */
+	EReference getMappingOperation_RefinedRelation();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.qvtoperational.Constructor <em>Constructor</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -4616,6 +4645,17 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EReference getOperationalTransformation_IntermediateProperty();
+
+	/**
+	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation#getRefined <em>Refined</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the reference '<em>Refined</em>'.
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation#getRefined()
+	 * @see #getOperationalTransformation()
+	 * @generated
+	 */
+	EReference getOperationalTransformation_Refined();
 
 	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.qvtoperational.Library <em>Library</em>}'.
@@ -5364,6 +5404,14 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference MAPPING_OPERATION__MERGED = eINSTANCE.getMappingOperation_Merged();
 
 		/**
+		 * The meta object literal for the '<em><b>Refined Relation</b></em>' reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference MAPPING_OPERATION__REFINED_RELATION = eINSTANCE.getMappingOperation_RefinedRelation();
+
+		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.ConstructorImpl <em>Constructor</em>}' class.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
@@ -5482,6 +5530,14 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY = eINSTANCE.getOperationalTransformation_IntermediateProperty();
+
+		/**
+		 * The meta object literal for the '<em><b>Refined</b></em>' reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference OPERATIONAL_TRANSFORMATION__REFINED = eINSTANCE.getOperationalTransformation_Refined();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.LibraryImpl <em>Library</em>}' class.

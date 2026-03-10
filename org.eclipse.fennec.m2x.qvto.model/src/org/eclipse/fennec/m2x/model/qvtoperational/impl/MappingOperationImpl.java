@@ -32,6 +32,8 @@ import org.eclipse.emf.ecore.util.InternalEList;
 
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 
+import org.eclipse.fennec.m2x.model.qvtbase.Rule;
+
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
 
@@ -48,6 +50,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.MappingOperationImpl#getDisjunct <em>Disjunct</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.MappingOperationImpl#getInherited <em>Inherited</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.MappingOperationImpl#getMerged <em>Merged</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.impl.MappingOperationImpl#getRefinedRelation <em>Refined Relation</em>}</li>
  * </ul>
  *
  * @generated
@@ -102,6 +105,16 @@ public class MappingOperationImpl extends ImperativeOperationImpl implements Map
 	 * @ordered
 	 */
 	protected EList<MappingOperation> merged;
+
+	/**
+	 * The cached value of the '{@link #getRefinedRelation() <em>Refined Relation</em>}' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getRefinedRelation()
+	 * @generated
+	 * @ordered
+	 */
+	protected Rule refinedRelation;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -225,6 +238,46 @@ public class MappingOperationImpl extends ImperativeOperationImpl implements Map
 	 * @generated
 	 */
 	@Override
+	public Rule getRefinedRelation() {
+		if (refinedRelation != null && refinedRelation.eIsProxy()) {
+			InternalEObject oldRefinedRelation = (InternalEObject)refinedRelation;
+			refinedRelation = (Rule)eResolveProxy(oldRefinedRelation);
+			if (refinedRelation != oldRefinedRelation) {
+				if (eNotificationRequired())
+					eNotify(new ENotificationImpl(this, Notification.RESOLVE, QvtOperationalPackage.MAPPING_OPERATION__REFINED_RELATION, oldRefinedRelation, refinedRelation));
+			}
+		}
+		return refinedRelation;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public Rule basicGetRefinedRelation() {
+		return refinedRelation;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setRefinedRelation(Rule newRefinedRelation) {
+		Rule oldRefinedRelation = refinedRelation;
+		refinedRelation = newRefinedRelation;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, QvtOperationalPackage.MAPPING_OPERATION__REFINED_RELATION, oldRefinedRelation, refinedRelation));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
 		switch (featureID) {
 			case QvtOperationalPackage.MAPPING_OPERATION__WHEN:
@@ -253,6 +306,9 @@ public class MappingOperationImpl extends ImperativeOperationImpl implements Map
 				return getInherited();
 			case QvtOperationalPackage.MAPPING_OPERATION__MERGED:
 				return getMerged();
+			case QvtOperationalPackage.MAPPING_OPERATION__REFINED_RELATION:
+				if (resolve) return getRefinedRelation();
+				return basicGetRefinedRelation();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}
@@ -285,6 +341,9 @@ public class MappingOperationImpl extends ImperativeOperationImpl implements Map
 				getMerged().clear();
 				getMerged().addAll((Collection<? extends MappingOperation>)newValue);
 				return;
+			case QvtOperationalPackage.MAPPING_OPERATION__REFINED_RELATION:
+				setRefinedRelation((Rule)newValue);
+				return;
 		}
 		super.eSet(featureID, newValue);
 	}
@@ -312,6 +371,9 @@ public class MappingOperationImpl extends ImperativeOperationImpl implements Map
 			case QvtOperationalPackage.MAPPING_OPERATION__MERGED:
 				getMerged().clear();
 				return;
+			case QvtOperationalPackage.MAPPING_OPERATION__REFINED_RELATION:
+				setRefinedRelation((Rule)null);
+				return;
 		}
 		super.eUnset(featureID);
 	}
@@ -334,6 +396,8 @@ public class MappingOperationImpl extends ImperativeOperationImpl implements Map
 				return inherited != null && !inherited.isEmpty();
 			case QvtOperationalPackage.MAPPING_OPERATION__MERGED:
 				return merged != null && !merged.isEmpty();
+			case QvtOperationalPackage.MAPPING_OPERATION__REFINED_RELATION:
+				return refinedRelation != null;
 		}
 		return super.eIsSet(featureID);
 	}

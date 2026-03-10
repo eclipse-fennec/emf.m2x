@@ -29,6 +29,8 @@ import org.eclipse.fennec.m2x.model.imperativeocl.impl.ImperativeOclPackageImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 
+import org.eclipse.fennec.m2x.model.qvtbase.QvtbasePackage;
+
 import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
@@ -305,6 +307,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 
 		// Initialize simple dependencies
 		OclPackage.eINSTANCE.eClass();
+		QvtbasePackage.eINSTANCE.eClass();
 
 		// Obtain or create and register interdependencies
 		Object registeredPackage = EPackage.Registry.INSTANCE.getEPackage(ImperativeOclPackage.eNS_URI);
@@ -656,6 +659,16 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	 * @generated
 	 */
 	@Override
+	public EReference getMappingOperation_RefinedRelation() {
+		return (EReference)mappingOperationEClass.getEStructuralFeatures().get(5);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getConstructor() {
 		return constructorEClass;
 	}
@@ -788,6 +801,16 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 	@Override
 	public EReference getOperationalTransformation_IntermediateProperty() {
 		return (EReference)operationalTransformationEClass.getEStructuralFeatures().get(2);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getOperationalTransformation_Refined() {
+		return (EReference)operationalTransformationEClass.getEStructuralFeatures().get(3);
 	}
 
 	/**
@@ -1279,6 +1302,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		createEReference(mappingOperationEClass, MAPPING_OPERATION__DISJUNCT);
 		createEReference(mappingOperationEClass, MAPPING_OPERATION__INHERITED);
 		createEReference(mappingOperationEClass, MAPPING_OPERATION__MERGED);
+		createEReference(mappingOperationEClass, MAPPING_OPERATION__REFINED_RELATION);
 
 		constructorEClass = createEClass(CONSTRUCTOR);
 
@@ -1297,6 +1321,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		createEReference(operationalTransformationEClass, OPERATIONAL_TRANSFORMATION__MODEL_PARAMETER);
 		createEReference(operationalTransformationEClass, OPERATIONAL_TRANSFORMATION__INTERMEDIATE_CLASS);
 		createEReference(operationalTransformationEClass, OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY);
+		createEReference(operationalTransformationEClass, OPERATIONAL_TRANSFORMATION__REFINED);
 
 		libraryEClass = createEClass(LIBRARY);
 
@@ -1381,6 +1406,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 
 		// Obtain other dependent packages
 		OclPackage theOclPackage = (OclPackage)EPackage.Registry.INSTANCE.getEPackage(OclPackage.eNS_URI);
+		QvtbasePackage theQvtbasePackage = (QvtbasePackage)EPackage.Registry.INSTANCE.getEPackage(QvtbasePackage.eNS_URI);
 		ImperativeOclPackage theImperativeOclPackage = (ImperativeOclPackage)EPackage.Registry.INSTANCE.getEPackage(ImperativeOclPackage.eNS_URI);
 
 		// Create type parameters
@@ -1455,6 +1481,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		initEReference(getMappingOperation_Disjunct(), this.getMappingOperation(), null, "disjunct", null, 0, -1, MappingOperation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getMappingOperation_Inherited(), this.getMappingOperation(), null, "inherited", null, 0, -1, MappingOperation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getMappingOperation_Merged(), this.getMappingOperation(), null, "merged", null, 0, -1, MappingOperation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getMappingOperation_RefinedRelation(), theQvtbasePackage.getRule(), null, "refinedRelation", null, 0, 1, MappingOperation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(constructorEClass, Constructor.class, "Constructor", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 
@@ -1473,6 +1500,7 @@ public class QvtOperationalPackageImpl extends EPackageImpl implements QvtOperat
 		initEReference(getOperationalTransformation_ModelParameter(), this.getModelParameter(), null, "modelParameter", null, 0, -1, OperationalTransformation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getOperationalTransformation_IntermediateClass(), ecorePackage.getEClass(), null, "intermediateClass", null, 0, -1, OperationalTransformation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getOperationalTransformation_IntermediateProperty(), ecorePackage.getEStructuralFeature(), null, "intermediateProperty", null, 0, -1, OperationalTransformation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getOperationalTransformation_Refined(), theQvtbasePackage.getTransformation(), null, "refined", null, 0, 1, OperationalTransformation.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(libraryEClass, Library.class, "Library", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 

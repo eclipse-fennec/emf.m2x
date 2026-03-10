@@ -12,5 +12,5 @@ Bundle-Description: MOFM2T v1.0 EMF metamodel (2 EEnums, 17 EClasses)
 -includeresource.model: model=model
 
 -buildpath: \
-	org.eclipse.fennec.m2x.ocl.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.osgi.service.condition;version=latest

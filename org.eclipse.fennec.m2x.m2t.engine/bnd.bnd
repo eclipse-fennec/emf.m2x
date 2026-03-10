@@ -4,12 +4,12 @@ Bundle-Description: MOFM2T v1.0 template evaluator and text generation engine
 -library: enableEMF
 
 -buildpath: \
-	org.eclipse.fennec.m2x.m2t.api;version=latest,\
-	org.eclipse.fennec.m2x.m2t.model;version=latest,\
-	org.eclipse.fennec.m2x.m2t.parser;version=latest,\
-	org.eclipse.fennec.m2x.ocl.api;version=latest,\
-	org.eclipse.fennec.m2x.ocl.model;version=latest,\
-	org.eclipse.fennec.m2x.ocl.engine;version=latest,\
-	org.eclipse.fennec.m2x.ocl.parser;version=latest,\
+	org.eclipse.fennec.m2x.m2t.api;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.model;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
 	org.osgi.service.component.annotations;version=latest,\
 	org.osgi.service.condition;version=latest

@@ -18,6 +18,8 @@ import org.eclipse.emf.common.util.EList;
 
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 
+import org.eclipse.fennec.m2x.model.qvtbase.Rule;
+
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -38,6 +40,7 @@ import org.osgi.annotation.versioning.ProviderType;
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation#getDisjunct <em>Disjunct</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation#getInherited <em>Inherited</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation#getMerged <em>Merged</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation#getRefinedRelation <em>Refined Relation</em>}</li>
  * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getMappingOperation()
@@ -115,5 +118,30 @@ public interface MappingOperation extends ImperativeOperation {
 	 * @generated
 	 */
 	EList<MappingOperation> getMerged();
+
+	/**
+	 * Returns the value of the '<em><b>Refined Relation</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * The relation (Rule) being refined by this mapping operation (QVT v1.3 §8.2.1.15). Typed as Rule (from qvtbase) to avoid qvto.model→qvtd.model dependency; at runtime this is always a Relation instance.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Refined Relation</em>' reference.
+	 * @see #setRefinedRelation(Rule)
+	 * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getMappingOperation_RefinedRelation()
+	 * @model
+	 * @generated
+	 */
+	Rule getRefinedRelation();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation#getRefinedRelation <em>Refined Relation</em>}' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Refined Relation</em>' reference.
+	 * @see #getRefinedRelation()
+	 * @generated
+	 */
+	void setRefinedRelation(Rule value);
 
 } // MappingOperation
