@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.engine;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -33,6 +34,7 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvalEnvironment;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvaluator;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrExtentManager;
@@ -59,6 +61,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 	private final QvtrParserSupport parserSupport;
 	private final OclEngineImpl oclEngine;
 	private final QvtdConfiguration config;
+	private final List<RelationImplementationProvider> implementationProviders = new ArrayList<>();
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -110,7 +113,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 			QvtrExtentManager extentManager = new QvtrExtentManager(transformation, context);
 			QvtrEvaluator evaluator = new QvtrEvaluator(
 					oclEngine, env, transformation, extentManager, context,
-					config.blackboxRegistry());
+					config.blackboxRegistry(), List.copyOf(implementationProviders));
 
 			List<Diagnostic> diagnostics = evaluator.execute();
 			return new QvtdExecutionResult(diagnostics, !context.checkOnly());
@@ -123,6 +126,12 @@ public class QvtdEngineImpl implements QvtdEngine {
 							0, "Execution error: " + e.getMessage(), null)),
 					false);
 		}
+	}
+
+	@Override
+	public void registerImplementationProvider(RelationImplementationProvider provider) {
+		Objects.requireNonNull(provider, "provider must not be null");
+		implementationProviders.add(provider);
 	}
 
 	/**

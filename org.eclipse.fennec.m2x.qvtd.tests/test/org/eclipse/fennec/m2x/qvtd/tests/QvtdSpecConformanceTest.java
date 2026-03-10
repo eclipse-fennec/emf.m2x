@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
-import org.eclipse.fennec.m2x.model.qvtbase.Rule;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
@@ -1262,11 +1261,39 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 	class ImportMultiFile {
 
 		@Test
-		@Disabled("GAP-10: Import requires file resolution infrastructure (finding/parsing external units by name/URI) — deferred to Phase 5")
+		@Disabled("GAP-10: Multi-file import — deferred to Phase 5 (Language Servers). "
+				+ "§7.13.4 defines 'import' syntax for referencing external QVT-R units by URI. "
+				+ "Requires: (1) UnitResolver infrastructure for QVT-R (analog to QvtoUnitResolver), "
+				+ "(2) file lookup + external parsing + cross-unit linking in QvtrParserSupport, "
+				+ "(3) relation/query sharing across compilation units. "
+				+ "Currently all QVT-R transformations are single-file. Multi-file becomes relevant "
+				+ "with Language Server support (live editing, workspace-wide resolution).")
 		@DisplayName("import resolves external transformation unit")
 		void importResolvesExternalUnit() throws QvtdParseException {
 			// §7.13.4: 'import' [identifier ':'] URI ('::' identifier)* ['::*'] ';'
-			// Requires: file lookup, external parsing, cross-unit linking
+			//
+			// What this gap requires:
+			// 1. QvtdUnitResolver interface (analog to QvtoUnitResolver) — resolves
+			//    unit names/URIs to source text or pre-parsed RelationalTransformations.
+			// 2. QvtrParserSupport extended to handle multi-unit parsing — parse the
+			//    imported unit, merge relations/queries into the importing transformation.
+			// 3. Cross-unit relation calls — a relation in unit A can invoke a relation
+			//    from imported unit B via 'where { B::SomeRelation(...); }'.
+			// 4. QvtdConfiguration extended with unitResolvers (like QvtoConfiguration).
+			//
+			// Example (when implemented):
+			//   // helpers.qvtr
+			//   transformation Helpers(uml : simpleuml, rdbms : simplerdbms) {
+			//       relation NameMapping { ... }
+			//   }
+			//   // main.qvtr
+			//   import helpers;
+			//   transformation Main(uml : simpleuml, rdbms : simplerdbms) {
+			//       top relation ClassToTable {
+			//           ...
+			//           where { Helpers::NameMapping(cn, tn); }
+			//       }
+			//   }
 		}
 	}
 
@@ -1433,11 +1460,34 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 	class ChangePropagation {
 
 		@Test
-		@Disabled("GAP-13: §7.6 change propagation is semantically equivalent to full re-execution; incremental optimization deferred to Phase 5")
+		@Disabled("GAP-13: Incremental change propagation — deferred to Phase 5 (Language Servers). "
+				+ "§7.10.4 describes incremental re-execution where only affected relations re-run "
+				+ "after source model changes. Our engine currently performs full re-execution, which "
+				+ "is semantically correct (produces identical results). Incremental execution is a "
+				+ "performance optimization requiring: (1) dependency graph between relations, "
+				+ "(2) change listeners on source model extents, (3) dirty-marking of affected traces. "
+				+ "Becomes relevant with Language Server support (live preview, watch mode).")
 		@DisplayName("Incremental execution propagates changes without full re-execution")
 		void incrementalChangePropagation() throws QvtdParseException {
-			// §7.10.4: When a source model changes, only affected relations should
-			// re-execute rather than full re-execution. Requires dependency tracking.
+			// §7.10.4: Change propagation — incremental re-execution optimization.
+			//
+			// Current behavior: Full re-execution on every engine.execute() call.
+			// This is CORRECT per spec — §7.6 states that change propagation is
+			// "semantically equivalent to re-execution of the transformation".
+			//
+			// What this gap requires for INCREMENTAL execution:
+			// 1. Dependency graph: track which relations depend on which model elements.
+			//    When element E changes, only relations touching E need re-execution.
+			// 2. Change listeners: EMF EContentAdapter or similar on source extents to
+			//    detect modifications between execute() calls.
+			// 3. Trace-based dirty marking: use QvtrTraceManager to identify which
+			//    trace entries are invalidated by the change, re-execute only those.
+			// 4. Target model update: merge incremental results into existing target
+			//    (update/delete affected elements, keep unaffected ones).
+			//
+			// This is a pure performance optimization — the spec explicitly notes that
+			// full re-execution produces correct results. Incremental mode becomes
+			// valuable in IDE/LSP scenarios with live model editing.
 		}
 	}
 

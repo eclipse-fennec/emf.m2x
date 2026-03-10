@@ -66,6 +66,9 @@ Three EPackages following the spec structure:
 - `optionalMultiplicity` (`[?]`) — Eclipse extension (GAP-5)
 - `implementedby` clause on domains (GAP-12)
 
+**Post-parse validation:**
+- `QvtrBindingValidator` — §7.5 binding restriction analysis (run after AST build)
+
 **EAnnotation conventions** (metadata without metamodel changes):
 | Annotation Source | On | Purpose |
 |---|---|---|
@@ -164,6 +167,27 @@ For **in-place** transformations (GAP-7): same TypedModel can appear in both sou
 | Optional `[?]` | Eclipse ext. | `DomainPattern` EAnnotation, null binding |
 | Default values | §7.11.3 | `default_values { ... }` assignment |
 | Opposite properties | §7.11.2 | `opposite(T::prop)` in templates |
+| Binding validation | §7.5 | `QvtrBindingValidator` — post-parse static analysis |
+| Standard Library | §7.12 | OCL standard library (spec: "no additional operation") |
+
+### 6.1 Binding Validation (§7.5)
+
+The parser performs a post-parse static analysis via `QvtrBindingValidator` to enforce
+§7.5 "Restrictions on Expressions". For each relation, the validator:
+
+1. **Collects binding sites** — variables bound by:
+   - Explicit variable declarations
+   - When-clause `RelationCallExp` arguments (bound from trace)
+   - Domain template patterns (`ObjectTemplateExp.bindsTo`, `PropertyTemplateItem` simple VariableExp, `CollectionTemplateExp.bindsTo`/`rest`/members)
+   - Primitive domain root variables
+
+2. **Checks each domain as potential target** — since the target domain depends on execution direction, the validator verifies that for each domain D, all non-binding variable references in D's template expressions are satisfiable from external sources (when-clause + other domains + variable declarations).
+
+3. **Checks when/where clauses** — all variable references must be bound by appropriate sources.
+
+4. **Respects local scopes** — variables introduced by `LetExp`, `IteratorExp`, and `IterateExp` are correctly scoped and not flagged as unresolved.
+
+Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entries referencing §7.5.
 
 ## 7. Known Gaps (deferred)
 
@@ -171,7 +195,7 @@ For **in-place** transformations (GAP-7): same TypedModel can appear in both sou
 |-----|---------|--------|--------|
 | GAP-10 | Multi-file import | Needs file resolution infrastructure | Phase 5 |
 | GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution | Phase 5 |
-| GAP-6 | QVT-O `refined` relation | QVT-R↔QVT-O interop | Phase 4b |
+| GAP-6 | QVT-O `refined` — stub resolution | Parser + Provider-Brücke ✅ (Phase 4b). Runtime Stub-Auflösung (`OT.refined` → echte RT) + Trace-Semantik ausstehend | Phase 5 |
 
 ## 8. Design Decisions
 
@@ -195,5 +219,7 @@ For **in-place** transformations (GAP-7): same TypedModel can appear in both sou
 | `QvtdEngineTraceTest` | Traces, RelationCallExp, non-top relations | ~10 |
 | `QvtdE2EUmlToRdbmsTest` | End-to-end UML→RDBMS transformation | ~5 |
 | `QvtdSpecConformanceTest` | Systematic spec conformance (per section) | ~46 |
+| `QvtdBindingValidatorTest` | §7.5 binding validation (valid/invalid/edge) | 16 |
+| `QvtdHybridIntegrationTest` | §7.8 QVT-R↔QVT-O hybrid (Phase 4b) | 13 |
 
-**Total: 96 tests, 0 failures, 2 @Disabled**
+**Total: 125 tests, 0 failures, 2 @Disabled**

@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvtd.parser;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,6 +22,8 @@ import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.model.qvtbase.Rule;
+import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 
@@ -84,6 +87,9 @@ public class QvtrParserSupport {
 			result.setName(unitName);
 		}
 
+		// §7.5: Validate binding restrictions on all relations
+		validateBindings(result, unitName);
+
 		return result;
 	}
 
@@ -104,6 +110,28 @@ public class QvtrParserSupport {
 		lexer.addErrorListener(errorListener);
 
 		return errorListener;
+	}
+
+	/**
+	 * Validates §7.5 binding restrictions on all relations in the transformation.
+	 * Reports unresolved variable references and binding order violations.
+	 */
+	private void validateBindings(RelationalTransformation transformation, String unitName)
+			throws QvtdParseException {
+		QvtrBindingValidator validator = new QvtrBindingValidator();
+		List<Resource.Diagnostic> allDiagnostics = new ArrayList<>();
+
+		for (Rule rule : transformation.getRule()) {
+			if (rule instanceof Relation relation) {
+				allDiagnostics.addAll(validator.validate(relation));
+			}
+		}
+
+		if (!allDiagnostics.isEmpty()) {
+			String message = "QVT-R binding validation error in '" + unitName + "': "
+					+ allDiagnostics.get(0).getMessage();
+			throw new QvtdParseException(message, allDiagnostics);
+		}
 	}
 
 	private void checkErrors(QvtrErrorListener errorListener, String unitName)

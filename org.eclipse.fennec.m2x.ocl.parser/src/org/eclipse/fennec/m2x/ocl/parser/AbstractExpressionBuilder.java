@@ -14,7 +14,6 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -46,7 +45,6 @@ import org.eclipse.fennec.m2x.model.ocl.IntegerLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.InvalidLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.IterateExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
-import org.eclipse.fennec.m2x.model.ocl.LetExp;
 import org.eclipse.fennec.m2x.model.ocl.MapLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.MapLiteralPart;
 import org.eclipse.fennec.m2x.model.ocl.NullLiteralExp;

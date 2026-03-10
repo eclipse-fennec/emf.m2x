@@ -16,10 +16,7 @@ package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
-import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralPart;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
@@ -401,7 +398,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		if (AbstractExpressionBuilder.ITERATOR_NAMES.contains(opName) && ctx.argumentList() != null
 				&& ctx.argumentList().expression().size() == 1) {
 			OclEnvironment savedEnv = env();
-			Variable iterVar = support.pushImplicitIteratorEnv(source);
+			support.pushImplicitIteratorEnv(source);
 			OclExpression body = (OclExpression) visit(ctx.argumentList().expression(0));
 			setEnv(savedEnv);
 			return support.buildImplicitIterator(source, opName, body, isSafe);

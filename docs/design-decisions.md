@@ -726,18 +726,20 @@ QvtoEvaluator
 | P4-5 | `qvtd.engine` | Traces: implizite Trace-Erzeugung, RelationCallExp in when/where, non-top relation invocation |
 | P4-6 | `qvtd.tests` | Spec-Conformance Tests, E2E-Tests mit UML→RDBMS Beispiel aus Spec |
 
-**Phase 4b — QVT-R↔QVT-O Hybrid (deferred):**
+**Phase 4b — QVT-R↔QVT-O Hybrid ✅ (teilweise abgeschlossen):**
 
-| Sub-Phase | Inhalt |
-|-----------|--------|
-| P4-7 | GAP-6: `OperationalTransformation.refined`, `MappingOperation.refinedRelation` |
-| P4-8 | §7.8: Blackbox/QVT-O Implementierung für Relations |
+| Sub-Phase | Inhalt | Status |
+|-----------|--------|--------|
+| P4b-1 | Parser: `refines` keyword (§8.4.7), Grammar (`moduleRefName` akzeptiert `::` und `.`), UnitBuilder (Stub Transformation + EAnnotation) | ✅ 12 Tests |
+| P4b-2 | D39 Brücke: `QvtoEngineImpl implements RelationImplementationProvider`, `QvtdEngine.registerImplementationProvider()`, `QvtrEvaluator` Provider-First + Blackbox-Fallback | ✅ |
+| P4b-3 | Runtime Stub-Auflösung: `OT.refined` → echte `RelationalTransformation` via QvtdEngine | ⏳ Phase 5 |
+| P4b-4 | Integration-Tests (Hybrid QVT-O↔QVT-R) | ✅ 13 Tests |
 
-**Rationale:** Phase 4a ist in sich geschlossen — QVT-R ist standalone nutzbar ohne QVT-O. Phase 4b ist optional und kann unabhängig nachgezogen werden. Die Sub-Phasen folgen dem bewährten Muster: Metamodell → API → Parser → Engine (inkrementell) → Tests.
+**D40:** `qvtbase.ecore` in Shared-Bundle `org.eclipse.fennec.m2x.qvt.model` extrahiert (9 Classifiers).
 
-**Deferred QVT-O Gaps (unlocked durch Phase 4):**
-- **GAP-6** (`refined`, `relation`, `refinedRelation`) → Phase 4b
-- **GAP-13 Semantik** (`refines` pattern inheritance) → Phase 4b
+**Verbleibende TODOs (deferred → Phase 5):**
+- **P4b-3:** Stub-Auflösung `OT.refined` → echte RT zur Laufzeit. QVT-O Engine braucht Zugang zum QVT-R Engine (Reverse-Richtung). Erst relevant wenn QVT-O Engine eine QVT-R Transformation tatsächlich laden/ausführen soll.
+- **GAP-13 Semantik:** `refines` pattern inheritance — Mapping populates same trace as refined Relation (§8.2.1.15). Erfordert P4b-3.
 
 ---
 

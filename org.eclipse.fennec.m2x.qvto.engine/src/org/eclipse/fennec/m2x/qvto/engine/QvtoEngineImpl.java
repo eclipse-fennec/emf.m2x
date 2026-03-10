@@ -18,18 +18,29 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 
 import org.eclipse.emf.common.util.Diagnostic;
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.trace.Trace;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
+import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
@@ -57,7 +68,7 @@ import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-public class QvtoEngineImpl implements QvtoEngine {
+public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvider {
 
 	private final QvtoParserSupport parserSupport;
 	private final OclEngineImpl oclEngine;
@@ -68,6 +79,9 @@ public class QvtoEngineImpl implements QvtoEngine {
 	private final Set<String> allowedBlackboxModules;
 	private final boolean unitResolverEnabled;
 	private final Set<String> allowedUnitModules;
+
+	/** Loaded transformation for RelationImplementationProvider (D39, Phase 4b). */
+	private volatile OperationalTransformation loadedTransformation;
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -182,5 +196,105 @@ public class QvtoEngineImpl implements QvtoEngine {
 	 */
 	public QvtoBlackboxRegistry getBlackboxRegistry() {
 		return blackboxRegistry;
+	}
+
+	// --- RelationImplementationProvider (D39, Phase 4b) ---
+
+	/**
+	 * Loads a parsed QVT-O transformation so this engine can serve as a
+	 * {@link RelationImplementationProvider} for QVT-R hybrid execution.
+	 *
+	 * @param transformation the parsed operational transformation
+	 */
+	public void loadTransformation(OperationalTransformation transformation) {
+		this.loadedTransformation = Objects.requireNonNull(transformation);
+	}
+
+	@Override
+	public boolean canProvide(String relationQualifiedName) {
+		OperationalTransformation ot = loadedTransformation;
+		if (ot == null) {
+			return false;
+		}
+		return findMappingByName(ot, relationQualifiedName) != null;
+	}
+
+	@Override
+	public QvtdExecutionResult executeRelation(String relationQualifiedName,
+			QvtdExecutionContext qvtdContext) {
+		OperationalTransformation ot = loadedTransformation;
+		if (ot == null) {
+			return new QvtdExecutionResult(
+					List.of(new org.eclipse.emf.common.util.BasicDiagnostic(
+							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine", 0,
+							"No QVT-O transformation loaded for relation: " + relationQualifiedName,
+							null)),
+					false);
+		}
+
+		// Bridge QvtdExecutionContext → QvtoExecutionContext
+		// Map named extents to positional extents matching OT model parameters
+		List<QvtoModelExtent> extents = new ArrayList<>();
+		for (var modelParam : ot.getModelParameter()) {
+			String paramName = modelParam.getName();
+			QvtdModelExtent qvtdExtent = qvtdContext.modelExtents().get(paramName);
+			if (qvtdExtent != null) {
+				extents.add(bridgeExtent(qvtdExtent));
+			} else {
+				// Use empty extent for unmatched parameters
+				extents.add(new BridgedModelExtent(new ArrayList<>()));
+			}
+		}
+
+		QvtoExecutionContext qvtoCtx = QvtoExecutionContext.of(extents, Map.of());
+		QvtoExecutionResult qvtoResult = execute(ot, qvtoCtx);
+
+		// Bridge result back
+		List<Diagnostic> diagnostics = qvtoResult.diagnostics();
+		return new QvtdExecutionResult(diagnostics, !qvtdContext.checkOnly());
+	}
+
+	private static MappingOperation findMappingByName(OperationalTransformation ot, String name) {
+		for (var classifier : ot.getEClassifiers()) {
+			if (classifier instanceof EClass ec) {
+				for (EOperation op : ec.getEOperations()) {
+					if (op instanceof MappingOperation mo && name.equals(mo.getName())) {
+						return mo;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	private static QvtoModelExtent bridgeExtent(QvtdModelExtent qvtdExtent) {
+		return new BridgedModelExtent(qvtdExtent.getContents());
+	}
+
+	/**
+	 * Bridges a QVT-R model extent to a QVT-O model extent. Both share the
+	 * same underlying object list so mutations are visible across engines.
+	 */
+	private static final class BridgedModelExtent implements QvtoModelExtent {
+		private List<EObject> contents;
+
+		BridgedModelExtent(List<EObject> contents) {
+			this.contents = new ArrayList<>(contents);
+		}
+
+		@Override
+		public List<EObject> getContents() {
+			return contents;
+		}
+
+		@Override
+		public void setContents(List<? extends EObject> newContents) {
+			contents = new ArrayList<>(newContents);
+		}
+
+		@Override
+		public void add(EObject object) {
+			contents.add(object);
+		}
 	}
 }

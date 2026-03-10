@@ -60,6 +60,8 @@ import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
 
 /**
  * Core evaluator for QVT-R transformations (§7.10).
@@ -89,19 +91,22 @@ public class QvtrEvaluator {
 	private final QvtrExtentManager extentManager;
 	private final QvtdExecutionContext context;
 	private final QvtdBlackboxRegistry blackboxRegistry;
+	private final List<RelationImplementationProvider> implementationProviders;
 	private final QvtrPatternMatcher patternMatcher;
 	private final QvtrTraceManager traceManager = new QvtrTraceManager();
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
 
 	public QvtrEvaluator(OclEngineImpl oclEngine, QvtrEvalEnvironment env,
 			RelationalTransformation transformation, QvtrExtentManager extentManager,
-			QvtdExecutionContext context, QvtdBlackboxRegistry blackboxRegistry) {
+			QvtdExecutionContext context, QvtdBlackboxRegistry blackboxRegistry,
+			List<RelationImplementationProvider> implementationProviders) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
 		this.extentManager = Objects.requireNonNull(extentManager, "extentManager must not be null");
 		this.context = Objects.requireNonNull(context, "context must not be null");
 		this.blackboxRegistry = blackboxRegistry; // may be null
+		this.implementationProviders = Objects.requireNonNull(implementationProviders);
 		this.patternMatcher = new QvtrPatternMatcher(oclEngine, extentManager);
 	}
 
@@ -1030,7 +1035,9 @@ public class QvtrEvaluator {
 	/**
 	 * Invokes an implementedby operational implementation (§7.11.3.6).
 	 * Searches the relation's {@code operationalImpl} list for an implementation
-	 * matching the target direction and delegates to the blackbox registry.
+	 * matching the target direction and delegates first to registered
+	 * {@link RelationImplementationProvider}s (D39, Phase 4b), then falls back
+	 * to the blackbox registry.
 	 *
 	 * @return {@code true} if an implementation was found and invoked
 	 */
@@ -1040,10 +1047,28 @@ public class QvtrEvaluator {
 			TypedModel direction = impl.getInDirectionOf();
 			if (direction != null && targetModel.getName().equals(direction.getName())) {
 				EOperation op = impl.getImpl();
-				if (op == null || blackboxRegistry == null) {
+				if (op == null) {
 					continue;
 				}
 				String opName = op.getName();
+
+				// §7.8 / D39: Try RelationImplementationProviders first (QVT-O hybrid)
+				String qualifiedName = relation.getName();
+				for (RelationImplementationProvider provider : implementationProviders) {
+					if (provider.canProvide(qualifiedName)) {
+						QvtdExecutionResult result = provider.executeRelation(qualifiedName, context);
+						if (result.isSuccess()) {
+							return true;
+						}
+						diagnostics.addAll(result.diagnostics());
+						return true; // invoked, even if errors
+					}
+				}
+
+				// Fallback: blackbox registry
+				if (blackboxRegistry == null) {
+					continue;
+				}
 
 				// Evaluate argument expressions from annotation
 				Object[] argValues = new Object[0];

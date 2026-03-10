@@ -638,10 +638,4 @@ class QvtdEnginePatternTest extends AbstractQvtdEngineTest {
 		return schema;
 	}
 
-	private static EObject createTable(String name) {
-		EClass cls = ecoreHelper.getEClass(rdbmsPackage, "Table");
-		EObject table = EcoreUtil.create(cls);
-		table.eSet(cls.getEStructuralFeature("name"), name);
-		return table;
-	}
 }

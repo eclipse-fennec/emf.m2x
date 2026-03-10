@@ -101,7 +101,6 @@ public abstract class AbstractQvtdEngineTest {
 		return pkg;
 	}
 
-	@SuppressWarnings("unchecked")
 	protected static EObject createClass(String name, String kind) {
 		EClass cls = ecoreHelper.getEClass(umlPackage, "Class");
 		EObject clazz = EcoreUtil.create(cls);

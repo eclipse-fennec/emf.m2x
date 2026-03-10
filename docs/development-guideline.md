@@ -855,16 +855,20 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 - GAP-10: Multi-File Import (needs file resolution infrastructure)
 - GAP-13: Change Propagation (§7.6 — semantically equivalent to full re-execution)
 
-#### Phase 4b — QVT-R↔QVT-O Hybrid (deferred)
+#### Phase 4b — QVT-R↔QVT-O Hybrid ✅ (teilweise)
 
-| Sub-Phase | Description |
-|-----------|-------------|
-| P4-7 | GAP-6: `OperationalTransformation.refined`, `MappingOperation.refinedRelation` (§8.2.1.1, §8.2.1.11) |
-| P4-8 | §7.8: Blackbox/QVT-O implementation for Relations |
+| Sub-Phase | Description | Status |
+|-----------|-------------|--------|
+| P4b-1 | Parser: `refines` keyword (§8.4.7) — Grammar, UnitBuilder, Stub/EAnnotation | ✅ 12 Tests |
+| P4b-2 | D39 Brücke: `QvtoEngineImpl` implements `RelationImplementationProvider` | ✅ |
+| P4b-3 | Runtime Stub-Auflösung: `OT.refined` → echte `RelationalTransformation` via QvtdEngine | ⏳ Phase 5 |
+| P4b-4 | Integration-Tests | ✅ 13 Tests |
 
-**Deferred QVT-O Gaps (unlocked by Phase 4):**
-- **GAP-6** (`refined`, `relation`, `refinedRelation`) — QVT-O transformation refines a QVT-R transformation → Phase 4b
-- **GAP-13 Semantik** (`refines` pattern inheritance) — Parser support ✅ (6 tests), semantic execution requires relation refinement logic → Phase 4b
+**D40:** `qvtbase.ecore` in Shared-Bundle `org.eclipse.fennec.m2x.qvt.model` extrahiert.
+
+**Verbleibende TODOs (Phase 5):**
+- **P4b-3:** Wenn QVT-O Engine eine Transformation mit `refines BaseRT` ausführt, muss der Name-Only-Stub `OT.refined` zur Laufzeit gegen die echte `RelationalTransformation` aufgelöst werden. Erfordert: QVT-O Engine bekommt Zugang zum QVT-R Engine (Reverse-Richtung zu P4b-2). Relevant erst wenn ein QVT-O Engine tatsächlich eine QVT-R Transformation laden und ausführen soll.
+- **GAP-13 Semantik:** `refines` pattern inheritance — der QVT-O Engine soll bei Mapping-Ausführung die refinedRelation-Trace-Semantik nutzen (§8.2.1.15: Mapping populates same trace as refined Relation). Erfordert P4b-3 als Voraussetzung.
 
 ### Phase 5: Language Servers (Future)
 

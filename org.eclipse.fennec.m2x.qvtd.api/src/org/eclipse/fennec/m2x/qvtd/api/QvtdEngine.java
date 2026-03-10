@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.qvtd.api;
 
+import java.util.Objects;
+
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.osgi.annotation.versioning.ProviderType;
@@ -69,4 +71,19 @@ public interface QvtdEngine {
 	 */
 	QvtdExecutionResult execute(RelationalTransformation transformation,
 			QvtdExecutionContext context);
+
+	/**
+	 * Registers a {@link RelationImplementationProvider} for hybrid QVT-O ↔ QVT-R
+	 * execution (D39).
+	 *
+	 * <p>When a QVT-R relation has an {@code implementedby} clause, the engine
+	 * queries registered providers via {@link RelationImplementationProvider#canProvide}
+	 * before falling back to the blackbox registry.
+	 *
+	 * @param provider the provider to register, must not be {@code null}
+	 */
+	default void registerImplementationProvider(RelationImplementationProvider provider) {
+		Objects.requireNonNull(provider, "provider must not be null");
+		// Default no-op for backward compatibility
+	}
 }
