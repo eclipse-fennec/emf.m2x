@@ -37,6 +37,7 @@ import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 
 /**
  * Pattern matcher for QVT-R domain patterns (§7.10.3).
@@ -61,10 +62,13 @@ public class QvtrPatternMatcher {
 
 	private final OclEngineImpl oclEngine;
 	private final QvtrExtentManager extentManager;
+	private final int maxBindings;
 
-	public QvtrPatternMatcher(OclEngineImpl oclEngine, QvtrExtentManager extentManager) {
+	public QvtrPatternMatcher(OclEngineImpl oclEngine, QvtrExtentManager extentManager,
+			int maxBindings) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.extentManager = Objects.requireNonNull(extentManager, "extentManager must not be null");
+		this.maxBindings = maxBindings;
 	}
 
 	/**
@@ -192,6 +196,7 @@ public class QvtrPatternMatcher {
 			List<Map<String, Object>> nextSets = new ArrayList<>();
 			for (Map<String, Object> bs : currentSets) {
 				nextSets.addAll(matchPropertyItemAll(item, object, bs));
+				checkBindingLimit(nextSets);
 			}
 			currentSets = nextSets;
 			if (currentSets.isEmpty()) {
@@ -437,6 +442,7 @@ public class QvtrPatternMatcher {
 				}
 			}
 
+			checkBindingLimit(nextSets);
 			currentSets = nextSets;
 			if (currentSets.isEmpty()) {
 				return List.of();
@@ -480,6 +486,19 @@ public class QvtrPatternMatcher {
 			Map<String, Object> bindings) {
 		OclContext ctx = new OclContext(contextObject, null, bindings);
 		return oclEngine.evaluate(expression, ctx);
+	}
+
+	/**
+	 * Checks if the number of binding sets exceeds the configured limit (M-R3).
+	 *
+	 * @throws QvtdExecutionException if the limit is exceeded
+	 */
+	private void checkBindingLimit(List<?> bindings) {
+		if (bindings.size() > maxBindings) {
+			throw new QvtdExecutionException(
+					"Pattern matching binding limit exceeded (%d) — possible cross-product explosion"
+							.formatted(maxBindings));
+		}
 	}
 
 	private boolean valuesEqual(Object actual, Object expected) {

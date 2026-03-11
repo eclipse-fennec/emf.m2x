@@ -17,9 +17,9 @@ package org.eclipse.fennec.m2x.qvtd.engine;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
@@ -61,7 +61,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 	private final QvtrParserSupport parserSupport;
 	private final OclEngineImpl oclEngine;
 	private final QvtdConfiguration config;
-	private final List<RelationImplementationProvider> implementationProviders = new ArrayList<>();
+	private final List<RelationImplementationProvider> implementationProviders = new CopyOnWriteArrayList<>();
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -113,7 +113,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 			QvtrExtentManager extentManager = new QvtrExtentManager(transformation, context);
 			QvtrEvaluator evaluator = new QvtrEvaluator(
 					oclEngine, env, transformation, extentManager, context,
-					config.blackboxRegistry(), List.copyOf(implementationProviders));
+					config, config.blackboxRegistry(), List.copyOf(implementationProviders));
 
 			List<Diagnostic> diagnostics = evaluator.execute();
 			return new QvtdExecutionResult(diagnostics, !context.checkOnly());

@@ -1231,6 +1231,7 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 					new OclParserSupport()).build();
 			QvtdConfiguration bbConfig = QvtdConfiguration.builder(oclConfig)
 					.blackboxRegistry(registry)
+					.blackboxEnabled(true)
 					.build();
 			QvtdEngineImpl bbEngine = new QvtdEngineImpl(bbConfig);
 
@@ -1432,6 +1433,7 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 					new OclParserSupport()).build();
 			QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
 					.blackboxRegistry(registry)
+					.blackboxEnabled(true)
 					.build();
 			QvtdEngineImpl implEngine = new QvtdEngineImpl(config);
 

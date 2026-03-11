@@ -49,6 +49,10 @@ public final class QvtdConfiguration {
 	private final Set<String> allowedUnitModules;
 	private final int maxBlackboxLibraries;
 	private final int maxUnitResolvers;
+	private final int maxRelationDepth;
+	private final int maxBindings;
+	private final long timeoutMs;
+	private final int maxTraceRecords;
 
 	private QvtdConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
@@ -60,6 +64,10 @@ public final class QvtdConfiguration {
 		this.allowedUnitModules = Set.copyOf(builder.allowedUnitModules);
 		this.maxBlackboxLibraries = builder.maxBlackboxLibraries;
 		this.maxUnitResolvers = builder.maxUnitResolvers;
+		this.maxRelationDepth = builder.maxRelationDepth;
+		this.maxBindings = builder.maxBindings;
+		this.timeoutMs = builder.timeoutMs;
+		this.maxTraceRecords = builder.maxTraceRecords;
 	}
 
 	public OclConfiguration oclConfiguration() {
@@ -123,6 +131,40 @@ public final class QvtdConfiguration {
 		return maxUnitResolvers;
 	}
 
+	/**
+	 * Returns the maximum relation call depth (M-R2).
+	 * Prevents stack overflow from mutually recursive where-clauses.
+	 * Defaults to 200.
+	 */
+	public int maxRelationDepth() {
+		return maxRelationDepth;
+	}
+
+	/**
+	 * Returns the maximum number of binding sets during pattern matching (M-R3).
+	 * Prevents combinatorial explosion from cross-products.
+	 * Defaults to 10,000.
+	 */
+	public int maxBindings() {
+		return maxBindings;
+	}
+
+	/**
+	 * Returns the execution timeout in milliseconds (M-R4).
+	 * Zero means no timeout (default).
+	 */
+	public long timeoutMs() {
+		return timeoutMs;
+	}
+
+	/**
+	 * Returns the maximum number of trace records per relation (M-R8).
+	 * Defaults to 100,000.
+	 */
+	public int maxTraceRecords() {
+		return maxTraceRecords;
+	}
+
 	public static Builder builder(OclConfiguration oclConfiguration) {
 		return new Builder(oclConfiguration);
 	}
@@ -138,6 +180,10 @@ public final class QvtdConfiguration {
 		private Set<String> allowedUnitModules = Set.of();
 		private int maxBlackboxLibraries = 10;
 		private int maxUnitResolvers = 5;
+		private int maxRelationDepth = 200;
+		private int maxBindings = 10_000;
+		private long timeoutMs;
+		private int maxTraceRecords = 100_000;
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
@@ -222,6 +268,54 @@ public final class QvtdConfiguration {
 				throw new IllegalArgumentException("maxUnitResolvers must be positive: " + max);
 			}
 			this.maxUnitResolvers = max;
+			return this;
+		}
+
+		/**
+		 * Sets the maximum relation call depth (M-R2).
+		 * Defaults to 200.
+		 */
+		public Builder maxRelationDepth(int max) {
+			if (max <= 0) {
+				throw new IllegalArgumentException("maxRelationDepth must be positive: " + max);
+			}
+			this.maxRelationDepth = max;
+			return this;
+		}
+
+		/**
+		 * Sets the maximum number of binding sets during pattern matching (M-R3).
+		 * Defaults to 10,000.
+		 */
+		public Builder maxBindings(int max) {
+			if (max <= 0) {
+				throw new IllegalArgumentException("maxBindings must be positive: " + max);
+			}
+			this.maxBindings = max;
+			return this;
+		}
+
+		/**
+		 * Sets the execution timeout in milliseconds (M-R4).
+		 * Zero means no timeout (default).
+		 */
+		public Builder timeoutMs(long ms) {
+			if (ms < 0) {
+				throw new IllegalArgumentException("timeoutMs must not be negative: " + ms);
+			}
+			this.timeoutMs = ms;
+			return this;
+		}
+
+		/**
+		 * Sets the maximum number of trace records per relation (M-R8).
+		 * Defaults to 100,000.
+		 */
+		public Builder maxTraceRecords(int max) {
+			if (max <= 0) {
+				throw new IllegalArgumentException("maxTraceRecords must be positive: " + max);
+			}
+			this.maxTraceRecords = max;
 			return this;
 		}
 

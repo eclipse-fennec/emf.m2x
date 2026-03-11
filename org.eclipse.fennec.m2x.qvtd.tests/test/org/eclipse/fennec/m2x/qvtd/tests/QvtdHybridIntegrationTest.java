@@ -195,6 +195,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 
 			QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
 					.blackboxRegistry(registry)
+					.blackboxEnabled(true)
 					.build();
 			QvtdEngineImpl qvtdEngine = new QvtdEngineImpl(config);
 			qvtdEngine.registerImplementationProvider(qvtoEngine);

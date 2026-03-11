@@ -840,13 +840,21 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		if (pkg instanceof EPackage ePkg) {
 			return ePkg;
 		}
-		// Try finding by name in all registered packages
+		// Try finding by exact name in all registered packages
+		EPackage caseInsensitiveMatch = null;
 		for (Object value : packageRegistry.values()) {
-			if (value instanceof EPackage ePkg && name.equals(ePkg.getName())) {
-				return ePkg;
+			if (value instanceof EPackage ePkg) {
+				if (name.equals(ePkg.getName())) {
+					return ePkg;
+				}
+				// Track case-insensitive match as fallback
+				if (caseInsensitiveMatch == null
+						&& name.equalsIgnoreCase(ePkg.getName())) {
+					caseInsensitiveMatch = ePkg;
+				}
 			}
 		}
-		return null;
+		return caseInsensitiveMatch;
 	}
 
 	/**

@@ -16,4 +16,6 @@
  * Internal implementation classes for the QVT-R engine.
  * This package is not exported and should not be used by clients.
  */
+@org.osgi.annotation.bundle.Export
+@org.osgi.annotation.versioning.Version("1.0.0")
 package org.eclipse.fennec.m2x.qvtd.engine.internal;

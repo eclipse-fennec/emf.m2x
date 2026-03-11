@@ -23,9 +23,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.qvtbase.Domain;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
-import org.eclipse.fennec.m2x.model.qvtbase.Domain;
 
 /**
  * Manages implicit trace records for QVT-R transformations.
@@ -47,16 +47,11 @@ public class QvtrTraceManager {
 	private static final Logger LOG = Logger.getLogger(QvtrTraceManager.class.getName());
 
 	/**
-	 * Maximum number of trace records per relation before a warning is logged.
-	 * This guards against unbounded memory growth in large transformations.
+	 * Warn threshold: logs a warning when this many records accumulate per relation.
 	 */
 	private static final int TRACE_WARN_THRESHOLD = 10_000;
 
-	/**
-	 * Absolute maximum number of trace records per relation.
-	 * Beyond this limit, new records are silently dropped to prevent OOM.
-	 */
-	private static final int TRACE_MAX_PER_RELATION = 100_000;
+	private final int maxTraceRecords;
 
 	/**
 	 * A single trace record: the full variable bindings for a successful relation execution.
@@ -72,6 +67,15 @@ public class QvtrTraceManager {
 	private final Map<String, List<TraceRecord>> tracesByRelation = new HashMap<>();
 
 	/**
+	 * Creates a trace manager with the given per-relation record limit.
+	 *
+	 * @param maxTraceRecords maximum records per relation (M-R8)
+	 */
+	public QvtrTraceManager(int maxTraceRecords) {
+		this.maxTraceRecords = maxTraceRecords;
+	}
+
+	/**
 	 * Records a trace entry for a successful relation execution.
 	 *
 	 * @param relation the relation that was executed
@@ -81,7 +85,12 @@ public class QvtrTraceManager {
 		String key = relation.getName();
 		List<TraceRecord> traces = tracesByRelation.computeIfAbsent(key, k -> new ArrayList<>());
 		int size = traces.size();
-		if (size >= TRACE_MAX_PER_RELATION) {
+		if (size >= maxTraceRecords) {
+			if (size == maxTraceRecords) {
+				LOG.log(Level.WARNING,
+						"Relation ''{0}'' reached trace record limit ({1}) — further records dropped, results may be unreliable",
+						new Object[]{key, maxTraceRecords});
+			}
 			return;
 		}
 		if (size == TRACE_WARN_THRESHOLD) {
