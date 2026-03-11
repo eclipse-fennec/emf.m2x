@@ -27,6 +27,7 @@ import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.DomainPattern;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
@@ -247,8 +248,9 @@ public class QvtrPatternMatcher {
 		}
 
 		// VariableExp → bind or compare
-		if (isVariableExpression(valueExpr)) {
-			String varName = getVariableName(valueExpr);
+		if (valueExpr instanceof VariableExp ve
+				&& ve.getReferredVariable() != null) {
+			String varName = ve.getReferredVariable().getName();
 			if (varName != null) {
 				Object existing = bindings.get(varName);
 				if (existing != null) {
@@ -400,8 +402,9 @@ public class QvtrPatternMatcher {
 						}
 					}
 				}
-			} else if (isVariableExpression(memberExpr)) {
-				String varName = getVariableName(memberExpr);
+			} else if (memberExpr instanceof VariableExp memberVe
+					&& memberVe.getReferredVariable() != null) {
+				String varName = memberVe.getReferredVariable().getName();
 				if ("_".equals(varName)) {
 					// Wildcard: matches any single element — require non-empty collection
 					if (!collection.isEmpty()) {
@@ -477,18 +480,6 @@ public class QvtrPatternMatcher {
 			Map<String, Object> bindings) {
 		OclContext ctx = new OclContext(contextObject, null, bindings);
 		return oclEngine.evaluate(expression, ctx);
-	}
-
-	private boolean isVariableExpression(OclExpression expr) {
-		return expr instanceof org.eclipse.fennec.m2x.model.ocl.VariableExp;
-	}
-
-	private String getVariableName(OclExpression expr) {
-		if (expr instanceof org.eclipse.fennec.m2x.model.ocl.VariableExp varExp) {
-			Variable ref = varExp.getReferredVariable();
-			return ref != null ? ref.getName() : null;
-		}
-		return null;
 	}
 
 	private boolean valuesEqual(Object actual, Object expected) {

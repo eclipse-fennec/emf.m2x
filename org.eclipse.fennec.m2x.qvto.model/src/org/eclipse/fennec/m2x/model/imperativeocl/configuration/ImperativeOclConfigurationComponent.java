@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2x.model.imperativeocl.configuration;
 
 import java.util.Hashtable;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.emf.ecore.EFactory;
 import org.eclipse.emf.ecore.EPackage;
@@ -55,7 +57,9 @@ import org.osgi.service.condition.Condition;
 @Capability( namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator\"" , "uses:=\"org.eclipse.emf.ecore,org.eclipse.fennec.m2x.model.imperativeocl\"" })
 @Capability( namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.osgi.service.condition.Condition\"" , "uses:=org.osgi.service.condition" })
 public class ImperativeOclConfigurationComponent {
-	
+
+	private static final Logger LOG = Logger.getLogger(ImperativeOclConfigurationComponent.class.getName());
+
 	private ServiceRegistration<?> packageRegistration = null;
 	private ServiceRegistration<EPackageConfigurator> ePackageConfiguratorRegistration = null;
 	private ServiceRegistration<?> eFactoryRegistration = null;
@@ -97,8 +101,8 @@ public class ImperativeOclConfigurationComponent {
 				try {
 					bundle.start();
 				} catch (BundleException e) {
-					System.err.println("Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong: " + e.getMessage());
-					e.printStackTrace();
+					LOG.log(Level.SEVERE,
+							"Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong", e);
 				}
 				break;
 			}

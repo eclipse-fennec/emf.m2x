@@ -290,7 +290,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 	@Override
 	public OclExpression visitNavigationExp(QvtRParser.NavigationExpContext ctx) {
 		OclExpression source = (OclExpression) visit(ctx.expression());
-		boolean isSafe = ctx.getChild(1).getText().equals("?.");
+		boolean isSafe = ctx.getChildCount() > 1 && "?.".equals(ctx.getChild(1).getText());
 
 		QvtRParser.PropertyOrCallSuffixContext suffix = ctx.propertyOrCallSuffix();
 		if (suffix instanceof QvtRParser.PropertySuffixContext propCtx) {
@@ -312,7 +312,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 	@Override
 	public OclExpression visitArrowExp(QvtRParser.ArrowExpContext ctx) {
 		OclExpression source = (OclExpression) visit(ctx.expression());
-		boolean isSafe = ctx.getChild(1).getText().equals("?->");
+		boolean isSafe = ctx.getChildCount() > 1 && "?->".equals(ctx.getChild(1).getText());
 
 		QvtRParser.IteratorOrOperationCallContext call = ctx.iteratorOrOperationCall();
 		if (call instanceof QvtRParser.IteratorCallContext iterCtx) {

@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
@@ -42,6 +44,20 @@ import org.eclipse.fennec.m2x.model.qvtbase.Domain;
  */
 public class QvtrTraceManager {
 
+	private static final Logger LOG = Logger.getLogger(QvtrTraceManager.class.getName());
+
+	/**
+	 * Maximum number of trace records per relation before a warning is logged.
+	 * This guards against unbounded memory growth in large transformations.
+	 */
+	private static final int TRACE_WARN_THRESHOLD = 10_000;
+
+	/**
+	 * Absolute maximum number of trace records per relation.
+	 * Beyond this limit, new records are silently dropped to prevent OOM.
+	 */
+	private static final int TRACE_MAX_PER_RELATION = 100_000;
+
 	/**
 	 * A single trace record: the full variable bindings for a successful relation execution.
 	 */
@@ -63,8 +79,17 @@ public class QvtrTraceManager {
 	 */
 	public void record(Relation relation, Map<String, Object> bindings) {
 		String key = relation.getName();
-		tracesByRelation.computeIfAbsent(key, k -> new ArrayList<>())
-				.add(new TraceRecord(relation, bindings));
+		List<TraceRecord> traces = tracesByRelation.computeIfAbsent(key, k -> new ArrayList<>());
+		int size = traces.size();
+		if (size >= TRACE_MAX_PER_RELATION) {
+			return;
+		}
+		if (size == TRACE_WARN_THRESHOLD) {
+			LOG.log(Level.WARNING,
+					"Relation ''{0}'' has accumulated {1} trace records — possible memory issue",
+					new Object[]{key, size});
+		}
+		traces.add(new TraceRecord(relation, bindings));
 	}
 
 	/**

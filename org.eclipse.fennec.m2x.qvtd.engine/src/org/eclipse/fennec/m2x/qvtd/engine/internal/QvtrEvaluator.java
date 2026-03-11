@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -121,7 +122,7 @@ public class QvtrEvaluator {
 		resolveOverrides();
 
 		// Collect overridden relations so they can be skipped
-		Set<String> overriddenNames = new java.util.HashSet<>();
+		Set<String> overriddenNames = new HashSet<>();
 		for (Rule rule : transformation.getRule()) {
 			if (rule instanceof Relation rel && rel.getOverrides() != null) {
 				overriddenNames.add(rel.getOverrides().getName());
@@ -1153,9 +1154,11 @@ public class QvtrEvaluator {
 				EAnnotation ann = rel.getEAnnotation("qvtr.overrides");
 				if (ann != null) {
 					String overridesName = ann.getDetails().get("name");
-					Relation base = relationsByName.get(overridesName);
-					if (base != null) {
-						rel.setOverrides(base);
+					if (overridesName != null) {
+						Relation base = relationsByName.get(overridesName);
+						if (base != null) {
+							rel.setOverrides(base);
+						}
 					}
 				}
 			}

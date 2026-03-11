@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2x.model.qvtbase.configuration;
 
 import java.util.Hashtable;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.emf.ecore.EFactory;
 import org.eclipse.emf.ecore.EPackage;
@@ -55,7 +57,9 @@ import org.osgi.service.condition.Condition;
 @Capability( namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator\"" , "uses:=\"org.eclipse.emf.ecore,org.eclipse.fennec.m2x.model.qvtbase\"" })
 @Capability( namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.osgi.service.condition.Condition\"" , "uses:=org.osgi.service.condition" })
 public class QvtbaseConfigurationComponent {
-	
+
+	private static final Logger LOG = Logger.getLogger(QvtbaseConfigurationComponent.class.getName());
+
 	private ServiceRegistration<?> packageRegistration = null;
 	private ServiceRegistration<EPackageConfigurator> ePackageConfiguratorRegistration = null;
 	private ServiceRegistration<?> eFactoryRegistration = null;
@@ -97,8 +101,8 @@ public class QvtbaseConfigurationComponent {
 				try {
 					bundle.start();
 				} catch (BundleException e) {
-					System.err.println("Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong: " + e.getMessage());
-					e.printStackTrace();
+					LOG.log(Level.SEVERE,
+							"Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong", e);
 				}
 				break;
 			}
@@ -172,12 +176,11 @@ public class QvtbaseConfigurationComponent {
 	 */
 	@Deactivate
 	public void deactivate() {
-		conditionRegistration.unregister();
-		eFactoryRegistration.unregister();
-		packageRegistration.unregister();
-		resourceFactoryRegistration.unregister();
-
-		ePackageConfiguratorRegistration.unregister();
+		if (conditionRegistration != null) conditionRegistration.unregister();
+		if (eFactoryRegistration != null) eFactoryRegistration.unregister();
+		if (packageRegistration != null) packageRegistration.unregister();
+		if (resourceFactoryRegistration != null) resourceFactoryRegistration.unregister();
+		if (ePackageConfiguratorRegistration != null) ePackageConfiguratorRegistration.unregister();
 		EPackage.Registry.INSTANCE.remove(QvtbasePackage.eNS_URI);
 	}
 }
