@@ -125,7 +125,7 @@ The QVT-R Engine operates as an **embedded Java library** within a host applicat
 | **Vector** | Registered blackbox library executes arbitrary Java code |
 | **Impact** | Full JVM access (filesystem, network, processes, reflection) |
 | **Prerequisite** | Attacker can register a blackbox library or `blackboxEnabled = true` without allow-list |
-| **File** | `QvtrEvaluator.java:1090,1129` (`library.invoke`) |
+| **File** | `QvtrBlackboxBridge.java:127,165` (`library.invoke`) |
 
 **Analysis:** Blackbox invocations execute arbitrary code from registered libraries without sandboxing. The operation name comes from the transformation model (user-controlled input). Additional issues:
 - Exceptions from blackbox invocations are silently swallowed (catch blocks return `null`)
@@ -314,7 +314,7 @@ The QVT-R Engine inherits all OCL mitigations (documented in `ocl-architecture.m
 
 **OCL:** 19 dedicated security tests in `OclSecurityHardeningTest.java`
 
-**QVT-R:** `QvtdSecurityHardeningTest` — 6 tests covering R-1 depth limit, R-4 blackbox, R-7 timeout, config defaults (M-R7 ✅).
+**QVT-R:** `QvtdSecurityHardeningTest` — 9 tests covering R-1 depth limit, R-2 binding limit, R-4 blackbox (disabled + allow-list), R-7 timeout, R-8 trace limit, config defaults (M-R7 ✅).
 
 ---
 
@@ -340,7 +340,7 @@ Trace limit is now configurable via `QvtdConfiguration.maxTraceRecords()` (defau
 
 **Solution:** Configurable `maxRelationDepth` (default: 200) in `QvtdConfiguration`. Depth counter in `executeRelationWithBindings()`, incremented on entry, decremented in finally-block. Throws `QvtdExecutionException` if the limit is exceeded.
 
-**Files:** `QvtrEvaluator.java`, `QvtdConfiguration.java`
+**Files:** `QvtrEvaluator.java` (`executeRelationWithBindings()`), `QvtdConfiguration.java`
 
 ---
 
@@ -355,7 +355,7 @@ Trace limit is now configurable via `QvtdConfiguration.maxTraceRecords()` (defau
 
 Throws `QvtdExecutionException` if exceeded. Tested in `QvtdSecurityHardeningTest.r2_crossProduct_exceedingBindingLimit_terminates()`.
 
-**Files:** `QvtrPatternMatcher.java`, `QvtrEvaluator.java`, `QvtdConfiguration.java`
+**Files:** `QvtrPatternMatcher.java`, `QvtrEvaluator.java` (`matchSourceDomains()`), `QvtdConfiguration.java`
 
 ---
 
@@ -371,7 +371,7 @@ Throws `QvtdExecutionException` if exceeded. Tested in `QvtdSecurityHardeningTes
 
 Throws `QvtdExecutionException` if deadline exceeded.
 
-**Files:** `QvtrEvaluator.java`, `QvtdConfiguration.java`
+**Files:** `QvtrEvaluator.java` (`checkDeadline()`), `QvtdConfiguration.java`
 
 ---
 
@@ -382,11 +382,11 @@ Throws `QvtdExecutionException` if deadline exceeded.
 **Priority:** MEDIUM → **Done**
 
 **Implementation:**
-1. Added `config.blackboxEnabled()` gate in `QvtrEvaluator.invokeImplementedBy()` and `evaluateBlackboxQuery()`
+1. Added `config.blackboxEnabled()` gate in `QvtrBlackboxBridge.invokeImplementedBy()` and `evaluateBlackboxQuery()`
 2. Added `isBlackboxAllowed()` helper checking `allowedBlackboxModules` allow-list
 3. Blackbox disabled by default — existing tests updated to opt-in with `.blackboxEnabled(true)`
 
-**Affected files:** `QvtrEvaluator.java`
+**Affected files:** `QvtrBlackboxBridge.java`
 
 ---
 
@@ -510,7 +510,7 @@ Mapping of identified risks and mitigations to the requirement areas of [BSI TR-
 |----------------|----------------|--------|
 | Security tests OCL | 19 tests in `OclSecurityHardeningTest` | ✅ Implemented |
 | Security tests QVT-O | 12 tests in `QvtoSecurityHardeningTest` | ✅ Implemented |
-| Security tests QVT-R | `QvtdSecurityHardeningTest` (6 tests) | ✅ M-R7 |
+| Security tests QVT-R | `QvtdSecurityHardeningTest` (9 tests) + 26 unit tests (helpers) | ✅ M-R7 |
 | Penetration testing | Not performed | Pending |
 
 ### 5.6 Further Relevant BSI Guidelines
@@ -623,7 +623,7 @@ engine.registerImplementationProvider(qvtoEngine);
 
 ### 6.5 Thread-Safety Caveat
 
-Despite the Javadoc claim, `registerImplementationProvider()` is **not thread-safe** (R-9). Either:
+R-9 has been fixed — `implementationProviders` now uses `CopyOnWriteArrayList` (M-R6). However, for best practice:
 - Register all providers before first `execute()` call, or
 - Synchronize externally if registration and execution overlap
 

@@ -1,0 +1,7 @@
+-library: enableEMF
+
+-buildpath.qvtd = ${qvtd.lib}
+
+qvtd.lib: \
+	org.eclipse.fennec.m2x.qvtd.api;version=latest,\
+	org.eclipse.fennec.m2x.qvtd.model;version=latest

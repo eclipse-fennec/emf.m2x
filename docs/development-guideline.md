@@ -824,7 +824,7 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 
 ### Phase 4: QVT-Relations (Direct Interpretation, no QVT-C)
 
-**Status:** ✅ Phase 4a Complete — P4-0 through P4-6 ✅, all gaps implemented. **96 Tests, 0 Failures, 2 @Disabled** (GAP-10 Import, GAP-13 Change Propagation → Phase 5).
+**Status:** ✅ Phase 4a+4b+4c Complete — P4-0 through P4-6 ✅, all gaps implemented, evaluator refactored, security hardened. **160 Tests, 0 Failures, 2 @Disabled** (GAP-10 Import, GAP-13 Change Propagation → Phase 5).
 
 **Approach:** Direct QVT-R interpretation (D33). Spec-first against QVT v1.3 Ch. 7, Eclipse QVT-D as behavioral reference only (D35). No QVTr→QVTc compiler, no QVT-C engine. See [Design Decisions](design-decisions.md) D33–D38.
 
@@ -865,6 +865,15 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 | P4b-4 | Integration-Tests | ✅ 13 Tests |
 
 **D40:** `qvtbase.ecore` in Shared-Bundle `org.eclipse.fennec.m2x.qvt.model` extrahiert.
+
+#### Phase 4c — Architecture Hardening ✅
+
+| Sub-Phase | Description | Status |
+|-----------|-------------|--------|
+| P4c-1 | Evaluator Refactoring: Extract `QvtrEnforcer`, `QvtrBlackboxBridge`, `QvtrQueryEvaluator`, `QvtrOclCallback` | ✅ |
+| P4c-2 | Security Tests: `QvtdSecurityHardeningTest` (9 tests, BSI TR-03185 M-R2–M-R8) | ✅ |
+| P4c-3 | Unit Tests: `QvtrEnforcerTest` (12), `QvtrQueryEvaluatorTest` (8), `QvtrBlackboxBridgeTest` (6) | ✅ 26 Tests |
+| P4c-4 | Parser Fix: case-insensitive metamodel package resolution in `QvtrUnitBuilder.resolvePackage()` | ✅ |
 
 **Verbleibende TODOs (Phase 5):**
 - **P4b-3:** Wenn QVT-O Engine eine Transformation mit `refines BaseRT` ausführt, muss der Name-Only-Stub `OT.refined` zur Laufzeit gegen die echte `RelationalTransformation` aufgelöst werden. Erfordert: QVT-O Engine bekommt Zugang zum QVT-R Engine (Reverse-Richtung zu P4b-2). Relevant erst wenn ein QVT-O Engine tatsächlich eine QVT-R Transformation laden und ausführen soll.

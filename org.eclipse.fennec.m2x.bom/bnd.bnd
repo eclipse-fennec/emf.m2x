@@ -1,0 +1,5 @@
+-resourceonly: true
+-include: \
+	${.}/../org.eclipse.fennec.m2x.library.workspace/buildpath.bnd
+
+-diffignore: */pom.properties

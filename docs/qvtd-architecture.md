@@ -15,7 +15,7 @@ Direct QVT-R interpretation engine (D33 — no QVT-C lowering). Implements QVT v
 | `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces |
 | `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser, CST→AST |
 | `org.eclipse.fennec.m2x.qvtd.engine` | Direct interpretation engine |
-| `org.eclipse.fennec.m2x.qvtd.tests` | Spec-conformance tests (96 tests) |
+| `org.eclipse.fennec.m2x.qvtd.tests` | Spec-conformance tests (160 tests) |
 
 ## 2. Metamodel (D34)
 
@@ -83,7 +83,11 @@ Three EPackages following the spec structure:
 | Class | Purpose |
 |-------|---------|
 | `QvtdEngineImpl` | Facade: parse + execute, OCL engine composition (D36) |
-| `QvtrEvaluator` | Main evaluator: relation execution, domain classification, enforcement |
+| `QvtrEvaluator` | Core evaluator: relation execution, domain classification, when/where-clauses |
+| `QvtrEnforcer` | Target domain enforcement (§7.10.2), key-based identity (§7.4), property enforcement |
+| `QvtrBlackboxBridge` | Blackbox library invocation (§7.8), `implementedby` delegation (§7.11.3.6), M-R5 security |
+| `QvtrQueryEvaluator` | Query resolution (§7.11.4), where-clause variable pre-computation |
+| `QvtrOclCallback` | Functional interface: breaks circular deps between helpers and evaluator |
 | `QvtrPatternMatcher` | Pattern matching: object/collection templates, variable binding |
 | `QvtrEvalEnvironment` | Variable scope stack (push/pop) |
 | `QvtrExtentManager` | Model extent management: typed model → extent mapping, `allInstances()` |
@@ -116,13 +120,35 @@ For **in-place** transformations (GAP-7): same TypedModel can appear in both sou
 
 ### 5.4 Enforcement (§7.10.2)
 
+Extracted into `QvtrEnforcer` for testability and separation of concerns.
+
 1. Try **match** target domain against existing elements
-2. If no match → **create** via `ObjectTemplateExp`:
-   a. Look up by **Key** (`key T { prop1, prop2 }`) — identity-based find-or-create
-   b. Look up by **bound variables** (`findByBoundVariables()`) — for in-place
-   c. **Invoke `implementedby`** (GAP-12) — delegate to blackbox
+2. Apply **default value assignments** (§7.11.3.7) for unbound variables
+3. Try **`implementedby`** (§7.11.3.6) via `QvtrBlackboxBridge` — delegate to `RelationImplementationProvider` or blackbox registry
+4. If no match → **create** via `ObjectTemplateExp`:
+   a. Check already-bound variable (e.g. from when-clause or shared variable)
+   b. Look up by **Key** (`key T { prop1, prop2 }`) — identity-based find-or-create (§7.4)
+   c. Look up by **bound variables** (`findByBoundVariables()`) — for in-place (§7.7)
    d. **Instantiate** (`EcoreUtil.create()`) + set features from template
-3. For `CollectionTemplateExp` (GAP-1): create collection members
+5. For `CollectionTemplateExp` (GAP-1): create collection members
+
+### 5.4.1 Blackbox Bridge (§7.8)
+
+Extracted into `QvtrBlackboxBridge` for testability and security centralization (M-R5).
+
+- `invokeImplementedBy()` — searches `RelationImplementationProvider`s first (D39 hybrid), then falls back to blackbox registry
+- `evaluateBlackboxQuery()` — delegates query calls without body to registered libraries
+- `isBlackboxAllowed()` — enforces `allowedBlackboxModules` allow-list
+- All blackbox access gated by `config.blackboxEnabled()` (disabled by default)
+
+### 5.4.2 Query Evaluation (§7.11.4)
+
+Extracted into `QvtrQueryEvaluator` for testability.
+
+- `resolveQuery()` — finds `Function` by name from the transformation's synthetic `_queries` EClass
+- `evaluateQueryCall()` — binds parameters and evaluates query body, or delegates to blackbox
+- `evaluateExprWithQueries()` — expression evaluation with automatic query call resolution
+- `preComputeWhereBindings()` — pre-computes where-clause `var = expr` bindings before enforcement
 
 ### 5.5 Pattern Matching
 
@@ -221,5 +247,9 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | `QvtdSpecConformanceTest` | Systematic spec conformance (per section) | ~46 |
 | `QvtdBindingValidatorTest` | §7.5 binding validation (valid/invalid/edge) | 16 |
 | `QvtdHybridIntegrationTest` | §7.8 QVT-R↔QVT-O hybrid (Phase 4b) | 13 |
+| `QvtdSecurityHardeningTest` | BSI TR-03185 security mitigations (M-R2–M-R8) | 9 |
+| `QvtrEnforcerTest` | Unit tests: enforcement, key lookup, feature resolution | 12 |
+| `QvtrQueryEvaluatorTest` | Unit tests: query resolution, body/blackbox evaluation | 8 |
+| `QvtrBlackboxBridgeTest` | Unit tests: allow-list, blackbox delegation | 6 |
 
-**Total: 125 tests, 0 failures, 2 @Disabled**
+**Total: 160 tests, 0 failures, 2 @Disabled**

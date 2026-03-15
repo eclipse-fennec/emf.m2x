@@ -1,0 +1,7 @@
+-library: enableEMF
+
+-buildpath.qvto = ${qvto.lib}
+
+qvto.lib: \
+	org.eclipse.fennec.m2x.qvto.api;version=latest,\
+	org.eclipse.fennec.m2x.qvto.model;version=latest

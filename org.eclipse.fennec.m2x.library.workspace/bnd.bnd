@@ -1,0 +1,16 @@
+-resourceonly: true
+-include: ${.}/buildpath.bnd	
+mavendeps: ${sjoin;\n; ${template;-maven-dependencies;${@}}}
+
+-includeresource: resources,\
+	{template/fennecM2X.maven=resources/template/fennecM2X.maven};onduplicate:=OVERWRITE
+	
+Provide-Capability: \
+	${fennec-base}
+
+fennec-base:\
+    bnd.library;\
+        bnd.library     = fennecM2X; \
+        path            = template
+Bundle-Name: Fennec M2T Bnd Workspace Library
+Bundle-Description: Bnd workspace library to include all M2X dependencies

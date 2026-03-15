@@ -1,0 +1,20 @@
+-resourceonly: true
+-includeresource: resources
+Provide-Capability: \
+	${fennec-base}
+
+fennec-base:\
+    bnd.library;\
+        bnd.library     = enableOCL; \
+        version			= 1.0.0;\
+        path            = ocl,\
+    bnd.library;\
+        bnd.library     = enableQVTO; \
+        version			= 1.0.0;\
+        path            = qvto,\
+    bnd.library;\
+        bnd.library     = enableQVTD; \
+        version			= 1.0.0;\
+        path            = qvtd,\
+Bundle-Name: Eclipse Fennec M2X Project Library
+Bundle-Description: Bnd project library for M2X 
