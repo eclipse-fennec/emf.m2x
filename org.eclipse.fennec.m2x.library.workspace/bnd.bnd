@@ -2,8 +2,7 @@
 -include: ${.}/buildpath.bnd	
 mavendeps: ${sjoin;\n; ${template;-maven-dependencies;${@}}}
 
--includeresource: resources,\
-	{template/fennecM2X.maven=resources/template/fennecM2X.maven};onduplicate:=OVERWRITE
+-includeresource: {resources}
 	
 Provide-Capability: \
 	${fennec-base}
