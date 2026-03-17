@@ -24,4 +24,5 @@ src=${^src},src-gen
 	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
-	org.eclipse.fennec.m2x;version=snapshot
+	org.eclipse.fennec.m2x;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.example.model;version=snapshot

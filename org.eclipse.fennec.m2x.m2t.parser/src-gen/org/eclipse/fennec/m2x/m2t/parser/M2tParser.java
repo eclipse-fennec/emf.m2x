@@ -1,4 +1,4 @@
-// Generated from /opt/git/m2m/workspace/org.eclipse.fennec.m2x.m2t.parser/grammar/M2tParser.g4 by ANTLR 4.13.2
+// Generated from /opt/git/emf.m2x/org.eclipse.fennec.m2x.m2t.parser/grammar/M2tParser.g4 by ANTLR 4.13.2
 package org.eclipse.fennec.m2x.m2t.parser;
 import org.antlr.v4.runtime.atn.*;
 import org.antlr.v4.runtime.dfa.DFA;

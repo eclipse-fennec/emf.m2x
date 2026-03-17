@@ -1,4 +1,4 @@
-// Generated from /opt/git/m2m/workspace/org.eclipse.fennec.m2x.m2t.parser/grammar/M2tParser.g4 by ANTLR 4.13.2
+// Generated from /opt/git/emf.m2x/org.eclipse.fennec.m2x.m2t.parser/grammar/M2tParser.g4 by ANTLR 4.13.2
 package org.eclipse.fennec.m2x.m2t.parser;
 import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
 
@@ -10,6 +10,7 @@ import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
  * @param <T> The return type of the visit operation. Use {@link Void} for
  * operations with no return type.
  */
+@SuppressWarnings("CheckReturnValue")
 public class M2tParserBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements M2tParserVisitor<T> {
 	/**
 	 * {@inheritDoc}
