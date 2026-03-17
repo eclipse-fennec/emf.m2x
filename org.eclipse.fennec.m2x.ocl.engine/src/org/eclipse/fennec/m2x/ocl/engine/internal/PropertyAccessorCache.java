@@ -62,7 +62,7 @@ public final class PropertyAccessorCache {
 
 	private final ConcurrentHashMap<AccessorKey, PropertyAccessor> cache = new ConcurrentHashMap<>();
 
-	private static final MethodHandles.Lookup LOOKUP = MethodHandles.lookup();
+	private static final MethodHandles.Lookup ENGINE_LOOKUP = MethodHandles.lookup();
 
 	/**
 	 * Creates a new, empty property accessor cache.
@@ -119,7 +119,7 @@ public final class PropertyAccessorCache {
 			try {
 				Method getter = findGetter(implClass, getterName);
 				if (getter != null) {
-					return createLambdaAccessor(getter);
+					return createLambdaAccessor(implClass, getter);
 				}
 			} catch (Throwable t) {
 				// Fall through to eGet fallback
@@ -133,13 +133,21 @@ public final class PropertyAccessorCache {
 
 	/**
 	 * Creates a LambdaMetafactory-based accessor that the JIT can inline.
+	 *
+	 * <p>Uses a {@link MethodHandles.Lookup} obtained from the model's own class
+	 * via {@link MethodHandles#privateLookupIn}, so the generated lambda can
+	 * resolve the model's implementation classes in OSGi environments where the
+	 * engine bundle cannot see the model bundle's classes.
 	 */
-	private static PropertyAccessor createLambdaAccessor(Method getter) throws Throwable {
-		MethodHandle mh = LOOKUP.unreflect(getter);
+	private static PropertyAccessor createLambdaAccessor(Class<?> implClass, Method getter) throws Throwable {
+		// Obtain a lookup rooted in the model class's module/classloader,
+		// not the engine bundle's. This is critical for OSGi cross-bundle access.
+		MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(implClass, ENGINE_LOOKUP);
+		MethodHandle mh = lookup.unreflect(getter);
 
 		// Use LambdaMetafactory to generate a Function<Object, Object> that the JIT inlines
 		CallSite site = LambdaMetafactory.metafactory(
-				LOOKUP,
+				lookup,
 				"apply",
 				MethodType.methodType(Function.class),
 				MethodType.methodType(Object.class, Object.class),     // erased type
