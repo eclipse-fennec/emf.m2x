@@ -18,8 +18,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
+import org.eclipse.emf.common.util.BasicEList;
+import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -27,11 +32,14 @@ import org.eclipse.emf.ecore.EFactory;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EParameter;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.InternalEObject;
+import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclDelegateUtil;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -50,6 +58,8 @@ class OclDelegateTest extends AbstractOclTest {
 
 	static EPackage testPackage;
 	static EClass employeeClass;
+	static EClass companyClass;
+	static EOperation findEmployeesOp;
 
 	@BeforeAll
 	static void setUpDelegateModel() {
@@ -113,6 +123,38 @@ class OclDelegateTest extends AbstractOclTest {
 		addAnnotation(greetingOp, "body", "'Hello, '.concat(self.name)");
 		employeeClass.getEOperations().add(greetingOp);
 
+		// Company with containment reference to Employee[*] — used to exercise
+		// multi-valued EOperation bodies (see https://github.com/eclipse-fennec/emf.m2x/issues/3).
+		companyClass = EcoreFactory.eINSTANCE.createEClass();
+		companyClass.setName("Company");
+		testPackage.getEClassifiers().add(companyClass);
+
+		EAttribute companyNameAttr = EcoreFactory.eINSTANCE.createEAttribute();
+		companyNameAttr.setName("name");
+		companyNameAttr.setEType(EcorePackage.Literals.ESTRING);
+		companyClass.getEStructuralFeatures().add(companyNameAttr);
+
+		EReference employeesRef = EcoreFactory.eINSTANCE.createEReference();
+		employeesRef.setName("employees");
+		employeesRef.setEType(employeeClass);
+		employeesRef.setContainment(true);
+		employeesRef.setUpperBound(-1);
+		companyClass.getEStructuralFeatures().add(employeesRef);
+
+		// operation: findEmployeesByNamePrefix(prefix: EString) : Employee[*]
+		// body = self.employees->select(e | e.name.startsWith(prefix))->asSequence()
+		findEmployeesOp = EcoreFactory.eINSTANCE.createEOperation();
+		findEmployeesOp.setName("findEmployeesByNamePrefix");
+		findEmployeesOp.setEType(employeeClass);
+		findEmployeesOp.setUpperBound(-1);
+		EParameter prefixParam = EcoreFactory.eINSTANCE.createEParameter();
+		prefixParam.setName("prefix");
+		prefixParam.setEType(EcorePackage.Literals.ESTRING);
+		findEmployeesOp.getEParameters().add(prefixParam);
+		addAnnotation(findEmployeesOp, "body",
+				"self.employees->select(e | e.name.startsWith(prefix))->asSequence()");
+		companyClass.getEOperations().add(findEmployeesOp);
+
 		// Register the package
 		EPackage.Registry.INSTANCE.put(testPackage.getNsURI(), testPackage);
 
@@ -141,6 +183,18 @@ class OclDelegateTest extends AbstractOclTest {
 		emp.eSet(employeeClass.getEStructuralFeature("age"), age);
 		emp.eSet(employeeClass.getEStructuralFeature("salary"), salary);
 		return emp;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static EObject createDelegateCompany(String name, EObject... employees) {
+		EFactory factory = testPackage.getEFactoryInstance();
+		EObject company = factory.create(companyClass);
+		company.eSet(companyClass.getEStructuralFeature("name"), name);
+		List<EObject> empList = (List<EObject>) company.eGet(companyClass.getEStructuralFeature("employees"));
+		for (EObject emp : employees) {
+			empList.add(emp);
+		}
+		return company;
 	}
 
 	// --- Delegate registration ---
@@ -206,6 +260,78 @@ class OclDelegateTest extends AbstractOclTest {
 		EOperation greetingOp = employeeClass.getEOperations().get(1);
 		Object result = ((InternalEObject) emp).eInvoke(greetingOp, null);
 		assertEquals("Hello, Bob", result);
+	}
+
+	/**
+	 * Regression test for <a href="https://github.com/eclipse-fennec/emf.m2x/issues/3">issue #3</a>:
+	 * An EOperation with {@code upperBound != 1} whose OCL body ends with
+	 * {@code ->asSequence()} / {@code ->asOrderedSet()} must return an
+	 * {@link EList}, otherwise callers of generated EMF accessors hit a
+	 * {@code ClassCastException} when the result is cast to {@code EList}.
+	 */
+	@Test
+	void invocationDelegate_multiValuedOperation_returnsEList() throws Exception {
+		EObject jane = createEmployee("Jane", 30, 50000.0);
+		EObject john = createEmployee("John", 25, 40000.0);
+		EObject alice = createEmployee("Alice", 40, 60000.0);
+		EObject company = createDelegateCompany("Acme", jane, john, alice);
+
+		EList<Object> args = new BasicEList<>();
+		args.add("J");
+		Object result = ((InternalEObject) company).eInvoke(findEmployeesOp, args);
+
+		assertTrue(result instanceof EList,
+				"Expected EList, got: " + (result == null ? "null" : result.getClass().getName()));
+		EList<?> list = (EList<?>) result;
+		assertEquals(2, list.size());
+		assertTrue(list.contains(jane));
+		assertTrue(list.contains(john));
+	}
+
+	/**
+	 * Regression test for <a href="https://github.com/eclipse-fennec/emf.m2x/issues/3">issue #3</a>:
+	 * Returned {@link EList} from the delegate must be unmodifiable — an
+	 * {@code ->asSequence()} result is a fresh collection, not a live view,
+	 * so mutating it from the caller must not silently succeed.
+	 */
+	@Test
+	void invocationDelegate_multiValuedOperation_returnsUnmodifiableEList() throws Exception {
+		EObject jane = createEmployee("Jane", 30, 50000.0);
+		EObject company = createDelegateCompany("Acme", jane);
+
+		EList<Object> args = new BasicEList<>();
+		args.add("J");
+		EList<?> result = (EList<?>) ((InternalEObject) company).eInvoke(findEmployeesOp, args);
+
+		assertThrows(UnsupportedOperationException.class, () -> result.clear());
+	}
+
+	/**
+	 * Regression test for <a href="https://github.com/eclipse-fennec/emf.m2x/issues/3">issue #3</a>:
+	 * An OCL expression that invokes a multi-valued EOperation and chains
+	 * further OCL operations on the result must keep working — i.e.
+	 * {@code caseOperationCallExp} in the evaluator must accept whatever the
+	 * delegate returns as an OCL collection.
+	 */
+	@Test
+	void invocationDelegate_multiValuedOperation_usableInOclExpression() throws Exception {
+		EObject jane = createEmployee("Jane", 30, 50000.0);
+		EObject john = createEmployee("John", 25, 40000.0);
+		EObject alice = createEmployee("Alice", 40, 60000.0);
+		EObject company = createDelegateCompany("Acme", jane, john, alice);
+
+		Object size = engine.evaluate(
+				"self.findEmployeesByNamePrefix('J')->size()", OclContext.of(company));
+		assertEquals(2, ((Number) size).intValue());
+
+		Object names = engine.evaluate(
+				"self.findEmployeesByNamePrefix('J')->collect(e | e.name)->asSequence()",
+				OclContext.of(company));
+		assertTrue(names instanceof java.util.Collection);
+		java.util.Collection<?> nameColl = (java.util.Collection<?>) names;
+		assertEquals(2, nameColl.size());
+		assertTrue(nameColl.contains("Jane"));
+		assertTrue(nameColl.contains("John"));
 	}
 
 	// --- Validation delegate ---

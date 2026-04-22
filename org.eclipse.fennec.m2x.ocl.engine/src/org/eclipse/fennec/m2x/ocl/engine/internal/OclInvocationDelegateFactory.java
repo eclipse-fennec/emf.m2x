@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,8 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.eclipse.emf.common.util.BasicEList;
+import org.eclipse.emf.common.util.ECollections;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EParameter;
@@ -134,6 +137,20 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 				if (body != null) {
 					OclExpression bodyExpr = getParsedBody();
 					result = engine.evaluate(bodyExpr, context, engine.getDelegateOptions());
+				}
+
+				// 3a. EMF casts delegate results for multi-valued EOperations to EList.
+				// OCL stdlib collection ops (->asSequence, ->asOrderedSet, ->asBag,
+				// ->asSet, ->select, ...) return ArrayList / OclOrderedSet / OclBag /
+				// OclSet — none of which implement EList. Wrap so callers of the
+				// generated EMF accessor receive a valid (unmodifiable) EList.
+				if (operation.isMany() && result != null && !(result instanceof EList<?>)) {
+					if (result instanceof Collection<?> col) {
+						result = ECollections.unmodifiableEList(new BasicEList<>(col));
+					} else {
+						result = ECollections.unmodifiableEList(
+								new BasicEList<>(List.of(result)));
+					}
 				}
 
 				// 4. Evaluate postcondition if present
