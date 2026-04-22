@@ -25,7 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
 
+import org.eclipse.emf.common.util.BasicEList;
+import org.eclipse.emf.common.util.BasicEMap;
 import org.eclipse.emf.common.util.Diagnostic;
+import org.eclipse.emf.common.util.ECollections;
+import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.common.util.EMap;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
@@ -236,7 +241,8 @@ public class OclEngineImpl implements OclEngine {
 	@Override
 	public Object evaluate(OclExpression expression, OclContext context, OclEvaluationOptions options) {
 		OclResult result = evaluateWithDiagnostics(expression, context, options);
-		return narrowResult(result.value());
+		Object narrowed = narrowResult(result.value());
+		return options.useEMFTypes() ? wrapTopLevelAsEMF(narrowed) : narrowed;
 	}
 
 	@Override
@@ -514,7 +520,8 @@ public class OclEngineImpl implements OclEngine {
 				config.maxClosureIterations(),
 				config.maxRegexLength(),
 				config.customOperationsEnabled(),
-				List.of());
+				List.of(),
+				config.useEMFTypes());
 	}
 
 	/**
@@ -578,6 +585,31 @@ public class OclEngineImpl implements OclEngine {
 				narrowed.put(narrowResult(entry.getKey()), narrowResult(entry.getValue()));
 			}
 			return narrowed;
+		}
+		return value;
+	}
+
+	/**
+	 * Wraps the top-level result as an EMF collection type if applicable.
+	 * Used when {@link OclEvaluationOptions#useEMFTypes()} is {@code true} —
+	 * top-level {@link Collection} becomes an unmodifiable {@link EList} and
+	 * top-level {@link Map} becomes an unmodifiable {@link EMap}. Nested
+	 * collections inside the result are left untouched; non-collection values
+	 * pass through. See <a href="https://github.com/eclipse-fennec/emf.m2x/issues/4">issue #4</a>.
+	 */
+	private static Object wrapTopLevelAsEMF(Object value) {
+		if (value == null || value instanceof EList<?> || value instanceof EMap<?, ?>) {
+			return value;
+		}
+		if (value instanceof Map<?, ?> map) {
+			BasicEMap<Object, Object> emap = new BasicEMap<>();
+			for (Map.Entry<?, ?> entry : map.entrySet()) {
+				emap.put(entry.getKey(), entry.getValue());
+			}
+			return ECollections.unmodifiableEMap(emap);
+		}
+		if (value instanceof Collection<?> col) {
+			return ECollections.unmodifiableEList(new BasicEList<>(col));
 		}
 		return value;
 	}

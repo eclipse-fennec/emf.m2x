@@ -112,6 +112,21 @@ public interface OclEngine {
 	 * <p>Returns {@link OclInvalid#INSTANCE} if evaluation produces the OCL {@code invalid}
 	 * value, and {@code null} for the OCL {@code void}/{@code null} value.
 	 *
+	 * <p><b>Return-type mapping</b> (default, OCL-spec-native):
+	 * <ul>
+	 *   <li>OCL {@code Integer} / {@code UnlimitedNatural} → {@link Integer} (narrowed from {@code Long} when it fits)</li>
+	 *   <li>OCL {@code Sequence(T)} → {@link java.util.ArrayList}</li>
+	 *   <li>OCL {@code OrderedSet(T)} → {@code OclOrderedSet} (extends {@code ArrayList})</li>
+	 *   <li>OCL {@code Bag(T)} → {@code OclBag} (extends {@code ArrayList})</li>
+	 *   <li>OCL {@code Set(T)} → {@code OclSet} (extends {@code AbstractSet})</li>
+	 *   <li>OCL {@code Map(K,V)} → {@link java.util.LinkedHashMap}</li>
+	 * </ul>
+	 * When {@link OclEvaluationOptions#useEMFTypes()} is {@code true}, the top-level
+	 * {@link java.util.Collection} result is wrapped as
+	 * {@link org.eclipse.emf.common.util.EList} and a top-level {@link java.util.Map}
+	 * as {@link org.eclipse.emf.common.util.EMap} (see
+	 * <a href="https://github.com/eclipse-fennec/emf.m2x/issues/4">issue #4</a>).
+	 *
 	 * @param expression the parsed OCL expression
 	 * @param context the evaluation context providing {@code self}, optional extent, and variables
 	 * @return the evaluation result
@@ -121,9 +136,15 @@ public interface OclEngine {
 	/**
 	 * Evaluates a pre-parsed expression against an evaluation context with explicit options.
 	 *
+	 * <p>See {@link #evaluate(OclExpression, OclContext)} for the default return-type
+	 * mapping. Set {@link OclEvaluationOptions#useEMFTypes()} to {@code true} to get a
+	 * top-level {@link org.eclipse.emf.common.util.EList} or
+	 * {@link org.eclipse.emf.common.util.EMap} instead of the native Java collection.
+	 *
 	 * @param expression the parsed OCL expression
 	 * @param context the evaluation context providing {@code self}, optional extent, and variables
-	 * @param options evaluation options controlling null handling, error recovery, depth, and timeout
+	 * @param options evaluation options controlling null handling, error recovery, depth, timeout,
+	 *        and the top-level return-type shape ({@code useEMFTypes})
 	 * @return the evaluation result
 	 */
 	Object evaluate(OclExpression expression, OclContext context, OclEvaluationOptions options);

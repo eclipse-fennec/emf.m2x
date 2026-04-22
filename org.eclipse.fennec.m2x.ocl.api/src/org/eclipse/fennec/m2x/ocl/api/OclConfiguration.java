@@ -60,6 +60,7 @@ public final class OclConfiguration {
 	private final int maxCollectionSize;
 	private final int maxClosureIterations;
 	private final int maxRegexLength;
+	private final boolean useEMFTypes;
 
 	private OclConfiguration(Builder builder) {
 		this.parser = builder.parser;
@@ -73,6 +74,7 @@ public final class OclConfiguration {
 		this.maxCollectionSize = builder.maxCollectionSize;
 		this.maxClosureIterations = builder.maxClosureIterations;
 		this.maxRegexLength = builder.maxRegexLength;
+		this.useEMFTypes = builder.useEMFTypes;
 	}
 
 	/**
@@ -181,6 +183,20 @@ public final class OclConfiguration {
 	}
 
 	/**
+	 * Returns whether {@code OclEngine.evaluate(...)} should return EMF
+	 * collection types ({@link org.eclipse.emf.common.util.EList},
+	 * {@link org.eclipse.emf.common.util.EMap}) at the top level instead of
+	 * plain Java collections. Defaults to {@code false}.
+	 *
+	 * @return {@code true} if EMF types are returned at the top level
+	 *
+	 * @see <a href="https://github.com/eclipse-fennec/emf.m2x/issues/4">issue #4</a>
+	 */
+	public boolean useEMFTypes() {
+		return useEMFTypes;
+	}
+
+	/**
 	 * Creates a new builder with the given parser.
 	 *
 	 * @param parser the OCL expression parser, must not be {@code null}
@@ -206,6 +222,7 @@ public final class OclConfiguration {
 		private int maxCollectionSize = DEFAULT_MAX_COLLECTION_SIZE;
 		private int maxClosureIterations = DEFAULT_MAX_CLOSURE_ITERATIONS;
 		private int maxRegexLength = DEFAULT_MAX_REGEX_LENGTH;
+		private boolean useEMFTypes;
 
 		private Builder(OclExpressionParser parser) {
 			this.parser = Objects.requireNonNull(parser, "parser must not be null");
@@ -347,6 +364,25 @@ public final class OclConfiguration {
 				throw new IllegalArgumentException("maxRegexLength must be positive: " + maxRegexLength);
 			}
 			this.maxRegexLength = maxRegexLength;
+			return this;
+		}
+
+		/**
+		 * Enables or disables EMF collection return types at the top level.
+		 *
+		 * <p>When {@code true}, {@code OclEngine.evaluate(...)} wraps top-level
+		 * {@link java.util.Collection} results as
+		 * {@link org.eclipse.emf.common.util.EList} and top-level
+		 * {@link java.util.Map} results as
+		 * {@link org.eclipse.emf.common.util.EMap}. Defaults to {@code false}.
+		 *
+		 * @param useEMFTypes whether EMF types are returned at the top level
+		 * @return this builder
+		 *
+		 * @see <a href="https://github.com/eclipse-fennec/emf.m2x/issues/4">issue #4</a>
+		 */
+		public Builder useEMFTypes(boolean useEMFTypes) {
+			this.useEMFTypes = useEMFTypes;
 			return this;
 		}
 

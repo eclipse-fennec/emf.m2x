@@ -414,7 +414,8 @@ OclEvaluationOptions options = OclEvaluationOptions.strict()
     .withMaxDepth(500)
     .withMaxCollectionSize(100_000)
     .withMaxClosureIterations(50_000)
-    .withMaxRegexLength(500);
+    .withMaxRegexLength(500)
+    .withUseEMFTypes(true);
 ```
 
 ### 6.3 Option Reference
@@ -430,6 +431,57 @@ OclEvaluationOptions options = OclEvaluationOptions.strict()
 | `maxCollectionSize` | 1,000,000 | Maximum elements in a collection |
 | `maxClosureIterations` | 100,000 | Maximum closure() iterations |
 | `maxRegexLength` | 1,000 | Maximum regex pattern length |
+| `useEMFTypes` | `false` | Wrap top-level `Collection` as `EList`, top-level `Map` as `EMap` |
+
+### 6.4 Return Types — Java vs. EMF
+
+By default, `OclEngine.evaluate(...)` returns OCL-spec-native Java types:
+
+| OCL type        | Java class (default)                                  |
+|-----------------|-------------------------------------------------------|
+| `Sequence(T)`   | `java.util.ArrayList`                                 |
+| `OrderedSet(T)` | `OclOrderedSet` (extends `ArrayList`, OCL equality)   |
+| `Bag(T)`        | `OclBag` (extends `ArrayList`)                        |
+| `Set(T)`        | `OclSet` (extends `AbstractSet`, OCL equality)        |
+| `Map(K,V)`      | `java.util.LinkedHashMap`                             |
+| `Integer`       | `Integer` (narrowed from `Long` when it fits)         |
+
+When a caller expects EMF-shaped results — e.g. the result is being assigned
+to an `EList<T>`-typed variable or fed back into EMF APIs — set
+`useEMFTypes = true`. The engine then wraps **top-level only** collection/map
+results:
+
+- `Collection` (any OCL kind) → unmodifiable `EList`
+- `Map` → unmodifiable `EMap`
+
+Nested collections inside the result are left untouched. Non-collection
+values (numbers, strings, `EObject`s, …) pass through unchanged.
+
+#### Example
+
+```java
+OclEvaluationOptions options = OclEvaluationOptions.strict()
+    .withUseEMFTypes(true);
+
+// "self.employees->select(e | e.name.startsWith(prefix))->asSequence()"
+EList<Person> matches = (EList<Person>) engine.evaluate(parsed, ctx, options);
+```
+
+The same flag can be set once on the engine configuration so every call uses
+it:
+
+```java
+OclConfiguration config = OclConfiguration.builder(parser)
+    .useEMFTypes(true)
+    .build();
+OclEngine engine = new OclEngineImpl(config);
+```
+
+> **Delegate note:** The EMF invocation delegate always returns an `EList` for
+> multi-valued `EOperation`s regardless of this flag — that is required by the
+> EMF contract (see [issue #3](https://github.com/eclipse-fennec/emf.m2x/issues/3)).
+> The `useEMFTypes` flag (see [issue #4](https://github.com/eclipse-fennec/emf.m2x/issues/4))
+> only affects the shape of `OclEngine.evaluate(...)` return values.
 
 ---
 
@@ -797,6 +849,10 @@ for (EObject obj : objects) {
 ---
 
 ## 13. Value Type Mapping
+
+> See also [Section 6.4](#64-return-types--java-vs-emf) for the exact runtime
+> classes used for OCL collections and the `useEMFTypes` option that switches
+> top-level `Collection`/`Map` returns to `EList`/`EMap`.
 
 OCL types map to Java types as follows:
 

@@ -39,7 +39,8 @@ public record OclEvaluationOptions(
 		int maxClosureIterations,
 		int maxRegexLength,
 		boolean customOperationsEnabled,
-		List<OclOperationProvider> additionalProviders) {
+		List<OclOperationProvider> additionalProviders,
+		boolean useEMFTypes) {
 
 	/**
 	 * Controls how {@code null} values are handled during navigation.
@@ -78,6 +79,10 @@ public record OclEvaluationOptions(
 	 * @param maxRegexLength maximum regex pattern length for matches/replaceAll/replaceFirst (must be positive)
 	 * @param customOperationsEnabled whether config-registered custom operations are active
 	 * @param additionalProviders per-evaluation providers, always active regardless of enable flag
+	 * @param useEMFTypes when {@code true}, top-level {@link java.util.Collection} results are
+	 *        returned as {@link org.eclipse.emf.common.util.EList} and top-level {@link java.util.Map}
+	 *        results as {@link org.eclipse.emf.common.util.EMap}
+	 *        (see <a href="https://github.com/eclipse-fennec/emf.m2x/issues/4">issue #4</a>)
 	 */
 	public OclEvaluationOptions {
 		Objects.requireNonNull(nullHandling, "nullHandling must not be null");
@@ -108,7 +113,7 @@ public record OclEvaluationOptions(
 		return new OclEvaluationOptions(NullHandling.STRICT, ErrorRecovery.FAIL_FAST,
 				DEFAULT_MAX_DEPTH, null,
 				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
-				false, List.of());
+				false, List.of(), false);
 	}
 
 	/**
@@ -121,7 +126,7 @@ public record OclEvaluationOptions(
 		return new OclEvaluationOptions(NullHandling.LENIENT, ErrorRecovery.COLLECT_ERRORS,
 				DEFAULT_MAX_DEPTH, null,
 				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
-				false, List.of());
+				false, List.of(), false);
 	}
 
 	/**
@@ -133,7 +138,7 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withMaxDepth(int maxDepth) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders);
+				customOperationsEnabled, additionalProviders, useEMFTypes);
 	}
 
 	/**
@@ -145,7 +150,7 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withMaxCollectionSize(int maxCollectionSize) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders);
+				customOperationsEnabled, additionalProviders, useEMFTypes);
 	}
 
 	/**
@@ -157,7 +162,7 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withMaxClosureIterations(int maxClosureIterations) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders);
+				customOperationsEnabled, additionalProviders, useEMFTypes);
 	}
 
 	/**
@@ -169,7 +174,7 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withMaxRegexLength(int maxRegexLength) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders);
+				customOperationsEnabled, additionalProviders, useEMFTypes);
 	}
 
 	/**
@@ -181,7 +186,7 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withTimeout(Duration timeout) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders);
+				customOperationsEnabled, additionalProviders, useEMFTypes);
 	}
 
 	/**
@@ -196,7 +201,7 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withCustomOperationsEnabled(boolean enabled) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				enabled, additionalProviders);
+				enabled, additionalProviders, useEMFTypes);
 	}
 
 	/**
@@ -212,6 +217,26 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withAdditionalProviders(List<OclOperationProvider> providers) {
 		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, providers);
+				customOperationsEnabled, providers, useEMFTypes);
+	}
+
+	/**
+	 * Returns a copy with the given {@code useEMFTypes} flag.
+	 *
+	 * <p>When {@code true}, top-level {@link java.util.Collection} results of
+	 * {@code OclEngine.evaluate(...)} are wrapped as
+	 * {@link org.eclipse.emf.common.util.EList} and top-level {@link java.util.Map}
+	 * results as {@link org.eclipse.emf.common.util.EMap}. Nested collections
+	 * are not rewrapped. Defaults to {@code false} (OCL-spec-native Java types).
+	 *
+	 * @param useEMFTypes whether to return EMF collection types at the top level
+	 * @return new options with the given flag
+	 *
+	 * @see <a href="https://github.com/eclipse-fennec/emf.m2x/issues/4">issue #4</a>
+	 */
+	public OclEvaluationOptions withUseEMFTypes(boolean useEMFTypes) {
+		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				customOperationsEnabled, additionalProviders, useEMFTypes);
 	}
 }
