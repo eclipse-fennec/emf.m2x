@@ -60,6 +60,7 @@ class OclDelegateTest extends AbstractOclTest {
 	static EClass employeeClass;
 	static EClass companyClass;
 	static EOperation findEmployeesOp;
+	static EAttribute employeesNames;
 
 	@BeforeAll
 	static void setUpDelegateModel() {
@@ -154,6 +155,15 @@ class OclDelegateTest extends AbstractOclTest {
 		addAnnotation(findEmployeesOp, "body",
 				"self.employees->select(e | e.name.startsWith(prefix))->asSequence()");
 		companyClass.getEOperations().add(findEmployeesOp);
+		
+		//derived many attribute
+		employeesNames = EcoreFactory.eINSTANCE.createEAttribute();
+		employeesNames.setName("employeesNames");
+		employeesNames.setEType(EcorePackage.Literals.ESTRING);
+		employeesNames.setUpperBound(-1);
+		addAnnotation(employeesNames, "derivation",
+				"self.employees->collect(e | e.name)->asSequence()");
+		companyClass.getEStructuralFeatures().add(employeesNames);
 
 		// Register the package
 		EPackage.Registry.INSTANCE.put(testPackage.getNsURI(), testPackage);
@@ -234,6 +244,23 @@ class OclDelegateTest extends AbstractOclTest {
 	void settingDelegate_derivedFeature_isSet() {
 		EObject emp = createEmployee("Alice", 30, 50000.0);
 		assertTrue(emp.eIsSet(employeeClass.getEStructuralFeature("nameLength")));
+	}
+	
+	@Test
+	void settingDelegate_multiValueDerivedFeature_returnsEList() {
+		EObject jane = createEmployee("Jane", 30, 50000.0);
+		EObject john = createEmployee("John", 25, 40000.0);
+		EObject alice = createEmployee("Alice", 40, 60000.0);
+		EObject company = createDelegateCompany("Acme", jane, john, alice);
+		
+		Object result = company.eGet(employeesNames);
+		assertTrue(result instanceof EList,
+				"Expected EList, got: " + (result == null ? "null" : result.getClass().getName()));
+		EList<?> list = (EList<?>) result;
+		assertEquals(3, list.size());
+		assertTrue(list.contains("Jane"));
+		assertTrue(list.contains("John"));
+		assertTrue(list.contains("Alice"));
 	}
 
 	// --- Invocation delegate (operations) ---
