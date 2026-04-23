@@ -14,8 +14,13 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 
+import org.eclipse.emf.common.util.BasicEList;
+import org.eclipse.emf.common.util.ECollections;
+import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.InternalEObject;
 import org.eclipse.emf.ecore.util.BasicSettingDelegate;
@@ -93,7 +98,15 @@ public class OclSettingDelegateFactory implements EStructuralFeature.Internal.Se
 			try {
 				OclExpression expression = getParsedExpression();
 				OclContext context = OclContext.of(owner);
-				return engine.evaluate(expression, context, engine.getDelegateOptions());
+				Object result = engine.evaluate(expression, context, engine.getDelegateOptions());
+				if (eStructuralFeature.isMany() && result != null && !(result instanceof EList<?>)) {
+					if (result instanceof Collection<?> col) {
+						result = ECollections.unmodifiableEList(new BasicEList<>(col));
+					} else {
+						result = ECollections.unmodifiableEList(new BasicEList<>(List.of(result)));
+					}
+				}
+				return result;
 			} catch (Exception e) {
 				throw new IllegalStateException(
 						"OCL derivation failed for " + eStructuralFeature.getName()
