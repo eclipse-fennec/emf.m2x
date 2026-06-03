@@ -312,12 +312,15 @@ public class OclEngineImpl implements OclEngine {
 
 	/**
 	 * Registers this engine as EMF delegate for invocation, setting, and
-	 * validation under the Fennec OCL delegate URI
-	 * ({@value OclDelegateUtil#DELEGATE_URI}).
+	 * validation under every {@linkplain OclDelegateUtil#SERVED_URIS served URI}.
 	 *
-	 * <p>After calling this method, EOperations, EStructuralFeatures, and
-	 * EClasses annotated with the Fennec delegate URI will be evaluated
-	 * using this engine.
+	 * <p>This covers both the native Fennec OCL delegate URI
+	 * ({@value OclDelegateUtil#DELEGATE_URI}) and the legacy Eclipse OCL Pivot
+	 * delegate URI ({@value OclDelegateUtil#LEGACY_PIVOT_URI}), so that models
+	 * authored against either evaluate using this engine. The same factory
+	 * instance is shared across URIs; it reads the OCL expression from whichever
+	 * served URI the model annotated (see
+	 * {@link OclDelegateUtil#getAnnotationDetail}).
 	 *
 	 * <p>For standalone (non-OSGi) usage:
 	 * <pre>
@@ -328,29 +331,34 @@ public class OclEngineImpl implements OclEngine {
 	 * @see #uninstallDelegates()
 	 */
 	public void installDelegates() {
-		String uri = OclDelegateUtil.DELEGATE_URI;
+		OclInvocationDelegateFactory invocationFactory = new OclInvocationDelegateFactory(this);
+		OclSettingDelegateFactory settingFactory = new OclSettingDelegateFactory(this);
+		OclValidationDelegateFactory validationFactory = new OclValidationDelegateFactory(this);
 
-		EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE
-				.put(uri, new OclInvocationDelegateFactory(this));
+		for (String uri : OclDelegateUtil.SERVED_URIS) {
+			EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE
+					.put(uri, invocationFactory);
 
-		EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE
-				.put(uri, new OclSettingDelegateFactory(this));
+			EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE
+					.put(uri, settingFactory);
 
-		EValidator.ValidationDelegate.Registry.INSTANCE
-				.put(uri, new OclValidationDelegateFactory(this));
+			EValidator.ValidationDelegate.Registry.INSTANCE
+					.put(uri, validationFactory);
+		}
 	}
 
 	/**
-	 * Removes the Fennec OCL delegate registrations from the global EMF registries.
+	 * Removes the Fennec OCL delegate registrations from the global EMF registries
+	 * for every {@linkplain OclDelegateUtil#SERVED_URIS served URI}.
 	 *
 	 * @see #installDelegates()
 	 */
 	public void uninstallDelegates() {
-		String uri = OclDelegateUtil.DELEGATE_URI;
-
-		EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE.remove(uri);
-		EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE.remove(uri);
-		EValidator.ValidationDelegate.Registry.INSTANCE.remove(uri);
+		for (String uri : OclDelegateUtil.SERVED_URIS) {
+			EOperation.Internal.InvocationDelegate.Factory.Registry.INSTANCE.remove(uri);
+			EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE.remove(uri);
+			EValidator.ValidationDelegate.Registry.INSTANCE.remove(uri);
+		}
 	}
 
 	// --- Warm-Up ---
@@ -378,7 +386,6 @@ public class OclEngineImpl implements OclEngine {
 	 */
 	public void warmUp(EPackage ePackage) {
 		Objects.requireNonNull(ePackage, "ePackage must not be null");
-		String delegateUri = OclDelegateUtil.DELEGATE_URI;
 
 		for (EClassifier classifier : ePackage.getEClassifiers()) {
 			if (!(classifier instanceof EClass eClass)) {
@@ -395,40 +402,43 @@ public class OclEngineImpl implements OclEngine {
 				}
 			}
 
-			// 2. Expression parse warm-up (derivation, initial on features)
+			// Expression parse warm-up across every served delegate URI.
 			if (expressionCache != null) {
-				for (EStructuralFeature sf : eClass.getEStructuralFeatures()) {
-					EAnnotation ann = sf.getEAnnotation(delegateUri);
-					if (ann == null) {
-						continue;
-					}
-					for (String key : List.of("derivation", "initial")) {
-						String expr = ann.getDetails().get(key);
-						if (expr != null) {
-							tryParse(expr, eClass);
+				for (String delegateUri : OclDelegateUtil.SERVED_URIS) {
+					// 2. Expression parse warm-up (derivation, initial on features)
+					for (EStructuralFeature sf : eClass.getEStructuralFeatures()) {
+						EAnnotation ann = sf.getEAnnotation(delegateUri);
+						if (ann == null) {
+							continue;
+						}
+						for (String key : List.of("derivation", "initial")) {
+							String expr = ann.getDetails().get(key);
+							if (expr != null) {
+								tryParse(expr, eClass);
+							}
 						}
 					}
-				}
 
-				// 3. Expression parse warm-up (body, pre, post on operations)
-				for (EOperation op : eClass.getEOperations()) {
-					EAnnotation ann = op.getEAnnotation(delegateUri);
-					if (ann == null) {
-						continue;
-					}
-					for (String key : List.of("body", "pre", "post")) {
-						String expr = ann.getDetails().get(key);
-						if (expr != null) {
-							tryParse(expr, eClass);
+					// 3. Expression parse warm-up (body, pre, post on operations)
+					for (EOperation op : eClass.getEOperations()) {
+						EAnnotation ann = op.getEAnnotation(delegateUri);
+						if (ann == null) {
+							continue;
+						}
+						for (String key : List.of("body", "pre", "post")) {
+							String expr = ann.getDetails().get(key);
+							if (expr != null) {
+								tryParse(expr, eClass);
+							}
 						}
 					}
-				}
 
-				// 4. Expression parse warm-up (constraint expressions on class)
-				EAnnotation classAnn = eClass.getEAnnotation(delegateUri);
-				if (classAnn != null) {
-					for (Map.Entry<String, String> detail : classAnn.getDetails().entrySet()) {
-						tryParse(detail.getValue(), eClass);
+					// 4. Expression parse warm-up (constraint expressions on class)
+					EAnnotation classAnn = eClass.getEAnnotation(delegateUri);
+					if (classAnn != null) {
+						for (Map.Entry<String, String> detail : classAnn.getDetails().entrySet()) {
+							tryParse(detail.getValue(), eClass);
+						}
 					}
 				}
 			}

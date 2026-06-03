@@ -605,9 +605,22 @@ engine.uninstallDelegates();
 
 ### 9.2 Delegate URI
 
+The native Fennec OCL delegate URI is:
+
 ```
 http://www.eclipse.org/fennec/m2x/ocl/1.0
 ```
+
+The engine also serves the legacy Eclipse OCL Pivot delegate URI for
+interop (see [9.5](#95-legacy-eclipse-ocl-pivot-namespace)):
+
+```
+http://www.eclipse.org/emf/2002/Ecore/OCL/Pivot
+```
+
+Both are exposed as `OclDelegateUtil.DELEGATE_URI` and
+`OclDelegateUtil.LEGACY_PIVOT_URI`; the full set served by the engine is
+`OclDelegateUtil.SERVED_URIS`.
 
 ### 9.3 Ecore Annotations
 
@@ -648,6 +661,40 @@ them and populate the global EMF registries. No manual `installDelegates()` call
 Each delegate factory injects `OclEngineImpl` via `@Reference` to access both the
 public API methods (`parse`, `evaluate`) and internal delegate methods
 (`getDelegateOptions`, `evaluatePostcondition`).
+
+### 9.5 Legacy Eclipse OCL Pivot Namespace
+
+The Fennec engine also serves the legacy **Eclipse OCL Pivot** delegate URI:
+
+```
+http://www.eclipse.org/emf/2002/Ecore/OCL/Pivot
+```
+
+This lets models authored against Eclipse OCL — whose derived features,
+operation bodies, and constraints are annotated under the Pivot URI rather
+than the Fennec URI — evaluate with the Fennec engine **without re-annotating
+the model**. The Fennec OCL dialect is a superset of Eclipse OCL's, so no
+expression translation is involved; only the annotation source differs.
+
+Both URIs are registered on every path:
+
+- **Standalone** — `installDelegates()` registers each factory under all
+  served URIs; `uninstallDelegates()` removes them all.
+- **OSGi** — each delegate factory declares `emf.configuratorName` once per
+  served URI, so the emf.osgi whiteboard registers it under both.
+
+The factories resolve the OCL expression by consulting the served URIs in
+order (Fennec first, Pivot as fallback), so a feature annotated under either
+URI is picked up transparently. An example of a model that relies on this is
+`org.eclipse.daanse.cwm.model.cwmx.eorm`, whose derived features (e.g.
+`Column.name = cwmColumn.name`) are annotated under the legacy Pivot URI.
+
+To serve additional legacy or third-party delegate URIs, add them to
+`OclDelegateUtil.SERVED_URIS` — registration, expression lookup, and warm-up
+all iterate that list.
+
+> **Note:** This changes only the set of annotation sources the engine
+> *answers to*. The OCL expressions themselves are handled exactly as before.
 
 ---
 
