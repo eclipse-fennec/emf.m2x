@@ -680,8 +680,13 @@ Both URIs are registered on every path:
 
 - **Standalone** — `installDelegates()` registers each factory under all
   served URIs; `uninstallDelegates()` removes them all.
-- **OSGi** — each delegate factory declares `emf.configuratorName` once per
-  served URI, so the emf.osgi whiteboard registers it under both.
+- **OSGi** — the emf.osgi delegate registry reads `emf.configuratorName` as a
+  single value, so each delegate type ships a thin companion component for the
+  legacy URI (`OclLegacyPivotSettingDelegateFactory`,
+  `OclLegacyPivotInvocationDelegateFactory`,
+  `OclLegacyPivotValidationDelegateFactory`). These subclass the Fennec
+  factories and only differ in their whiteboard properties
+  (`emf.configuratorName` = the Pivot URI, `emf.name=fennec-ocl-pivot`).
 
 The factories resolve the OCL expression by consulting the served URIs in
 order (Fennec first, Pivot as fallback), so a feature annotated under either
@@ -690,8 +695,9 @@ URI is picked up transparently. An example of a model that relies on this is
 `Column.name = cwmColumn.name`) are annotated under the legacy Pivot URI.
 
 To serve additional legacy or third-party delegate URIs, add them to
-`OclDelegateUtil.SERVED_URIS` — registration, expression lookup, and warm-up
-all iterate that list.
+`OclDelegateUtil.SERVED_URIS` — standalone registration, expression lookup, and
+warm-up all iterate that list. For OSGi, also add a companion component for the
+new URI (one per delegate type), mirroring the `OclLegacyPivot*` factories.
 
 > **Note:** This changes only the set of annotation sources the engine
 > *answers to*. The OCL expressions themselves are handled exactly as before.
