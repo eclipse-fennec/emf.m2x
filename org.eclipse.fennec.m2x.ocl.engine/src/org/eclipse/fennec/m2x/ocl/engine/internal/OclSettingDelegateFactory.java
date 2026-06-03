@@ -52,7 +52,6 @@ import org.osgi.service.component.annotations.Reference;
 		service = EStructuralFeature.Internal.SettingDelegate.Factory.class,
 		property = {
 				"emf.configuratorName=" + OclDelegateUtil.DELEGATE_URI,
-				"emf.configuratorName=" + OclDelegateUtil.LEGACY_PIVOT_URI,
 				"emf.name=fennec-ocl",
 				"emf.configuratorType=SETTING_DELEGATE_FACTORY"
 		})
