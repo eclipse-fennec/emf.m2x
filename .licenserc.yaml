@@ -48,6 +48,7 @@ header:
     - '**/*.basic'
     - '**/.classpath'
     - 'LICENSE'
+    - '**/license.txt'
     - 'Jenkinsfile'
     - 'NOTICE'
     - 'cnf/**'

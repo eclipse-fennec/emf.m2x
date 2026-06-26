@@ -8,6 +8,16 @@ Bundle-Description: Builds an Eclipse p2 repository for the Fennec OCL bundles \
 # This project produces a p2 repository, not a code bundle.
 -fixupmessages: "The JAR is empty"
 
+# The p2 export packages these workspace bundles (referenced from ocl.feature.bndrun
+# via -runbundles). -runbundles alone creates no build-order dependency, so on a full
+# CI build the export can run before they are built. -dependson forces them first.
+-dependson: \
+	org.eclipse.fennec.m2x.ocl.model, \
+	org.eclipse.fennec.m2x.ocl.api, \
+	org.eclipse.fennec.m2x.ocl.parser, \
+	org.eclipse.fennec.m2x.ocl.engine, \
+	org.eclipse.fennec.m2x.ocl.ide
+
 # Export the feature set as an Eclipse p2 repository into generated/.
 -export: features.bnd; \
 	type=p2; \
