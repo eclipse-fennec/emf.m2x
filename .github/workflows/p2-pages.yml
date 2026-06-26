@@ -1,0 +1,49 @@
+name: Assemble p2 update sites (reusable)
+
+# Reusable: turns the built OCL p2 jar (artifact `ocl-p2`) into a Pages *slice*
+# under <component>/<branch>/p2/ and uploads it as a regular artifact (`pages-ocl`).
+# It deliberately does NOT deploy: GitHub Pages replaces the whole site on every
+# deploy, so a single orchestrator deploy job merges all `pages-*` slices (p2,
+# and later the documentation site) and publishes once.
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: "branch/version segment in the URL, e.g. snapshot or latest"
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  assemble:
+    name: Assemble OCL p2 slice
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download OCL p2 jar
+        uses: actions/download-artifact@v4
+        with:
+          name: ocl-p2
+          path: p2-in
+      - name: Assemble p2 slice
+        run: |
+          set -euo pipefail
+          branch="${{ inputs.branch }}"
+          out="site"
+          rm -rf "$out"
+          # OCL update site -> <component>/<branch>/p2/
+          mkdir -p "$out/ocl/${branch}/p2"
+          unzip -q -o p2-in/org.eclipse.fennec.m2x.ocl.p2.jar -d "$out/ocl/${branch}/p2"
+          # QVT/M2T slices will be added here once they have p2 projects:
+          #   $out/qvt/${branch}/p2/   and   $out/m2t/${branch}/p2/
+          echo "p2 slice:"; find "$out" -maxdepth 3 -type d | sort
+      - name: Upload p2 slice
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-ocl
+          path: site
+          if-no-files-found: error

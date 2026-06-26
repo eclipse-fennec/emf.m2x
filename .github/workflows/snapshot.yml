@@ -1,4 +1,10 @@
 name: Snapshot Build
+
+# Orchestrator for the snapshot branch: build & release to Sonatype, then publish
+# the p2 update site(s) to GitHub Pages — reusing the *exact* jar from the build
+# (no rebuild). Child workflows are reusable (workflow_call); `needs` enforces the
+# order. The documentation build will be added here later as another child whose
+# `pages-*` artifact is merged by the single `deploy` job below.
 on:
   push:
     # This snapshot build should only happen on pushes to the snapshot branch.
@@ -6,56 +12,78 @@ on:
       - snapshot
   pull_request:
     # This snapshot build should NOT happen on pull requests.
-    # Therefore, we explicitly exclude all branches for pull requests.
     branches-ignore:
       - '*'
 
-env:
-  LC_ALL: en_US.UTF-8
-  GRADLE_OPTS: >-
-    -Dorg.gradle.parallel=true
-
-defaults:
-  run:
-    shell: bash
+# Serialize Pages publishing; let an in-flight deploy finish before the next.
+concurrency:
+  group: snapshot-pages
+  cancel-in-progress: false
 
 jobs:
-  snapshot:
-    name: Gradle Snapshot Build
+  build:
+    name: Build & release snapshot
+    uses: ./.github/workflows/snapshot-build.yml
+    secrets: inherit
+
+  p2:
+    name: Assemble p2 update site
+    needs: build
+    uses: ./.github/workflows/p2-pages.yml
+    with:
+      branch: ${{ github.ref_name }}
+
+  # docs:                              # ← future documentation build
+  #   needs: build
+  #   uses: ./.github/workflows/docs-pages.yml
+  #   with: { branch: ${{ github.ref_name }} }
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: [p2]
     runs-on: ubuntu-latest
-    env:
-      CS_PASSWORD: ${{secrets.CENTRAL_SONATYPE_TOKEN_PASSWORD}}
-      CS_USERNAME: ${{secrets.CENTRAL_SONATYPE_TOKEN_USERNAME}}
-      GPG_PASSPHRASE: ${{secrets.GPG_PASSPHRASE}}
-      GPG_KEY_ID: ${{secrets.GPG_KEY_ID}}
-      GPG_PRIVATE_KEY: ${{secrets.GPG_PRIVATE_KEY}}
-      DO_RELEASE: false
+    permissions:
+      pages: write # publish to GitHub Pages
+      id-token: write # OIDC token for the Pages deployment
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    defaults:
+      run:
+        shell: bash
     steps:
-    - name: Git Checkout
-      uses: actions/checkout@v4
-    - name: Gradle Wrapper Validation
-      uses: gradle/actions/wrapper-validation@v4
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: "temurin"
-        cache: "gradle"
-        java-version: 21
-    - name: Grant execute permission for gradlew
-      run: chmod +x ./gradlew
-    - name: Gradle version
-      run: ./gradlew --no-daemon --version
-    - name: Setup GPG and jp environment
-      run: |
-        sudo apt-get update && sudo apt-get install -y gnupg2 jp
-        echo "$GPG_PRIVATE_KEY" > private.key
-        echo "$GPG_PASSPHRASE" | gpg --batch --passphrase-fd 0 --pinentry-mode loopback --no-tty --quiet --yes --import private.key
-        rm private.key
-      shell: bash 
-    - name: Build with Gradle
-      run: ./gradlew release
-    - name: Delete GPG key from keyring
-      if: always()
-      run: |
-        rm -rf ~/.gnupg
-      shell: bash
+      - name: Collect site slices
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pages-*
+          merge-multiple: true
+          path: _site
+      - name: Finalize site
+        run: |
+          set -euo pipefail
+          branch="${{ github.ref_name }}"
+          touch _site/.nojekyll
+          # Minimal landing page; will be replaced by the documentation build's
+          # shell (with a version selector) once that child workflow exists.
+          cat > _site/index.html <<HTML
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>Fennec M2X &mdash; Eclipse update sites</title>
+          <style>body{font:16px/1.5 system-ui,sans-serif;max-width:42rem;margin:3rem auto;padding:0 1rem}code{background:#f3f3f3;padding:.1em .3em;border-radius:3px}</style>
+          <h1>Fennec M2X &mdash; Eclipse update sites</h1>
+          <p>Add these URLs in Eclipse via <em>Help &rarr; Install New Software&hellip; &rarr; Add&hellip;</em>.</p>
+          <ul>
+            <li><strong>OCL (${branch})</strong>:
+              <code>https://eclipse-fennec.github.io/emf.m2x/ocl/${branch}/p2/</code>
+              &mdash; <a href="ocl/${branch}/p2/">browse</a></li>
+          </ul>
+          <p>See the <a href="https://github.com/eclipse-fennec/emf.m2x">project repository</a> for documentation.</p>
+          HTML
+          echo "Final site:"; find _site -maxdepth 3 -type d | sort
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
