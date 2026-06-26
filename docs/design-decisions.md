@@ -47,6 +47,8 @@
 | D37 | QVT-R: Unit Resolver wiederverwenden | Gemeinsames `TransformationUnitResolver`-Konzept für QVT-R und QVT-O. Gleiche Patterns: ServiceLoader (standalone), Whiteboard (OSGi), Security Controls (D29). |
 | D38 | QVT-R: Phasenplan — QVT-R standalone zuerst, dann QVT-O Brücke | Phase 4a: QVT-R standalone (Metamodell, Parser, Engine). Phase 4b: QVT-R↔QVT-O Hybrid (GAP-6 `refined`, §7.8 Blackbox-Delegation). QVT-C bleibt optional für spätere Optimierung. |
 | D39 | QVT-R: Modul-Abhängigkeiten — keine Zyklen durch Interface-Entkopplung | `qvtd.model` und `qvto.model` bleiben unabhängig (kein Refactoring). Hybrid-Brücke über Interfaces in `qvtd.api` (`QvtdEngine`, `RelationImplementationProvider`). `qvto.engine → qvtd.api` (nicht qvtd.engine). `qvtd.engine` kennt QVT-O nicht. |
+| D40 | QVTBase als Shared-Bundle `org.eclipse.fennec.m2x.qvt.model` | `qvtbase.ecore` extrahiert; typsichere EReferences zwischen `qvto.model` und `qvtd.model`. Siehe DR-D40. |
+| D41 | OCL IDE-Integration als isoliertes, platform-gekoppeltes Bundle | `org.eclipse.fennec.m2x.ocl.ide` registriert die EMF-Delegates via `plugin.xml` für den generischen EMF-Editor. Einzige Ausnahme zur "No Eclipse Platform"-Regel, strikt isoliert. Siehe DR-D41. |
 
 ---
 
@@ -881,3 +883,32 @@ qvtdEngine.registerImplementationProvider(qvtoEngine);                // §7.8
 - EMF-Code muss für alle drei Model-Bundles neu generiert werden
 - nsURI `http://www.eclipse.org/fennec/m2x/qvtd/qvtbase/1.0` bleibt (Abwärtskompatibilität)
 - Bestehende Tests in `qvtd.tests` müssen Imports anpassen (Package wechselt von `qvtd.model` nach `qvt.model`)
+
+---
+
+### DR-D41: OCL IDE-Integration als isoliertes, platform-gekoppeltes Bundle
+
+**Context:** Das Legacy-Eclipse-OCL unterstützt den generischen (reflektiven) EMF-Editor: OCL-Annotationen (Invarianten, abgeleitete Features, Operations-Bodies) werden beim Öffnen/Validieren eines Modells ausgewertet. Diese Fähigkeit soll für die Fennec-OCL-Engine nachgebaut werden. Mechanismus im Legacy-OCL: Registrierung der EMF-Delegates über die Extension-Points `org.eclipse.emf.ecore.{validation,setting,invocation,query}_delegate` per `plugin.xml`.
+
+**Problem:** Das Projekt verbietet Eclipse-Platform-Abhängigkeiten (§17 — kein `org.eclipse.core.*`, `org.eclipse.ui.*`). Eine IDE-Integration setzt aber zwingend die Eclipse-Extension-Registry voraus.
+
+**Options considered:**
+- (A) Delegate-Logik in `plugin.xml` der Engine — koppelt das saubere Engine-Bundle an IDE-Belange
+- (B) Eigenes, isoliertes Bundle `org.eclipse.fennec.m2x.ocl.ide` mit `plugin.xml`, das die vorhandenen Engine-Delegates über die Extension-Registry registriert
+
+**Decision:** Option B. `org.eclipse.fennec.m2x.ocl.ide` ist die **einzige** platform-gekoppelte Komponente und bewusste Ausnahme zur "No Eclipse Platform"-Regel. Sie ist strikt isoliert: kein Engine-/Core-Bundle referenziert sie rückwärts; die Engines bleiben plain-Java/OSGi-optional.
+
+**Scope (bewusst minimal):** Nur Delegate-Registrierung (validation/setting/invocation). **Kein** OCL-Editor, **keine** Konsole, **kein** Xtext (verboten). Query-Delegate vorerst nicht (Engine hat keine Query-Delegate-Logik; für die Annotation-Auswertung im generischen Editor nicht erforderlich).
+
+**Rationale / Footprint:**
+- Compile-Buildpath nur `org.eclipse.emf.ecore` + OCL-Bundles — **kein** `org.eclipse.core.*`/`org.eclipse.ui.*` (belegt im Manifest: `Import-Package` nur EMF + ocl.*). Die Extension-Registry ist reine Laufzeit-Host-Umgebung (im Ziel-Eclipse vorhanden), kein Buildpath-Eintrag.
+- Keine Duplikation: die Engine-Delegate-Logik (inkl. `@pre`/Postcondition-Maschinerie) bleibt im `internal`-Package der Engine. Eine einzige additive public Klasse `OclDelegateFactories` (im exportierten Engine-Paket) reicht die internen Factories als EMF-Interface-Typen heraus; `internal` bleibt unexportiert.
+- `ocl.ide` komponiert Parser+Engine (`SharedOclEngine`, lazy) — dieser Wiring-Schritt gehört nicht in die parser-agnostische Engine, sondern ins IDE-Bundle.
+- Dual-URI: Delegates registriert unter Fennec-URI **und** Legacy-Eclipse-OCL-Pivot-URI → Modelle aus Eclipse-OCL werden direkt ausgewertet.
+
+**Änderungen:**
+1. Neue public Klasse `org.eclipse.fennec.m2x.ocl.engine.OclDelegateFactories` (additiv, keine Verhaltensänderung)
+2. Neues Bundle `org.eclipse.fennec.m2x.ocl.ide`: `plugin.xml` + 3 no-arg Extension-Factories (`OclValidationDelegate`, `OclSettingDelegateFactory`, `OclInvocationDelegateFactory`) + `SharedOclEngine`; Paket `Private-Package` (nicht exportiert), `Bundle-ActivationPolicy: lazy`
+3. Neues Test-Bundle `org.eclipse.fennec.m2x.ocl.ide.tests` (Plain JUnit 5, 4 Tests): registriert die Delegates in den statischen EMF-Registries (wie die Extension-Registry zur Laufzeit) und prüft `eGet`/`eInvoke`/`validate` inkl. Legacy-Pivot-URI
+
+**Auslieferung:** p2-Repository über ein separates Projekt `org.eclipse.fennec.m2x.ocl.ide.p2` (bnd `-export … type=p2`) — nur OCL-Bundles; EMF/Equinox sind im Ziel-Eclipse host-seitig vorhanden. (Modul B, folgt.)

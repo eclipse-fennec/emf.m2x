@@ -1,0 +1,29 @@
+Bundle-SymbolicName: org.eclipse.fennec.m2x.ocl.feature
+Bundle-Name: Fennec OCL
+Bundle-Description: Lightweight OCL v2.5 engine, decoupled from the Eclipse \
+ platform, with delegate-based integration into the generic EMF (reflective) \
+ editor: invariant constraints, derived-feature derivations, and operation \
+ bodies annotated with OCL are evaluated by the Fennec engine.
+Bundle-Category: fennec-ocl
+Bundle-Vendor: Eclipse Foundation
+
+# No feature-level Require-Capability: a `feature;name=...` would be exported as a
+# required `<name>.feature.group` IU pinned to THIS feature's version, which p2
+# cannot find. Instead, the host requirements are satisfied per-bundle at install
+# time against the target Eclipse / pool:
+#   - EMF packages (org.eclipse.emf.ecore/common/xmi) ......... provided by the pool
+#   - org.osgi.service.condition ............................. exported by org.eclipse.osgi
+#   - osgi.extender=osgi.component (DS) ...................... provided by org.apache.felix.scr
+# Only the non-platform bundles are shipped: the Fennec emf.osgi API (exports
+# org.eclipse.fennec.emf.osgi.configurator/constants) and the ANTLR runtime.
+-runbundles: \
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model,\
+	org.eclipse.fennec.m2x.ocl.api,\
+	org.eclipse.fennec.m2x.ocl.parser,\
+	org.eclipse.fennec.m2x.ocl.engine,\
+	org.eclipse.fennec.m2x.ocl.ide,\
+	org.antlr.antlr4-runtime
+-runrequires: bnd.identity;id='org.eclipse.fennec.m2x.ocl.ide'
+-runfw: org.apache.felix.framework;version='[7.0.5,7.0.5]'
+-runee: JavaSE-21

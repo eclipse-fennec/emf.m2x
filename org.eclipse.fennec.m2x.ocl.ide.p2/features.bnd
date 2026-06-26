@@ -1,0 +1,17 @@
+Bundle-SymbolicName: org.eclipse.fennec.m2x.ocl.p2
+Bundle-Name: Fennec OCL p2 Repository
+Bundle-Vendor: Eclipse Foundation
+Bundle-License: \
+	EPL-2.0; \
+		file="license.txt"; \
+		link="https://www.eclipse.org/legal/epl-2.0/"
+Bundle-DocURL: https://github.com/eclipse-fennec/emf.m2x
+Bundle-Copyright: Copyright (c) 2026 Contributors to the Eclipse Foundation
+
+features = \
+	ocl.feature.bndrun
+
+-categories: \
+	fennec-ocl; \
+		label = "Fennec OCL"; \
+		description = "Lightweight OCL v2.5 engine with generic EMF editor integration"

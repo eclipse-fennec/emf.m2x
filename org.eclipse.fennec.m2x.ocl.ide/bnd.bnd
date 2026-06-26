@@ -1,0 +1,24 @@
+Bundle-Name: Fennec OCL IDE Integration
+Bundle-Description: Registers the Fennec OCL EMF delegates (validation, setting, \
+ invocation) with the Eclipse extension registry, so OCL annotations \
+ (invariants, derived features, operation bodies) are evaluated when a model is \
+ opened or validated in the generic EMF (reflective) editor.
+
+-library: enableEMF
+
+# This is the only platform-coupled bundle (Design Decision D41). It contributes
+# to the Eclipse extension registry via plugin.xml; the registry is a runtime host
+# concern, so there is no compile-time dependency on org.eclipse.core.* / org.eclipse.ui.*.
+#
+# singleton:=true is REQUIRED: the Eclipse extension registry only reads plugin.xml
+# from singleton bundles. Without it the delegate extensions are silently ignored.
+Bundle-SymbolicName: org.eclipse.fennec.m2x.ocl.ide;singleton:=true
+Bundle-ActivationPolicy: lazy
+
+-includeresource: plugin.xml=_plugin.xml
+
+-buildpath: \
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot

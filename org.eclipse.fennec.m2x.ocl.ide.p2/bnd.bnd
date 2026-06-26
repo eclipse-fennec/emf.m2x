@@ -1,0 +1,14 @@
+Bundle-Name: Fennec OCL p2 Repository Builder
+Bundle-Description: Builds an Eclipse p2 repository for the Fennec OCL bundles \
+ and their generic EMF (reflective) editor integration. Install into a modeling \
+ Eclipse (EMF is host-provided); the repository ships the OCL bundles and the \
+ ANTLR runtime.
+
+-resourceonly: true
+# This project produces a p2 repository, not a code bundle.
+-fixupmessages: "The JAR is empty"
+
+# Export the feature set as an Eclipse p2 repository into generated/.
+-export: features.bnd; \
+	type=p2; \
+	name=org.eclipse.fennec.m2x.ocl.p2.jar

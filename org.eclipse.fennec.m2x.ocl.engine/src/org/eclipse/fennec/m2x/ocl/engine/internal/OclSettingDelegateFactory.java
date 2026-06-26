@@ -26,6 +26,7 @@ import org.eclipse.emf.ecore.InternalEObject;
 import org.eclipse.emf.ecore.util.BasicSettingDelegate;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.osgi.service.component.annotations.Activate;
@@ -99,6 +100,15 @@ public class OclSettingDelegateFactory implements EStructuralFeature.Internal.Se
 				OclExpression expression = getParsedExpression();
 				OclContext context = OclContext.of(owner);
 				Object result = engine.evaluate(expression, context, engine.getDelegateOptions());
+				if (result == OclInvalid.INSTANCE) {
+					// Mirror Eclipse OCL (OCLSettingDelegate throws OCLDelegateException on
+					// an invalid result): signal invalid as an exception rather than handing
+					// the OclInvalid marker back as the feature value. EMF / the reflective
+					// editor then renders an empty value instead of the literal "OclInvalid".
+					throw new IllegalStateException(
+							"OCL derivation for " + eStructuralFeature.getName()
+									+ " evaluated to invalid");
+				}
 				if (eStructuralFeature.isMany() && result != null && !(result instanceof EList<?>)) {
 					if (result instanceof Collection<?> col) {
 						result = ECollections.unmodifiableEList(new BasicEList<>(col));
@@ -107,6 +117,9 @@ public class OclSettingDelegateFactory implements EStructuralFeature.Internal.Se
 					}
 				}
 				return result;
+			} catch (IllegalStateException e) {
+				// already descriptive (invalid result or below) — do not double-wrap
+				throw e;
 			} catch (Exception e) {
 				throw new IllegalStateException(
 						"OCL derivation failed for " + eStructuralFeature.getName()

@@ -1,0 +1,16 @@
+Bundle-Name: Fennec OCL IDE Integration Tests
+Bundle-Description: Verifies that the org.eclipse.fennec.m2x.ocl.ide delegates, \
+ once registered in EMF's delegate registries (as the Eclipse extension registry \
+ does at runtime), evaluate OCL annotations through the normal EMF API.
+
+-library: enableEMF
+
+src=${^src}
+
+-buildpath: \
+	org.antlr.antlr4-runtime;version=latest,\
+	org.eclipse.fennec.m2x.ocl.ide;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot

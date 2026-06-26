@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<!--
+  Copyright (c) 2026 Contributors to the Eclipse Foundation.
+  This program and the accompanying materials are made available under the
+  terms of the Eclipse Public License 2.0 (https://www.eclipse.org/legal/epl-2.0/).
+  SPDX-License-Identifier: EPL-2.0
+
+  Registers the Fennec OCL delegates with EMF's delegate registries so that the
+  generic (reflective) EMF editor evaluates OCL annotations. Each delegate is
+  registered under both the Fennec URI and the legacy Eclipse OCL Pivot URI, so
+  models authored against either are evaluated by the Fennec engine.
+-->
+<plugin>
+
+   <!-- Invariant constraints on EClasses / EOperations -->
+   <extension point="org.eclipse.emf.ecore.validation_delegate">
+      <delegate
+            uri="http://www.eclipse.org/fennec/m2x/ocl/1.0"
+            class="org.eclipse.fennec.m2x.ocl.ide.OclValidationDelegate"/>
+      <delegate
+            uri="http://www.eclipse.org/emf/2002/Ecore/OCL/Pivot"
+            class="org.eclipse.fennec.m2x.ocl.ide.OclValidationDelegate"/>
+   </extension>
+
+   <!-- Derivation expressions for derived structural features -->
+   <extension point="org.eclipse.emf.ecore.setting_delegate">
+      <factory
+            uri="http://www.eclipse.org/fennec/m2x/ocl/1.0"
+            class="org.eclipse.fennec.m2x.ocl.ide.OclSettingDelegateFactory"/>
+      <factory
+            uri="http://www.eclipse.org/emf/2002/Ecore/OCL/Pivot"
+            class="org.eclipse.fennec.m2x.ocl.ide.OclSettingDelegateFactory"/>
+   </extension>
+
+   <!-- Operation bodies, pre- and postconditions -->
+   <extension point="org.eclipse.emf.ecore.invocation_delegate">
+      <factory
+            uri="http://www.eclipse.org/fennec/m2x/ocl/1.0"
+            class="org.eclipse.fennec.m2x.ocl.ide.OclInvocationDelegateFactory"/>
+      <factory
+            uri="http://www.eclipse.org/emf/2002/Ecore/OCL/Pivot"
+            class="org.eclipse.fennec.m2x.ocl.ide.OclInvocationDelegateFactory"/>
+   </extension>
+
+</plugin>

@@ -13,7 +13,7 @@
 #fennec-baselining: true
 github-orga: eclipse-fennec
 github-project: emf.m2x
-base-version: 0.1.0
+base-version: 0.1.1
 Bundle-Version: ${base-version}.SNAPSHOT
 
 # Maven Central Group-Id
@@ -61,6 +61,11 @@ javac.target: 21
  	aQute.bnd.repository.p2.provider.P2Repository; \
  	url = https://download.eclipse.org/modeling/mdt/uml2/updates/releases/; \
  	name = EclipseMDT-UML2
+
+# Enables `-export ...; type=p2` to produce an Eclipse p2 repository
+# (used by org.eclipse.fennec.m2x.ocl.ide.p2).
+-plugin.5.P2Export: \
+	aQute.p2.export.P2Exporter
 
 -fixupmessages: \
 	"jpms.jarname calculated module";is:=ignore,\
