@@ -25,9 +25,30 @@ JAR** (`org.eclipse.fennec.m2x.ocl.p2`). That JAR is published to Maven Central
 
 ---
 
-## 2. Get the p2 archive
+## 2. Install from the update site (recommended)
 
-The artifact is a normal Maven artifact whose JAR *is* a p2 repository.
+The p2 repository is published as a live **GitHub Pages update site** — a stable
+URL you simply add in Eclipse, with no download:
+
+```
+https://eclipse-fennec.github.io/emf.m2x/ocl/snapshot/p2/
+```
+
+In Eclipse: **Help → Install New Software… → Add… → Location:** paste the URL →
+tick **Fennec OCL** → install → restart.
+
+The path carries the branch/version: `…/ocl/<branch>/p2/`. Today the development
+branch `snapshot` is published; once the first release is cut, a stable
+`…/ocl/latest/p2/` alias (tracking `main`) is added — prefer that for production.
+
+> This is the easiest option and supports normal *Check for Updates*. The Maven
+> archive below (§3) is an alternative for offline/pinned installs.
+
+---
+
+## 3. Get the p2 archive (alternative)
+
+The same repository is also a normal Maven artifact whose JAR *is* a p2 repository.
 
 | | |
 |---|---|
@@ -35,27 +56,37 @@ The artifact is a normal Maven artifact whose JAR *is* a p2 repository.
 | **artifactId** | `org.eclipse.fennec.m2x.ocl.p2` |
 | **packaging** | `jar` (a self‑contained p2 repository) |
 
-**Release (Maven Central):**
+**Snapshot (Sonatype Central Snapshots)** — current development builds:
+
+```
+https://central.sonatype.com/repository/maven-snapshots/org/eclipse/fennec/m2x/org.eclipse.fennec.m2x.ocl.p2/0.1.1-SNAPSHOT/
+```
+Snapshot JARs are timestamped; the directory's `maven-metadata.xml` names the
+latest one, e.g.:
+```
+.../0.1.1-SNAPSHOT/org.eclipse.fennec.m2x.ocl.p2-0.1.1-<timestamp>-<n>.jar
+```
+You can either download that JAR (§3, Method A) **or** point Eclipse straight at
+it with the `jar:…!/` URL (§3, Method B) — that works for snapshots too, e.g.:
+```
+jar:https://central.sonatype.com/repository/maven-snapshots/org/eclipse/fennec/m2x/org.eclipse.fennec.m2x.ocl.p2/0.1.1-SNAPSHOT/org.eclipse.fennec.m2x.ocl.p2-0.1.1-<timestamp>-<n>.jar!/
+```
+Note the URL pins one timestamped build, so it doesn't auto‑update — use the
+GitHub Pages update site (§2) if you want *Check for Updates*.
+
+**Release (Maven Central)** — once a release is published:
 
 ```
 https://repo1.maven.org/maven2/org/eclipse/fennec/m2x/org.eclipse.fennec.m2x.ocl.p2/<version>/org.eclipse.fennec.m2x.ocl.p2-<version>.jar
 ```
-
-**Snapshot (Central Snapshots):**
-
-```
-https://central.sonatype.com/repository/maven-snapshots/org/eclipse/fennec/m2x/org.eclipse.fennec.m2x.ocl.p2/<version>-SNAPSHOT/
-```
-(snapshot JARs are timestamped — pick the latest from the directory's
-`maven-metadata.xml`).
-
-> Substitute `<version>` with the version you want (e.g. `0.1.1`).
+Releases have stable file names, so the direct `jar:…!/` URL (§3, Method B) works
+without a download. Substitute `<version>` (e.g. `0.1.1`).
 
 ---
 
-## 3. Install into Eclipse
+### Install the archive in Eclipse
 
-### Method A — local archive (recommended, works for releases *and* snapshots)
+#### Method A — local archive (works for releases *and* snapshots)
 
 1. Download the `org.eclipse.fennec.m2x.ocl.p2-<version>.jar`.
 2. In Eclipse: **Help → Install New Software… → Add… → Archive…**
@@ -64,13 +95,19 @@ https://central.sonatype.com/repository/maven-snapshots/org/eclipse/fennec/m2x/o
 4. Tick the **Fennec OCL** category, **Next**, accept the EPL‑2.0 license, **Finish**.
 5. Restart Eclipse when prompted.
 
-### Method B — direct `jar:` URL (releases)
+#### Method B — direct `jar:` URL (releases *and* snapshots, no download)
 
 In **Help → Install New Software… → Add…**, set *Location* to the JAR wrapped as a
-p2 archive URL (note the leading `jar:` and trailing `!/`):
+p2 archive URL (note the leading `jar:` and trailing `!/`). Eclipse reads the p2
+metadata straight from inside the remote JAR — no download needed.
 
+Release (stable file name):
 ```
 jar:https://repo1.maven.org/maven2/org/eclipse/fennec/m2x/org.eclipse.fennec.m2x.ocl.p2/<version>/org.eclipse.fennec.m2x.ocl.p2-<version>.jar!/
+```
+Snapshot (timestamped file name from `maven-metadata.xml`):
+```
+jar:https://central.sonatype.com/repository/maven-snapshots/org/eclipse/fennec/m2x/org.eclipse.fennec.m2x.ocl.p2/0.1.1-SNAPSHOT/org.eclipse.fennec.m2x.ocl.p2-0.1.1-<timestamp>-<n>.jar!/
 ```
 
 Then proceed as in Method A from step 4.
