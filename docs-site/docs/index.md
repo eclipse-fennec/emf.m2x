@@ -14,7 +14,7 @@ hero:
       link: /guides/ocl
     - theme: alt
       text: Eclipse Update Site
-      link: /emf.m2x/ocl/snapshot/p2/
+      link: https://eclipse-fennec.github.io/emf.m2x/ocl/snapshot/p2/
     - theme: alt
       text: View on GitHub
       link: https://github.com/eclipse-fennec/emf.m2x
@@ -53,5 +53,5 @@ libraries and as OSGi services. Every engine works without the Eclipse platform.
 
 The OCL engine ships as an Eclipse feature that adds OCL delegate support to the
 generic EMF editor. Install it from the
-[Eclipse update site](/emf.m2x/ocl/snapshot/p2/), or follow the
-[installation guide](/guides/ide-installation).
+[Eclipse update site](https://eclipse-fennec.github.io/emf.m2x/ocl/snapshot/p2/),
+or follow the [installation guide](/guides/ide-installation).
