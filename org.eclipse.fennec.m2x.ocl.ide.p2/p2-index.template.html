@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fennec OCL — Eclipse Update Site</title>
+<meta name="description" content="This is an Eclipse p2 update site for the Fennec OCL feature. Add the URL in Eclipse via Help → Install New Software." />
+<!-- Static info page placed inside the p2 repository so a browser (and Eclipse's
+     repository view) shows a human-readable page instead of a 404 / directory
+     listing. __BRANCH__ and __P2_URL__ are substituted at publish time. -->
+<style>
+  :root {
+    --brand: #c0631c;
+    --brand-2: #e08a3a;
+    --ink: #1b1b1f;
+    --muted: #5c5c66;
+    --bg: #ffffff;
+    --soft: #f6f3f0;
+    --border: #e4e0db;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --brand: #e08a3a; --brand-2: #c0631c; --ink: #e8e8ea; --muted: #a8a8b3;
+      --bg: #1b1b1f; --soft: #26242a; --border: #34323a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+  header { display: flex; align-items: center; gap: .9rem; margin-bottom: 1.5rem; }
+  header img { width: 48px; height: 48px; }
+  h1 {
+    font-size: 1.6rem; margin: 0; line-height: 1.2;
+    background: linear-gradient(120deg, var(--brand-2) 20%, var(--brand));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .lead { color: var(--muted); margin: 0 0 2rem; }
+  .badge {
+    display: inline-block; font-size: .72rem; font-weight: 700; letter-spacing: .04em;
+    text-transform: uppercase; color: #fff; background: var(--brand);
+    padding: .2rem .55rem; border-radius: 999px; vertical-align: middle; margin-left: .5rem;
+  }
+  .urlbox {
+    display: flex; align-items: center; gap: .5rem; flex-wrap: wrap;
+    background: var(--soft); border: 1px solid var(--border); border-radius: 10px;
+    padding: .85rem 1rem; margin: 0 0 2rem;
+  }
+  .urlbox code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .95rem; word-break: break-all; color: var(--brand);
+  }
+  button.copy {
+    margin-left: auto; border: 1px solid var(--brand); background: transparent;
+    color: var(--brand); font-weight: 600; font-size: .82rem; padding: .35rem .7rem;
+    border-radius: 7px; cursor: pointer;
+  }
+  button.copy:hover { background: var(--brand); color: #fff; }
+  h2 { font-size: 1.1rem; margin: 2rem 0 .6rem; }
+  ol { padding-left: 1.2rem; }
+  ol li { margin: .35rem 0; }
+  code.inline {
+    background: var(--soft); border: 1px solid var(--border); border-radius: 4px;
+    padding: .08em .4em; font-family: ui-monospace, monospace; font-size: .9em;
+  }
+  .note {
+    background: var(--soft); border-left: 3px solid var(--brand); border-radius: 4px;
+    padding: .8rem 1rem; color: var(--muted); font-size: .92rem; margin: 1.5rem 0;
+  }
+  footer {
+    margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--border);
+    color: var(--muted); font-size: .85rem;
+  }
+  a { color: var(--brand); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img src="https://eclipse-fennec.github.io/emf.m2x/__BRANCH__/fennec-logo.png" alt="Eclipse Fennec logo" onerror="this.style.display='none'" />
+      <div>
+        <h1>Fennec OCL — Eclipse Update Site</h1>
+      </div>
+      <span class="badge">__BRANCH__</span>
+    </header>
+
+    <p class="lead">
+      This is an <strong>Eclipse p2 update site</strong>, not a normal web page.
+      It provides the <em>Fennec OCL</em> feature — OCL delegate support for the
+      generic EMF editor (validation, derived features, invocation). Install it
+      into your Eclipse IDE using the URL below.
+    </p>
+
+    <div class="urlbox">
+      <code id="p2url">__P2_URL__</code>
+      <button class="copy" onclick="navigator.clipboard&amp;&amp;navigator.clipboard.writeText(document.getElementById('p2url').textContent).then(()=>{this.textContent='Copied';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+    </div>
+
+    <h2>Install in Eclipse</h2>
+    <ol>
+      <li>In Eclipse, open <strong>Help → Install New Software…</strong></li>
+      <li>Click <strong>Add…</strong>, paste the URL above into the <em>Location</em> field, and confirm.</li>
+      <li>Select the <strong>Fennec OCL</strong> feature, click <strong>Next</strong>, accept the EPL-2.0 license, and finish.</li>
+      <li>Restart Eclipse when prompted.</li>
+    </ol>
+
+    <div class="note">
+      Browsing this folder shows the repository metadata
+      (<code class="inline">content.jar</code>, <code class="inline">artifacts.jar</code>,
+      <code class="inline">p2.index</code>). Eclipse reads those files automatically —
+      you do not need to download anything by hand.
+    </div>
+
+    <h2>Documentation</h2>
+    <p>
+      See the <a href="https://eclipse-fennec.github.io/emf.m2x/__BRANCH__/guides/ide-installation">installation guide</a>
+      for screenshots, snapshot vs. release channels, and troubleshooting, or the
+      <a href="https://eclipse-fennec.github.io/emf.m2x/__BRANCH__/">Fennec M2X documentation</a>.
+    </p>
+
+    <footer>
+      Released under the EPL-2.0 License. Eclipse Fennec is part of the Eclipse Foundation. ·
+      <a href="https://github.com/eclipse-fennec/emf.m2x">Project repository</a>
+    </footer>
+  </div>
+</body>
+</html>

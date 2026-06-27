@@ -33,14 +33,15 @@ jobs:
     with:
       branch: ${{ github.ref_name }}
 
-  # docs:                              # ← future documentation build
-  #   needs: build
-  #   uses: ./.github/workflows/docs-pages.yml
-  #   with: { branch: ${{ github.ref_name }} }
+  docs:
+    name: Assemble documentation site
+    uses: ./.github/workflows/docs-pages.yml
+    with:
+      branch: ${{ github.ref_name }}
 
   deploy:
     name: Deploy to GitHub Pages
-    needs: [p2]
+    needs: [p2, docs]
     runs-on: ubuntu-latest
     permissions:
       pages: write # publish to GitHub Pages
@@ -61,24 +62,10 @@ jobs:
       - name: Finalize site
         run: |
           set -euo pipefail
-          branch="${{ github.ref_name }}"
+          # Landing page (root index.html) and per-version docs come from the
+          # docs slice; the OCL update site comes from the p2 slice. Here we only
+          # disable Jekyll so paths like /.vitepress assets are served verbatim.
           touch _site/.nojekyll
-          # Minimal landing page; will be replaced by the documentation build's
-          # shell (with a version selector) once that child workflow exists.
-          cat > _site/index.html <<HTML
-          <!doctype html>
-          <meta charset="utf-8">
-          <title>Fennec M2X &mdash; Eclipse update sites</title>
-          <style>body{font:16px/1.5 system-ui,sans-serif;max-width:42rem;margin:3rem auto;padding:0 1rem}code{background:#f3f3f3;padding:.1em .3em;border-radius:3px}</style>
-          <h1>Fennec M2X &mdash; Eclipse update sites</h1>
-          <p>Add these URLs in Eclipse via <em>Help &rarr; Install New Software&hellip; &rarr; Add&hellip;</em>.</p>
-          <ul>
-            <li><strong>OCL (${branch})</strong>:
-              <code>https://eclipse-fennec.github.io/emf.m2x/ocl/${branch}/p2/</code>
-              &mdash; <a href="ocl/${branch}/p2/">browse</a></li>
-          </ul>
-          <p>See the <a href="https://github.com/eclipse-fennec/emf.m2x">project repository</a> for documentation.</p>
-          HTML
           echo "Final site:"; find _site -maxdepth 3 -type d | sort
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

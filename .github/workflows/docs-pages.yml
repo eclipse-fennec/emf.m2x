@@ -1,0 +1,70 @@
+name: Assemble docs site (reusable)
+
+# Reusable: builds the VitePress documentation site (curated user guides) into a
+# Pages *slice* under /<branch>/ and uploads it as `pages-docs`. Like the p2
+# child it deliberately does NOT deploy — the orchestrator's single deploy job
+# merges all `pages-*` slices and publishes once. A root index.html redirect to
+# the current version is included so /emf.m2x/ lands on the docs.
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: "branch/version segment in the URL, e.g. snapshot or latest"
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  assemble:
+    name: Build docs slice
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # lastUpdated git timestamps
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+      - name: Install dependencies
+        working-directory: docs-site
+        run: npm ci
+      - name: Build with VitePress
+        working-directory: docs-site
+        env:
+          DOCS_BRANCH: ${{ inputs.branch }}
+        run: npm run docs:build
+      - name: Assemble docs slice
+        run: |
+          set -euo pipefail
+          branch="${{ inputs.branch }}"
+          out="site"
+          rm -rf "$out"
+          mkdir -p "$out/${branch}"
+          cp -r docs-site/docs/.vitepress/dist/. "$out/${branch}/"
+          # Root redirect so https://eclipse-fennec.github.io/emf.m2x/ lands on
+          # the current docs version. Replaced by a real version picker once
+          # `latest` (= main) is published.
+          cat > "$out/index.html" <<HTML
+          <!doctype html><meta charset="utf-8">
+          <title>Fennec M2X</title>
+          <meta http-equiv="refresh" content="0; url=./${branch}/">
+          <link rel="canonical" href="./${branch}/">
+          <p>Redirecting to <a href="./${branch}/">the Fennec M2X documentation</a>&hellip;</p>
+          HTML
+          echo "docs slice:"; find "$out" -maxdepth 2 -type d | sort
+      - name: Upload docs slice
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-docs
+          path: site
+          if-no-files-found: error

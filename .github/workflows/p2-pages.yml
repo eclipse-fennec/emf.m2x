@@ -24,6 +24,8 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
       - name: Download OCL p2 jar
         uses: actions/download-artifact@v4
         with:
@@ -36,11 +38,17 @@ jobs:
           out="site"
           rm -rf "$out"
           # OCL update site -> <component>/<branch>/p2/
-          mkdir -p "$out/ocl/${branch}/p2"
-          unzip -q -o p2-in/org.eclipse.fennec.m2x.ocl.p2.jar -d "$out/ocl/${branch}/p2"
+          dir="$out/ocl/${branch}/p2"
+          mkdir -p "$dir"
+          unzip -q -o p2-in/org.eclipse.fennec.m2x.ocl.p2.jar -d "$dir"
+          # Human-readable info page so the URL shows a real page (not a 404 /
+          # directory listing) in a browser and in Eclipse's repository view.
+          p2url="https://eclipse-fennec.github.io/emf.m2x/ocl/${branch}/p2/"
+          sed -e "s|__BRANCH__|${branch}|g" -e "s|__P2_URL__|${p2url}|g" \
+            org.eclipse.fennec.m2x.ocl.ide.p2/p2-index.template.html > "$dir/index.html"
           # QVT/M2T slices will be added here once they have p2 projects:
           #   $out/qvt/${branch}/p2/   and   $out/m2t/${branch}/p2/
-          echo "p2 slice:"; find "$out" -maxdepth 3 -type d | sort
+          echo "p2 slice:"; find "$out" -type f | sort
       - name: Upload p2 slice
         uses: actions/upload-artifact@v4
         with:
