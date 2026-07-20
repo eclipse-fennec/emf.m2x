@@ -27,7 +27,7 @@ jobs:
       - name: Git Checkout
         uses: actions/checkout@v4
       - name: Download OCL p2 jar
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ocl-p2
           path: p2-in
