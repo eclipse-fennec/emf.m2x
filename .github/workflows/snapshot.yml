@@ -68,7 +68,7 @@ jobs:
           touch _site/.nojekyll
           echo "Final site:"; find _site -maxdepth 3 -type d | sort
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: _site
       - name: Deploy
