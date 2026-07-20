@@ -1,42 +1,29 @@
 name: CI Build
+
 on:
   push:
+    # Verify on every branch EXCEPT main and snapshot (those release/publish via
+    # their dedicated orchestrators). All other branches only verify.
     branches-ignore:
-      # This build should run on all pushes EXCEPT main and snapshot branches.
       - main
       - snapshot
   pull_request:
-    # This build should run for all pull requests.
     branches:
-    - '*' # Run on all branches for pull requests.
+      - '*'
 
-env:
-  LC_ALL: en_US.UTF-8
-  GRADLE_OPTS: >-
-    -Dorg.gradle.parallel=true
+# Least privilege by default; verification only reads the repository.
+permissions:
+  contents: read
 
-defaults:
-  run:
-    shell: bash
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    name: Gradle Build
-    runs-on: ubuntu-latest
-    steps:
-    - name: Git Checkout
-      uses: actions/checkout@v4
-    - name: Gradle Wrapper Validation
-      uses: gradle/actions/wrapper-validation@v4
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: "temurin"
-        cache: "gradle"
-        java-version: 21
-    - name: Grant execute permission for gradlew
-      run: chmod +x ./gradlew
-    - name: Gradle version
-      run: ./gradlew --no-daemon --version
-    - name: Build with Gradle
-      run: ./gradlew build --info
+  verify:
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@227b1dfa5f323fdd6d857d0a61fbaaf6e7288716 # v1.0.0
+    with:
+      # m2m is a Java 21 project; the JDK 25 matrix leg can be enabled later
+      # (drop this input to use the reusable default '["21","25"]') once the
+      # EMF/bnd/ANTLR toolchain is verified against JDK 25.
+      java-versions: '["21"]'
