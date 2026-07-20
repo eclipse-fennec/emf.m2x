@@ -20,9 +20,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
-
-import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
@@ -30,32 +27,29 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.emf.ecore.InternalEObject;
-import org.eclipse.emf.ecore.resource.Resource;
-import org.eclipse.emf.ecore.resource.ResourceSet;
-import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
-import org.eclipse.emf.ecore.util.BasicExtendedMetaData;
-import org.eclipse.emf.ecore.util.ExtendedMetaData;
-import org.eclipse.emf.ecore.xmi.impl.EcoreResourceFactoryImpl;
 import org.eclipse.fennec.m2x.ocl.ide.OclInvocationDelegateFactory;
 import org.eclipse.fennec.m2x.ocl.ide.OclSettingDelegateFactory;
 import org.eclipse.fennec.m2x.ocl.ide.OclValidationDelegate;
+import org.eclipse.fennec.m2x.utils.EcoreHelper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Loads the hand-written {@code /opt/git/m2m/company.ecore} test model and
- * exercises every OCL annotation in it through the {@code ocl.ide} delegates,
- * proving the file is correct independently of any running Eclipse.
+ * Loads the hand-written {@code company.ecore} test model (bundled next to this
+ * test on the classpath) and exercises every OCL annotation in it through the
+ * {@code ocl.ide} delegates, proving the file is correct independently of any
+ * running Eclipse.
  */
 class CompanyEcoreDelegateTest {
 
 	private static final String URI_FENNEC = "http://www.eclipse.org/fennec/m2x/ocl/1.0";
-	private static final String ECORE_PATH = "/opt/git/m2m/company.ecore";
 
+	private EcoreHelper ecoreHelper;
 	private EPackage companyPkg;
 
 	@BeforeEach
-	void setup() {
+	void setup() throws Exception {
 		for (String uri : new String[] { URI_FENNEC }) {
 			EValidator.ValidationDelegate.Registry.INSTANCE.put(uri, new OclValidationDelegate());
 			EStructuralFeature.Internal.SettingDelegate.Factory.Registry.INSTANCE
@@ -64,17 +58,15 @@ class CompanyEcoreDelegateTest {
 					.put(uri, new OclInvocationDelegateFactory());
 		}
 
-		ResourceSet rs = new ResourceSetImpl();
-		rs.getResourceFactoryRegistry().getExtensionToFactoryMap()
-				.put("ecore", new EcoreResourceFactoryImpl());
-		Resource res = rs.getResource(URI.createFileURI(new File(ECORE_PATH).getAbsolutePath()), true);
-		companyPkg = (EPackage) res.getContents().get(0);
-		// register so dynamic instances resolve their package
-		rs.getPackageRegistry().put(companyPkg.getNsURI(), companyPkg);
-		ExtendedMetaData emd = new BasicExtendedMetaData(rs.getPackageRegistry());
-		rs.getResource(URI.createFileURI(new File(ECORE_PATH).getAbsolutePath()), true)
-				.setURI(res.getURI());
-		assertNotNull(emd);
+		ecoreHelper = new EcoreHelper(CompanyEcoreDelegateTest.class);
+		companyPkg = ecoreHelper.loadEcore("company.ecore");
+	}
+
+	@AfterEach
+	void tearDown() {
+		if (ecoreHelper != null) {
+			ecoreHelper.releaseAll();
+		}
 	}
 
 	private EObject create(String className) {
