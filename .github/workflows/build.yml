@@ -27,3 +27,7 @@ jobs:
       # (drop this input to use the reusable default '["21","25"]') once the
       # EMF/bnd/ANTLR toolchain is verified against JDK 25.
       java-versions: '["21"]'
+      # perfTest runs the heavy, informational (@Tag("perf")) benchmarks. They
+      # were never part of m2m CI and just slow every PR down; keep them out of
+      # the per-PR verify (run them manually / on a dedicated job when needed).
+      run-perf-tests: false
