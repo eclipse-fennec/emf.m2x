@@ -42,7 +42,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = TracePackage.eNS_URI, genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/trace.ecore", ecoreSourceLocations = "/model/trace.ecore")
+@EPackage(uri = TracePackage.eNS_URI, fingerprint = "fp1:6554603e3a1b8726251093881408ea5cc71c56476adbf6541261b24f40114690", genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/trace.ecore", ecoreSourceLocations = "/model/trace.ecore")
 public interface TracePackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

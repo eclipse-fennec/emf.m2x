@@ -33,6 +33,14 @@ import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
  */
 public class QvtOperationalEPackageConfigurator implements EPackageConfigurator {
 	
+	/**
+	 * The fingerprint of this model version, computed from the <code>.ecore</code> at build
+	 * time. It identifies the model content, not the artifact - see the <code>emf.fingerprint</code>
+	 * service property.
+	 * @generated
+	 */
+	public static final String FINGERPRINT = "fp1:74a71b555625b34936060dbf5eec28da48abd58333b97daef77a9ed1f88eaa58";
+
 	private QvtOperationalPackage ePackage;
 
 	protected QvtOperationalEPackageConfigurator(QvtOperationalPackage ePackage){
@@ -70,6 +78,7 @@ public class QvtOperationalEPackageConfigurator implements EPackageConfigurator 
 		properties.put(EMFNamespaces.EMF_MODEL_REGISTRATION, EMFNamespaces.MODEL_REGISTRATION_PROVIDED);
 		properties.put(EMFNamespaces.EMF_MODEL_FILE_EXT, "qvtoperational");
 		properties.put(EMFNamespaces.EMF_MODEL_VERSION, "1.0");
+		properties.put(EMFNamespaces.EMF_MODEL_FINGERPRINT, FINGERPRINT);
 		return properties;
 	}
 }

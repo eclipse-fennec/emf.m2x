@@ -18,20 +18,29 @@ import java.util.Hashtable;
 
 import org.eclipse.emf.ecore.EFactory;
 import org.eclipse.emf.ecore.EPackage;
+
 import org.eclipse.emf.ecore.resource.Resource.Factory;
+
 import org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator;
+
 import org.eclipse.fennec.m2x.ocl.tests.company.CompanyFactory;
 import org.eclipse.fennec.m2x.ocl.tests.company.CompanyPackage;
+
 import org.eclipse.fennec.m2x.ocl.tests.company.impl.CompanyPackageImpl;
+
 import org.eclipse.fennec.m2x.ocl.tests.company.util.CompanyResourceFactoryImpl;
+
 import org.osgi.annotation.bundle.Capability;
+
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.BundleException;
 import org.osgi.framework.ServiceRegistration;
+
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Deactivate;
+
 import org.osgi.service.condition.Condition;
 /**
  * The <b>PackageConfiguration</b> for the model.
@@ -88,8 +97,7 @@ public class CompanyConfigurationComponent {
 				try {
 					bundle.start();
 				} catch (BundleException e) {
-					System.err.println("Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong: " + e.getMessage());
-					e.printStackTrace();
+					System.getLogger(getClass().getName()).log(System.Logger.Level.ERROR, "Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong", e);
 				}
 				break;
 			}

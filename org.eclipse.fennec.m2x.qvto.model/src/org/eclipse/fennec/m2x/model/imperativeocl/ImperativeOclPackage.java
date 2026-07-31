@@ -45,7 +45,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = ImperativeOclPackage.eNS_URI, genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/imperativeocl.ecore", ecoreSourceLocations = "/model/imperativeocl.ecore")
+@EPackage(uri = ImperativeOclPackage.eNS_URI, fingerprint = "fp1:5c3fdf717379827d7db55be185ad85855c86d8c14a91abadbb369a336ef9c11f", genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/imperativeocl.ecore", ecoreSourceLocations = "/model/imperativeocl.ecore")
 public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

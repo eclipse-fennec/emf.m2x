@@ -15,7 +15,9 @@
 package org.eclipse.fennec.m2x.ocl.tests.company;
 
 import org.eclipse.emf.common.util.EList;
+
 import org.eclipse.emf.ecore.EObject;
+
 import org.osgi.annotation.versioning.ProviderType;
 
 /**

@@ -19,7 +19,9 @@ import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EReference;
+
 import org.eclipse.fennec.emf.osgi.annotation.provide.EPackage;
+
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -40,7 +42,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = CompanyPackage.eNS_URI, genModel = "/model/company.genmodel", genModelSourceLocations = {"model/company.genmodel","org.eclipse.fennec.m2x.ocl.tests/model/company.genmodel"}, ecore = "/model/company.ecore", ecoreSourceLocations = "/model/company.ecore")
+@EPackage(uri = CompanyPackage.eNS_URI, fingerprint = "fp1:63bec3f170a5f7a65bc9113a45a800f2cb5ca5c081283caa64eb416a86272222", genModel = "/model/company.genmodel", genModelSourceLocations = {"model/company.genmodel","org.eclipse.fennec.m2x.ocl.tests/model/company.genmodel"}, ecore = "/model/company.ecore", ecoreSourceLocations = "/model/company.ecore")
 public interface CompanyPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

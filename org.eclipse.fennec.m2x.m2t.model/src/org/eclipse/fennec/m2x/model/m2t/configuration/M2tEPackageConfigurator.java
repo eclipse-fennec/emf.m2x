@@ -33,6 +33,14 @@ import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
  */
 public class M2tEPackageConfigurator implements EPackageConfigurator {
 	
+	/**
+	 * The fingerprint of this model version, computed from the <code>.ecore</code> at build
+	 * time. It identifies the model content, not the artifact - see the <code>emf.fingerprint</code>
+	 * service property.
+	 * @generated
+	 */
+	public static final String FINGERPRINT = "fp1:f501f4fe8cd550795b07715bfcb5e2c1c57d77be38483899f3281fe3533da2c6";
+
 	private M2tPackage ePackage;
 
 	protected M2tEPackageConfigurator(M2tPackage ePackage){
@@ -70,6 +78,7 @@ public class M2tEPackageConfigurator implements EPackageConfigurator {
 		properties.put(EMFNamespaces.EMF_MODEL_REGISTRATION, EMFNamespaces.MODEL_REGISTRATION_PROVIDED);
 		properties.put(EMFNamespaces.EMF_MODEL_FILE_EXT, "m2t");
 		properties.put(EMFNamespaces.EMF_MODEL_VERSION, "1.0");
+		properties.put(EMFNamespaces.EMF_MODEL_FINGERPRINT, FINGERPRINT);
 		return properties;
 	}
 }

@@ -46,7 +46,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = QvtrelationPackage.eNS_URI, genModel = "/model/qvtd.genmodel", genModelSourceLocations = {"model/qvtd.genmodel","org.eclipse.fennec.m2x.qvtd.model/model/qvtd.genmodel"}, ecore = "/model/qvtrelation.ecore", ecoreSourceLocations = "/model/qvtrelation.ecore")
+@EPackage(uri = QvtrelationPackage.eNS_URI, fingerprint = "fp1:49c3be116190ad7c26652a8689650dc55825a4ba8e7da9e594b07552552ff7f5", genModel = "/model/qvtd.genmodel", genModelSourceLocations = {"model/qvtd.genmodel","org.eclipse.fennec.m2x.qvtd.model/model/qvtd.genmodel"}, ecore = "/model/qvtrelation.ecore", ecoreSourceLocations = "/model/qvtrelation.ecore")
 public interface QvtrelationPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

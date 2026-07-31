@@ -8,7 +8,7 @@ Bundle-Description: Unit tests, delegate tests, and spec compliance tests for th
 
 src=${^src},src-gen
 
-# Uncomment after genmodel is created in Eclipse:
+# Generate the company test model on demand
 #-generate:\
 #	model/company.genmodel;\
 #		generate=fennecEMF;\

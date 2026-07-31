@@ -18,7 +18,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator;
+
 import org.eclipse.fennec.emf.osgi.constants.EMFNamespaces;
+
 import org.eclipse.fennec.m2x.ocl.tests.company.CompanyPackage;
 
 /**
@@ -31,6 +33,14 @@ import org.eclipse.fennec.m2x.ocl.tests.company.CompanyPackage;
  */
 public class CompanyEPackageConfigurator implements EPackageConfigurator {
 	
+	/**
+	 * The fingerprint of this model version, computed from the <code>.ecore</code> at build
+	 * time. It identifies the model content, not the artifact - see the <code>emf.fingerprint</code>
+	 * service property.
+	 * @generated
+	 */
+	public static final String FINGERPRINT = "fp1:63bec3f170a5f7a65bc9113a45a800f2cb5ca5c081283caa64eb416a86272222";
+
 	private CompanyPackage ePackage;
 
 	protected CompanyEPackageConfigurator(CompanyPackage ePackage){
@@ -68,6 +78,7 @@ public class CompanyEPackageConfigurator implements EPackageConfigurator {
 		properties.put(EMFNamespaces.EMF_MODEL_REGISTRATION, EMFNamespaces.MODEL_REGISTRATION_PROVIDED);
 		properties.put(EMFNamespaces.EMF_MODEL_FILE_EXT, "company");
 		properties.put(EMFNamespaces.EMF_MODEL_VERSION, "1.0");
+		properties.put(EMFNamespaces.EMF_MODEL_FINGERPRINT, FINGERPRINT);
 		return properties;
 	}
 }
