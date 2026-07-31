@@ -23,11 +23,12 @@ jobs:
   verify:
     uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
     with:
-      # m2m is a Java 21 project; the JDK 25 matrix leg can be enabled later
-      # (drop this input to use the reusable default '["21","25"]') once the
-      # EMF/bnd/ANTLR toolchain is verified against JDK 25.
-      java-versions: '["21"]'
+      # java-versions is deliberately not set: the reusable default is
+      # '["21","25"]' and both legs are wanted. m2x still *targets* 21
+      # (javac.source/target in cnf/build.bnd, -runee JavaSE-21), so the JDK 25
+      # leg checks that the toolchain builds under 25 while the artifacts stay
+      # Java 21 bytecode.
+      #
       # perfTest runs the heavy, informational (@Tag("perf")) benchmarks. They
-      # were never part of m2m CI and just slow every PR down; keep them out of
-      # the per-PR verify (run them manually / on a dedicated job when needed).
+      # set ignoreFailures, so they carry no gate signal and just add ~25 min.
       run-perf-tests: false
