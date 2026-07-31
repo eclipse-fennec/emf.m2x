@@ -15,8 +15,6 @@
 package org.eclipse.fennec.m2x.model.trace.configuration;
 
 import java.util.Hashtable;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.eclipse.emf.ecore.EFactory;
 import org.eclipse.emf.ecore.EPackage;
@@ -57,9 +55,7 @@ import org.osgi.service.condition.Condition;
 @Capability( namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator\"" , "uses:=\"org.eclipse.emf.ecore,org.eclipse.fennec.m2x.model.trace\"" })
 @Capability( namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.osgi.service.condition.Condition\"" , "uses:=org.osgi.service.condition" })
 public class TraceConfigurationComponent {
-
-	private static final Logger LOG = Logger.getLogger(TraceConfigurationComponent.class.getName());
-
+	
 	private ServiceRegistration<?> packageRegistration = null;
 	private ServiceRegistration<EPackageConfigurator> ePackageConfiguratorRegistration = null;
 	private ServiceRegistration<?> eFactoryRegistration = null;
@@ -101,8 +97,7 @@ public class TraceConfigurationComponent {
 				try {
 					bundle.start();
 				} catch (BundleException e) {
-					LOG.log(Level.SEVERE,
-							"Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong", e);
+					System.getLogger(getClass().getName()).log(System.Logger.Level.ERROR, "Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong", e);
 				}
 				break;
 			}

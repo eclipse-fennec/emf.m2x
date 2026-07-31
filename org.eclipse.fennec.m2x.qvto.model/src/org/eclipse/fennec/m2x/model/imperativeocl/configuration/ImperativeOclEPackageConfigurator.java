@@ -33,6 +33,14 @@ import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclPackage;
  */
 public class ImperativeOclEPackageConfigurator implements EPackageConfigurator {
 	
+	/**
+	 * The fingerprint of this model version, computed from the <code>.ecore</code> at build
+	 * time. It identifies the model content, not the artifact - see the <code>emf.fingerprint</code>
+	 * service property.
+	 * @generated
+	 */
+	public static final String FINGERPRINT = "fp1:5c3fdf717379827d7db55be185ad85855c86d8c14a91abadbb369a336ef9c11f";
+
 	private ImperativeOclPackage ePackage;
 
 	protected ImperativeOclEPackageConfigurator(ImperativeOclPackage ePackage){
@@ -70,6 +78,7 @@ public class ImperativeOclEPackageConfigurator implements EPackageConfigurator {
 		properties.put(EMFNamespaces.EMF_MODEL_REGISTRATION, EMFNamespaces.MODEL_REGISTRATION_PROVIDED);
 		properties.put(EMFNamespaces.EMF_MODEL_FILE_EXT, "imperativeocl");
 		properties.put(EMFNamespaces.EMF_MODEL_VERSION, "1.0");
+		properties.put(EMFNamespaces.EMF_MODEL_FINGERPRINT, FINGERPRINT);
 		return properties;
 	}
 }

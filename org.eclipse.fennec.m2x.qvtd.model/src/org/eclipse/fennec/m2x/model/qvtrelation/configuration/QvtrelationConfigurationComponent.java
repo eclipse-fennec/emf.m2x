@@ -15,8 +15,6 @@
 package org.eclipse.fennec.m2x.model.qvtrelation.configuration;
 
 import java.util.Hashtable;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.eclipse.emf.ecore.EFactory;
 import org.eclipse.emf.ecore.EPackage;
@@ -57,9 +55,7 @@ import org.osgi.service.condition.Condition;
 @Capability( namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator\"" , "uses:=\"org.eclipse.emf.ecore,org.eclipse.fennec.m2x.model.qvtrelation\"" })
 @Capability( namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.osgi.service.condition.Condition\"" , "uses:=org.osgi.service.condition" })
 public class QvtrelationConfigurationComponent {
-
-	private static final Logger LOG = Logger.getLogger(QvtrelationConfigurationComponent.class.getName());
-
+	
 	private ServiceRegistration<?> packageRegistration = null;
 	private ServiceRegistration<EPackageConfigurator> ePackageConfiguratorRegistration = null;
 	private ServiceRegistration<?> eFactoryRegistration = null;
@@ -101,8 +97,7 @@ public class QvtrelationConfigurationComponent {
 				try {
 					bundle.start();
 				} catch (BundleException e) {
-					LOG.log(Level.SEVERE,
-							"Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong", e);
+					System.getLogger(getClass().getName()).log(System.Logger.Level.ERROR, "Could not start Bundle org.eclipse.emf.ecore, something seems seriously wrong", e);
 				}
 				break;
 			}
@@ -176,11 +171,12 @@ public class QvtrelationConfigurationComponent {
 	 */
 	@Deactivate
 	public void deactivate() {
-		if (conditionRegistration != null) conditionRegistration.unregister();
-		if (eFactoryRegistration != null) eFactoryRegistration.unregister();
-		if (packageRegistration != null) packageRegistration.unregister();
-		if (resourceFactoryRegistration != null) resourceFactoryRegistration.unregister();
-		if (ePackageConfiguratorRegistration != null) ePackageConfiguratorRegistration.unregister();
+		conditionRegistration.unregister();
+		eFactoryRegistration.unregister();
+		packageRegistration.unregister();
+		resourceFactoryRegistration.unregister();
+
+		ePackageConfiguratorRegistration.unregister();
 		EPackage.Registry.INSTANCE.remove(QvtrelationPackage.eNS_URI);
 	}
 }

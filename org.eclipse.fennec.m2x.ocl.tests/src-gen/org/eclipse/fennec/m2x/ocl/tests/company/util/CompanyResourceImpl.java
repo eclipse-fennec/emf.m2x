@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.tests.company.util;
 
 import org.eclipse.emf.common.util.URI;
+
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceImpl;
 
 /**

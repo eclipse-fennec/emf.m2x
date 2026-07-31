@@ -3,11 +3,11 @@ Bundle-Description: MOFM2T v1.0 EMF metamodel (2 EEnums, 17 EClasses)
 
 -library: enableEMF
 
--generate:\
-	model/m2t.genmodel;\
-		generate=fennecEMF;\
-		genmodel=model/m2t.genmodel;\
-		output=src
+#-generate:\
+#	model/m2t.genmodel;\
+#		generate=fennecEMF;\
+#		genmodel=model/m2t.genmodel;\
+#		output=src
 
 -includeresource.model: model=model
 

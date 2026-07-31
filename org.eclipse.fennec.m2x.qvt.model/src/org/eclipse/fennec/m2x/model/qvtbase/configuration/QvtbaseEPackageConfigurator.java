@@ -33,6 +33,14 @@ import org.eclipse.fennec.m2x.model.qvtbase.QvtbasePackage;
  */
 public class QvtbaseEPackageConfigurator implements EPackageConfigurator {
 	
+	/**
+	 * The fingerprint of this model version, computed from the <code>.ecore</code> at build
+	 * time. It identifies the model content, not the artifact - see the <code>emf.fingerprint</code>
+	 * service property.
+	 * @generated
+	 */
+	public static final String FINGERPRINT = "fp1:d4a960867ad7138dc869f2b9bb9e76db1837210da88ae75d3abb4ede10f0ccf5";
+
 	private QvtbasePackage ePackage;
 
 	protected QvtbaseEPackageConfigurator(QvtbasePackage ePackage){
@@ -70,6 +78,7 @@ public class QvtbaseEPackageConfigurator implements EPackageConfigurator {
 		properties.put(EMFNamespaces.EMF_MODEL_REGISTRATION, EMFNamespaces.MODEL_REGISTRATION_PROVIDED);
 		properties.put(EMFNamespaces.EMF_MODEL_FILE_EXT, "qvtbase");
 		properties.put(EMFNamespaces.EMF_MODEL_VERSION, "1.0");
+		properties.put(EMFNamespaces.EMF_MODEL_FINGERPRINT, FINGERPRINT);
 		return properties;
 	}
 }

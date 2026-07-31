@@ -16,11 +16,12 @@ package org.eclipse.fennec.m2x.ocl.tests.company.util;
 
 import org.eclipse.emf.common.notify.Adapter;
 import org.eclipse.emf.common.notify.Notifier;
+
 import org.eclipse.emf.common.notify.impl.AdapterFactoryImpl;
+
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.fennec.m2x.ocl.tests.company.Company;
-import org.eclipse.fennec.m2x.ocl.tests.company.CompanyPackage;
-import org.eclipse.fennec.m2x.ocl.tests.company.Person;
+
+import org.eclipse.fennec.m2x.ocl.tests.company.*;
 
 /**
  * <!-- begin-user-doc -->

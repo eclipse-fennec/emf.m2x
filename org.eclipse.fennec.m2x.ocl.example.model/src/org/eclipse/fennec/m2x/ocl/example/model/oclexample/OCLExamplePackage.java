@@ -42,7 +42,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = OCLExamplePackage.eNS_URI, genModel = "/model/oclexample.genmodel", genModelSourceLocations = {"model/oclexample.genmodel","org.eclipse.fennec.m2x.ocl.example.model/model/oclexample.genmodel"}, ecore = "/model/oclexample.ecore", ecoreSourceLocations = "/model/oclexample.ecore")
+@EPackage(uri = OCLExamplePackage.eNS_URI, fingerprint = "fp1:cfa25623a3a83a65d6811f1110965250b25082cbded44cb6bbc8117a031c0921", genModel = "/model/oclexample.genmodel", genModelSourceLocations = {"model/oclexample.genmodel","org.eclipse.fennec.m2x.ocl.example.model/model/oclexample.genmodel"}, ecore = "/model/oclexample.ecore", ecoreSourceLocations = "/model/oclexample.ecore")
 public interface OCLExamplePackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

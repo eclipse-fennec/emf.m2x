@@ -33,6 +33,14 @@ import org.eclipse.fennec.m2x.model.ocl.OclPackage;
  */
 public class OclEPackageConfigurator implements EPackageConfigurator {
 	
+	/**
+	 * The fingerprint of this model version, computed from the <code>.ecore</code> at build
+	 * time. It identifies the model content, not the artifact - see the <code>emf.fingerprint</code>
+	 * service property.
+	 * @generated
+	 */
+	public static final String FINGERPRINT = "fp1:50e8809ad65f1b659f16c5bf655b0408d452ef5597b3839255acaa0df56bbfc5";
+
 	private OclPackage ePackage;
 
 	protected OclEPackageConfigurator(OclPackage ePackage){
@@ -70,6 +78,7 @@ public class OclEPackageConfigurator implements EPackageConfigurator {
 		properties.put(EMFNamespaces.EMF_MODEL_REGISTRATION, EMFNamespaces.MODEL_REGISTRATION_PROVIDED);
 		properties.put(EMFNamespaces.EMF_MODEL_FILE_EXT, "ocl");
 		properties.put(EMFNamespaces.EMF_MODEL_VERSION, "1.0");
+		properties.put(EMFNamespaces.EMF_MODEL_FINGERPRINT, FINGERPRINT);
 		return properties;
 	}
 }

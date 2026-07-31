@@ -16,10 +16,10 @@ package org.eclipse.fennec.m2x.ocl.tests.company.util;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+
 import org.eclipse.emf.ecore.util.Switch;
-import org.eclipse.fennec.m2x.ocl.tests.company.Company;
-import org.eclipse.fennec.m2x.ocl.tests.company.CompanyPackage;
-import org.eclipse.fennec.m2x.ocl.tests.company.Person;
+
+import org.eclipse.fennec.m2x.ocl.tests.company.*;
 
 /**
  * <!-- begin-user-doc -->

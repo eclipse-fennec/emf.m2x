@@ -33,6 +33,14 @@ import org.eclipse.fennec.m2x.model.trace.TracePackage;
  */
 public class TraceEPackageConfigurator implements EPackageConfigurator {
 	
+	/**
+	 * The fingerprint of this model version, computed from the <code>.ecore</code> at build
+	 * time. It identifies the model content, not the artifact - see the <code>emf.fingerprint</code>
+	 * service property.
+	 * @generated
+	 */
+	public static final String FINGERPRINT = "fp1:6554603e3a1b8726251093881408ea5cc71c56476adbf6541261b24f40114690";
+
 	private TracePackage ePackage;
 
 	protected TraceEPackageConfigurator(TracePackage ePackage){
@@ -70,6 +78,7 @@ public class TraceEPackageConfigurator implements EPackageConfigurator {
 		properties.put(EMFNamespaces.EMF_MODEL_REGISTRATION, EMFNamespaces.MODEL_REGISTRATION_PROVIDED);
 		properties.put(EMFNamespaces.EMF_MODEL_FILE_EXT, "trace");
 		properties.put(EMFNamespaces.EMF_MODEL_VERSION, "1.0");
+		properties.put(EMFNamespaces.EMF_MODEL_FINGERPRINT, FINGERPRINT);
 		return properties;
 	}
 }
