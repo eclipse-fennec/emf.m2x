@@ -3,8 +3,10 @@ name: Assemble docs site (reusable)
 # Reusable: builds the VitePress documentation site (curated user guides) into a
 # Pages *slice* under /<branch>/ and uploads it as `pages-docs`. Like the p2
 # child it deliberately does NOT deploy — the orchestrator's single deploy job
-# merges all `pages-*` slices and publishes once. A root index.html redirect to
-# the current version is included so /emf.m2x/ lands on the docs.
+# merges all `pages-*` slices and publishes once. The root index.html redirect is
+# written by that deploy job (pages-deploy.yml), not here: with both `snapshot`
+# and `latest` publishing, the root has to point at a channel deterministically
+# instead of at whichever branch deployed last.
 on:
   workflow_call:
     inputs:
@@ -51,16 +53,6 @@ jobs:
           rm -rf "$out"
           mkdir -p "$out/${branch}"
           cp -r docs-site/docs/.vitepress/dist/. "$out/${branch}/"
-          # Root redirect so https://eclipse-fennec.github.io/emf.m2x/ lands on
-          # the current docs version. Replaced by a real version picker once
-          # `latest` (= main) is published.
-          cat > "$out/index.html" <<HTML
-          <!doctype html><meta charset="utf-8">
-          <title>Fennec M2X</title>
-          <meta http-equiv="refresh" content="0; url=./${branch}/">
-          <link rel="canonical" href="./${branch}/">
-          <p>Redirecting to <a href="./${branch}/">the Fennec M2X documentation</a>&hellip;</p>
-          HTML
           echo "docs slice:"; find "$out" -maxdepth 2 -type d | sort
       - name: Upload docs slice
         uses: actions/upload-artifact@v4

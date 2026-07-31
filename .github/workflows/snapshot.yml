@@ -1,10 +1,14 @@
 name: Snapshot Build
 
-# Orchestrator for the snapshot branch: build & release to Sonatype, then publish
-# the p2 update site(s) to GitHub Pages — reusing the *exact* jar from the build
-# (no rebuild). Child workflows are reusable (workflow_call); `needs` enforces the
-# order. The documentation build will be added here later as another child whose
-# `pages-*` artifact is merged by the single `deploy` job below.
+# Orchestrator for the snapshot branch (development branch -> Maven Snapshot).
+#
+# verify and release come from the central reusables in eclipse-fennec/.github;
+# the Pages part stays repo-local because the central set knows nothing about p2
+# and emf.m2x publishes the p2 update site and the docs in a single deploy
+# (see pages-deploy.yml for why).
+#
+# The p2 update site is republished from the *exact* jar built by the release job
+# (artifact `release-jars`), never rebuilt.
 on:
   push:
     # This snapshot build should only happen on pushes to the snapshot branch.
@@ -15,62 +19,58 @@ on:
     branches-ignore:
       - '*'
 
+permissions:
+  contents: read
+  pages: write # Pages deploy
+  id-token: write # OIDC token for the Pages deployment
+  actions: read # pages-deploy restores the previous site-full artifact
+
 # Serialize Pages publishing; let an in-flight deploy finish before the next.
 concurrency:
   group: snapshot-pages
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build & release snapshot
-    uses: ./.github/workflows/snapshot-build.yml
+  verify:
+    name: Verify
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
+    with:
+      # m2m is a Java 21 project; the JDK 25 matrix leg can be enabled later
+      # (drop this input to use the reusable default '["21","25"]') once the
+      # EMF/bnd/ANTLR toolchain is verified against JDK 25.
+      java-versions: '["21"]'
+      # perfTest runs the heavy, informational (@Tag("perf")) benchmarks. They
+      # set ignoreFailures, so they carry no gate signal and just add ~25 min.
+      run-perf-tests: false
+
+  release:
+    name: Release snapshot
+    needs: verify
+    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
+    with:
+      do-release: false
+      # The p2 repository jar is produced by the normal build (-export: type=p2
+      # in ocl.ide.p2/bnd.bnd), so no extra Gradle task is needed - only the
+      # upload, so the p2 job can reuse this build's jar.
+      artifact-paths: org.eclipse.fennec.m2x.ocl.ide.p2/generated/org.eclipse.fennec.m2x.ocl.p2.jar
     secrets: inherit
 
   p2:
     name: Assemble p2 update site
-    needs: build
+    needs: release
     uses: ./.github/workflows/p2-pages.yml
     with:
-      branch: ${{ github.ref_name }}
+      branch: snapshot
 
   docs:
     name: Assemble documentation site
     uses: ./.github/workflows/docs-pages.yml
     with:
-      branch: ${{ github.ref_name }}
+      branch: snapshot
 
   deploy:
     name: Deploy to GitHub Pages
     needs: [p2, docs]
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write # publish to GitHub Pages
-      id-token: write # OIDC token for the Pages deployment
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Collect site slices
-        uses: actions/download-artifact@v4
-        with:
-          pattern: pages-*
-          merge-multiple: true
-          path: _site
-      - name: Finalize site
-        run: |
-          set -euo pipefail
-          # Landing page (root index.html) and per-version docs come from the
-          # docs slice; the OCL update site comes from the p2 slice. Here we only
-          # disable Jekyll so paths like /.vitepress assets are served verbatim.
-          touch _site/.nojekyll
-          echo "Final site:"; find _site -maxdepth 3 -type d | sort
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - name: Deploy
-        id: deployment
-        uses: actions/deploy-pages@v4
+    uses: ./.github/workflows/pages-deploy.yml
+    with:
+      channel: snapshot
