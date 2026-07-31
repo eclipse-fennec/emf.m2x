@@ -1,61 +1,65 @@
-name: CI Build
+name: Release Build
+
+# Orchestrator for main (release branch -> Maven Central).
+#
+# Identical in shape to snapshot.yml; the only differences are do-release=true and
+# the `latest` Pages channel. Note that verify now gates the release: the previous
+# bespoke workflow called `./gradlew release` directly, and the bnd release task
+# does not depend on test/check, so main published without ever running a test.
 on:
   push:
-    # This release should only happen on pushes to the snapshot or main branches.
+    # This release should only happen on pushes to the main branch.
     branches:
       - main
   pull_request:
     # This release should NOT happen on pull requests.
-    # Therefore, we explicitly exclude all branches for pull requests.
     branches-ignore:
       - '*'
 
-env:
-  LC_ALL: en_US.UTF-8
-  GRADLE_OPTS: >-
-    -Dorg.gradle.parallel=true
+permissions:
+  contents: read
+  pages: write # Pages deploy
+  id-token: write # OIDC token for the Pages deployment
+  actions: read # pages-deploy restores the previous site-full artifact
 
-defaults:
-  run:
-    shell: bash
+# Serialize Pages publishing; let an in-flight deploy finish before the next.
+concurrency:
+  group: release-pages
+  cancel-in-progress: false
 
 jobs:
-  build:
-    name: Gradle Release Build
-    runs-on: ubuntu-latest
-    env:
-      CS_PASSWORD: ${{secrets.CENTRAL_SONATYPE_TOKEN_PASSWORD}}
-      CS_USERNAME: ${{secrets.CENTRAL_SONATYPE_TOKEN_USERNAME}}
-      GPG_PASSPHRASE: ${{secrets.GPG_PASSPHRASE}}
-      GPG_KEY_ID: ${{secrets.GPG_KEY_ID}}
-      GPG_PRIVATE_KEY: ${{secrets.GPG_PRIVATE_KEY}}
-      DO_RELEASE: ${{ github.ref == 'refs/heads/main' && 'true' || 'false' }}
-    steps:
-    - name: Git Checkout
-      uses: actions/checkout@v4
-    - name: Gradle Wrapper Validation
-      uses: gradle/actions/wrapper-validation@v4
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: "temurin"
-        cache: "gradle"
-        java-version: 21
-    - name: Grant execute permission for gradlew
-      run: chmod +x ./gradlew
-    - name: Gradle version
-      run: ./gradlew --no-daemon --version
-    - name: Setup GPG and jp environment
-      run: |
-        sudo apt-get update && sudo apt-get install -y gnupg2 jp
-        echo "$GPG_PRIVATE_KEY" > private.key
-        echo "$GPG_PASSPHRASE" | gpg --batch --passphrase-fd 0 --pinentry-mode loopback --no-tty --quiet --yes --import private.key
-        rm private.key
-      shell: bash 
-    - name: Build with Gradle
-      run: ./gradlew release --info
-    - name: Delete GPG key from keyring
-      if: always()
-      run: |
-        rm -rf ~/.gnupg
-      shell: bash
+  verify:
+    name: Verify
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
+    with:
+      java-versions: '["21"]'
+      run-perf-tests: false
+
+  release:
+    name: Release to Maven Central
+    needs: verify
+    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
+    with:
+      do-release: true
+      artifact-paths: org.eclipse.fennec.m2x.ocl.ide.p2/generated/org.eclipse.fennec.m2x.ocl.p2.jar
+    secrets: inherit
+
+  p2:
+    name: Assemble p2 update site
+    needs: release
+    uses: ./.github/workflows/p2-pages.yml
+    with:
+      branch: latest
+
+  docs:
+    name: Assemble documentation site
+    uses: ./.github/workflows/docs-pages.yml
+    with:
+      branch: latest
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: [p2, docs]
+    uses: ./.github/workflows/pages-deploy.yml
+    with:
+      channel: latest

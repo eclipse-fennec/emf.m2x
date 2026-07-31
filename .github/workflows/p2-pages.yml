@@ -1,10 +1,10 @@
 name: Assemble p2 update sites (reusable)
 
-# Reusable: turns the built OCL p2 jar (artifact `ocl-p2`) into a Pages *slice*
-# under <component>/<branch>/p2/ and uploads it as a regular artifact (`pages-ocl`).
+# Reusable: turns the built OCL p2 jar into a Pages *slice* under
+# <component>/<branch>/p2/ and uploads it as a regular artifact (`pages-ocl`).
 # It deliberately does NOT deploy: GitHub Pages replaces the whole site on every
-# deploy, so a single orchestrator deploy job merges all `pages-*` slices (p2,
-# and later the documentation site) and publishes once.
+# deploy, so a single orchestrator deploy job merges all `pages-*` slices (p2 and
+# the documentation site) and publishes once - see pages-deploy.yml.
 on:
   workflow_call:
     inputs:
@@ -12,6 +12,11 @@ on:
         description: "branch/version segment in the URL, e.g. snapshot or latest"
         required: true
         type: string
+      artifact-name:
+        description: "artifact holding the p2 jar; reusable-release.yml uploads it as release-jars"
+        required: false
+        type: string
+        default: release-jars
 
 defaults:
   run:
@@ -29,7 +34,7 @@ jobs:
       - name: Download OCL p2 jar
         uses: actions/download-artifact@v4
         with:
-          name: ocl-p2
+          name: ${{ inputs.artifact-name }}
           path: p2-in
       - name: Assemble p2 slice
         run: |

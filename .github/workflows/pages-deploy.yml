@@ -1,0 +1,124 @@
+name: Deploy GitHub Pages (reusable)
+
+# Repo-local, deliberately not eclipse-fennec/.github's `reusable-docs.yml`.
+#
+# GitHub Pages replaces the *entire* site on every deploy, but emf.m2x publishes
+# several independent slices: the OCL p2 update site (`ocl/<channel>/p2/`) and the
+# VitePress docs (`<channel>/`), where <channel> is `snapshot` (from the snapshot
+# branch) or `latest` (from main). A naive deploy would delete the other channel,
+# so `latest` and `snapshot` would keep wiping each other.
+#
+# This job therefore keeps the site cumulative:
+#   1. restore the full site published by the most recent successful deploy
+#      (artifact `site-full`, uploaded by whichever of the two publishing
+#      workflows ran last),
+#   2. overlay this run's `pages-*` slices on top,
+#   3. publish the merged result and re-upload `site-full` for the next run.
+#
+# Known bounds, accepted on purpose:
+#   - Artifact retention is finite (90 days by default). If no `site-full` is
+#     found we publish only this run's slices; the next deploy of the other
+#     channel restores it. Losing a channel this way requires that channel to go
+#     untouched for the whole retention window.
+#   - The overlay adds and replaces files but never deletes: a file dropped from a
+#     slice lingers until a channel is rebuilt from scratch.
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: "URL segment this run publishes, e.g. snapshot or latest"
+        required: true
+        type: string
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write # publish to GitHub Pages
+      id-token: write # OIDC token for the Pages deployment
+      actions: read # read the previous deploy's site-full artifact
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Restore previously published site
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          # Newest successful run of either publishing workflow, newest first.
+          # The current run is still in progress, so it cannot match itself.
+          ids=$(gh run list --status success --limit 40 \
+                  --json databaseId,workflowName \
+                  --jq '.[] | select(.workflowName == "Snapshot Build" or .workflowName == "Release Build") | .databaseId')
+          for id in $ids; do
+            if gh run download "$id" --name site-full --dir _site 2>/dev/null; then
+              echo "Restored published site from run $id"
+              exit 0
+            fi
+          done
+          echo "::warning::No site-full artifact found - publishing only this run's slices."
+
+      - name: Collect this run's slices
+        # Overlays the fresh slices onto the restored site; same-path files win.
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pages-*
+          merge-multiple: true
+          path: _site
+
+      - name: Finalize site
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          # Disable Jekyll so paths like /.vitepress assets are served verbatim.
+          touch _site/.nojekyll
+          # Root redirect. Deterministic regardless of which channel deployed
+          # last: prefer the released docs, fall back to snapshot, so the root
+          # never points at a channel that is not present.
+          target=""
+          for candidate in latest snapshot "$CHANNEL"; do
+            if [ -f "_site/${candidate}/index.html" ]; then
+              target="$candidate"
+              break
+            fi
+          done
+          if [ -n "$target" ]; then
+            cat > _site/index.html <<HTML
+          <!doctype html><meta charset="utf-8">
+          <title>Fennec M2X</title>
+          <meta http-equiv="refresh" content="0; url=./${target}/">
+          <link rel="canonical" href="./${target}/">
+          <p>Redirecting to <a href="./${target}/">the Fennec M2X documentation</a>&hellip;</p>
+          HTML
+            echo "Root redirect -> ${target}/"
+          else
+            echo "::warning::No docs channel present; leaving the root page as-is."
+          fi
+          echo "Final site:"; find _site -maxdepth 3 -type d | sort
+
+      - name: Upload merged site for the next deploy
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-full
+          path: _site
+          if-no-files-found: error
+          include-hidden-files: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
