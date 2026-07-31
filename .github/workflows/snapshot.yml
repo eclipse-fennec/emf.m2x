@@ -35,12 +35,9 @@ jobs:
     name: Verify
     uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@9292fbff296548018fa9e4b0f6ad49ba7c639501 # v1.1.1
     with:
-      # m2m is a Java 21 project; the JDK 25 matrix leg can be enabled later
-      # (drop this input to use the reusable default '["21","25"]') once the
-      # EMF/bnd/ANTLR toolchain is verified against JDK 25.
-      java-versions: '["21"]'
-      # perfTest runs the heavy, informational (@Tag("perf")) benchmarks. They
-      # set ignoreFailures, so they carry no gate signal and just add ~25 min.
+      # java-versions unset on purpose: the reusable default '["21","25"]' runs
+      # both legs. m2x still targets Java 21; the 25 leg is a toolchain check.
+      # perfTest sets ignoreFailures, so it carries no gate signal - keep it out.
       run-perf-tests: false
 
   release:
