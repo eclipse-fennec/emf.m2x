@@ -55,7 +55,7 @@ jobs:
           cp -r docs-site/docs/.vitepress/dist/. "$out/${branch}/"
           echo "docs slice:"; find "$out" -maxdepth 2 -type d | sort
       - name: Upload docs slice
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pages-docs
           path: site

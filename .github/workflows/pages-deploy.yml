@@ -107,7 +107,7 @@ jobs:
           echo "Final site:"; find _site -maxdepth 3 -type d | sort
 
       - name: Upload merged site for the next deploy
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: site-full
           path: _site
