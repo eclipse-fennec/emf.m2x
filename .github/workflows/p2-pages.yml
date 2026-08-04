@@ -30,7 +30,7 @@ jobs:
       contents: read
     steps:
       - name: Git Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Download OCL p2 jar
         uses: actions/download-artifact@v4
         with:
