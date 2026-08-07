@@ -49,6 +49,7 @@
 | D39 | QVT-R: Modul-Abhängigkeiten — keine Zyklen durch Interface-Entkopplung | `qvtd.model` und `qvto.model` bleiben unabhängig (kein Refactoring). Hybrid-Brücke über Interfaces in `qvtd.api` (`QvtdEngine`, `RelationImplementationProvider`). `qvto.engine → qvtd.api` (nicht qvtd.engine). `qvtd.engine` kennt QVT-O nicht. |
 | D40 | QVTBase als Shared-Bundle `org.eclipse.fennec.m2x.qvt.model` | `qvtbase.ecore` extrahiert; typsichere EReferences zwischen `qvto.model` und `qvtd.model`. Siehe DR-D40. |
 | D41 | OCL IDE-Integration als isoliertes, platform-gekoppeltes Bundle | `org.eclipse.fennec.m2x.ocl.ide` registriert die EMF-Delegates via `plugin.xml` für den generischen EMF-Editor. Einzige Ausnahme zur "No Eclipse Platform"-Regel, strikt isoliert. Siehe DR-D41. |
+| D42 | `EPackage.Registry` ist Eingabewert der Engine, genau ein Fallback-Punkt | Engine-Interna lesen nie `EPackage.Registry.INSTANCE`. Die Konfiguration löst einmalig `registry != null ? registry : INSTANCE` auf, alles darunter bekommt die Registry als Parameter. Modellversions-Identität bleibt Sache des Aufrufers. Siehe DR-D42. |
 
 ---
 
@@ -912,3 +913,43 @@ qvtdEngine.registerImplementationProvider(qvtoEngine);                // §7.8
 3. Neues Test-Bundle `org.eclipse.fennec.m2x.ocl.ide.tests` (Plain JUnit 5, 4 Tests): registriert die Delegates in den statischen EMF-Registries (wie die Extension-Registry zur Laufzeit) und prüft `eGet`/`eInvoke`/`validate` inkl. Legacy-Pivot-URI
 
 **Auslieferung:** p2-Repository über ein separates Projekt `org.eclipse.fennec.m2x.ocl.ide.p2` (bnd `-export … type=p2`) — nur OCL-Bundles; EMF/Equinox sind im Ziel-Eclipse host-seitig vorhanden. (Modul B, folgt.)
+
+---
+
+### DR-D42: `EPackage.Registry` als Eingabewert der Engine — genau ein Fallback-Punkt
+
+**Context:** Typnamen in OCL-Ausdrücken, QVT-Transformationen und M2T-Templates werden zur Parse-Zeit gegen eine `EPackage.Registry` aufgelöst. Bisher greifen Parser- und Engine-Interna aller vier Engines direkt auf `EPackage.Registry.INSTANCE` zu (neun Fundstellen, siehe Issue #47).
+
+**Problem:** Die statische Registry ist JVM-globaler Zustand mit der nsURI als Schlüssel. Unter OSGi — und überall dort, wo zwei Versionen einer nsURI koexistieren können — ist damit nicht definiert, *welches* `EPackage` die Engine auflöst. `emf.osgi` löst dieses Problem für Modell-Identität über den Fingerprint (inhaltsabgeleitet statt nsURI-basiert); eine Engine, die sich implizit aus der globalen Registry bedient, unterläuft das, weil sie eine Auflösungsentscheidung trifft, die dem Aufrufer gehört.
+
+Der schwerste Fall war `QvtoAliasRegistry`: eine Suche nach einfachem Klassennamen über *alle* in der JVM registrierten Packages — das Ergebnis hängt davon ab, welche fremden Bundles zufällig aktiv sind.
+
+**Options considered:**
+- (A) Registry weiter global lesen, dafür Fingerprint-Prüfungen in den Engines — verlagert eine Aufrufer-Entscheidung in die Engine und macht sie von `emf.osgi` abhängig
+- (B) Registry als Pflichtparameter ohne Fallback — bricht den Plain-Java-Fall ohne Not; dort *ist* die statische Registry die richtige Antwort
+- (C) Registry als Eingabewert mit genau einem Fallback-Punkt
+
+**Decision:** Option C.
+
+1. **Engine-Interna lesen nie `EPackage.Registry.INSTANCE`.** Die Registry wird als Parameter durchgereicht.
+2. **Ist keine Registry konfiguriert, gilt die statische.** Das ist der Plain-Java-/Non-OSGi-Fall: dort existiert keine Versions-Mehrdeutigkeit, und die statische Registry ist die korrekte Auflösung.
+3. **Genau eine Stelle je Engine wendet diesen Fallback an** — dort, wo die Registry entgegengenommen wird, löst sie einmalig `registry != null ? registry : EPackage.Registry.INSTANCE` auf. Alles darunter bekommt die aufgelöste Registry.
+
+Welche Stelle das ist, folgt daraus, wer den Parser besitzt:
+
+| Engine | Fallback-Punkt | Grund |
+|---|---|---|
+| OCL | `OclParserSupport`-Konstruktor (`new OclParserSupport()` → `INSTANCE`, `new OclParserSupport(registry)` → explizit) | Der Parser wird vom Aufrufer gebaut und in die `OclConfiguration` hineingereicht; die Engine kann ihm nachträglich nichts mitgeben, ohne das `OclExpressionParser`-Interface zu erweitern. Der Parser ist zugleich die einzige Komponente, die Classifier auflöst. |
+| QVT-O, QVT-R, M2T | `<X>Configuration.packageRegistry(…)` | Diese Engines bauen ihren Parser-Support selbst; der Aufrufer erreicht ihn nur über die Konfiguration. |
+
+**Rationale:** Der Fallback ist keine Ausnahme von der Regel, sondern ihre Anwendung an einer einzigen, sichtbaren Stelle. Wer die Auflösung kontrollieren muss — ein OSGi-Consumer, oder wer zwei Versionen einer nsURI hält — übergibt die selbst aufgelösten und geprüften Packages. Die Engine hat danach keine implizite Meinung mehr dazu, welche Modellversion eine URI bezeichnet; Versions-Identität bleibt beim Aufrufer, wo der Fingerprint sie ohnehin verortet.
+
+Für den Bestand ist die Änderung verhaltensneutral: dieselbe Registry ist in Gebrauch, nur eine Ebene höher aufgelöst.
+
+**Scope:** OCL, QVT-O, QVT-R, M2T. (Keine Paketversions-Anpassung — vor dem ersten Release werden Versionen nicht gepflegt.)
+
+**Folge für OCL über das reine Durchreichen hinaus:** `OclParserSupport.parse(expression, contextType)` benutzte bisher überhaupt keine Registry — Typnamen in einem Ausdruck wurden nur über das Package des Kontexttyps aufgelöst, alles andere fiel still auf den Kontexttyp zurück. Mit D42 bekommt auch dieser Pfad die Registry, womit Typnamen aus fremden Packages korrekt auflösen. Das ändert Auflösungsergebnisse (bewusst: `self.oclIsKindOf(FremdesPackageTyp)` lieferte vorher `true`, weil der Name zum Kontexttyp degradierte).
+
+**Nicht betroffen:** EMFs Delegate-Registries (`EOperation.Internal.InvocationDelegate.Factory.Registry`, `EStructuralFeature.Internal.SettingDelegate.Factory.Registry`, `EValidator.ValidationDelegate.Registry`) in `OclEngineImpl`. Die sind von EMF als global vorgesehen und gehören zum Delegate-Mechanismus selbst (D11).
+
+**Nachgelagert:** Die OCL-Caches schlüsseln heute über nsURI bzw. einfachen Klassennamen und müssen auf Fingerprint-abgeleitete Schlüssel umgestellt werden (Issue #50) — dieselbe Identitätsfrage, eine Ebene tiefer.
