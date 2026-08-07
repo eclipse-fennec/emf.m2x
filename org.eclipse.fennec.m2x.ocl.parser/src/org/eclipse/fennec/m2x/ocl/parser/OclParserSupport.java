@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
@@ -49,6 +50,40 @@ import org.osgi.service.component.annotations.ServiceScope;
 @Component(scope = ServiceScope.PROTOTYPE, property = "parser.type=DEFAULT")
 public class OclParserSupport implements OclExpressionParser {
 
+	private final EPackage.Registry packageRegistry;
+
+	/**
+	 * Creates a parser that resolves classifier names against the global
+	 * {@link EPackage.Registry#INSTANCE}.
+	 *
+	 * <p>This is the plain-Java case, where the static registry is the correct
+	 * answer and no model version ambiguity exists. Callers that hold their own
+	 * packages — under OSGi, or wherever two versions of one nsURI can coexist —
+	 * use {@link #OclParserSupport(EPackage.Registry)} instead (D42).
+	 */
+	public OclParserSupport() {
+		this(EPackage.Registry.INSTANCE);
+	}
+
+	/**
+	 * Creates a parser that resolves classifier names against the given registry.
+	 *
+	 * @param packageRegistry the registry used for classifier resolution, must not be {@code null}
+	 */
+	public OclParserSupport(EPackage.Registry packageRegistry) {
+		this.packageRegistry = Objects.requireNonNull(packageRegistry,
+				"packageRegistry must not be null");
+	}
+
+	/**
+	 * Returns the registry this parser resolves classifier names against.
+	 *
+	 * @return the package registry, never {@code null}
+	 */
+	public EPackage.Registry getPackageRegistry() {
+		return packageRegistry;
+	}
+
 	/**
 	 * Parses an OCL expression string in the context of the given classifier.
 	 *
@@ -66,7 +101,7 @@ public class OclParserSupport implements OclExpressionParser {
 		checkErrors(errorListener, expression);
 
 		try {
-			OclAstBuilder builder = new OclAstBuilder(contextType);
+			OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry);
 			return builder.visitExpressionEntry(tree);
 		} catch (IllegalArgumentException e) {
 			throw new OclParseException(e.getMessage());
@@ -75,7 +110,8 @@ public class OclParserSupport implements OclExpressionParser {
 
 	/**
 	 * Parses a Complete OCL document, producing a list of constraints.
-	 * Uses the global {@link EPackage.Registry#INSTANCE} for classifier resolution.
+	 * Uses the registry this parser was created with for classifier resolution
+	 * (the global {@link EPackage.Registry#INSTANCE} unless one was supplied).
 	 *
 	 * @param oclDocument the Complete OCL document text
 	 * @return the list of parsed constraints
@@ -83,7 +119,7 @@ public class OclParserSupport implements OclExpressionParser {
 	 */
 	@Override
 	public List<Constraint> parseDocument(String oclDocument) throws OclParseException {
-		return parseDocument(oclDocument, EPackage.Registry.INSTANCE);
+		return parseDocument(oclDocument, packageRegistry);
 	}
 
 	/**
