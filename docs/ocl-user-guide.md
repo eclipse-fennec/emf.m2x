@@ -249,6 +249,28 @@ Object sandboxed = engine.evaluate(expr, ctx,
     OclEvaluationOptions.strict().withMaxDepth(50));
 ```
 
+### 3.7 Type Resolution — Which Packages the Parser Sees
+
+Classifier names are resolved when an expression is parsed — `self.oclIsTypeOf(Novel)` needs to find `Novel` somewhere. The parser looks in the context type's own package first, then in its `EPackage.Registry`.
+
+```java
+// plain Java: the global registry, which is the correct answer there
+OclEngine engine = new OclEngineImpl(new OclParserSupport());
+
+// your own packages — under OSGi, or when two versions of one nsURI coexist
+EPackage.Registry registry = new EPackageRegistryImpl();
+registry.put(LIBRARY_NS, libraryPackage);
+registry.put(MEDIA_NS, mediaPackage);
+
+OclEngine engine = new OclEngineImpl(new OclParserSupport(registry));
+```
+
+The registry is the parser's, not the engine's: hand it over when constructing `OclParserSupport`, and every expression and Complete OCL document parsed by that engine resolves against it. Nothing inside the engine reaches for the global registry on its own (D42), so what you pass in is what the parser sees.
+
+Which packages a caller supplies is a model-identity decision, and identity is the model **fingerprint** rather than the nsURI — see the `emf.osgi` fingerprint guide. Supply the packages you resolved and verified yourself; the engine forms no opinion about which version an nsURI names.
+
+> A name that resolves in neither the context package nor the registry currently degrades silently to the context type. Check spelling of type names — there is no diagnostic for this yet.
+
 ---
 
 ## 4. Evaluating Expressions
@@ -743,6 +765,8 @@ If the document references types from specific packages:
 ```java
 List<Constraint> constraints = engine.parseDocument(oclDocument, myResourceSet);
 ```
+
+This resolves against the resource set's own package registry, for that one call. To make *every* parse of an engine use a specific registry, give it to the parser instead (see §3.7).
 
 ### 10.4 OSGi: CompleteOclContribution
 
