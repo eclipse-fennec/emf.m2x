@@ -326,6 +326,19 @@ Parser resolves types during AST construction for hot-path performance.
 - All errors collected in a single pass (ANTLR4 auto-recovery)
 - ANTLR4 `RecognitionException` subtypes mapped to `OclParseException`
 
+### 5.7 Classifier Resolution — the Package Registry (D42)
+
+Classifier names in an expression (`self.oclIsTypeOf(Novel)`) and in a Complete OCL document (`context Novel`) are resolved at parse time against an `EPackage.Registry`. `OclParserSupport` owns that registry:
+
+| Constructor | Registry | For |
+|---|---|---|
+| `new OclParserSupport()` | `EPackage.Registry.INSTANCE` | plain Java, where the static registry is the correct answer |
+| `new OclParserSupport(registry)` | the given one | OSGi, or any caller holding its own packages — including two versions of one nsURI |
+
+This is the **single** place where the static-registry fallback is applied; nothing below it reads `EPackage.Registry.INSTANCE` (D42). `parseDocument(String, ResourceSet)` remains available and uses the resource set's own registry for that one call.
+
+Resolution order for a simple name is: the context type's own package first, then the registry. A name that resolves in neither still degrades silently to the context type (`AbstractExpressionBuilder.resolveClassifier`) — a known gap tracked in the issue for the M2T type-resolution defect.
+
 ---
 
 ## 6. Engine Architecture (`ocl.engine`)
