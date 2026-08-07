@@ -48,6 +48,12 @@ import org.osgi.test.junit5.service.ServiceExtension;
  * ConfigurationAdmin-based customization (e.g. custom cache targeting)
  * is wired correctly end-to-end.
  *
+ * <p><b>Every test that configures its own engine injects it through an
+ * {@code engine.tag} filter.</b> Configuration teardown between tests is
+ * asynchronous, so an unfiltered {@code ServiceAware<OclEngine>} can hand out a
+ * leftover engine from a previous test and the assertions then describe the wrong
+ * instance. Do not drop these filters.
+ *
  * @see <a href="https://github.com/osgi/osgi-test">osgi-test</a>
  */
 @RequireOCL
@@ -75,12 +81,14 @@ class SimpleOSGiTest {
 			@Property(key = "name", value = "foo-cache")
 	})
 	@WithFactoryConfiguration(factoryPid = "DefaultOclEngine", location = "?", name = "foo", properties = {
-			@Property(key = "expressionCache.target", value = "(name=foo-cache)")
+			@Property(key = "expressionCache.target", value = "(name=foo-cache)"),
+			@Property(key = "engine.tag", value = "cache-wiring-eng")
 	})
 	@Test
 	void oclEngine_customCacheWiring_evaluationUsesConfiguredCache(
 			@InjectService(filter = "(name=foo-cache)") ServiceAware<OclExpressionCache> cacheAware,
-			@InjectService ServiceAware<OclEngine> engineAware) throws OclParseException {
+			@InjectService(filter = "(engine.tag=cache-wiring-eng)") ServiceAware<OclEngine> engineAware)
+			throws OclParseException {
 
 		// Verify custom cache service is available and empty
 		OclExpressionCache cache = cacheAware.getService();
@@ -104,11 +112,13 @@ class SimpleOSGiTest {
 	// --- ConfigAdmin: maxDepth enforcement ---
 
 	@WithFactoryConfiguration(factoryPid = "DefaultOclEngine", location = "?", name = "depth-test", properties = {
-			@Property(key = "ocl.maxDepth", scalar = Scalar.Integer, value = "3")
+			@Property(key = "ocl.maxDepth", scalar = Scalar.Integer, value = "3"),
+			@Property(key = "engine.tag", value = "depth-eng")
 	})
 	@Test
 	void oclEngine_configuredMaxDepth_enforcedDuringEvaluation(
-			@InjectService ServiceAware<OclEngine> engineAware) throws OclParseException {
+			@InjectService(filter = "(engine.tag=depth-eng)") ServiceAware<OclEngine> engineAware)
+			throws OclParseException {
 
 		OclEngine engine = engineAware.getService();
 		assertNotNull(engine);
@@ -123,11 +133,13 @@ class SimpleOSGiTest {
 	// --- ConfigAdmin: lenient null handling ---
 
 	@WithFactoryConfiguration(factoryPid = "DefaultOclEngine", location = "?", name = "lenient-test", properties = {
-			@Property(key = "ocl.nullHandling", value = "LENIENT")
+			@Property(key = "ocl.nullHandling", value = "LENIENT"),
+			@Property(key = "engine.tag", value = "lenient-null-eng")
 	})
 	@Test
 	void oclEngine_configuredNullHandling_lenient(
-			@InjectService ServiceAware<OclEngine> engineAware) throws OclParseException {
+			@InjectService(filter = "(engine.tag=lenient-null-eng)") ServiceAware<OclEngine> engineAware)
+			throws OclParseException {
 
 		OclEngine engine = engineAware.getService();
 		assertNotNull(engine);
