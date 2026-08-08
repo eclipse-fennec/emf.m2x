@@ -31,10 +31,16 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.qvtrelation.QvtrelationFactory;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvalEnvironment;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvaluator;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrExtentManager;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
-import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
+import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
@@ -66,13 +72,14 @@ class QvtdSecurityHardeningTest {
 
 	private static EcoreHelper ecoreHelper;
 	private static EPackage umlPackage;
+	private static EPackage rdbmsPackage;
 
 	@BeforeAll
 	static void setUp() throws IOException {
 		ecoreHelper = new EcoreHelper(QvtdSecurityHardeningTest.class);
 		umlPackage = ecoreHelper.loadEcore("simpleuml.ecore");
 		// Register simplerdbms in EPackage.Registry so parser can resolve Schema etc.
-		ecoreHelper.loadEcore("simplerdbms.ecore");
+		rdbmsPackage = ecoreHelper.loadEcore("simplerdbms.ecore");
 	}
 
 	@AfterAll
@@ -129,7 +136,10 @@ class QvtdSecurityHardeningTest {
 
 	@Test
 	void r7_timeout_exceedingDeadline_terminates() throws QvtdParseException {
-		// Normal transformation but with very short timeout
+		// The deadline is driven, not raced: the clock stands still while the deadline
+		// is computed and jumps past it before the first per-binding check. Making the
+		// test depend on wall-clock speed made it fail intermittently (#61) — and a
+		// timeout test that passes because the machine was slow proves nothing.
 		String source = """
 				transformation timeoutTest(uml : simpleuml, rdbms : simplerdbms) {
 				    top relation PackageToSchema {
@@ -140,18 +150,25 @@ class QvtdSecurityHardeningTest {
 				}
 				""";
 
-		// Use 1ms timeout — should trigger on almost any execution
-		QvtdEngineImpl engine = createEngine(b -> b.timeoutMs(1));
-		RelationalTransformation t = engine.parse(source, "timeoutTest");
+		QvtdConfiguration config = QvtdConfiguration.builder(
+				OclConfiguration.builder(new OclParserSupport()).build())
+				.timeoutMs(1)
+				.build();
+		RelationalTransformation t = new QvtdEngineImpl(config).parse(source, "timeoutTest");
 
-		// Create a model with many packages to ensure the timeout is reached
-		QvtdModelExtent umlExtent = createUmlExtentMany(1000);
-		QvtdModelExtent rdbmsExtent = new BasicQvtdModelExtent();
 		QvtdExecutionContext ctx = QvtdExecutionContext.enforce("rdbms",
-				Map.of("uml", umlExtent, "rdbms", rdbmsExtent));
+				Map.of("uml", createUmlExtentMany(3), "rdbms", new BasicQvtdModelExtent()));
 
-		assertThrows(QvtdExecutionException.class, () -> engine.execute(t, ctx),
-				"Should throw when timeout exceeded");
+		AtomicLong now = new AtomicLong();
+		QvtrEvaluator evaluator = new QvtrEvaluator(
+				new OclEngineImpl(new OclParserSupport()), new QvtrEvalEnvironment(),
+				t, new QvtrExtentManager(t, ctx), ctx, config, null, List.of(),
+				// first reading sets the deadline, every later one is past it
+				() -> now.getAndAdd(TimeUnit.SECONDS.toNanos(1)));
+
+		QvtdExecutionException failure = assertThrows(QvtdExecutionException.class,
+				evaluator::execute, "Should throw when the deadline has passed");
+		assertTrue(failure.getMessage().contains("timeout"), failure::getMessage);
 	}
 
 	@Test
