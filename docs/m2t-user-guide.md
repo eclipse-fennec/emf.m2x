@@ -245,10 +245,10 @@ class Employee
 Inline OCL expressions are enclosed in `[` and `/]`:
 
 ```mtl
-[c.name/]                           [comment single property /]
-[c.eAttributes->size()/]            [comment collection operation /]
-[c.name.toUpper()/]                 [comment string operation /]
-['hello'.concat(' world')/]         [comment string literal /]
+[c.name/]                           [comment]single property[/comment]
+[c.eAttributes->size()/]            [comment]collection operation[/comment]
+[c.name.toUpper()/]                 [comment]string operation[/comment]
+['hello'.concat(' world')/]         [comment]string literal[/comment]
 ```
 
 ### 4.4 For Block
@@ -256,22 +256,22 @@ Inline OCL expressions are enclosed in `[` and `/]`:
 Iterate over collections with optional separator, before, after, and guard:
 
 ```mtl
-[comment simple iteration /]
+[comment]simple iteration[/comment]
 [for (a : EAttribute | c.eAttributes)]
   [a.eType.name/] [a.name/];
 [/for]
 
-[comment with separator /]
+[comment]with separator[/comment]
 [for (a : EAttribute | c.eAttributes) separator (', ')]
 [a.name/]
 [/for]
 
-[comment with before/after /]
+[comment]with before/after[/comment]
 [for (c : EClassifier | p.eClassifiers) before ('[') separator (', ') after (']')]
 [c.name/]
 [/for]
 
-[comment with guard — only matching elements /]
+[comment]with guard — only matching elements[/comment]
 [for (cl : EClassifier | p.eClassifiers) ? (cl.name.startsWith('C'))]
 [cl.name/]
 [/for]
@@ -372,8 +372,14 @@ Output: `Result: <Employee>`
 ### 4.10 Comment
 
 ```mtl
-[comment this is a comment /]
+[comment]
+  this is a comment, and it is discarded
+[/comment]
 ```
+
+Only the paired form exists. MOFM2T v1.0 specifies comments as a macro — `[comment()] … [/comment]` — and the grammar follows that; the single-expression form `[comment]…[/comment]` is an Acceleo 3.x extension the parser does not know.
+
+A comment may not precede the `[module …/]` header.
 
 ---
 
@@ -606,13 +612,13 @@ The `generation.log` file contains one line per generated class.
 A module can extend another module to inherit its templates, queries, and macros:
 
 ```mtl
-[comment base.mtl /]
+[comment]base.mtl[/comment]
 [module base(ecore)/]
 [template public greet(e : EClass)]Hello[/template]
 ```
 
 ```mtl
-[comment child.mtl /]
+[comment]child.mtl[/comment]
 [module child(ecore) extends base/]
 [template public main(e : EClass)]
 [file ('out.txt', false)]
@@ -657,7 +663,7 @@ engine.link(utilModule, mainModule);
 A child module can override a template from its parent, optionally calling `[super/]` to include the original output:
 
 ```mtl
-[comment base.mtl /]
+[comment]base.mtl[/comment]
 [module base(ecore)/]
 [template public render(e : EClass)]Base[/template]
 [template public main(e : EClass)]
@@ -668,7 +674,7 @@ A child module can override a template from its parent, optionally calling `[sup
 ```
 
 ```mtl
-[comment child.mtl /]
+[comment]child.mtl[/comment]
 [module child(ecore) extends base/]
 [template public render(e : EClass) overrides render]Before-[super/]-After[/template]
 ```
@@ -685,13 +691,13 @@ M2tResult result = engine.execute(baseMod, M2tContext.of(input));
 Override chains work transitively. With modules A -> B -> C, each overriding `render`:
 
 ```mtl
-[comment A /]
+[comment]A[/comment]
 [template public render(e : EClass)]A[/template]
 
-[comment B extends A /]
+[comment]B extends A[/comment]
 [template public render(e : EClass) overrides render][super/]+B[/template]
 
-[comment C extends B /]
+[comment]C extends B[/comment]
 [template public render(e : EClass) overrides render][super/]+C[/template]
 ```
 
@@ -752,10 +758,10 @@ When the guard evaluates to `false`, the template produces no output.
 Override templates can have guards. When the guard is `false`, the engine falls back to the overridden template:
 
 ```mtl
-[comment base /]
+[comment]base[/comment]
 [template public render(e : EClass)]Original[/template]
 
-[comment child — only overrides for abstract classes /]
+[comment]child — only overrides for abstract classes[/comment]
 [template public render(e : EClass) overrides render ? (e.abstract)]Abstract: [e.name/][/template]
 ```
 
@@ -767,10 +773,10 @@ Override templates can have guards. When the guard is `false`, the engine falls 
 An override can narrow the parameter type. The override applies only when the actual argument matches the narrower type:
 
 ```mtl
-[comment base — accepts EClassifier /]
+[comment]base — accepts EClassifier[/comment]
 [template public render(e : EClassifier)]Base[/template]
 
-[comment child — narrowed to EDataType /]
+[comment]child — narrowed to EDataType[/comment]
 [template public render(e : EDataType) overrides render]Narrowed[/template]
 ```
 
@@ -926,15 +932,15 @@ MOFM2T defines 13 string operations (§8.3) in addition to the full OCL standard
 All OCL String and Collection operations are also available:
 
 ```mtl
-[comment OCL String operations /]
-['hello'.concat(' world')/]           [comment → hello world /]
-['hello'.size()/]                     [comment → 5 /]
-['hello'.substring(2, 4)/]            [comment → ell /]
+[comment]OCL String operations[/comment]
+['hello'.concat(' world')/]           [comment]→ hello world[/comment]
+['hello'.size()/]                     [comment]→ 5[/comment]
+['hello'.substring(2, 4)/]            [comment]→ ell[/comment]
 
-[comment OCL Collection operations /]
-[p.eClassifiers->size()/]             [comment → 3 /]
-[p.eClassifiers->first().name/]       [comment → ClasseA /]
-[p.eClassifiers->exists(c | c.name = 'ClasseA')/]  [comment → true /]
+[comment]OCL Collection operations[/comment]
+[p.eClassifiers->size()/]             [comment]→ 3[/comment]
+[p.eClassifiers->first().name/]       [comment]→ ClasseA[/comment]
+[p.eClassifiers->exists(c | c.name = 'ClasseA')/]  [comment]→ true[/comment]
 [p.eClassifiers->select(c | c.name.startsWith('C'))->collect(c | c.name)/]
 ```
 
