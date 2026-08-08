@@ -16,6 +16,11 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
+import org.eclipse.emf.common.util.BasicDiagnostic;
+import org.eclipse.emf.common.util.Diagnostic;
+import org.eclipse.fennec.m2x.model.qvtoperational.ModelType;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EAnnotation;
@@ -39,12 +44,15 @@ class QvtoAliasRegistry {
 	private final QvtoExtentManager extentManager;
 	private final Map<String, Map.Entry<EClass, String>> aliasRegistry = new HashMap<>();
 	private final EPackage.Registry packageRegistry;
+	private final List<Diagnostic> diagnostics;
 
 	QvtoAliasRegistry(OperationalTransformation transformation,
-			QvtoExtentManager extentManager, EPackage.Registry packageRegistry) {
+			QvtoExtentManager extentManager, EPackage.Registry packageRegistry,
+			List<Diagnostic> diagnostics) {
 		this.transformation = Objects.requireNonNull(transformation);
 		this.extentManager = Objects.requireNonNull(extentManager);
 		this.packageRegistry = Objects.requireNonNull(packageRegistry);
+		this.diagnostics = Objects.requireNonNull(diagnostics);
 	}
 
 	/**
@@ -62,13 +70,15 @@ class QvtoAliasRegistry {
 				continue;
 			}
 			String aliasName = aliasValue;
-			// Parse target path: e.g. "ecore::EPackage::name" → class=EPackage, feature=name
+			// §8.3.19 notation: tag "alias" RDBMS::Table::key_ = "key";
+			// the path qualifies the class through its model type, so the qualifier is
+			// what disambiguates two metamodels that both define a class of that name
 			String[] parts = target.split("::");
 			if (parts.length >= 2) {
 				String className = parts[parts.length - 2];
 				String featureName = parts[parts.length - 1];
-				// Find the EClass in the transformation's used metamodels
-				EClass eClass = findEClassByName(className);
+				String qualifier = parts.length >= 3 ? parts[parts.length - 3] : null;
+				EClass eClass = findEClass(qualifier, className);
 				if (eClass != null && eClass.getEStructuralFeature(featureName) != null) {
 					aliasRegistry.put(aliasName, Map.entry(eClass, featureName));
 				}
@@ -86,6 +96,42 @@ class QvtoAliasRegistry {
 			return entry.getValue();
 		}
 		return null;
+	}
+
+	/**
+	 * Resolves the class of an alias target.
+	 *
+	 * <p>The qualifier of the path — {@code RDBMS} in
+	 * {@code tag "alias" RDBMS::Table::key_} — names a model type of the transformation
+	 * (§8.3.19, §8.2.1.6). When it is present and known, only that model type's
+	 * metamodels are searched, which is what makes the answer well defined when two
+	 * metamodels declare a class of the same name. Without a usable qualifier the search
+	 * falls back to the extents and the configured registry, and says so.
+	 */
+	private EClass findEClass(String qualifier, String name) {
+		if (qualifier != null) {
+			for (ModelType modelType : transformation.getUsedModelType()) {
+				if (!qualifier.equals(modelType.getName())) {
+					continue;
+				}
+				for (EPackage metamodel : modelType.getMetamodel()) {
+					EClass found = findEClassInPackage(metamodel, name);
+					if (found != null) {
+						return found;
+					}
+				}
+			}
+			for (Object value : packageRegistry.values()) {
+				if (value instanceof EPackage pkg
+						&& (qualifier.equals(pkg.getName()) || qualifier.equals(pkg.getNsURI()))) {
+					EClass found = findEClassInPackage(pkg, name);
+					if (found != null) {
+						return found;
+					}
+				}
+			}
+		}
+		return findEClassByName(name);
 	}
 
 	private EClass findEClassByName(String name) {
@@ -107,16 +153,31 @@ class QvtoAliasRegistry {
 				}
 			}
 		}
-		// Fallback: search the package registry the engine was configured with (D42)
+		// Fallback: scan the registry the engine was configured with (D42). The name
+		// alone may fit several metamodels, so an ambiguous hit is reported rather than
+		// silently decided — Eclipse QVT-O warns in the same situation.
+		EClass firstMatch = null;
+		List<String> matchingPackages = new ArrayList<>();
 		for (Object value : packageRegistry.values()) {
 			if (value instanceof EPackage pkg) {
 				EClass found = findEClassInPackage(pkg, name);
 				if (found != null) {
-					return found;
+					matchingPackages.add(pkg.getNsURI());
+					if (firstMatch == null) {
+						firstMatch = found;
+					}
 				}
 			}
 		}
-		return null;
+		if (matchingPackages.size() > 1) {
+			diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING,
+					"org.eclipse.fennec.m2x.qvto.engine", 0,
+					"Alias target class '" + name + "' is ambiguous — it matches "
+							+ matchingPackages + "; the first was used. Qualify the tag"
+							+ " target with its model type to make this unambiguous.",
+					null));
+		}
+		return firstMatch;
 	}
 
 	private static EClass findEClassInPackage(EPackage pkg, String name) {

@@ -468,6 +468,8 @@ OperationalTransformation ast = parser.parse(source, unitName, registry);
 
 The registry is always explicit. There is deliberately no convenience overload that reaches for `EPackage.Registry.INSTANCE`: the fallback belongs to `QvtoConfiguration` and is applied there, once (D42).
 
+Alias tag targets (`tag "alias" RDBMS::Table::key_ = "key";`, §8.3.19) resolve through their qualifier: it names a model type of the transformation, or a package by name or nsURI, and only that metamodel is searched. Without a usable qualifier the search falls back to the model extents and then to the registry, and a name that fits several metamodels produces a warning instead of a silent pick.
+
 Type names resolve in this order: the module's own `typedef`s → the package registry → the QVT-O standard library (`QvtoStandardLibraryTypes`, QVT v1.3 §8.3.1). A name that resolves in none of them becomes an error diagnostic, collected and reported together with every other unresolved name when the unit has been visited. Typedefs are registered in a pre-pass, like intermediate class shells, so a reference ahead of the declaration resolves too.
 
 ---
