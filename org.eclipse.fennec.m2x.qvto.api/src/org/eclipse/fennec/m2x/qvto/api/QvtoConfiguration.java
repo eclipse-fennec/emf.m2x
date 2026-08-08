@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 
 /**
@@ -43,6 +44,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 public final class QvtoConfiguration {
 
 	private final OclConfiguration oclConfiguration;
+	private final EPackage.Registry packageRegistry;
 	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final List<QvtoUnitResolver> unitResolvers;
 	private final Executor parallelExecutor;
@@ -55,6 +57,7 @@ public final class QvtoConfiguration {
 
 	private QvtoConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
+		this.packageRegistry = builder.packageRegistry;
 		this.blackboxRegistry = builder.blackboxRegistry;
 		this.unitResolvers = Collections.unmodifiableList(new ArrayList<>(builder.unitResolvers));
 		this.parallelExecutor = builder.parallelExecutor;
@@ -68,6 +71,19 @@ public final class QvtoConfiguration {
 
 	public OclConfiguration oclConfiguration() {
 		return oclConfiguration;
+	}
+
+	/**
+	 * Returns the registry used for metamodel resolution, never {@code null}.
+	 *
+	 * <p>This is the single place where the fallback to the global registry is
+	 * applied: unless a caller supplied one, this is {@link EPackage.Registry#INSTANCE}.
+	 * Nothing below the engine reads the static registry on its own (D42).
+	 *
+	 * @return the package registry
+	 */
+	public EPackage.Registry packageRegistry() {
+		return packageRegistry;
 	}
 
 	/**
@@ -142,6 +158,7 @@ public final class QvtoConfiguration {
 	public static final class Builder {
 
 		private final OclConfiguration oclConfiguration;
+		private EPackage.Registry packageRegistry = EPackage.Registry.INSTANCE;
 		private QvtoBlackboxRegistry blackboxRegistry;
 		private final List<QvtoUnitResolver> unitResolvers = new ArrayList<>();
 		private Executor parallelExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -154,6 +171,24 @@ public final class QvtoConfiguration {
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
+		}
+
+		/**
+		 * Sets the registry used to resolve {@code modeltype … uses '<nsURI>'}
+		 * declarations and every metamodel type below them.
+		 *
+		 * <p>Defaults to {@link EPackage.Registry#INSTANCE}, which is the correct
+		 * answer in plain Java, where no model version ambiguity exists. Supply your
+		 * own registry under OSGi, or wherever two versions of one nsURI can coexist:
+		 * the engine then resolves exactly the packages you resolved and verified
+		 * yourself, and forms no opinion about which version an nsURI names (D42).
+		 *
+		 * @param registry the package registry, must not be {@code null}
+		 * @return this builder
+		 */
+		public Builder packageRegistry(EPackage.Registry registry) {
+			this.packageRegistry = Objects.requireNonNull(registry, "registry must not be null");
+			return this;
 		}
 
 		/**

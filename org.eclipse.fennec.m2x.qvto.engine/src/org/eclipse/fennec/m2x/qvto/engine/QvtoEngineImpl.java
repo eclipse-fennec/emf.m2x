@@ -71,6 +71,7 @@ import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
 public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvider {
 
 	private final QvtoParserSupport parserSupport;
+	private final EPackage.Registry packageRegistry;
 	private final OclEngineImpl oclEngine;
 	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final List<QvtoUnitResolver> unitResolvers;
@@ -91,6 +92,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	public QvtoEngineImpl(QvtoConfiguration config) {
 		Objects.requireNonNull(config, "config must not be null");
 		this.parserSupport = new QvtoParserSupport();
+		this.packageRegistry = config.packageRegistry();
 		OclConfiguration oclConfig = config.oclConfiguration();
 		this.oclEngine = new OclEngineImpl(oclConfig);
 		this.blackboxRegistry = config.blackboxRegistry();
@@ -119,7 +121,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	public OperationalTransformation parse(String source, String unitName) throws QvtoParseException {
 		Objects.requireNonNull(source, "source must not be null");
 		Objects.requireNonNull(unitName, "unitName must not be null");
-		return parserSupport.parse(source, unitName, EPackage.Registry.INSTANCE);
+		return parserSupport.parse(source, unitName, packageRegistry);
 	}
 
 	// --- Execution ---
@@ -149,7 +151,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		// so unresolved imports will correctly fail with "Cannot resolve import".
 		try {
 			QvtoLinker linker = new QvtoLinker(parserSupport, effectiveResolvers,
-					EPackage.Registry.INSTANCE, effectiveRegistry,
+					packageRegistry, effectiveRegistry,
 					effectiveBbAllow, effectiveUrAllow);
 			linker.link(transformation);
 		} catch (QvtoParseException e) {
@@ -164,7 +166,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		QvtoExtentManager extentManager = new QvtoExtentManager(transformation, context);
 
 		QvtoEvaluator evaluator = new QvtoEvaluator(
-				oclEngine, env, options, transformation, extentManager, this);
+				oclEngine, env, options, transformation, extentManager, this, packageRegistry);
 		evaluator.setConfigProperties(context.configProperties());
 
 		// D29: Pass QVT-O operations as additionalProviders — always active, no mutable registration

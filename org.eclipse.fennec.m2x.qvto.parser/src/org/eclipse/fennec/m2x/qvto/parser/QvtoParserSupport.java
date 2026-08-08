@@ -49,21 +49,12 @@ public class QvtoParserSupport {
 	public static final String LINKER_STUB_ANNOTATION = QvtoUnitBuilder.LINKER_STUB_ANNOTATION;
 
 	/**
-	 * Parses a QVT-O transformation source using the global package registry.
-	 *
-	 * @param source the QVT-O source text
-	 * @param unitName the name of the compilation unit (for error messages)
-	 * @return the parsed transformation AST
-	 * @throws QvtoParseException if the source contains syntax errors
-	 */
-	public OperationalTransformation parse(String source, String unitName)
-			throws QvtoParseException {
-		return parse(source, unitName, EPackage.Registry.INSTANCE);
-	}
-
-	/**
 	 * Parses a QVT-O transformation source using the given package registry
 	 * for metamodel resolution.
+	 *
+	 * <p>The registry is always explicit here: the fallback to
+	 * {@link EPackage.Registry#INSTANCE} belongs to
+	 * {@code QvtoConfiguration.packageRegistry()} and is applied there, once (D42).
 	 *
 	 * @param source the QVT-O source text
 	 * @param unitName the name of the compilation unit (for error messages)
