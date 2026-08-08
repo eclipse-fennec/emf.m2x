@@ -97,7 +97,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 	public RelationalTransformation parse(String source, String unitName) throws QvtdParseException {
 		Objects.requireNonNull(source, "source must not be null");
 		Objects.requireNonNull(unitName, "unitName must not be null");
-		return parserSupport.parse(source, unitName, EPackage.Registry.INSTANCE);
+		return parserSupport.parse(source, unitName, config.packageRegistry());
 	}
 
 	// --- Execution ---

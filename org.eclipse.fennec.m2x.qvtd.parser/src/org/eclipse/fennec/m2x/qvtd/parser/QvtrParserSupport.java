@@ -44,21 +44,12 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 public class QvtrParserSupport {
 
 	/**
-	 * Parses a QVT-R transformation source using the global package registry.
-	 *
-	 * @param source the QVT-R source text
-	 * @param unitName the name of the compilation unit (for error messages)
-	 * @return the parsed transformation AST
-	 * @throws QvtdParseException if the source contains syntax errors
-	 */
-	public RelationalTransformation parse(String source, String unitName)
-			throws QvtdParseException {
-		return parse(source, unitName, EPackage.Registry.INSTANCE);
-	}
-
-	/**
 	 * Parses a QVT-R transformation source using the given package registry
 	 * for metamodel resolution.
+	 *
+	 * <p>The registry is always explicit here: the fallback to
+	 * {@link EPackage.Registry#INSTANCE} belongs to
+	 * {@code QvtdConfiguration.packageRegistry()} and is applied there, once (D42).
 	 *
 	 * @param source the QVT-R source text
 	 * @param unitName the name of the compilation unit (for error messages)

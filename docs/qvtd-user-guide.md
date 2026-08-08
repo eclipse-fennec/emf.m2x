@@ -123,6 +123,7 @@ QvtdEngineImpl engine = new QvtdEngineImpl(config);
 
 | Method | Default | Description |
 |--------|---------|-------------|
+| `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | `EPackage.Registry` used to resolve the transformation's typed models |
 | `blackboxRegistry(registry)` | empty | Registry for blackbox Java libraries |
 | `blackboxEnabled(boolean)` | `false` | Enable blackbox library imports |
 | `allowedBlackboxModules(Set)` | empty | Allow-list for blackbox module names |
@@ -131,7 +132,23 @@ QvtdEngineImpl engine = new QvtdEngineImpl(config);
 | `maxBlackboxLibraries(int)` | 10 | Maximum registered blackbox libraries |
 | `maxUnitResolvers(int)` | 5 | Maximum registered unit resolvers |
 
-### 3.3 OSGi Setup
+### 3.3 Which Metamodels the Engine Sees
+
+The typed models of a transformation — `transformation t(uml : simpleuml, rdbms : simplerdbms)` — are resolved by package name when the transformation is parsed. By default the engine looks in `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Hand it your own registry when you hold the packages yourself:
+
+```java
+EPackage.Registry registry = new EPackageRegistryImpl();
+registry.put(UML_NS, umlPackage);
+registry.put(RDBMS_NS, rdbmsPackage);
+
+QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
+    .packageRegistry(registry)
+    .build();
+```
+
+Parser and engine use exactly that registry; nothing reaches for the global one on its own (D42). Under OSGi, or wherever two versions of one nsURI can coexist, this is what keeps the engine from forming its own opinion about which version an nsURI names. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
+
+### 3.4 OSGi Setup
 
 In OSGi, inject the engine via Declarative Services:
 

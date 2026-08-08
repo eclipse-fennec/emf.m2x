@@ -39,7 +39,7 @@ Three EPackages following the spec structure:
 | Interface/Class | Purpose |
 |-----------------|---------|
 | `QvtdEngine` | Main engine interface: `parse()`, `execute()` |
-| `QvtdConfiguration` | Engine config: OCL config, blackbox registry |
+| `QvtdConfiguration` | Engine config: OCL config, blackbox registry, package registry (D42 — the single place applying the `EPackage.Registry.INSTANCE` fallback) |
 | `QvtdExecutionContext` | Execution mode (enforce/checkOnly), model extents, target model |
 | `QvtdExecutionResult` | Diagnostics, success flag |
 | `QvtdModelExtent` | Wraps `Resource` contents for a typed model |
