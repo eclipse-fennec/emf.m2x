@@ -18,6 +18,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 
 /**
@@ -50,6 +51,7 @@ public final class M2tConfiguration {
 	public static final long DEFAULT_MAX_OUTPUT_SIZE = 10_000_000L;
 
 	private final OclConfiguration oclConfiguration;
+	private final EPackage.Registry packageRegistry;
 	private final M2tGenerationStrategy generationStrategy;
 	private final Charset defaultCharset;
 	private final WhitespaceMode whitespaceMode;
@@ -62,6 +64,7 @@ public final class M2tConfiguration {
 
 	private M2tConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
+		this.packageRegistry = builder.packageRegistry;
 		this.generationStrategy = builder.generationStrategy;
 		this.defaultCharset = builder.defaultCharset;
 		this.whitespaceMode = builder.whitespaceMode;
@@ -75,6 +78,20 @@ public final class M2tConfiguration {
 
 	public OclConfiguration oclConfiguration() {
 		return oclConfiguration;
+	}
+
+	/**
+	 * Returns the registry used to resolve metamodel type names appearing in
+	 * template sources, never {@code null}.
+	 *
+	 * <p>This is the single place where the fallback to the global registry is
+	 * applied: unless a caller supplied one, this is {@link EPackage.Registry#INSTANCE}.
+	 * Nothing below the engine reads the static registry on its own (D42).
+	 *
+	 * @return the package registry
+	 */
+	public EPackage.Registry packageRegistry() {
+		return packageRegistry;
 	}
 
 	/**
@@ -166,6 +183,7 @@ public final class M2tConfiguration {
 	public static final class Builder {
 
 		private final OclConfiguration oclConfiguration;
+		private EPackage.Registry packageRegistry = EPackage.Registry.INSTANCE;
 		private M2tGenerationStrategy generationStrategy;
 		private Charset defaultCharset = StandardCharsets.UTF_8;
 		private WhitespaceMode whitespaceMode = WhitespaceMode.ACCELEO;
@@ -178,6 +196,26 @@ public final class M2tConfiguration {
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
+		}
+
+		/**
+		 * Sets the registry used to resolve metamodel type names in template sources.
+		 *
+		 * <p>Template type references such as the {@code Book} in
+		 * {@code [template public main(b : Book)]}, in {@code oclIsKindOf(Book)} or in an
+		 * {@code overrides} declaration are resolved against this registry at parse time.
+		 *
+		 * <p>Defaults to {@link EPackage.Registry#INSTANCE}, which is the correct answer in
+		 * plain Java, where no model version ambiguity exists. Supply your own registry under
+		 * OSGi, or wherever two versions of one nsURI can coexist: the engine then resolves
+		 * exactly the packages you resolved and verified yourself (D42).
+		 *
+		 * @param registry the package registry, must not be {@code null}
+		 * @return this builder
+		 */
+		public Builder packageRegistry(EPackage.Registry registry) {
+			this.packageRegistry = Objects.requireNonNull(registry, "registry must not be null");
+			return this;
 		}
 
 		/**

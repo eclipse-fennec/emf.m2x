@@ -130,6 +130,7 @@ M2tEngineImpl engine = new M2tEngineImpl(config);
 
 | Method | Default | Description |
 |--------|---------|-------------|
+| `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | `EPackage.Registry` used to resolve metamodel type names in templates (see [§3.4](#34-which-metamodels-the-engine-sees)) |
 | `defaultCharset(charset)` | UTF-8 | Charset for file output encoding |
 | `whitespaceMode(mode)` | `ACCELEO` | Whitespace normalization mode (see [§14](#14-whitespace-handling)) |
 | `generationStrategy(strategy)` | `null` (in-memory) | SPI for file output (see [§13](#13-m2tgenerationstrategy)) |
@@ -140,7 +141,31 @@ M2tEngineImpl engine = new M2tEngineImpl(config);
 | `maxOutputSize(long)` | 10,000,000 | Maximum total output size in characters (~10 MB), `0` for unlimited |
 | `protectedAreaEnabled(boolean)` | `true` | Enable/disable protected area markers and merging (see [§10.5](#105-disabling-protected-areas)) |
 
-### 3.4 OSGi (Declarative Services)
+### 3.4 Which Metamodels the Engine Sees
+
+Every metamodel type name in a template is resolved when the template is parsed — the `Book` in `[template public main(b : Book)]`, in `[b.oclIsKindOf(Book)/]`, in a `[for (b : Book | …)]` and in an `overrides` declaration. The engine looks them up in its `EPackage.Registry`.
+
+```java
+EPackage.Registry registry = new EPackageRegistryImpl();
+registry.put(BOOKSHELF_NS, bookshelfPackage);
+
+M2tConfiguration config = M2tConfiguration.builder(oclConfig)
+    .packageRegistry(registry)
+    .build();
+```
+
+The default is `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Supply your own when you hold the packages yourself — under OSGi, or wherever two versions of one nsURI can coexist. Nothing inside the engine reaches for the global registry on its own (D42), so what you pass in is what the parser sees. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
+
+**This matters more than it looks.** A type name that resolves nowhere degrades to `EObject` without a word, and two things break at once:
+
+```mtl
+[b.oclIsKindOf(Novel)/]                                    → false, for an actual Novel
+[template public render(n : Novel) overrides render]       → never selected
+```
+
+The override case is the nastier one: MOFM2T §8.1.3 dispatch compares the declared parameter type against the runtime type, and `EObject` is not a supertype of a dynamic `EClass`, so *no* override ever applies. Both symptoms are silent — `isSuccess()` stays `true` and the diagnostics list stays empty.
+
+### 3.5 OSGi (Declarative Services)
 
 The M2T engine currently does not register a DS component. Use standalone instantiation in OSGi by creating the engine in your component's `@Activate` method:
 
