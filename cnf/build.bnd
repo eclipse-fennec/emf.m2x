@@ -20,6 +20,11 @@ Bundle-Version: ${base-version}.SNAPSHOT
 # For Eclipse Fennec the groupid must start with org.eclipse.fennec
 -groupid: org.eclipse.fennec.m2x
 
+# The shared fennec bnd library defaults Bundle-Copyright to a company statement
+# with "All rights reserved", which contradicts EPL-2.0 and the Eclipse Foundation
+# branding of the released artifacts. Override it for every bundle of this workspace.
+Bundle-Copyright: Copyright (c) Contributors to the Eclipse Foundation.
+
 javac.source: 21
 javac.target: 21
 

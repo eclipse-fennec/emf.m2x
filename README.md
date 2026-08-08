@@ -1,4 +1,4 @@
-# Fennec M2M
+# Eclipse Fennec EMF M2X
 
 Lightweight, spec-compliant implementations of OMG model transformation and constraint languages, fully decoupled from the Eclipse platform.
 
@@ -56,9 +56,9 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 
 ## Build
 
-```bash
-cd workspace/
+The repository root is a Gradle + BND workspace:
 
+```bash
 # Build all
 ./gradlew build
 
@@ -73,6 +73,23 @@ cd workspace/
 ```
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
+
+## Branches & releases
+
+* `snapshot` is the active development branch. PRs land here first; every push publishes a `-SNAPSHOT` artifact to [Sonatype Central snapshots](https://central.sonatype.com/repository/maven-snapshots/org/eclipse/fennec/m2x/).
+* `main` always holds the latest released version.
+
+## Maven coordinates
+
+All bundles are published under the group id `org.eclipse.fennec.m2x`, with the bundle symbolic name as the artifact id:
+
+```xml
+<dependency>
+    <groupId>org.eclipse.fennec.m2x</groupId>
+    <artifactId>org.eclipse.fennec.m2x.ocl.engine</artifactId>
+    <version>0.1.1-SNAPSHOT</version>
+</dependency>
+```
 
 ## User Guides
 
@@ -116,11 +133,11 @@ See [Benchmark Results](docs/benchmark-results.md) for detailed numbers and meth
 
 ## License
 
-**Eclipse Public License 2.0**
+[Eclipse Public License 2.0](https://www.eclipse.org/legal/epl-2.0/)
 
 ## Copyright
 
-Data In Motion Consulting GmbH - All rights reserved
+Copyright (c) Contributors to the Eclipse Foundation.
 
 ---
 Data In Motion Consulting GmbH - [info@datainmotion.com](mailto:info@datainmotion.com)
