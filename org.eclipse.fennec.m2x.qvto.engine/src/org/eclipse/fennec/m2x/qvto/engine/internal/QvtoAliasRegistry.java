@@ -38,11 +38,13 @@ class QvtoAliasRegistry {
 	private final OperationalTransformation transformation;
 	private final QvtoExtentManager extentManager;
 	private final Map<String, Map.Entry<EClass, String>> aliasRegistry = new HashMap<>();
+	private final EPackage.Registry packageRegistry;
 
 	QvtoAliasRegistry(OperationalTransformation transformation,
-			QvtoExtentManager extentManager) {
+			QvtoExtentManager extentManager, EPackage.Registry packageRegistry) {
 		this.transformation = Objects.requireNonNull(transformation);
 		this.extentManager = Objects.requireNonNull(extentManager);
+		this.packageRegistry = Objects.requireNonNull(packageRegistry);
 	}
 
 	/**
@@ -105,8 +107,8 @@ class QvtoAliasRegistry {
 				}
 			}
 		}
-		// Fallback: search EPackage.Registry
-		for (Object value : EPackage.Registry.INSTANCE.values()) {
+		// Fallback: search the package registry the engine was configured with (D42)
+		for (Object value : packageRegistry.values()) {
 			if (value instanceof EPackage pkg) {
 				EClass found = findEClassInPackage(pkg, name);
 				if (found != null) {

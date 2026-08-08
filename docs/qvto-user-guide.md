@@ -140,12 +140,30 @@ QvtoEngine engine = new QvtoEngineImpl(qvtoConfig);
 
 | Method | Description |
 |--------|-------------|
+| `packageRegistry(registry)` | `EPackage.Registry` used to resolve `modeltype … uses '<nsURI>'` (default: `EPackage.Registry.INSTANCE`) |
 | `blackboxRegistry(registry)` | Registry for blackbox Java libraries |
 | `addUnitResolver(resolver)` | Add a unit resolver for multi-file composition |
 | `unitResolvers(list)` | Set all unit resolvers at once |
 | `parallelExecutor(executor)` | Executor for `parallelTransform()` (default: virtual threads) |
 
-### 3.3 OSGi Setup
+### 3.3 Which Metamodels the Engine Sees
+
+A `modeltype LIB uses 'http://example.org/library/1.0';` declaration is resolved when the transformation is parsed. By default the engine looks in `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Hand it your own registry when you hold the packages yourself:
+
+```java
+EPackage.Registry registry = new EPackageRegistryImpl();
+registry.put(LIBRARY_NS, libraryPackage);
+
+QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig)
+    .packageRegistry(registry)
+    .build();
+```
+
+Everything downstream — parser, linker, alias resolution, nested blackbox invocations — uses exactly that registry; nothing reaches for the global one on its own (D42). Under OSGi, or wherever two versions of one nsURI can coexist, this is what keeps the engine from forming its own opinion about which version an nsURI names. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
+
+> An nsURI that resolves in no registry is currently dropped silently — the transformation parses and the metamodel simply stays unresolved. Tracked as a known gap.
+
+### 3.4 OSGi Setup
 
 In OSGi, inject the engine via Declarative Services:
 

@@ -28,6 +28,7 @@ import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.imperativeocl.AltExp;
@@ -137,6 +138,7 @@ public class QvtoEvaluator {
 	private final QvtoIntermediatePropertyStore intermediateStore;
 
 	// §8.1.16 / §8.3.19: tag "alias" — maps alias name → (EClass, real feature name)
+	private final EPackage.Registry packageRegistry;
 	private final QvtoAliasRegistry aliasRegistry;
 	// §8.3.19: predefined tags "proxy" and "topclasses"
 	private final QvtoTagRegistry tagRegistry;
@@ -162,7 +164,8 @@ public class QvtoEvaluator {
 	 */
 	public QvtoEvaluator(OclEngineImpl oclEngine, QvtoEvalEnvironment env,
 			QvtoEvaluationOptions options, OperationalTransformation transformation,
-			QvtoExtentManager extentManager, QvtoEngineImpl engine) {
+			QvtoExtentManager extentManager, QvtoEngineImpl engine,
+			EPackage.Registry packageRegistry) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.options = Objects.requireNonNull(options, "options must not be null");
@@ -171,10 +174,21 @@ public class QvtoEvaluator {
 		this.engine = engine; // nullable for backward compatibility in tests
 		this.traceManager = new QvtoTraceManager(options.maxTraceRecords());
 		this.intermediateStore = new QvtoIntermediatePropertyStore(transformation, this::eval);
-		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager);
+		this.packageRegistry = Objects.requireNonNull(packageRegistry,
+				"packageRegistry must not be null");
+		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager, packageRegistry);
 		this.tagRegistry = new QvtoTagRegistry(transformation);
 		this.operationResolver = new QvtoOperationResolver(transformation);
 		this.modelOperations = new QvtoModelOperations(this::eval);
+	}
+
+	/**
+	 * Returns the package registry this execution resolves metamodels against (D42).
+	 *
+	 * @return the package registry, never {@code null}
+	 */
+	public EPackage.Registry packageRegistry() {
+		return packageRegistry;
 	}
 
 	/**

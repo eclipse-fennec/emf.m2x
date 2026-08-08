@@ -162,9 +162,12 @@ Immutable engine configuration bundling OCL config, blackbox registry, unit reso
 QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
     .blackboxRegistry(registry)
     .addUnitResolver(myResolver)
+    .packageRegistry(myPackageRegistry)   // optional, see below
     .build();
 QvtoEngine engine = new QvtoEngineImpl(config);
 ```
+
+`packageRegistry` resolves `modeltype … uses '<nsURI>'` declarations and everything below them. It defaults to `EPackage.Registry.INSTANCE`, and **this default is the single place in QVT-O where the static registry is applied** (D42) — parser, linker, evaluator, alias resolution and nested blackbox contexts all receive the resolved registry as a parameter.
 
 ### 4.3 QvtoExecutionContext
 
@@ -460,10 +463,10 @@ Entry rule: `compilationUnitEntry()`. Extends OCL with transformation-level cons
 
 ```java
 QvtoParserSupport parser = new QvtoParserSupport();
-OperationalTransformation ast = parser.parse(source, "MyTransform.qvto");
-// Or with custom EPackage.Registry:
 OperationalTransformation ast = parser.parse(source, unitName, registry);
 ```
+
+The registry is always explicit. There is deliberately no convenience overload that reaches for `EPackage.Registry.INSTANCE`: the fallback belongs to `QvtoConfiguration` and is applied there, once (D42).
 
 ---
 

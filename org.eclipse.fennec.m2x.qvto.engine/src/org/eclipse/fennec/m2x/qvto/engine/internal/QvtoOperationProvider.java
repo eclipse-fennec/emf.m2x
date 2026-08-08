@@ -633,7 +633,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 			if (moduleName.equals(lib.getModuleName())) {
 				QvtoBlackboxInvocationContextImpl ctx = new QvtoBlackboxInvocationContextImpl(
 						self, evaluator.diagnostics(), evaluator.extentManager(),
-						evaluator.configProperties(), EPackage.Registry.INSTANCE);
+						evaluator.configProperties(), evaluator.packageRegistry());
 				return lib.invoke(impOp.getName(), ctx, args);
 			}
 		}
