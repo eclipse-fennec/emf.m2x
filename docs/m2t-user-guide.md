@@ -1017,45 +1017,27 @@ public interface M2tGenerationStrategy {
 }
 ```
 
-### 13.2 File-System Strategy
+### 13.2 Writing to the File System
 
-A simple implementation that writes to the filesystem:
+`FileSystemGenerationStrategy` ships with the engine — there is no need to write one:
 
 ```java
-import java.io.FileWriter;
-import java.io.Writer;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import org.eclipse.fennec.m2x.m2t.api.M2tGenerationStrategy;
-import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
+import org.eclipse.fennec.m2x.m2t.engine.FileSystemGenerationStrategy;
 
-public class FileSystemStrategy implements M2tGenerationStrategy {
-
-    private final Path outputDir;
-
-    public FileSystemStrategy(Path outputDir) {
-        this.outputDir = outputDir;
-    }
-
-    @Override
-    public Writer createWriter(String filePath, OpenModeKind mode, Charset charset) {
-        Path target = outputDir.resolve(filePath);
-        target.getParent().toFile().mkdirs();
-        boolean append = mode == OpenModeKind.APPEND;
-        return new FileWriter(target.toFile(), charset, append);
-    }
-
-    @Override
-    public String readExistingContent(String filePath, Charset charset) {
-        Path target = outputDir.resolve(filePath);
-        if (Files.exists(target)) {
-            return Files.readString(target, charset);
-        }
-        return null;
-    }
-}
+M2tConfiguration config = M2tConfiguration.builder(oclConfig)
+    .generationStrategy(new FileSystemGenerationStrategy(Path.of("/tmp/output")))
+    .build();
 ```
+
+Every `[file (...)]` block of the run is written below that directory after generation:
+
+- missing parent directories are created;
+- `[file (path, false)]` truncates an existing file, `[file (path, true)]` appends to it;
+- existing content is read back for protected area merging (§10), except for append blocks — an appended file is extended, not regenerated, so merging its own content back in would duplicate it;
+- a path that would escape the output directory is rejected with a `SecurityException`, including `..` segments, absolute paths and symlinks pointing outside (T-4);
+- if one file cannot be written, the failure becomes an error diagnostic and the remaining files are still written. Check `result.isSuccess()`.
+
+Files are handed to the strategy **after** protected area merging, not streamed during evaluation: the merger needs the complete generated *and* the complete existing content before it can decide anything.
 
 ### 13.3 In-Memory Mode (Default)
 

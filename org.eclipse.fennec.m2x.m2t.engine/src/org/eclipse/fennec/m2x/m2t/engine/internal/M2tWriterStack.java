@@ -43,6 +43,8 @@ public class M2tWriterStack {
 	private final Deque<WriterEntry> stack = new ArrayDeque<>();
 	private final Map<String, String> generatedFiles = new LinkedHashMap<>();
 	private final Map<String, String> fileUniqueIds = new LinkedHashMap<>();
+	private final Map<String, OpenModeKind> fileOpenModes = new LinkedHashMap<>();
+	private final Map<String, Charset> fileCharsets = new LinkedHashMap<>();
 	private final long maxOutputSize;
 	private long totalOutputSize;
 	private boolean outputLimitExceeded;
@@ -77,13 +79,19 @@ public class M2tWriterStack {
 	 *
 	 * @param filePath the output file path
 	 * @param mode overwrite or append
-	 * @param charset the output charset (currently informational)
+	 * @param charset the output charset
 	 */
 	public void pushFileWriter(String filePath, OpenModeKind mode, Charset charset) {
 		Objects.requireNonNull(filePath, "filePath must not be null");
 		StringBuilder sb = new StringBuilder();
 		if (mode == OpenModeKind.APPEND && generatedFiles.containsKey(filePath)) {
 			sb.append(generatedFiles.get(filePath));
+		}
+		// Only the first block for a path decides how the file is opened and encoded;
+		// further APPEND blocks for the same path are concatenated in memory above.
+		fileOpenModes.putIfAbsent(filePath, mode == null ? OpenModeKind.OVERWRITE : mode);
+		if (charset != null) {
+			fileCharsets.putIfAbsent(filePath, charset);
 		}
 		stack.push(new WriterEntry(filePath, sb));
 	}
@@ -179,6 +187,31 @@ public class M2tWriterStack {
 	 */
 	public Map<String, String> getFileUniqueIds() {
 		return Map.copyOf(fileUniqueIds);
+	}
+
+	/**
+	 * Returns the open mode each generated file was first opened with
+	 * (file path &rarr; mode).
+	 *
+	 * <p>Within one execution, APPEND blocks targeting the same path are already
+	 * concatenated into a single entry of {@link #getGeneratedFiles()}. This map tells
+	 * a {@code M2tGenerationStrategy} whether the accumulated content replaces an
+	 * existing file on disk or extends it.
+	 *
+	 * @return unmodifiable map of open modes
+	 */
+	public Map<String, OpenModeKind> getFileOpenModes() {
+		return Map.copyOf(fileOpenModes);
+	}
+
+	/**
+	 * Returns the charset each generated file was first opened with
+	 * (file path &rarr; charset), for files that declared one.
+	 *
+	 * @return unmodifiable map of charsets
+	 */
+	public Map<String, Charset> getFileCharsets() {
+		return Map.copyOf(fileCharsets);
 	}
 
 	/**

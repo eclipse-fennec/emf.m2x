@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2x.m2t.engine;
 
 import java.io.IOException;
+import java.io.Writer;
+import java.nio.charset.Charset;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -47,6 +49,7 @@ import org.eclipse.fennec.m2x.m2t.parser.M2tParserSupport;
 import org.eclipse.fennec.m2x.m2t.parser.M2tWhitespaceNormalizer;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
+import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -209,13 +212,22 @@ public class M2tEngineImpl implements M2tEngine {
 		Map<String, String> generatedFiles = writers.getGeneratedFiles();
 		Map<String, String> fileUniqueIds = writers.getFileUniqueIds();
 
+		Map<String, OpenModeKind> openModes = writers.getFileOpenModes();
+		Map<String, Charset> charsets = writers.getFileCharsets();
+
 		// Apply protected area merging if strategy is configured AND protected areas enabled (D31, T-6)
 		M2tGenerationStrategy strategy = config.generationStrategy();
 		if (strategy != null && config.protectedAreaEnabled()) {
 			M2tProtectedAreaMerger merger = new M2tProtectedAreaMerger();
 			Map<String, String> mergedFiles = new LinkedHashMap<>(generatedFiles);
 			for (Map.Entry<String, String> entry : mergedFiles.entrySet()) {
-				String existing = strategy.readExistingContent(entry.getKey(), config.defaultCharset());
+				// An APPEND file is extended, not regenerated: merging its existing
+				// content in and then appending the result would duplicate the file.
+				if (openModes.get(entry.getKey()) == OpenModeKind.APPEND) {
+					continue;
+				}
+				String existing = strategy.readExistingContent(entry.getKey(),
+						charsetFor(entry.getKey(), charsets));
 				if (existing != null) {
 					entry.setValue(merger.merge(entry.getValue(), existing));
 				}
@@ -223,7 +235,50 @@ public class M2tEngineImpl implements M2tEngine {
 			generatedFiles = Map.copyOf(mergedFiles);
 		}
 
+		// Hand the final content to the strategy. This happens after the merge on
+		// purpose: the merger needs the complete generated and the complete existing
+		// content before it can decide anything, so output cannot be streamed through
+		// the strategy while the template is being evaluated.
+		if (strategy != null) {
+			writeGeneratedFiles(strategy, generatedFiles, openModes, charsets, evaluator);
+		}
+
 		return new M2tResult(evaluator.getDiagnostics(), generatedFiles, fileUniqueIds);
+	}
+
+	/**
+	 * Passes every generated file to the configured {@link M2tGenerationStrategy}.
+	 * A failure on one file is reported as a diagnostic and does not stop the rest —
+	 * a generator run should not lose nine files because the tenth is unwritable.
+	 */
+	private void writeGeneratedFiles(M2tGenerationStrategy strategy,
+			Map<String, String> generatedFiles, Map<String, OpenModeKind> openModes,
+			Map<String, Charset> charsets, M2tEvaluator evaluator) {
+		for (Map.Entry<String, String> entry : generatedFiles.entrySet()) {
+			String filePath = entry.getKey();
+			OpenModeKind mode = openModes.getOrDefault(filePath, OpenModeKind.OVERWRITE);
+			try {
+				Writer writer = strategy.createWriter(filePath, mode,
+						charsetFor(filePath, charsets));
+				if (writer == null) {
+					continue;
+				}
+				try {
+					writer.write(entry.getValue());
+				} finally {
+					strategy.closeWriter(filePath, writer);
+				}
+			} catch (IOException | RuntimeException e) {
+				evaluator.addGenerationError(filePath, e);
+			}
+		}
+	}
+
+	/**
+	 * Returns the charset the file block declared, or the configured default.
+	 */
+	private Charset charsetFor(String filePath, Map<String, Charset> charsets) {
+		return charsets.getOrDefault(filePath, config.defaultCharset());
 	}
 
 	/**
