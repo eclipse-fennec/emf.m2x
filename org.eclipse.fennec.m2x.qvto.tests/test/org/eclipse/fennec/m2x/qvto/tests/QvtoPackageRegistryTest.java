@@ -123,6 +123,28 @@ class QvtoPackageRegistryTest {
 				() -> "diagnostics: " + failure.getErrors());
 	}
 
+	@Test
+	@DisplayName("a type that resolves nowhere is reported instead of being fabricated")
+	void unknownTypeIsReported() {
+		QvtoEngineImpl engine = engineWith(builder -> builder.packageRegistry(registry));
+
+		QvtoParseException failure = assertThrows(QvtoParseException.class,
+				() -> engine.parse("""
+						modeltype LIB uses '%s';
+						transformation registryTest(in l : LIB, out o : LIB) {
+						    mapping doIt() {
+						        var x : NoSuchType;
+						    }
+						    main() {
+						    }
+						}
+						""".formatted(NS_URI), "registryTest"));
+
+		assertTrue(failure.getErrors().stream()
+				.anyMatch(d -> d.getMessage().contains("Unknown type (NoSuchType)")),
+				() -> "diagnostics: " + failure.getErrors());
+	}
+
 	// --- helpers ---
 
 	private QvtoEngineImpl engineWith(
