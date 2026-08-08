@@ -12,7 +12,7 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-package org.eclipse.fennec.m2x.ocl.engine;
+package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.util.List;
 

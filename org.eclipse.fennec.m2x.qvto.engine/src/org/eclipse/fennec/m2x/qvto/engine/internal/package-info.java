@@ -12,6 +12,8 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-@org.osgi.annotation.bundle.Export
-@org.osgi.annotation.versioning.Version("1.0")
+/**
+ * Internal implementation classes. Not exported: everything public in an exported
+ * package is API under the Eclipse evolution rules, and these classes are wiring.
+ */
 package org.eclipse.fennec.m2x.qvto.engine.internal;

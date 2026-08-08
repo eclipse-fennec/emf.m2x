@@ -12,5 +12,4 @@ Bundle-Description: QVT-Relations v1.3 execution engine
 	org.eclipse.fennec.m2x.qvtd.model;version=snapshot,\
 	org.eclipse.fennec.m2x.qvtd.parser;version=snapshot,\
 	org.eclipse.fennec.m2x;version=snapshot,\
-	org.osgi.service.component.annotations;version=latest,\
 	org.osgi.service.condition;version=latest

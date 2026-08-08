@@ -13,5 +13,4 @@ Bundle-Description: QVT-Operational v1.3 execution engine
 	org.eclipse.fennec.m2x.qvto.parser;version=snapshot,\
 	org.eclipse.fennec.m2x.qvtd.api;version=snapshot,\
 	org.eclipse.fennec.m2x;version=snapshot,\
-	org.osgi.service.component.annotations;version=latest,\
 	org.osgi.service.condition;version=latest

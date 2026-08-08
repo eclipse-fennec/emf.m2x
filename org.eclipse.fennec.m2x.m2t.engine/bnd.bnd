@@ -11,5 +11,4 @@ Bundle-Description: MOFM2T v1.0 template evaluator and text generation engine
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
-	org.osgi.service.component.annotations;version=latest,\
 	org.osgi.service.condition;version=latest
