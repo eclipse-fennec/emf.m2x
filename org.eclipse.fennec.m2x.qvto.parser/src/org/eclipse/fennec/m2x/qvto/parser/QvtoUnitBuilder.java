@@ -104,6 +104,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private final EPackage.Registry packageRegistry;
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
+	/** Module-local type names from {@code typedef}, shared with the expression builder. */
+	private final Map<String, EClassifier> localTypes = new HashMap<>();
 	private QvtoEnvironment environment;
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
@@ -114,7 +116,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
 		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry,
-				importedModuleStubs);
+				importedModuleStubs, localTypes, diagnostics);
 	}
 
 	// ==================== Entry Point ====================
@@ -296,6 +298,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// §8.2.1.3: Pre-pass — create IC shells so forward-references resolve
 		preCreateIntermediateClassShells(ctx.moduleElement(), transformation);
+		preRegisterTypedefs(ctx.moduleElement());
 
 		// Module elements
 		for (QvtOParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
@@ -1667,9 +1670,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		OclType baseType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 		if (baseType instanceof ClassifierType ct) {
 			typedef.setBase(ct.getReferredClassifier());
-			// A later reference to the typedef name resolves to the type it stands for
-			expressionBuilder.registerLocalType(typedef.getName(), ct.getReferredClassifier());
 		}
+		// A reference to the typedef name resolves to the type it stands for
+		localTypes.put(typedef.getName(), baseClassifier(baseType));
+		localTypes.values().removeIf(java.util.Objects::isNull);
 
 		if (ctx.expression() != null) {
 			typedef.setCondition((OclExpression) expressionBuilder.visit(ctx.expression()));
@@ -2026,9 +2030,53 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		};
 	}
 
+	/**
+	 * Registers every {@code typedef} of the module before its elements are visited, so
+	 * that a reference to the declared name resolves regardless of declaration order —
+	 * the same reason intermediate class shells are pre-created.
+	 *
+	 * <p>A typedef over a primitive maps to the corresponding Ecore data type: OCL's
+	 * {@code String} is Ecore's {@code EString}, and a variable declared with the alias
+	 * has to end up with a usable type either way.
+	 */
+	private void preRegisterTypedefs(List<QvtOParser.ModuleElementContext> elements) {
+		for (QvtOParser.ModuleElementContext elemCtx : elements) {
+			if (elemCtx.typedefDecl() == null) {
+				continue;
+			}
+			String name = QvtoExpressionBuilder.qvtoIdentifierText(
+					elemCtx.typedefDecl().qvtoIdentifier());
+			OclType baseType = expressionBuilder.resolveTypeExpression(
+					elemCtx.typedefDecl().typeExpression());
+			EClassifier resolved = baseClassifier(baseType);
+			if (name != null && resolved != null) {
+				localTypes.put(name, resolved);
+			}
+		}
+	}
+
+	/**
+	 * Returns the Ecore classifier a typedef base type stands for, or {@code null}.
+	 */
+	private static EClassifier baseClassifier(OclType baseType) {
+		if (baseType instanceof ClassifierType ct) {
+			return ct.getReferredClassifier();
+		}
+		if (baseType instanceof PrimitiveType pt) {
+			return switch (pt.getName()) {
+				case "String" -> EcorePackage.Literals.ESTRING;
+				case "Integer" -> EcorePackage.Literals.EINT;
+				case "Real" -> EcorePackage.Literals.EDOUBLE;
+				case "Boolean" -> EcorePackage.Literals.EBOOLEAN;
+				default -> null;
+			};
+		}
+		return null;
+	}
+
 	private void updateExpressionBuilder() {
 		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry,
-				this.importedModuleStubs);
+				this.importedModuleStubs, this.localTypes, this.diagnostics);
 	}
 
 	private String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {

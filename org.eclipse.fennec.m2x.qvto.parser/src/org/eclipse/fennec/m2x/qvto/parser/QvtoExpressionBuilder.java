@@ -27,6 +27,7 @@ import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -112,15 +113,30 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	private final EPackage.Registry packageRegistry;
 	private final Map<String, Module> importedModuleStubs;
-	private final Map<String, EClassifier> localTypes = new java.util.HashMap<>();
+	private final Map<String, EClassifier> localTypes;
+	private final List<Resource.Diagnostic> diagnostics;
 	private QvtoEnvironment environment;
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
-		this(environment, packageRegistry, Map.of());
+		this(environment, packageRegistry, Map.of(), new java.util.HashMap<>(),
+				new java.util.ArrayList<>());
 	}
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
 			Map<String, Module> importedModuleStubs) {
+		this(environment, packageRegistry, importedModuleStubs, new java.util.HashMap<>(),
+				new java.util.ArrayList<>());
+	}
+
+	/**
+	 * @param localTypes module-local type names ({@code typedef}), shared with the unit
+	 *        builder so that they survive this builder being recreated mid-unit
+	 */
+	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
+			Map<String, Module> importedModuleStubs, Map<String, EClassifier> localTypes,
+			List<Resource.Diagnostic> diagnostics) {
+		this.localTypes = Objects.requireNonNull(localTypes, "localTypes must not be null");
+		this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics must not be null");
 		this.environment = Objects.requireNonNull(environment,
 				"environment must not be null");
 		this.packageRegistry = packageRegistry;
@@ -1605,10 +1621,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			if (fromStandardLibrary != null) {
 				return fromStandardLibrary;
 			}
-			// Return a synthetic EClass as placeholder
-			EClass synthetic = EcoreFactory.eINSTANCE.createEClass();
-			synthetic.setName(name);
-			return synthetic;
+			return unresolvedName(name);
 		}
 
 		String classifierName = segments.get(segments.size() - 1);
@@ -1627,9 +1640,26 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			}
 		}
 
-		EClass synthetic = EcoreFactory.eINSTANCE.createEClass();
-		synthetic.setName(classifierName);
-		return synthetic;
+		return unresolvedName(String.join("::", segments));
+	}
+
+	/**
+	 * Records a type name that resolved nowhere and returns a placeholder so the rest
+	 * of the visit does not run into a {@code null}. The unit is rejected once it has
+	 * been visited — see {@link #getDiagnostics()} (#66).
+	 */
+	private EClassifier unresolvedName(String name) {
+		diagnostics.add(new QvtoParseDiagnostic("Unknown type (" + name + ")", 0, 0));
+		EClass placeholder = EcoreFactory.eINSTANCE.createEClass();
+		placeholder.setName(name);
+		return placeholder;
+	}
+
+	/**
+	 * Returns the diagnostics collected while building expressions (#66).
+	 */
+	List<Resource.Diagnostic> getDiagnostics() {
+		return diagnostics;
 	}
 
 	private EClassifier findInRegistry(String name) {
