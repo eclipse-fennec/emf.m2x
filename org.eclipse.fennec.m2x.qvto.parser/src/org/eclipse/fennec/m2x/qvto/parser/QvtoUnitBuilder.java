@@ -1667,6 +1667,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		OclType baseType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 		if (baseType instanceof ClassifierType ct) {
 			typedef.setBase(ct.getReferredClassifier());
+			// A later reference to the typedef name resolves to the type it stands for
+			expressionBuilder.registerLocalType(typedef.getName(), ct.getReferredClassifier());
 		}
 
 		if (ctx.expression() != null) {

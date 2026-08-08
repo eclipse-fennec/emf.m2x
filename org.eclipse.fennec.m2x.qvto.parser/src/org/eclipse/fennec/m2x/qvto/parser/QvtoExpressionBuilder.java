@@ -112,6 +112,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	private final EPackage.Registry packageRegistry;
 	private final Map<String, Module> importedModuleStubs;
+	private final Map<String, EClassifier> localTypes = new java.util.HashMap<>();
 	private QvtoEnvironment environment;
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
@@ -1573,12 +1574,36 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	// ==================== Name Resolution ====================
 
+	/**
+	 * Registers a module-local type name — a {@code typedef} — so that later
+	 * references resolve to its base type instead of a fabricated placeholder.
+	 *
+	 * @param name the declared name
+	 * @param type the classifier it stands for
+	 */
+	void registerLocalType(String name, EClassifier type) {
+		if (name != null && type != null) {
+			localTypes.put(name, type);
+		}
+	}
+
 	EClassifier resolveClassifier(List<String> segments) {
 		if (segments.size() == 1) {
 			String name = segments.get(0);
+			EClassifier local = localTypes.get(name);
+			if (local != null) {
+				return local;
+			}
 			EClassifier fromRegistry = findInRegistry(name);
 			if (fromRegistry != null) {
 				return fromRegistry;
+			}
+			// QVT v1.3 §8.3.1: names of the QVT-O standard library — Exception and its
+			// subclasses, and the Void synonym — belong to the language, not to a
+			// metamodel, so they resolve here rather than through the registry.
+			EClassifier fromStandardLibrary = QvtoStandardLibraryTypes.lookup(name);
+			if (fromStandardLibrary != null) {
+				return fromStandardLibrary;
 			}
 			// Return a synthetic EClass as placeholder
 			EClass synthetic = EcoreFactory.eINSTANCE.createEClass();
