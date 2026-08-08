@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.LongSupplier;
 import java.util.Set;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
@@ -87,6 +88,8 @@ public class QvtrEvaluator {
 	private final QvtrBlackboxBridge blackboxBridge;
 	private final QvtrQueryEvaluator queryEvaluator;
 
+	private final LongSupplier nanoTimeSource;
+
 	private int relationCallDepth;
 	private long deadlineNanos;
 
@@ -95,6 +98,29 @@ public class QvtrEvaluator {
 			QvtdExecutionContext context, QvtdConfiguration config,
 			QvtdBlackboxRegistry blackboxRegistry,
 			List<RelationImplementationProvider> implementationProviders) {
+		this(oclEngine, env, transformation, extentManager, context, config,
+				blackboxRegistry, implementationProviders, System::nanoTime);
+	}
+
+	/**
+	 * Creates an evaluator with an explicit time source for the execution deadline
+	 * (M-R4).
+	 *
+	 * <p>The deadline is the one part of the evaluator whose behaviour depends on how
+	 * fast the machine is. Taking the clock as a parameter lets a test drive the
+	 * deadline instead of racing it — a timeout test that passes because the machine
+	 * was slow enough proves nothing.
+	 *
+	 * @param nanoTimeSource the source of monotonic nanoseconds, must not be {@code null}
+	 */
+	public QvtrEvaluator(OclEngineImpl oclEngine, QvtrEvalEnvironment env,
+			RelationalTransformation transformation, QvtrExtentManager extentManager,
+			QvtdExecutionContext context, QvtdConfiguration config,
+			QvtdBlackboxRegistry blackboxRegistry,
+			List<RelationImplementationProvider> implementationProviders,
+			LongSupplier nanoTimeSource) {
+		this.nanoTimeSource = Objects.requireNonNull(nanoTimeSource,
+				"nanoTimeSource must not be null");
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
@@ -127,7 +153,7 @@ public class QvtrEvaluator {
 		// Initialize timeout deadline (M-R4)
 		long timeout = config.timeoutMs();
 		this.deadlineNanos = timeout > 0
-				? System.nanoTime() + timeout * 1_000_000L
+				? nanoTimeSource.getAsLong() + timeout * 1_000_000L
 				: 0;
 
 		// Resolve deferred overrides (EAnnotation → Rule.overrides reference)
@@ -520,7 +546,7 @@ public class QvtrEvaluator {
 	 * Checks if the execution deadline has been exceeded (M-R4).
 	 */
 	private void checkDeadline() {
-		if (deadlineNanos > 0 && System.nanoTime() > deadlineNanos) {
+		if (deadlineNanos > 0 && nanoTimeSource.getAsLong() > deadlineNanos) {
 			throw new QvtdExecutionException(
 					"Execution timeout exceeded (%d ms)".formatted(config.timeoutMs()));
 		}
