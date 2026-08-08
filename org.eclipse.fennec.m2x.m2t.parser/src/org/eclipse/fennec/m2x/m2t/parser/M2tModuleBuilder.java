@@ -60,6 +60,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 	private final String unitName;
 	private final M2tExpressionBuilder exprBuilder;
+	private final EPackage.Registry packageRegistry;
 	private Module module;
 
 	// Pending references — collected during parse, resolved during linking
@@ -78,6 +79,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	M2tModuleBuilder(String unitName, EClassifier contextType, EPackage.Registry packageRegistry) {
 		this.unitName = unitName;
 		this.exprBuilder = new M2tExpressionBuilder(contextType, packageRegistry);
+		this.packageRegistry = packageRegistry;
 	}
 
 	// ==================== Module ====================
@@ -118,8 +120,9 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			for (M2tParser.PathNameContext metamodelPath : ctx.metamodelList().pathName()) {
 				List<String> segments = M2tExpressionBuilder.pathNameSegments(metamodelPath);
 				String metamodelUri = String.join("::", segments);
-				// Try to resolve from global registry
-				EPackage pkg = EPackage.Registry.INSTANCE.getEPackage(metamodelUri);
+				// Resolve from the registry this build was given (D42)
+				EPackage pkg = packageRegistry == null ? null
+						: packageRegistry.getEPackage(metamodelUri);
 				if (pkg != null) {
 					module.getInput().add(pkg);
 				}

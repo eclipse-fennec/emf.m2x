@@ -28,6 +28,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
@@ -136,7 +137,8 @@ public class M2tEngineImpl implements M2tEngine {
 	public Module parse(String source, String unitName) throws M2tParseException {
 		Objects.requireNonNull(source, "source must not be null");
 		Objects.requireNonNull(unitName, "unitName must not be null");
-		M2tParseResult result = parserSupport.buildModuleWithPending(source, unitName);
+		M2tParseResult result = parserSupport.buildModuleWithPending(source, unitName,
+				EcorePackage.eINSTANCE.getEObject(), config.packageRegistry());
 		parseResultCache.put(result.module(), result);
 		return result.module();
 	}
