@@ -22,6 +22,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -50,6 +51,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	private final EPackage.Registry packageRegistry;
 	private final List<Constraint> constraints = new ArrayList<>();
+	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 	private String currentPackagePath;
 
 	OclDocumentBuilder(EPackage.Registry packageRegistry) {
@@ -62,6 +64,13 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	 * @param tree the parse tree for a Complete OCL document entry
 	 * @return the list of constraints
 	 */
+	/**
+	 * Returns the diagnostics collected while building the document (#66).
+	 */
+	List<Resource.Diagnostic> getDiagnostics() {
+		return diagnostics;
+	}
+
 	List<Constraint> buildDocument(OclParser.CompleteOclDocumentEntryContext tree) {
 		constraints.clear();
 		visit(tree);
@@ -365,7 +374,9 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (selfAlias != null) {
 			builder.registerSelfAlias(selfAlias);
 		}
-		return (OclExpression) builder.visit(ctx);
+		OclExpression expression = (OclExpression) builder.visit(ctx);
+		diagnostics.addAll(builder.support.getDiagnostics());
+		return expression;
 	}
 
 	// ==================== Classifier Resolution ====================

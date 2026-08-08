@@ -107,7 +107,9 @@ public class M2tParserSupport {
 		Objects.requireNonNull(contextType, "contextType must not be null");
 		M2tParser.ModuleContext cst = parse(source);
 		M2tModuleBuilder builder = new M2tModuleBuilder(unitName, contextType, packageRegistry);
-		return builder.visitModule(cst);
+		Module module = builder.visitModule(cst);
+		checkResolutionErrors(builder.getDiagnostics());
+		return module;
 	}
 
 	/**
@@ -144,7 +146,25 @@ public class M2tParserSupport {
 		M2tParser.ModuleContext cst = parse(source);
 		M2tModuleBuilder builder = new M2tModuleBuilder(unitName, contextType, packageRegistry);
 		builder.visitModule(cst);
+		checkResolutionErrors(builder.getDiagnostics());
 		return builder.getParseResult();
+	}
+
+	/**
+	 * Rejects a module whose type names could not be resolved (#66).
+	 *
+	 * <p>Collected rather than thrown on first sight, so a template with several unknown
+	 * names reports all of them at once — the contract syntax errors already have.
+	 *
+	 * @param diagnostics the diagnostics collected while building
+	 * @throws M2tParseException if any were collected
+	 */
+	private void checkResolutionErrors(List<Resource.Diagnostic> diagnostics)
+			throws M2tParseException {
+		if (!diagnostics.isEmpty()) {
+			throw new M2tParseException("M2T resolution error: "
+					+ diagnostics.get(0).getMessage(), List.copyOf(diagnostics));
+		}
 	}
 
 	private void checkErrors(M2tErrorListener errorListener, String input)

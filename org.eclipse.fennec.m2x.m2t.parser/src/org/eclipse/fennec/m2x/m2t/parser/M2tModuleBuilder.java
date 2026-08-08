@@ -21,6 +21,7 @@ import java.util.Map;
 
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
@@ -80,6 +81,13 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		this.unitName = unitName;
 		this.exprBuilder = new M2tExpressionBuilder(contextType, packageRegistry);
 		this.packageRegistry = packageRegistry;
+	}
+
+	/**
+	 * Returns the diagnostics collected while building — unresolved type names (#66).
+	 */
+	List<Resource.Diagnostic> getDiagnostics() {
+		return exprBuilder.support.getDiagnostics();
 	}
 
 	// ==================== Module ====================

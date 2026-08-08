@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvto.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -33,7 +34,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -109,14 +109,18 @@ class QvtoPackageRegistryTest {
 	}
 
 	@Test
-	@Disabled("#63 — an unresolvable modeltype nsURI is silently dropped instead of reported")
 	@DisplayName("an unknown metamodel URI is reported, not silently ignored")
 	void unknownMetamodelUriFails() {
 		QvtoEngineImpl engine = engineWith(builder -> builder);
 
-		assertThrows(QvtoParseException.class,
+		QvtoParseException failure = assertThrows(QvtoParseException.class,
 				() -> engine.parse(TRANSFORMATION, "registryTest"),
 				"neither the supplied nor the static registry knows this nsURI");
+
+		// §8.2.1.6: ModelType.metamodel is [1..*], so an unresolved one cannot be dropped
+		assertTrue(failure.getErrors().stream()
+				.anyMatch(d -> d.getMessage().contains("Failed to resolve metamodel")),
+				() -> "diagnostics: " + failure.getErrors());
 	}
 
 	// --- helpers ---

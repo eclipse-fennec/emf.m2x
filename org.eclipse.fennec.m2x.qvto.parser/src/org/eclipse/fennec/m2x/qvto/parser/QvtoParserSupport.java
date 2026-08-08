@@ -77,6 +77,7 @@ public class QvtoParserSupport {
 
 		QvtoUnitBuilder builder = new QvtoUnitBuilder(registry);
 		OperationalTransformation result = builder.visitCompilationUnitEntry(tree);
+		checkResolutionErrors(builder.getDiagnostics());
 
 		// Ensure the transformation has a name
 		if (result.getName() == null || "_unnamed".equals(result.getName())) {
@@ -103,6 +104,24 @@ public class QvtoParserSupport {
 		lexer.addErrorListener(errorListener);
 
 		return errorListener;
+	}
+
+	/**
+	 * Rejects a unit whose metamodels could not be resolved (#66).
+	 *
+	 * <p>Collected rather than thrown on first sight, so a transformation declaring
+	 * several unknown metamodels reports all of them at once — the contract syntax
+	 * errors already have.
+	 *
+	 * @param diagnostics the diagnostics collected while building
+	 * @throws QvtoParseException if any were collected
+	 */
+	private void checkResolutionErrors(List<Resource.Diagnostic> diagnostics)
+			throws QvtoParseException {
+		if (!diagnostics.isEmpty()) {
+			throw new QvtoParseException("QVT-O resolution error: "
+					+ diagnostics.get(0).getMessage(), List.copyOf(diagnostics));
+		}
 	}
 
 	private void checkErrors(QvtoErrorListener errorListener, String unitName)

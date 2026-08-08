@@ -72,6 +72,7 @@ public class QvtrParserSupport {
 
 		QvtrUnitBuilder builder = new QvtrUnitBuilder(registry);
 		RelationalTransformation result = builder.visitCompilationUnitEntry(tree);
+		checkResolutionErrors(builder.getDiagnostics());
 
 		// Ensure the transformation has a name
 		if (result.getName() == null || "_unnamed".equals(result.getName())) {
@@ -122,6 +123,23 @@ public class QvtrParserSupport {
 			String message = "QVT-R binding validation error in '" + unitName + "': "
 					+ allDiagnostics.get(0).getMessage();
 			throw new QvtdParseException(message, allDiagnostics);
+		}
+	}
+
+	/**
+	 * Rejects a unit whose metamodels or type names could not be resolved (#66).
+	 *
+	 * <p>Collected rather than thrown on first sight, so a transformation with several
+	 * unknown names reports all of them at once — the contract syntax errors already have.
+	 *
+	 * @param diagnostics the diagnostics collected while building
+	 * @throws QvtdParseException if any were collected
+	 */
+	private void checkResolutionErrors(List<Resource.Diagnostic> diagnostics)
+			throws QvtdParseException {
+		if (!diagnostics.isEmpty()) {
+			throw new QvtdParseException("QVT-R resolution error: "
+					+ diagnostics.get(0).getMessage(), List.copyOf(diagnostics));
 		}
 	}
 

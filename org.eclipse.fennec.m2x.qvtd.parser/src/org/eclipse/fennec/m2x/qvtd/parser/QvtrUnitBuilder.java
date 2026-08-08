@@ -28,6 +28,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -86,6 +87,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	private final EPackage.Registry packageRegistry;
 	private QvtrExpressionBuilder expressionBuilder;
+	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 
 	/** Current transformation being built. */
 	private RelationalTransformation currentTransformation;
@@ -834,6 +836,18 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	/**
 	 * Resolves an EPackage by name from the package registry.
 	 */
+	/**
+	 * Returns the diagnostics collected while building — unresolved typed model
+	 * packages and unresolved type names (#66).
+	 */
+	List<Resource.Diagnostic> getDiagnostics() {
+		List<Resource.Diagnostic> all = new ArrayList<>(diagnostics);
+		if (expressionBuilder != null) {
+			all.addAll(expressionBuilder.support.getDiagnostics());
+		}
+		return all;
+	}
+
 	private EPackage resolvePackage(String name) {
 		// Try direct URI lookup first
 		Object pkg = packageRegistry.get(name);
@@ -853,6 +867,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 					caseInsensitiveMatch = ePkg;
 				}
 			}
+		}
+		if (caseInsensitiveMatch == null) {
+			diagnostics.add(new QvtdParseDiagnostic(
+					"Unknown metamodel (" + name + ")", 0, 0));
 		}
 		return caseInsensitiveMatch;
 	}

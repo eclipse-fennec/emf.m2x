@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.m2t.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.function.UnaryOperator;
@@ -29,6 +30,7 @@ import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
+import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
@@ -137,6 +139,24 @@ class M2tPackageRegistryTest {
 
 		assertTrue(output.contains("kindOfNovel=true"), output);
 		assertTrue(output.contains("dispatch=OVERRIDE"), output);
+	}
+
+	@Test
+	@DisplayName("a type that resolves nowhere is reported instead of degrading")
+	void unknownTypeIsReported() {
+		M2tEngineImpl engine = engineWith(builder -> builder.packageRegistry(registry));
+
+		M2tParseException failure = assertThrows(M2tParseException.class,
+				() -> engine.parse("""
+						[module probe(_'http://example.org/m2x/m2t-registry/1.0')/]
+						[template public main(x : NoSuchType)]
+						[x.title/]
+						[/template]
+						""", "probe"));
+
+		assertTrue(failure.getErrors().stream()
+				.anyMatch(d -> d.getMessage().contains("Unknown type (NoSuchType)")),
+				() -> "diagnostics: " + failure.getErrors());
 	}
 
 	// --- helpers ---

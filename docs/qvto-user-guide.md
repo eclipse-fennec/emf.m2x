@@ -161,7 +161,7 @@ QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig)
 
 Everything downstream — parser, linker, alias resolution, nested blackbox invocations — uses exactly that registry; nothing reaches for the global one on its own (D42). Under OSGi, or wherever two versions of one nsURI can coexist, this is what keeps the engine from forming its own opinion about which version an nsURI names. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
 
-> An nsURI that resolves in no registry is currently dropped silently — the transformation parses and the metamodel simply stays unresolved. Tracked as a known gap.
+An nsURI that resolves in no registry is an error: `parse` fails with `QvtoParseException` carrying *Failed to resolve metamodel (…)*. QVT v1.3 §8.2.1.6 declares `ModelType.metamodel` as `[1..*]`, so a model type without a metamodel would not be a well-formed AST.
 
 ### 3.4 OSGi Setup
 
