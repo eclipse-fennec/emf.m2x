@@ -156,14 +156,15 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 
 The default is `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Supply your own when you hold the packages yourself — under OSGi, or wherever two versions of one nsURI can coexist. Nothing inside the engine reaches for the global registry on its own (D42), so what you pass in is what the parser sees. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
 
-**This matters more than it looks.** A type name that resolves nowhere degrades to `EObject` without a word, and two things break at once:
+**This matters more than it looks.** A declared type that resolves nowhere used to degrade to `EObject` without a word, and two things broke at once: `oclIsKindOf` answered for the wrong type, and MOFM2T §8.1.3 override dispatch selected no override at all, because `EObject` is not a supertype of a dynamic `EClass`.
+
+A type name that resolves nowhere is now an error — `parse` fails with `M2tParseException`, and `getErrors()` lists every unresolved name in the template:
 
 ```mtl
-[b.oclIsKindOf(Novel)/]                                    → false, for an actual Novel
-[template public render(n : Novel) overrides render]       → never selected
+[template public main(x : NoSuchType)]     → M2tParseException: Unknown type (NoSuchType)
 ```
 
-The override case is the nastier one: MOFM2T §8.1.3 dispatch compares the declared parameter type against the runtime type, and `EObject` is not a supertype of a dynamic `EClass`, so *no* override ever applies. Both symptoms are silent — `isSuccess()` stays `true` and the diagnostics list stays empty.
+So a missing or wrong registry announces itself at parse time instead of producing quietly wrong output.
 
 ### 3.5 OSGi (Declarative Services)
 

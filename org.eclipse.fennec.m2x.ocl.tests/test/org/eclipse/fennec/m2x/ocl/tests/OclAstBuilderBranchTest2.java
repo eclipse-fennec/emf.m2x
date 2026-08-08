@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collection;
@@ -187,12 +188,21 @@ class OclAstBuilderBranchTest2 extends AbstractOclTest {
 	// === Enum literal with non-existent literal name ===
 
 	@Test
-	void enumLiteral_nonExistentLiteral() throws OclParseException {
-		// Status::UNKNOWN — enum exists but literal doesn't
-		// Should fall through enum resolution and try as qualified name
-		Object result = eval("Status::UNKNOWN", alice);
-		// This will resolve as a qualified name (TypeExp), not throw
-		assertNotNull(result);
+	void enumLiteral_nonExistentLiteral() {
+		// Status::UNKNOWN — the enumeration exists, the literal does not.
+		//
+		// OCL v2.4 §9.3.9 resolves the literal via
+		//   type.oclAsType(Enumeration).literal->select(l | l.name = ...)->any(true)
+		// which is undefined for an empty selection, so the §8.3 invariant
+		//   self.type = referredEnumLiteral.enumeration
+		// cannot hold — the expression is not a well-formed AS instance. Eclipse OCL
+		// reports "Unknown enumeration literal" after exhausting its alternatives.
+		OclParseException failure = assertThrows(OclParseException.class,
+				() -> eval("Status::UNKNOWN", alice));
+
+		assertTrue(failure.getErrors().stream()
+				.anyMatch(d -> d.getMessage().contains("Unknown enumeration literal")),
+				() -> "diagnostics: " + failure.getErrors());
 	}
 
 	// === @pre marker (L492, L519, L562 — isMarkedPre branches) ===

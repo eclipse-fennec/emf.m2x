@@ -337,7 +337,9 @@ Classifier names in an expression (`self.oclIsTypeOf(Novel)`) and in a Complete 
 
 This is the **single** place where the static-registry fallback is applied; nothing below it reads `EPackage.Registry.INSTANCE` (D42). `parseDocument(String, ResourceSet)` remains available and uses the resource set's own registry for that one call.
 
-Resolution order for a simple name is: the context type's own package first, then the registry. A name that resolves in neither still degrades silently to the context type (`AbstractExpressionBuilder.resolveClassifier`) — a known gap tracked in the issue for the M2T type-resolution defect.
+Resolution order for a simple name is: the context type's own package first, then the registry. A qualified name that resolves in neither is recorded as a diagnostic by `AbstractExpressionBuilder` and turned into an `OclParseException` by `OclParserSupport` once the whole unit has been visited — every unresolved name at once, the same contract syntax errors have. The message follows what the name turned out to be, as in Eclipse OCL: *Unknown enumeration literal* when the path names an enumeration, *Unknown type* otherwise.
+
+An unqualified name that matches no property and no classifier stays an external variable reference (`resolveImplicitProperty`), which `OclContext` binds at evaluation time.
 
 ---
 

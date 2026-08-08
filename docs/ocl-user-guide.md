@@ -269,7 +269,17 @@ The registry is the parser's, not the engine's: hand it over when constructing `
 
 Which packages a caller supplies is a model-identity decision, and identity is the model **fingerprint** rather than the nsURI — see the `emf.osgi` fingerprint guide. Supply the packages you resolved and verified yourself; the engine forms no opinion about which version an nsURI names.
 
-> A name that resolves in neither the context package nor the registry currently degrades silently to the context type. Check spelling of type names — there is no diagnostic for this yet.
+A **qualified** name that resolves in neither the context package nor the registry is an error: parsing fails with `OclParseException`, and `getErrors()` carries one diagnostic per unresolved name — all of them, not just the first.
+
+```java
+parser.parse("self.oclIsTypeOf(nosuch::Type)", bookClass);
+// OclParseException: Unknown type (nosuch::Type)
+
+parser.parse("Status::UNKNOWN", personClass);
+// OclParseException: Unknown enumeration literal (Status::UNKNOWN)
+```
+
+An **unqualified** name is not rejected. A bare name that matches no property and no classifier becomes an external variable reference, which `OclContext` can bind at evaluation time — rejecting it would break context variables.
 
 ---
 

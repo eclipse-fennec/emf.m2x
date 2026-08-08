@@ -29,6 +29,7 @@ import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -102,6 +103,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private record PendingExtension(MappingOperation mapping, String kind, String name) {}
 
 	private final EPackage.Registry packageRegistry;
+	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 	private QvtoEnvironment environment;
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
@@ -379,6 +381,11 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			EPackage resolvedPkg = resolvePackageRef(refCtx);
 			if (resolvedPkg != null) {
 				modelType.getMetamodel().add(resolvedPkg);
+			} else {
+				// §8.2.1.6: ModelType.metamodel is [1..*] — a model type without a
+				// metamodel is not a well-formed AST, so this cannot pass silently (#66)
+				diagnostics.add(new QvtoParseDiagnostic(
+						"Failed to resolve metamodel (" + refCtx.getText() + ")", 0, 0));
 			}
 		}
 
@@ -1918,6 +1925,13 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if ("blackbox".equals(qualifier)) {
 			operation.setIsBlackbox(true);
 		}
+	}
+
+	/**
+	 * Returns the diagnostics collected while building — unresolved metamodels (#66).
+	 */
+	List<Resource.Diagnostic> getDiagnostics() {
+		return diagnostics;
 	}
 
 	private EPackage resolvePackageRef(QvtOParser.PackageRefContext ctx) {

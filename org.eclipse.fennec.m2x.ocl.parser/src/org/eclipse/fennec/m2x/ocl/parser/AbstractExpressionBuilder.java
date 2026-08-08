@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,6 +29,7 @@ import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -89,6 +91,7 @@ public class AbstractExpressionBuilder {
 	private final EClassifier contextType;
 	private final EPackage.Registry packageRegistry;
 	private OclEnvironment environment;
+	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 
 	/**
 	 * Creates a new expression builder for the given context type.
@@ -103,6 +106,31 @@ public class AbstractExpressionBuilder {
 		selfVar.setName("self");
 		selfVar.setType(createClassifierType(contextType));
 		this.environment = OclEnvironment.root(selfVar);
+	}
+
+	// ==================== Diagnostics ====================
+
+	/**
+	 * Returns the diagnostics collected while building, in the order they occurred.
+	 *
+	 * <p>An unresolvable name is recorded here rather than substituted silently
+	 * (D42, #66). The caller — the parser support of the respective engine — turns a
+	 * non-empty list into a parse exception once the whole unit has been visited, so
+	 * that every problem is reported instead of only the first.
+	 *
+	 * @return the collected diagnostics, never {@code null}
+	 */
+	public List<Resource.Diagnostic> getDiagnostics() {
+		return diagnostics;
+	}
+
+	/**
+	 * Records an error diagnostic.
+	 *
+	 * @param message the message, phrased for a template or expression author
+	 */
+	public void addError(String message) {
+		diagnostics.add(new OclParseDiagnostic(message, 0, 0));
 	}
 
 	// ==================== State Accessors ====================
@@ -698,7 +726,7 @@ public class AbstractExpressionBuilder {
 			if (fromRegistry != null) {
 				return fromRegistry;
 			}
-			return contextType;
+			return unresolvedName(segments);
 		}
 		String classifierName = segments.get(segments.size() - 1);
 		String packageName = String.join("::", segments.subList(0, segments.size() - 1));
@@ -724,7 +752,7 @@ public class AbstractExpressionBuilder {
 				}
 			}
 		}
-		return contextType;
+		return unresolvedName(segments);
 	}
 
 	public OclExpression resolveImplicitProperty(String name) {
@@ -960,6 +988,58 @@ public class AbstractExpressionBuilder {
 				if (found != null) {
 					return found;
 				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Records a name that resolved nowhere and returns the context type, so that the
+	 * remaining visit does not run into a {@code null}. The unit is rejected once the
+	 * visit finishes — see {@link #getDiagnostics()}.
+	 *
+	 * <p>The wording follows what the name turned out to be: if the first segment names
+	 * an enumeration, the author wrote a literal that does not exist (OCL v2.4 §9.3.9);
+	 * otherwise the name was meant to be a type.
+	 */
+	private EClassifier unresolvedName(List<String> segments) {
+		String name = String.join("::", segments);
+		if (segments.size() == 2 && findEnum(segments.get(0)) != null) {
+			addError("Unknown enumeration literal (" + name + ")");
+		} else {
+			addError("Unknown type (" + name + ")");
+		}
+		return contextType;
+	}
+
+	/**
+	 * Finds an enumeration by name in the context type's package or in the registry.
+	 */
+	private EEnum findEnum(String enumName) {
+		if (contextType instanceof EClass contextClass) {
+			EEnum found = findEnumInPackage(contextClass.getEPackage(), enumName);
+			if (found != null) {
+				return found;
+			}
+		}
+		if (packageRegistry != null) {
+			for (Object key : packageRegistry.keySet().toArray()) {
+				EPackage pkg = packageRegistry.getEPackage((String) key);
+				if (pkg != null) {
+					EEnum found = findEnumInPackage(pkg, enumName);
+					if (found != null) {
+						return found;
+					}
+				}
+			}
+		}
+		return null;
+	}
+
+	private static EEnum findEnumInPackage(EPackage pkg, String enumName) {
+		for (EClassifier classifier : pkg.getEClassifiers()) {
+			if (classifier instanceof EEnum eEnum && eEnum.getName().equals(enumName)) {
+				return eEnum;
 			}
 		}
 		return null;

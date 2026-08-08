@@ -16,6 +16,8 @@ package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.function.UnaryOperator;
 
@@ -108,6 +110,20 @@ class QvtdPackageRegistryTest {
 
 		assertNotNull(transformation);
 		assertEquals(bookshelfPackage, usedPackage(transformation));
+	}
+
+	@Test
+	@DisplayName("an unknown metamodel is reported instead of silently unresolved")
+	void unknownMetamodelIsReported() {
+		QvtdEngineImpl engine = engineWith(builder -> builder);
+
+		QvtdParseException failure = assertThrows(QvtdParseException.class,
+				() -> engine.parse(TRANSFORMATION, "registryTest"),
+				"neither the supplied nor the static registry knows this metamodel");
+
+		assertTrue(failure.getErrors().stream()
+				.anyMatch(d -> d.getMessage().contains("Unknown metamodel (bookshelf)")),
+				() -> "diagnostics: " + failure.getErrors());
 	}
 
 	// --- helpers ---

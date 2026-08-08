@@ -16,6 +16,8 @@ package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -121,6 +123,51 @@ class OclPackageRegistryTest {
 			OclExpression expression = parser.parse("self.oclIsTypeOf(Novel)", bookClass);
 
 			assertEquals(Boolean.TRUE, engine.evaluate(expression, OclContext.of(newNovel())));
+		}
+	}
+
+	@Nested
+	@DisplayName("Unresolvable names")
+	class Unresolvable {
+
+		@Test
+		@DisplayName("a qualified type that resolves nowhere is reported instead of degrading")
+		void unknownTypeIsReported() {
+			OclParserSupport parser = new OclParserSupport();
+
+			OclParseException failure = assertThrows(OclParseException.class,
+					() -> parser.parse("self.oclIsTypeOf(nosuch::NoSuchType)", bookClass));
+
+			assertEquals(1, failure.getErrors().size());
+			assertTrue(failure.getErrors().get(0).getMessage()
+					.contains("Unknown type (nosuch::NoSuchType)"),
+					() -> failure.getErrors().get(0).getMessage());
+		}
+
+		@Test
+		@DisplayName("several unknown names are reported together, not one at a time")
+		void allUnknownNamesAreReported() {
+			OclParserSupport parser = new OclParserSupport();
+
+			OclParseException failure = assertThrows(OclParseException.class,
+					() -> parser.parse(
+							"self.oclIsTypeOf(nosuch::Missing1) or self.oclIsTypeOf(nosuch::Missing2)",
+							bookClass));
+
+			assertEquals(2, failure.getErrors().size(),
+					() -> "diagnostics: " + failure.getErrors());
+		}
+
+		@Test
+		@DisplayName("an unqualified unknown name stays an external variable — by design")
+		void unqualifiedNameRemainsAnExternalVariable() throws OclParseException {
+			// A bare name that resolves to no property and no classifier becomes an
+			// external variable reference, which OclContext can bind at evaluation time.
+			// Turning that into an error would break context variables, so a name in a
+			// value position keeps this behaviour; only qualified names are rejected.
+			OclParserSupport parser = new OclParserSupport();
+
+			assertNotNull(parser.parse("threshold", bookClass));
 		}
 	}
 

@@ -102,7 +102,9 @@ public class OclParserSupport implements OclExpressionParser {
 
 		try {
 			OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry);
-			return builder.visitExpressionEntry(tree);
+			OclExpression result = builder.visitExpressionEntry(tree);
+			checkResolutionErrors(builder.support.getDiagnostics());
+			return result;
 		} catch (IllegalArgumentException e) {
 			throw new OclParseException(e.getMessage());
 		}
@@ -145,7 +147,10 @@ public class OclParserSupport implements OclExpressionParser {
 
 		checkErrors(errorListener, oclDocument);
 
-		return new OclDocumentBuilder(registry).buildDocument(tree);
+		OclDocumentBuilder builder = new OclDocumentBuilder(registry);
+		List<Constraint> result = builder.buildDocument(tree);
+		checkResolutionErrors(builder.getDiagnostics());
+		return result;
 	}
 
 	private OclParser createParser(String input) {
@@ -167,6 +172,23 @@ public class OclParserSupport implements OclExpressionParser {
 		lexer.addErrorListener(errorListener);
 
 		return errorListener;
+	}
+
+	/**
+	 * Rejects a unit whose names could not be resolved (#66).
+	 *
+	 * <p>Collected rather than thrown on first sight, so a source with several unknown
+	 * names reports all of them at once — the same contract syntax errors already have.
+	 *
+	 * @param diagnostics the diagnostics collected while building
+	 * @throws OclParseException if any were collected
+	 */
+	private void checkResolutionErrors(List<Resource.Diagnostic> diagnostics)
+			throws OclParseException {
+		if (!diagnostics.isEmpty()) {
+			throw new OclParseException("OCL resolution error: "
+					+ diagnostics.get(0).getMessage(), List.copyOf(diagnostics));
+		}
 	}
 
 	private void checkErrors(OclErrorListener errorListener, String input)
