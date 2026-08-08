@@ -176,7 +176,7 @@ public class QvtoEvaluator {
 		this.intermediateStore = new QvtoIntermediatePropertyStore(transformation, this::eval);
 		this.packageRegistry = Objects.requireNonNull(packageRegistry,
 				"packageRegistry must not be null");
-		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager, packageRegistry);
+		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager, packageRegistry, diagnostics);
 		this.tagRegistry = new QvtoTagRegistry(transformation);
 		this.operationResolver = new QvtoOperationResolver(transformation);
 		this.modelOperations = new QvtoModelOperations(this::eval);
