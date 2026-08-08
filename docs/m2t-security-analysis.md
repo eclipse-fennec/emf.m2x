@@ -122,7 +122,7 @@ Unlike OCL (pure query) and QVT-O (model transformation), MOFM2T **generates tex
 | **Severity** | MEDIUM |
 | **Vector** | `[file ('../../etc/shadow', false, 'UTF-8')]...[/file]` — path traversal in file block URL |
 | **Impact** | File write to arbitrary path (if GenerationStrategy writes to filesystem) |
-| **Prerequisite** | Attacker controls template + GenerationStrategy writes to disk |
+| **Prerequisite** | Attacker controls template + a GenerationStrategy that writes to disk **without** path validation. The shipped `FileSystemGenerationStrategy` validates (M-T6). |
 | **File** | `M2tEvaluator.java:caseFileBlock` (line 348), `M2tWriterStack.java:pushFileWriter` |
 
 **Analysis:** The file path from the `[file]` block URL expression is passed directly to `M2tWriterStack.pushFileWriter()` without any validation or canonicalization. The default engine stores paths as keys in an in-memory map (no actual filesystem I/O), but a `M2tGenerationStrategy` implementation that writes to the filesystem could be exploited.
@@ -305,7 +305,9 @@ The MOFM2T Engine delegates OCL expression evaluation to the OCL Engine, inherit
 
 **Problem:** T-4 — Path traversal in `[file]` block paths.
 
-**Status:** Documented in Embedder Guide (§6.2). By design: the default engine stores file paths as in-memory map keys. A `M2tGenerationStrategy` that writes to the filesystem **must** validate paths. Path validation is the responsibility of the strategy implementation, not the engine.
+**Status:** **Mitigated** for the shipped strategy. `FileSystemGenerationStrategy` (in `m2t.engine`) resolves every template-supplied path against its output directory and rejects anything that escapes it — `..` segments, absolute paths, and symbolic links inside the output directory that point outside — with a `SecurityException`. The default in-memory engine still stores file paths as map keys and touches no filesystem.
+
+A custom `M2tGenerationStrategy` that writes to the filesystem remains responsible for its own path validation; the engine passes the template-supplied path through unchanged.
 
 ---
 

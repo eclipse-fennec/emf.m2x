@@ -899,6 +899,18 @@ public class M2tEvaluator {
 				+ " characters) — output truncated");
 	}
 
+	/**
+	 * Adds an error diagnostic for a file the generation strategy could not write.
+	 * Called by the engine after execution; the content stays in the result.
+	 *
+	 * @param filePath the file that failed
+	 * @param cause the failure
+	 */
+	public void addGenerationError(String filePath, Exception cause) {
+		addError("Failed to write generated file '" + filePath + "' ["
+				+ cause.getClass().getSimpleName() + "]: " + cause.getMessage());
+	}
+
 	private void addError(String message) {
 		addDiagnostic(Diagnostic.ERROR, message);
 	}
