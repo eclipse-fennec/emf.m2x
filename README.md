@@ -4,8 +4,8 @@ Lightweight, spec-compliant implementations of OMG model transformation and cons
 
 - **OCL v2.5** — Object Constraint Language (backward compatible with v2.4)
 - **QVT Operational v1.3** — Query/View/Transformation (imperative)
-- **QVT Declarative v1.3** — Relations + Core (planned)
-- **MOFM2T v1.0** — MOF Model to Text Transformation (in progress)
+- **QVT Declarative v1.3** — Relations (Core planned)
+- **MOFM2T v1.0** — MOF Model to Text Transformation
 
 All engines work as **standalone Java 21 libraries** with optional OSGi support via Declarative Services.
 
@@ -19,7 +19,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.ocl.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.ocl.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.ocl.engine` | Switch-based evaluator | Done |
-| `org.eclipse.fennec.m2x.ocl.tests` | 4,202 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.ocl.tests` | 4,243 tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.ocl.benchmark` | Performance benchmarks | Done |
 
 ### QVT-O — QVT Operational
@@ -30,8 +30,19 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.qvto.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvto.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvto.engine` | Evaluator (mappings, resolve, trace, blackbox) | Done |
-| `org.eclipse.fennec.m2x.qvto.tests` | 1,059 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvto.tests` | 1,084 tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.qvto.benchmark` | Performance benchmarks | Done |
+
+### QVT-R — QVT Relations
+
+| Bundle | Description | Status |
+|--------|-------------|--------|
+| `org.eclipse.fennec.m2x.qvt.model` | QVTBase shared metamodel (9 classifiers) | Done |
+| `org.eclipse.fennec.m2x.qvtd.model` | QVT-R EMF metamodel (qvtrelation, qvttemplate) | Done |
+| `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces | Done |
+| `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser | Done |
+| `org.eclipse.fennec.m2x.qvtd.engine` | Relation evaluator, enforcer, traces | Done |
+| `org.eclipse.fennec.m2x.qvtd.tests` | 163 tests, 0 failures | Done |
 
 ### M2T — MOF Model to Text
 
@@ -39,9 +50,9 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 |--------|-------------|--------|
 | `org.eclipse.fennec.m2x.m2t.model` | MOFM2T EMF metamodel (2 enums, 17 EClasses) | Done |
 | `org.eclipse.fennec.m2x.m2t.api` | Public API interfaces | Done |
-| `org.eclipse.fennec.m2x.m2t.parser` | ANTLR4 parser | In Progress |
-| `org.eclipse.fennec.m2x.m2t.engine` | Template evaluator | Planned |
-| `org.eclipse.fennec.m2x.m2t.tests` | Tests | Planned |
+| `org.eclipse.fennec.m2x.m2t.parser` | ANTLR4 parser | Done |
+| `org.eclipse.fennec.m2x.m2t.engine` | Template evaluator | Done |
+| `org.eclipse.fennec.m2x.m2t.tests` | 283 tests, 0 failures | Done |
 
 ## Build
 
@@ -68,14 +79,20 @@ cd workspace/
 - **[OCL Engine User Guide](docs/ocl-user-guide.md)** — How to use the OCL engine as a Java library (setup, evaluation, caching, EMF delegates, custom operations)
 - **[QVT-O Engine User Guide](docs/qvto-user-guide.md)** — How to use the QVT-O engine (setup, model extents, execution, tracing, blackbox libraries, multi-file composition)
 - **[OCL Security Analysis](docs/ocl-security-analysis.md)** — OCL threat model, attack vectors, hardening measures, BSI TR-03185 mapping
+- **[QVT-R Engine User Guide](docs/qvtd-user-guide.md)** — How to use the QVT-R engine (setup, relations, binding validation, blackbox, hybrid QVT-O)
+- **[M2T Engine User Guide](docs/m2t-user-guide.md)** — How to use the M2T engine (setup, template syntax, file output, protected areas, module composition)
+- **[OCL IDE Installation](docs/ocl-ide-installation.md)** — Installing the generic EMF editor support from the p2 repository
 - **[QVT-O Security Analysis](docs/qvto-security-analysis.md)** — QVT-O threat model, attack vectors, hardening measures, BSI TR-03185 mapping
+- **[QVT-R Security Analysis](docs/qvtd-security-analysis.md)** — QVT-R threat model, attack vectors, hardening measures, BSI TR-03185 mapping
+- **[M2T Security Analysis](docs/m2t-security-analysis.md)** — M2T threat model, attack vectors, hardening measures, BSI TR-03185 mapping
 
 ## Architecture & Design
 
 - [Development Guideline](docs/development-guideline.md) — Conventions, coding standards, testing strategy, OSGi architecture, roadmap
 - [OCL Architecture](docs/ocl-architecture.md) — OCL implementation reference (metamodel, parser, engine, caching, delegates)
 - [QVT-O Architecture](docs/qvto-architecture.md) — QVT-O implementation reference (metamodel, parser, engine, trace, resolve)
-- [Design Decisions](docs/design-decisions.md) — Decision records D1–D28 with rationale
+- [QVT-R Architecture](docs/qvtd-architecture.md) — QVT-R implementation reference (metamodel, parser, engine, traces)
+- [Design Decisions](docs/design-decisions.md) — Decision records D1–D42 with rationale
 - [OCL Spec Compliance](docs/ocl-spec-compliance.md) — Gap analysis against OCL v2.4 spec
 - [QVT-O Test Plan](docs/qvto-test-plan.md) — Spec-conformance test plan (Phase 0–10)
 - [M2T Implementation Plan](docs/m2t-implementation-plan.md) — MOFM2T implementation plan (P3-0 through P3-6)
