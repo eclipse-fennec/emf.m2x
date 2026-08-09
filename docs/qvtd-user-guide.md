@@ -113,31 +113,7 @@ QvtdConfiguration.builder(oclConfiguration).build();
 
 A supplied engine is used as it is: its cache, its operation providers, its evaluation settings. `QvtdEngine.getOclEngine()` returns the engine that actually runs — useful to warm it up, inspect its cache, or install EMF delegates on it.
 
-#### Under OSGi
-
-`DefaultQvtdEngine` publishes `QvtdEngine` as a prototype-scoped service, so every consumer gets its own engine with its own caches. Its configuration policy is optional: there is a working engine without configuring anything, and configuring one does not register a different service.
-
-It takes the OCL engine as a mandatory service reference, which is door 2 — the engine a consumer configured is the engine that evaluates. OCL limits therefore belong on `DefaultOclEngine`, not here:
-
-```json
-{
-  "DefaultQvtdEngine": { "qvtd.blackboxEnabled": true },
-  "DefaultOclEngine":  { "ocl.maxDepth": 500 }
-}
-```
-
-| Property | Default |
-|---|---|
-| `qvtd.blackboxEnabled` | `false` |
-| `qvtd.allowedBlackboxModules` | *(empty — allows none)* |
-| `qvtd.unitResolverEnabled` | `false` |
-| `qvtd.allowedUnitModules` | *(empty — allows none)* |
-| `qvtd.maxBlackboxLibraries` | 10 |
-| `qvtd.maxUnitResolvers` | 5 |
-| `qvtd.maxRelationDepth` | 200 |
-| `qvtd.maxBindings` | 10000 |
-| `qvtd.timeout` | 0 |
-| `qvtd.maxTraceRecords` | 100000 |
+Under OSGi the engine is a service and door 2 is what the component uses — see [§3.4](#34-osgi-setup).
 
 ### 3.1.1 Configuring both sides
 
@@ -199,23 +175,82 @@ Parser and engine use exactly that registry; nothing reaches for the global one 
 
 ### 3.4 OSGi Setup
 
-In OSGi, inject the engine via Declarative Services:
+`DefaultQvtdEngine` publishes `QvtdEngine` as a **PROTOTYPE**-scoped service. Every `@Reference` injection gets its own engine with its own caches, so one consumer's warm-up and another's memory footprint stay separate.
+
+Its configuration policy is **optional**: there is a working engine without configuring anything, and configuring one later does not register a second service that consumers would have to disambiguate.
 
 ```java
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.api.annotation.require.RequireQVTD;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 
+@RequireQVTD                     // resolver: a bundle providing the QVT-R engine must be present
 @Component
 public class MyTransformationRunner {
 
     @Reference
-    private QvtdEngine engine;
+    private QvtdEngine engine;   // fresh instance, own caches
 
     public void run(EObject input) throws QvtdParseException {
         RelationalTransformation trafo = engine.parse(source, "MyTrafo");
-        // ...
+        engine.execute(trafo, QvtdExecutionContext.enforce("target",
+                Map.of("source", inExtent, "target", outExtent)));
     }
+}
+```
+
+**Components and scopes:**
+
+| Component | Scope | What's shared? |
+|---|---|---|
+| `DefaultQvtdEngine` | PROTOTYPE | Nothing — each consumer gets its own engine and trace state |
+| `DefaultOclEngine` | PROTOTYPE | Nothing — bound `prototype_required`, so each QVT-R engine evaluates on its own OCL engine |
+| `DefaultOclExpressionCacheComponent` | SINGLETON | The parsed-expression cache, shared by all OCL engines |
+
+The engine takes its OCL engine as a **mandatory** service reference. That is door 2 from [§3.1](#31-three-ways-to-give-qvt-r-its-ocl-engine): the OCL engine a consumer configured — with its cache and its operation providers — is the one that evaluates relation expressions, rather than a second one built beside it.
+
+### 3.4.1 Configuration via ConfigAdmin
+
+All properties use the `qvtd.` prefix. OCL limits are **not** repeated here; they are configured on `DefaultOclEngine` with `ocl.*`, so the two cannot drift apart.
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultQvtdEngine": {
+        "qvtd.blackboxEnabled": true,
+        "qvtd.allowedBlackboxModules": ["my.trusted.Library"]
+    },
+    "DefaultOclEngine": {
+        "ocl.maxDepth": 500
+    }
+}
+```
+
+**Available properties:**
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `qvtd.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries |
+| `qvtd.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; empty allows none |
+| `qvtd.unitResolverEnabled` | boolean | `false` | Whether transformations may import units resolved from outside |
+| `qvtd.allowedUnitModules` | String[] | *(empty)* | Qualified names that may be imported as a unit; empty allows none |
+| `qvtd.maxBlackboxLibraries` | int | 10 | Blackbox libraries one engine will use |
+| `qvtd.maxUnitResolvers` | int | 5 | Unit resolvers one engine will use |
+| `qvtd.maxRelationDepth` | int | 200 | Recursion depth of relation invocation (§7.10) |
+| `qvtd.maxBindings` | int | 10,000 | Variable bindings one relation may produce |
+| `qvtd.timeout` | long | 0 | Transformation timeout in ms (0 = no timeout) |
+| `qvtd.maxTraceRecords` | int | 100,000 | Trace records one transformation may create |
+
+Blackboxes and unit resolvers are **off by default and gated by an allow-list**: both let a transformation reach code and files outside itself, so switching them on is a decision, not a default. An empty allow-list permits nothing even when the feature is enabled.
+
+The same settings are available to plain Java through `QvtdConfiguration.Builder` — see [§3.2](#32-configuration-options).
+
+**Running on a specific OCL engine:** the reference is unfiltered by default, so the engine binds whichever `OclEngine` service is there. To pin it to one you configured yourself, set a target filter:
+
+```json
+{
+    "DefaultQvtdEngine": { "oclEngine.target": "(component.name=MyTunedOclEngine)" }
 }
 ```
 
