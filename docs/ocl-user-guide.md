@@ -1013,6 +1013,16 @@ named `operationProvider`:
 }
 ```
 
+### 11.3.1 Which operation answers
+
+Among the registered operations, the one that answers a call is chosen by, in order:
+
+1. **How many arguments the call passes.** An operation declaring that many parameters is preferred, so a no-argument and a one-argument operation of the same name do not hide each other. If none matches that way, the count is ignored — several operations declare no parameter types at all and are still called with arguments.
+2. **How specific the receiver type is.** An exact primitive match beats a widening one (Integer → Real), which beats a catch-all (`OclAny` / `AnyType`).
+3. **Registration order.** Among equally applicable candidates the first registered one answers — whichever provider it came from. Two providers offering the same operation is a configuration mistake, not a crash, and this is what makes the outcome predictable rather than dependent on the order services happened to bind.
+
+The parameter *types* are not checked, only their number.
+
 ### 11.4 Using OclConfiguration
 
 ```java

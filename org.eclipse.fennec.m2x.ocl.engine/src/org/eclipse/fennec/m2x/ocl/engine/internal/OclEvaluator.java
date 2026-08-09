@@ -1191,6 +1191,20 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	private Object dispatchCustomOperation(String opName, Object source, Object[] args) {
+		// An operation taking as many arguments as the call passes is looked for first, so
+		// that a no-argument and a one-argument operation of the same name stop hiding each
+		// other. Only if none matches that way is the arity ignored, which is how this
+		// always worked — several operations declare no parameter types at all and are
+		// nevertheless called with arguments.
+		Object matched = dispatchCustomOperation(opName, source, args, true);
+		if (matched != OclStdlib.NOT_FOUND) {
+			return matched;
+		}
+		return dispatchCustomOperation(opName, source, args, false);
+	}
+
+	private Object dispatchCustomOperation(String opName, Object source, Object[] args,
+			boolean requireMatchingArity) {
 		// §8.1.14.3: most-specific-type-first dispatch
 		// Priority: exact match > widening (Integer→Real) > OclAny/AnyType catch-all
 		// OCL §7.4.7: null (OclVoid) conforms to all types → first named match wins
@@ -1204,6 +1218,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 		for (OclOperationProvider provider : customProviders) {
 			for (OclOperation op : provider.getOperations()) {
 				if (!opName.equals(op.name())) {
+					continue;
+				}
+				if (requireMatchingArity && op.parameterTypes().size() != args.length) {
 					continue;
 				}
 				// Null source: OclVoid conforms to all → first matching op wins
