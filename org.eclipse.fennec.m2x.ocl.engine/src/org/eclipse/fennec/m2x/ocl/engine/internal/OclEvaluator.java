@@ -528,11 +528,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 				Throwable cause = e.getCause();
 				return addError("Operation invocation failed: " + opName + " - " + (cause != null ? cause.getMessage() : e.getMessage()));
 			} catch (UnsupportedOperationException e) {
-				// A dynamic model has no generated eInvoke switch, so EMF refuses unless
-				// an invocation delegate is registered. Letting that escape would tear
-				// down an evaluation that has a diagnostics channel for exactly this.
-				return addError("Operation '" + opName + "' has no implementation: the model"
-						+ " is dynamic and no invocation delegate is registered for it");
+				// No generated eInvoke switch and no delegate that answers for this
+				// operation. Letting EMF's exception escape would tear down an evaluation
+				// that has a diagnostics channel for exactly this.
+				return addError("Operation '" + opName + "' has no implementation."
+						+ " Either the model is generated and implements it, or the"
+						+ " operation carries an OCL body annotation and the package"
+						+ " declares the delegate (see installDelegates())");
 			}
 		}
 

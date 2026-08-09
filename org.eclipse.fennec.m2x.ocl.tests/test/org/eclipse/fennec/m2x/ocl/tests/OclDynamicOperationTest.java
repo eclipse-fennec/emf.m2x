@@ -14,9 +14,14 @@
  */
 package org.eclipse.fennec.m2x.ocl.tests;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.InvocationTargetException;
+import org.eclipse.emf.common.util.ECollections;
+import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.fennec.m2x.ocl.engine.internal.OclDelegateUtil;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
@@ -39,11 +44,12 @@ import org.junit.jupiter.api.Test;
 /**
  * Calling an {@code EOperation} of a dynamic model.
  *
- * <p>An operation declared in an {@code .ecore} that is loaded at runtime has no
- * implementation: there is no generated {@code eInvoke} switch, and EMF refuses with an
- * {@link UnsupportedOperationException} unless an invocation delegate is registered.
- * That exception used to travel straight out of the engine, past a result type that
- * exists to carry exactly this kind of problem.
+ * <p>A dynamic model has no generated {@code eInvoke} switch, so EMF asks an invocation
+ * delegate — and with an OCL body annotation plus installed delegates there is one, so
+ * the call works. The two tests here are the pair: with a body it computes, without one
+ * there is nothing to invoke and the engine says so instead of letting EMF's
+ * {@link UnsupportedOperationException} travel out past a result type that exists to
+ * carry exactly this kind of problem.
  */
 class OclDynamicOperationTest {
 
@@ -80,6 +86,41 @@ class OclDynamicOperationTest {
 
 		parser = new OclParserSupport(registry);
 		engine = new OclEngineImpl(parser);
+	}
+
+	@Test
+	@DisplayName("an operation with an OCL body is invoked on a dynamic model")
+	void operationWithOclBodyIsInvoked() {
+		// The delegate mechanism is what makes eInvoke work without generated code:
+		// the package declares which delegate URI it uses, the operation carries the
+		// body, and the engine registers the factory for that URI.
+		EAnnotation packageAnnotation = EcoreFactory.eINSTANCE.createEAnnotation();
+		packageAnnotation.setSource("http://www.eclipse.org/emf/2002/Ecore");
+		packageAnnotation.getDetails().put("invocationDelegates", OclDelegateUtil.DELEGATE_URI);
+		bookClass.getEPackage().getEAnnotations().add(packageAnnotation);
+
+		EOperation shout = EcoreFactory.eINSTANCE.createEOperation();
+		shout.setName("shout");
+		shout.setEType(EcorePackage.Literals.ESTRING);
+		EAnnotation body = EcoreFactory.eINSTANCE.createEAnnotation();
+		body.setSource(OclDelegateUtil.DELEGATE_URI);
+		body.getDetails().put("body", "self.title.toUpper()");
+		shout.getEAnnotations().add(body);
+		bookClass.getEOperations().add(shout);
+
+		EPackage.Registry.INSTANCE.put(NS_URI, bookClass.getEPackage());
+		engine.installDelegates();
+		try {
+			EObject book = EcoreUtil.create(bookClass);
+			book.eSet(bookClass.getEStructuralFeature("title"), "Moby Dick");
+
+			assertEquals("MOBY DICK", book.eInvoke(shout, ECollections.emptyEList()));
+		} catch (InvocationTargetException e) {
+			throw new AssertionError("the delegate must handle this operation", e);
+		} finally {
+			engine.uninstallDelegates();
+			EPackage.Registry.INSTANCE.remove(NS_URI);
+		}
 	}
 
 	@Test
