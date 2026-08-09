@@ -282,6 +282,16 @@ engine.parse(UriHelper.fromFile(chooser.getSelectedFile()));
 
 Use it rather than `URI.createURI(path.toString())`: a path is not a URI. On Windows `C:\templates\report.mtl` would become a URI whose scheme is `C`, while `fromPath` uses `createFileURI`, which knows about drive letters and separators. `UriHelper.toJavaUri(uri)` goes back the other way, for APIs that speak `java.net.URI`.
 
+> `UriHelper` ships in the bundle **`org.eclipse.fennec.m2x`** (package `org.eclipse.fennec.m2x.utils`) — the shared commons of this workspace, separate from the engine bundles:
+>
+> ```xml
+> <dependency>
+>     <groupId>org.eclipse.fennec.m2x</groupId>
+>     <artifactId>org.eclipse.fennec.m2x</artifactId>
+> </dependency>
+> ```
+
+
 
 ### 5.3 Reuse Parsed ASTs
 

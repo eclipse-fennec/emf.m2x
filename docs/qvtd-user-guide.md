@@ -260,6 +260,16 @@ engine.parse(UriHelper.fromJavaUri(someJavaUri));
 
 `URI.createURI(path.toString())` is the trap it avoids: a path is not a URI, and on Windows `C:\transforms\MyTrafo.qvtr` would end up with `C` as its scheme. `UriHelper.toJavaUri(uri)` converts back for APIs that speak `java.net.URI`.
 
+> `UriHelper` ships in the bundle **`org.eclipse.fennec.m2x`** (package `org.eclipse.fennec.m2x.utils`) — the shared commons of this workspace, separate from the engine bundles:
+>
+> ```xml
+> <dependency>
+>     <groupId>org.eclipse.fennec.m2x</groupId>
+>     <artifactId>org.eclipse.fennec.m2x</artifactId>
+> </dependency>
+> ```
+
+
 ### 5.3 Reuse Parsed ASTs
 
 Parse once and execute many times — the `RelationalTransformation` AST is reusable:
