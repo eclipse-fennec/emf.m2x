@@ -52,6 +52,7 @@ public final class QvtdConfiguration {
 	private final boolean blackboxEnabled;
 	private final Set<String> allowedBlackboxModules;
 	private final boolean unitResolverEnabled;
+	private final boolean discoverUnitResolvers;
 	private final Set<String> allowedUnitModules;
 	private final int maxBlackboxLibraries;
 	private final int maxUnitResolvers;
@@ -70,6 +71,7 @@ public final class QvtdConfiguration {
 		this.blackboxEnabled = builder.blackboxEnabled;
 		this.allowedBlackboxModules = Set.copyOf(builder.allowedBlackboxModules);
 		this.unitResolverEnabled = builder.unitResolverEnabled;
+		this.discoverUnitResolvers = builder.discoverUnitResolvers;
 		this.allowedUnitModules = Set.copyOf(builder.allowedUnitModules);
 		this.maxBlackboxLibraries = builder.maxBlackboxLibraries;
 		this.maxUnitResolvers = builder.maxUnitResolvers;
@@ -174,6 +176,21 @@ public final class QvtdConfiguration {
 	/**
 	 * Returns the maximum number of blackbox libraries (D29).
 	 */
+	/**
+	 * Whether the engine also asks {@link QvtdUnitResolver} implementations it finds itself,
+	 * beyond the ones this configuration names.
+	 *
+	 * <p>Off by default, and deliberately a decision of its own rather than something
+	 * {@link #unitResolverEnabled()} implies: with an empty {@link #allowedUnitModules()}
+	 * every name is permitted, so switching discovery on there would let anything on the
+	 * class path answer an import.
+	 *
+	 * @return {@code true} if implementations are discovered
+	 */
+	public boolean discoverUnitResolvers() {
+		return discoverUnitResolvers;
+	}
+
 	public int maxBlackboxLibraries() {
 		return maxBlackboxLibraries;
 	}
@@ -258,6 +275,7 @@ public final class QvtdConfiguration {
 		private boolean blackboxEnabled;
 		private Set<String> allowedBlackboxModules = Set.of();
 		private boolean unitResolverEnabled;
+		private boolean discoverUnitResolvers;
 		private Set<String> allowedUnitModules = Set.of();
 		private int maxBlackboxLibraries = 10;
 		private int maxUnitResolvers = 5;
@@ -371,6 +389,24 @@ public final class QvtdConfiguration {
 		 * Sets the allow-list of unit module qualified names.
 		 * Empty means all are allowed when unit resolver is enabled.
 		 */
+		/**
+		 * Lets the engine ask {@link QvtdUnitResolver} implementations it discovers, on top
+		 * of the ones named here — through {@link java.util.ServiceLoader} in plain Java,
+		 * through the service registry under OSGi.
+		 *
+		 * <p>Requires {@link #unitResolverEnabled(boolean)}, and counts towards
+		 * {@link #maxUnitResolvers(int)} as one resolver. Off by default: with an empty
+		 * {@link #allowedUnitModules(Set)} every name is permitted, so this would otherwise
+		 * quietly let anything on the class path answer an import.
+		 *
+		 * @param discover whether to discover implementations
+		 * @return this builder
+		 */
+		public Builder discoverUnitResolvers(boolean discover) {
+			this.discoverUnitResolvers = discover;
+			return this;
+		}
+
 		public Builder allowedUnitModules(Set<String> modules) {
 			this.allowedUnitModules = Objects.requireNonNull(modules, "modules must not be null");
 			return this;

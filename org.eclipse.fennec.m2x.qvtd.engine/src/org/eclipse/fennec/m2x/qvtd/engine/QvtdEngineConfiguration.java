@@ -46,6 +46,9 @@ public @interface QvtdEngineConfiguration {
 	@AttributeDefinition(name = "Unit Resolver Enabled", description = "Whether transformations may import units resolved from outside")
 	boolean unitResolverEnabled() default false;
 
+	@AttributeDefinition(name = "Discover Unit Resolvers", description = "Whether the engine also asks unit resolvers registered as services, looked up by the name the transformation imports")
+	boolean discoverUnitResolvers() default false;
+
 	@AttributeDefinition(name = "Allowed Unit Modules", description = "Qualified names a transformation may import as a unit; empty puts no restriction on the names")
 	String[] allowedUnitModules() default {};
 
