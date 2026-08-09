@@ -19,7 +19,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Stream;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
@@ -36,6 +38,7 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
 import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
 
@@ -97,6 +100,16 @@ public class QvtdEngineImpl implements QvtdEngine {
 		}
 	}
 
+	/**
+	 * The discovery resolver, if this engine was told to discover — asked after the
+	 * configured ones, and counting as one resolver towards the limit.
+	 */
+	private Stream<QvtdUnitResolver> discoveredResolvers() {
+		return config.discoverUnitResolvers()
+				? Stream.of(new ServiceLoaderQvtdUnitResolver())
+				: Stream.of();
+	}
+
 	@Override
 	public RelationalTransformation parse(String source, String unitName) throws QvtdParseException {
 		Objects.requireNonNull(source, "source must not be null");
@@ -113,6 +126,19 @@ public class QvtdEngineImpl implements QvtdEngine {
 		Objects.requireNonNull(context, "context must not be null");
 
 		try {
+			// §7.11.1: resolve what the transformation imports before anything runs. The
+			// enable flag decides whether resolvers are reachable at all, the limit how far
+			// one import may travel, and the allow-list which names may be asked for —
+			// checked inside the linker, before a resolver is consulted.
+			List<QvtdUnitResolver> effectiveResolvers = config.unitResolverEnabled()
+					? Stream.concat(config.unitResolvers().stream(), discoveredResolvers())
+							.limit(config.maxUnitResolvers())
+							.toList()
+					: List.of();
+			new QvtdLinker(parserSupport, config.packageRegistry(), effectiveResolvers,
+					config.unitResolverEnabled() ? config.allowedUnitModules() : Set.of())
+					.link(transformation);
+
 			QvtrEvalEnvironment env = new QvtrEvalEnvironment();
 			QvtrExtentManager extentManager = new QvtrExtentManager(transformation, context);
 			QvtrEvaluator evaluator = new QvtrEvaluator(

@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdConfigurationHelper;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineConfiguration;
 import org.osgi.service.component.annotations.Activate;
@@ -63,7 +64,10 @@ public class QvtdEngineComponent extends QvtdEngineImpl {
 	@Activate
 	public QvtdEngineComponent(
 			QvtdEngineConfiguration config,
-			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine) {
-		super(QvtdConfigurationHelper.from(config, oclEngine));
+			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine,
+			@Reference(name = "unitDiscovery",
+					target = "(" + QvtdServiceUnitResolver.RESOLVER_KIND + "=discovery)")
+			QvtdUnitResolver unitDiscovery) {
+		super(QvtdConfigurationHelper.from(config, oclEngine, unitDiscovery));
 	}
 }

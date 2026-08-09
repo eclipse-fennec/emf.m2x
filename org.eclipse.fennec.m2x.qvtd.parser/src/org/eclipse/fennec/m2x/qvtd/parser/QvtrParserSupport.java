@@ -44,6 +44,15 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 public class QvtrParserSupport {
 
 	/**
+	 * Annotation on a parsed transformation carrying the unit names its {@code import}
+	 * declarations asked for (§7.11.1), keyed by their position.
+	 *
+	 * <p>The names are unresolved here — resolving them needs unit resolvers and an
+	 * allow-list, which belong to the engine, not to the parser.
+	 */
+	public static final String IMPORTS_ANNOTATION = "qvtr.imports";
+
+	/**
 	 * Parses a QVT-R transformation source using the given package registry
 	 * for metamodel resolution.
 	 *

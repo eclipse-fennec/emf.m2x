@@ -114,9 +114,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	@Override
 	public RelationalTransformation visitCompilationUnit(QvtRParser.CompilationUnitContext ctx) {
+		List<String> imports = importedUnitNames(ctx);
 		if (ctx.transformationDef().isEmpty()) {
 			RelationalTransformation empty = REL.createRelationalTransformation();
 			empty.setName("_unnamed");
+			recordImports(empty, imports);
 			return empty;
 		}
 
@@ -128,6 +130,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			relationMap.clear();
 			RelationalTransformation t = visitTransformationDef(tCtx);
 			transformations.put(t.getName(), t);
+		}
+
+		for (RelationalTransformation t : transformations.values()) {
+			recordImports(t, imports);
 		}
 
 		// Resolve 'extends' annotations (§7.11.1.1): merge base rules into child
@@ -159,6 +165,43 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * Extension is transitive: if the base itself extends another transformation,
 	 * its inherited rules are already merged.
 	 */
+	/**
+	 * The qualified names a compilation unit imports (§7.11.1).
+	 *
+	 * <p>{@code import a::b::c;} names one unit; the grammar also allows several names in
+	 * one declaration and a trailing {@code ::*}, which selects everything below the name
+	 * rather than naming a different unit — so the wildcard does not change what is asked
+	 * for here.
+	 */
+	private List<String> importedUnitNames(QvtRParser.CompilationUnitContext ctx) {
+		List<String> names = new ArrayList<>();
+		for (QvtRParser.ImportDeclContext importCtx : ctx.importDecl()) {
+			for (QvtRParser.QualifiedNameContext nameCtx : importCtx.qualifiedName()) {
+				names.add(nameCtx.getText());
+			}
+		}
+		return names;
+	}
+
+	/**
+	 * Keeps the imported names on the transformation so the link phase can resolve them.
+	 *
+	 * <p>An annotation rather than a model feature, the same way {@code extends} is carried
+	 * (§7.11.1.1): the import is unresolved at this point, and a name is all there is to
+	 * record.
+	 */
+	private void recordImports(RelationalTransformation transformation, List<String> imports) {
+		if (imports.isEmpty()) {
+			return;
+		}
+		EAnnotation annotation = EcoreFactory.eINSTANCE.createEAnnotation();
+		annotation.setSource(QvtrParserSupport.IMPORTS_ANNOTATION);
+		for (int i = 0; i < imports.size(); i++) {
+			annotation.getDetails().put(String.valueOf(i), imports.get(i));
+		}
+		transformation.getEAnnotations().add(annotation);
+	}
+
 	private void mergeInheritedRules(RelationalTransformation child,
 			RelationalTransformation base) {
 		// Collect names of child's own relations (for override detection)

@@ -234,6 +234,7 @@ All properties use the `qvtd.` prefix. OCL limits are **not** repeated here; the
 | `qvtd.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries |
 | `qvtd.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; **empty puts no restriction on the names** |
 | `qvtd.unitResolverEnabled` | boolean | `false` | Whether transformations may import units resolved from outside |
+| `qvtd.discoverUnitResolvers` | boolean | `false` | Whether resolvers registered as services are looked up by the name a transformation imports |
 | `qvtd.allowedUnitModules` | String[] | *(empty)* | Qualified names that may be imported as a unit; **empty puts no restriction on the names** |
 | `qvtd.maxBlackboxLibraries` | int | 10 | Blackbox libraries one engine will use |
 | `qvtd.maxUnitResolvers` | int | 5 | Unit resolvers one engine will use |
@@ -247,6 +248,49 @@ Blackboxes and unit resolvers are **off by default**: both let a transformation 
 The allow-lists narrow what may be reached once a feature is on. An **empty** allow-list does not narrow anything — enabling `blackboxEnabled` or `unitResolverEnabled` without also naming what may be reached permits every name. Name them.
 
 The same settings are available to plain Java through `QvtdConfiguration.Builder` — see [§3.2](#32-configuration-options).
+
+### 3.4.2 Imports
+
+A unit may import another (§7.11.1):
+
+```qvtr
+import shared.Library;
+
+transformation importer(source : bookshelf, target : bookshelf) {
+}
+```
+
+The imported unit's relations become available to the importing transformation, the way `extends` works. What the importing transformation declares itself wins, so an import cannot quietly replace a relation.
+
+Where the unit comes from is the resolvers' business. Configure them with `QvtdConfiguration.Builder.addUnitResolver(...)`, or let the engine find them:
+
+```java
+@Component(service = QvtdUnitResolver.class,
+           property = "qvtd.unit.name=shared.Library")
+public class SharedLibraryUnit implements QvtdUnitResolver {
+
+    @Override
+    public Optional<QvtdUnit> resolveUnit(String qualifiedName) {
+        return Optional.of(new QvtdUnit.SourceUnit(qualifiedName, uri, source));
+    }
+}
+```
+
+The engine looks that up when it links the import — not before. Outside OSGi the same happens through `ServiceLoader` and `discoverUnitResolvers(true)`.
+
+**Both are off by default.** `unitResolverEnabled` alone leaves the allow-list empty, which puts no restriction on names, so discovery would let anything registered answer an import. Name what may be reached:
+
+```json
+{
+    "DefaultQvtdEngine": {
+        "qvtd.unitResolverEnabled": true,
+        "qvtd.discoverUnitResolvers": true,
+        "qvtd.allowedUnitModules": ["shared.Library"]
+    }
+}
+```
+
+An import that nothing answers for is an error — `Cannot resolve import: shared.Library` — rather than a silently missing relation.
 
 **Running on a specific OCL engine:** the reference is unfiltered by default, so the engine binds whichever `OclEngine` service is there. To pin it to one you configured yourself, set a target filter:
 
