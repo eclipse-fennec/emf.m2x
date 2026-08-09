@@ -19,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 
 /**
@@ -52,6 +53,7 @@ public final class M2tConfiguration {
 
 	private final OclConfiguration oclConfiguration;
 	private final EPackage.Registry packageRegistry;
+	private final ResourceSet resourceSet;
 	private final M2tGenerationStrategy generationStrategy;
 	private final Charset defaultCharset;
 	private final WhitespaceMode whitespaceMode;
@@ -65,6 +67,7 @@ public final class M2tConfiguration {
 	private M2tConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
 		this.packageRegistry = builder.packageRegistry;
+		this.resourceSet = builder.resourceSet;
 		this.generationStrategy = builder.generationStrategy;
 		this.defaultCharset = builder.defaultCharset;
 		this.whitespaceMode = builder.whitespaceMode;
@@ -91,7 +94,25 @@ public final class M2tConfiguration {
 	 * @return the package registry
 	 */
 	public EPackage.Registry packageRegistry() {
-		return packageRegistry;
+		if (packageRegistry != null) {
+			return packageRegistry;
+		}
+		if (resourceSet != null) {
+			return resourceSet.getPackageRegistry();
+		}
+		return EPackage.Registry.INSTANCE;
+	}
+
+	/**
+	 * Returns the resource set this configuration was given, or {@code null}.
+	 *
+	 * <p>Only its {@linkplain ResourceSet#getPackageRegistry() package registry} is used
+	 * for resolution today; nothing is loaded through it.
+	 *
+	 * @return the resource set, or {@code null}
+	 */
+	public ResourceSet resourceSet() {
+		return resourceSet;
 	}
 
 	/**
@@ -183,7 +204,8 @@ public final class M2tConfiguration {
 	public static final class Builder {
 
 		private final OclConfiguration oclConfiguration;
-		private EPackage.Registry packageRegistry = EPackage.Registry.INSTANCE;
+		private EPackage.Registry packageRegistry;
+		private ResourceSet resourceSet;
 		private M2tGenerationStrategy generationStrategy;
 		private Charset defaultCharset = StandardCharsets.UTF_8;
 		private WhitespaceMode whitespaceMode = WhitespaceMode.ACCELEO;
@@ -213,6 +235,25 @@ public final class M2tConfiguration {
 		 * @param registry the package registry, must not be {@code null}
 		 * @return this builder
 		 */
+		/**
+		 * Sets the resource set whose package registry resolves metamodel type names appearing in template sources.
+		 *
+		 * <p>This is the form to reach for: a {@link ResourceSet} is what EMF hands
+		 * around, and under OSGi it is what {@code emf.osgi} injects — a configured,
+		 * isolated stack arrives as a resource set, not as a bare registry.
+		 *
+		 * <p>Only the resource set's package registry is used; nothing is loaded through
+		 * it. If a registry is set as well, that registry wins — the more specific
+		 * setting beats the more general one (D42).
+		 *
+		 * @param resourceSet the resource set, must not be {@code null}
+		 * @return this builder
+		 */
+		public Builder resourceSet(ResourceSet resourceSet) {
+			this.resourceSet = Objects.requireNonNull(resourceSet, "resourceSet must not be null");
+			return this;
+		}
+
 		public Builder packageRegistry(EPackage.Registry registry) {
 			this.packageRegistry = Objects.requireNonNull(registry, "registry must not be null");
 			return this;

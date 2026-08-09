@@ -130,7 +130,8 @@ M2tEngineImpl engine = new M2tEngineImpl(config);
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | `EPackage.Registry` used to resolve metamodel type names in templates (see [§3.4](#34-which-metamodels-the-engine-sees)) |
+| `resourceSet(resourceSet)` | — | Resource set whose package registry resolves metamodel type names (see [§3.4](#34-which-metamodels-the-engine-sees)) |
+| `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | The registry itself; wins over `resourceSet` when both are set |
 | `defaultCharset(charset)` | UTF-8 | Charset for file output encoding |
 | `whitespaceMode(mode)` | `ACCELEO` | Whitespace normalization mode (see [§14](#14-whitespace-handling)) |
 | `generationStrategy(strategy)` | `null` (in-memory) | SPI for file output (see [§13](#13-m2tgenerationstrategy)) |
@@ -146,13 +147,18 @@ M2tEngineImpl engine = new M2tEngineImpl(config);
 Every metamodel type name in a template is resolved when the template is parsed — the `Book` in `[template public main(b : Book)]`, in `[b.oclIsKindOf(Book)/]`, in a `[for (b : Book | …)]` and in an `overrides` declaration. The engine looks them up in its `EPackage.Registry`.
 
 ```java
-EPackage.Registry registry = new EPackageRegistryImpl();
-registry.put(BOOKSHELF_NS, bookshelfPackage);
+// the ResourceSet you already have — under OSGi this is what emf.osgi injects
+M2tConfiguration config = M2tConfiguration.builder(oclConfig)
+    .resourceSet(resourceSet)
+    .build();
 
+// or the registry itself, if that is what you hold
 M2tConfiguration config = M2tConfiguration.builder(oclConfig)
     .packageRegistry(registry)
     .build();
 ```
+
+If both are set, the explicitly configured registry wins — the more specific setting beats the more general one. Only the resource set's package registry is used; nothing is loaded through it.
 
 The default is `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Supply your own when you hold the packages yourself — under OSGi, or wherever two versions of one nsURI can coexist. Nothing inside the engine reaches for the global registry on its own (D42), so what you pass in is what the parser sees. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
 

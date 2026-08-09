@@ -27,6 +27,8 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
+import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
@@ -126,6 +128,39 @@ class M2tPackageRegistryTest {
 		assertTrue(output.contains("kindOfBook=true"), output);
 		assertTrue(output.contains("dispatch=OVERRIDE"),
 				() -> "MOFM2T §8.1.3: the override declared for Novel must win\n" + output);
+	}
+
+	@Test
+	@DisplayName("a resource set is enough — its package registry is used")
+	void resourceSetSuppliesTheRegistry() throws Exception {
+		ResourceSet resourceSet = new ResourceSetImpl();
+		resourceSet.getPackageRegistry().put(NS_URI, bookshelfPackage);
+
+		M2tEngineImpl engine = engineWith(builder -> builder.resourceSet(resourceSet));
+
+		String output = generate(engine);
+
+		assertTrue(output.contains("kindOfNovel=true"), output);
+		assertTrue(output.contains("dispatch=OVERRIDE"), output);
+	}
+
+	@Test
+	@DisplayName("an explicit registry outranks the resource set — specific beats general")
+	void explicitRegistryWinsOverResourceSet() {
+		// The resource set knows the metamodel, the explicit registry does not.
+		// The explicit setting has to win, otherwise the more specific configuration
+		// would be silently ignored.
+		ResourceSet resourceSet = new ResourceSetImpl();
+		resourceSet.getPackageRegistry().put(NS_URI, bookshelfPackage);
+
+		M2tConfiguration config = M2tConfiguration.builder(
+				OclConfiguration.builder(new OclParserSupport()).build())
+				.resourceSet(resourceSet)
+				.packageRegistry(new EPackageRegistryImpl())
+				.build();
+
+		assertThrows(M2tParseException.class, () -> new M2tEngineImpl(config).parse(TEMPLATE, "probe"),
+				"the empty registry was set explicitly and must be the one that counts");
 	}
 
 	@Test

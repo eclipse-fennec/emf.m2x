@@ -27,6 +27,8 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -97,6 +99,17 @@ class QvtdPackageRegistryTest {
 		assertNotNull(transformation);
 		assertEquals(bookshelfPackage, usedPackage(transformation),
 				"the engine must resolve the typed model against the supplied registry");
+	}
+
+	@Test
+	@DisplayName("a resource set is enough — its package registry is used")
+	void resourceSetSuppliesTheRegistry() throws QvtdParseException {
+		ResourceSet resourceSet = new ResourceSetImpl();
+		resourceSet.getPackageRegistry().put(NS_URI, bookshelfPackage);
+
+		QvtdEngineImpl engine = engineWith(builder -> builder.resourceSet(resourceSet));
+
+		assertEquals(bookshelfPackage, usedPackage(engine.parse(TRANSFORMATION, "registryTest")));
 	}
 
 	@Test

@@ -935,6 +935,18 @@ Der schwerste Fall war `QvtoAliasRegistry`: eine Suche nach einfachem Klassennam
 2. **Ist keine Registry konfiguriert, gilt die statische.** Das ist der Plain-Java-/Non-OSGi-Fall: dort existiert keine Versions-Mehrdeutigkeit, und die statische Registry ist die korrekte Auflösung.
 3. **Genau eine Stelle je Engine wendet diesen Fallback an** — dort, wo die Registry entgegengenommen wird, löst sie einmalig `registry != null ? registry : EPackage.Registry.INSTANCE` auf. Alles darunter bekommt die aufgelöste Registry.
 
+**Nachtrag (2026-08-09): das ResourceSet ist die Standardform.** Eine `EPackage.Registry` ist in EMF kein Objekt, mit dem man üblicherweise hantiert — das ist das `ResourceSet`. Unter `emf.osgi` bekommt man einen konfigurierten, isolierten Stack als `ResourceSetFactory`/`ResourceSet`-Service injiziert; die Registry müsste man daraus erst auspacken. Genau diese Reibung führt dazu, dass Konfiguration weggelassen wird — also zu dem Zustand, den D42 verhindern soll.
+
+Deshalb nimmt jede Engine zusätzlich ein `ResourceSet` entgegen und verwendet dessen `getPackageRegistry()`. Die Auflösungsreihenfolge ist:
+
+1. **explizit gesetzte Registry** — das Speziellere schlägt das Allgemeinere,
+2. sonst das **ResourceSet**,
+3. sonst `EPackage.Registry.INSTANCE`.
+
+Damit bleibt es bei genau einem Fallback-Punkt je Engine; er hat nur eine Stufe mehr davor. Dokumentiert wird künftig die ResourceSet-Form, `packageRegistry(…)` bleibt die tiefere Ebene.
+
+Vom ResourceSet wird vorerst **ausschließlich** die Package-Registry benutzt — es wird nichts darüber geladen. Das steht so im Javadoc, damit niemand eine URI-Auflösung erwartet, die es noch nicht gibt; `parse(URI)` über den `URIConverter` ist ein eigener, folgender Schritt.
+
 Welche Stelle das ist, folgt daraus, wer den Parser besitzt:
 
 | Engine | Fallback-Punkt | Grund |
