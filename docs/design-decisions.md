@@ -566,7 +566,7 @@ Fits the existing build model: `src-gen/` is generated code, bnd compiles and pa
 
 **Key implementation details:**
 
-1. **`M2tWhitespaceNormalizer`** (`m2t.parser`): AST transformation that runs **after linking** in `M2tEngineImpl.execute()`. Must run post-link because the linker replaces inline `__inline__` LetBlocks with actual `TemplateInvocation` objects — the normalizer needs the final AST to correctly extract indentation for standalone invocations.
+1. **`M2tWhitespaceNormalizer`** (`m2t.parser`): AST transformation that runs **after linking** in `M2tEngine.execute()`. Must run post-link because the linker replaces inline `__inline__` LetBlocks with actual `TemplateInvocation` objects — the normalizer needs the final AST to correctly extract indentation for standalone invocations.
 
 2. **Inline LetBlock exclusion:** The parser wraps inline expressions `[expr/]` as LetBlocks with synthetic `__inline__` variable names. These must be excluded from standalone-block detection and body-trimming, as they are expression wrappers, not structural blocks.
 
@@ -583,7 +583,7 @@ Fits the existing build model: `src-gen/` is generated code, bnd compiles and pa
 - `m2t.api/.../WhitespaceMode.java` — enum
 - `m2t.api/.../M2tConfiguration.java` — `whitespaceMode()` accessor
 - `m2t.parser/.../M2tWhitespaceNormalizer.java` — AST normalizer
-- `m2t.engine/.../M2tEngineImpl.java` — normalizer invocation + indentation map
+- `m2t.engine/.../M2tEngine.java` — normalizer invocation + indentation map
 - `m2t.engine/.../internal/M2tEvaluator.java` — `fitIndentationTo()` + indent-propagation
 - `m2t.tests/.../M2tWhitespaceTest.java` — 17 tests
 
@@ -734,7 +734,7 @@ QvtoEvaluator
 | Sub-Phase | Inhalt | Status |
 |-----------|--------|--------|
 | P4b-1 | Parser: `refines` keyword (§8.4.7), Grammar (`moduleRefName` akzeptiert `::` und `.`), UnitBuilder (Stub Transformation + EAnnotation) | ✅ 12 Tests |
-| P4b-2 | D39 Brücke: `QvtoEngineImpl implements RelationImplementationProvider`, `QvtdEngine.registerImplementationProvider()`, `QvtrEvaluator` Provider-First + Blackbox-Fallback | ✅ |
+| P4b-2 | D39 Brücke: `QvtoEngine implements RelationImplementationProvider`, `QvtdEngine.registerImplementationProvider()`, `QvtrEvaluator` Provider-First + Blackbox-Fallback | ✅ |
 | P4b-3 | Runtime Stub-Auflösung: `OT.refined` → echte `RelationalTransformation` via QvtdEngine | ⏳ Phase 5 |
 | P4b-4 | Integration-Tests (Hybrid QVT-O↔QVT-R) | ✅ 13 Tests |
 
@@ -811,8 +811,8 @@ qvtd.api definiert:
 
 ```java
 // Standalone
-QvtdEngine qvtdEngine = new QvtdEngineImpl(qvtdConfig);
-QvtoEngine qvtoEngine = new QvtoEngineImpl(qvtoConfig, qvtdEngine);  // GAP-6
+QvtdEngine qvtdEngine = QvtdEngines.create(qvtdConfig);
+QvtoEngine qvtoEngine = QvtoEngines.create(qvtoConfig, qvtdEngine);  // GAP-6
 qvtdEngine.registerImplementationProvider(qvtoEngine);                // §7.8
 
 // OSGi: automatic via DS @Reference injection

@@ -25,6 +25,8 @@ import java.util.Map;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
@@ -49,14 +51,14 @@ import org.junit.jupiter.api.Test;
  */
 class M2tAcceleoReferenceTest {
 
-	private M2tEngineImpl engine;
+	private M2tEngine engine;
 	private EPackage targetPackage;
 
 	@BeforeEach
 	void setUp() {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 		M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-		engine = new M2tEngineImpl(config);
+		engine = M2tEngines.create(config);
 
 		// Reproduce Acceleo's target.ecore: EPackage "target" with 3 EClassifiers
 		targetPackage = EcoreFactory.eINSTANCE.createEPackage();

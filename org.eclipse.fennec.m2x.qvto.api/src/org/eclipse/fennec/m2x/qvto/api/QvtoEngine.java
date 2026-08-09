@@ -83,4 +83,17 @@ public interface QvtoEngine {
 	QvtoExecutionResult execute(OperationalTransformation transformation,
 			QvtoExecutionContext context, QvtoEvaluationOptions options);
 
+
+	/**
+	 * Loads a transformation so that its mappings can serve relation implementations
+	 * (§7.8, D39 hybrid QVT-R / QVT-O).
+	 *
+	 * <p>The engine acts as a {@code RelationImplementationProvider} for a QVT-R engine
+	 * once a transformation is loaded. Under OSGi that role arrives as its own service
+	 * registration; in plain Java the engine created by {@code QvtoEngines} implements
+	 * it and can be handed to {@code QvtdEngine.registerImplementationProvider}.
+	 *
+	 * @param transformation the transformation whose mappings implement relations
+	 */
+	void loadTransformation(OperationalTransformation transformation);
 }

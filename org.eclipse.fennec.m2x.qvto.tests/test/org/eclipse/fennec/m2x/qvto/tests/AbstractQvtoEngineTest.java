@@ -20,6 +20,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -30,7 +32,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -41,7 +42,7 @@ import org.junit.jupiter.api.BeforeAll;
  */
 public abstract class AbstractQvtoEngineTest {
 
-	protected static QvtoEngineImpl engine;
+	protected static QvtoEngine engine;
 	protected static EcoreHelper ecoreHelper;
 	protected static EPackage sourcePackage;
 	protected static EPackage targetPackage;
@@ -50,7 +51,7 @@ public abstract class AbstractQvtoEngineTest {
 	static void setUpEngine() throws IOException {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-		engine = new QvtoEngineImpl(config);
+		engine = QvtoEngines.create(config);
 		ecoreHelper = new EcoreHelper(AbstractQvtoEngineTest.class);
 		sourcePackage = ecoreHelper.loadEcore("source.ecore");
 		targetPackage = ecoreHelper.loadEcore("target.ecore");

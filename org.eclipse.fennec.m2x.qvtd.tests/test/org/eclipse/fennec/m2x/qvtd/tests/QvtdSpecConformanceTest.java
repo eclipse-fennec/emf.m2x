@@ -25,6 +25,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -36,7 +38,6 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineImpl;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -1233,7 +1234,7 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 					.blackboxRegistry(registry)
 					.blackboxEnabled(true)
 					.build();
-			QvtdEngineImpl bbEngine = new QvtdEngineImpl(bbConfig);
+			QvtdEngine bbEngine = QvtdEngines.create(bbConfig);
 
 			EObject cls = createClass("Emp", null);
 			addAttributeToClass(cls, createAttribute("salary", "Integer"));
@@ -1435,7 +1436,7 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 					.blackboxRegistry(registry)
 					.blackboxEnabled(true)
 					.build();
-			QvtdEngineImpl implEngine = new QvtdEngineImpl(config);
+			QvtdEngine implEngine = QvtdEngines.create(config);
 
 			EObject cls = createClass("Employee", null);
 			QvtdModelExtent uml = QvtdModelExtent.of(cls);

@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
@@ -69,7 +71,7 @@ class M2tSuppliedEngineTest {
 				.addOperationProvider(provider)
 				.build());
 
-		String output = generate(new M2tEngineImpl(M2tConfiguration.builder(ocl).build()),
+		String output = generate(M2tEngines.create(M2tConfiguration.builder(ocl).build()),
 				"[c.name.shout()/]");
 
 		assertEquals("book!", output.strip());
@@ -82,7 +84,7 @@ class M2tSuppliedEngineTest {
 		// available even though the engine was configured entirely without M2T.
 		OclEngine ocl = OclEngines.create(new OclParserSupport());
 
-		String output = generate(new M2tEngineImpl(M2tConfiguration.builder(ocl).build()),
+		String output = generate(M2tEngines.create(M2tConfiguration.builder(ocl).build()),
 				"[c.name.toUpperFirst()/]");
 
 		assertEquals("Book", output.strip());
@@ -91,13 +93,13 @@ class M2tSuppliedEngineTest {
 	@Test
 	@DisplayName("without a supplied engine the configuration still builds one")
 	void configurationStillWorks() throws Exception {
-		M2tEngineImpl engine = new M2tEngineImpl(M2tConfiguration.builder(
+		M2tEngine engine = M2tEngines.create(M2tConfiguration.builder(
 				OclConfiguration.builder(new OclParserSupport()).build()).build());
 
 		assertEquals("Book", generate(engine, "[c.name.toUpperFirst()/]").strip());
 	}
 
-	private String generate(M2tEngineImpl engine, String body) throws Exception {
+	private String generate(M2tEngine engine, String body) throws Exception {
 		Module module = engine.parse(TEMPLATE.formatted(body), "doc");
 		engine.link(module);
 		EClass input = EcoreFactory.eINSTANCE.createEClass();

@@ -25,6 +25,8 @@ import java.util.concurrent.Executors;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -34,7 +36,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -53,7 +54,7 @@ import org.junit.jupiter.api.Test;
  */
 class QvtoE2eMultiFileCompositionTest {
 
-	private static QvtoEngineImpl engine;
+	private static QvtoEngine engine;
 
 	@BeforeAll
 	static void setUpEngine() {
@@ -72,7 +73,7 @@ class QvtoE2eMultiFileCompositionTest {
 				.addUnitResolver(inlineResolver)
 				.unitResolverEnabled(true)
 				.build();
-		engine = new QvtoEngineImpl(config);
+		engine = QvtoEngines.create(config);
 	}
 
 	// --- Inline transformation sources for unit resolver ---
@@ -174,7 +175,7 @@ class QvtoE2eMultiFileCompositionTest {
 				.addUnitResolver(failResolver)
 				.unitResolverEnabled(true)
 				.build();
-		QvtoEngineImpl failEngine = new QvtoEngineImpl(config);
+		QvtoEngine failEngine = QvtoEngines.create(config);
 
 		String mainSource = """
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
@@ -289,7 +290,7 @@ class QvtoE2eMultiFileCompositionTest {
 				.addUnitResolver(name -> Optional.empty())
 				.unitResolverEnabled(true)
 				.build();
-		QvtoEngineImpl emptyEngine = new QvtoEngineImpl(config);
+		QvtoEngine emptyEngine = QvtoEngines.create(config);
 
 		String mainSource = """
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
@@ -371,7 +372,7 @@ class QvtoE2eMultiFileCompositionTest {
 				.addUnitResolver(failResolver)
 				.unitResolverEnabled(true)
 				.build();
-		QvtoEngineImpl failEngine = new QvtoEngineImpl(config);
+		QvtoEngine failEngine = QvtoEngines.create(config);
 
 		String mainSource = """
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
@@ -451,7 +452,7 @@ class QvtoE2eMultiFileCompositionTest {
 				.unitResolverEnabled(true)
 				.parallelExecutor(Executors.newFixedThreadPool(2))
 				.build();
-		QvtoEngineImpl customEngine = new QvtoEngineImpl(config);
+		QvtoEngine customEngine = QvtoEngines.create(config);
 
 		String mainSource = """
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');

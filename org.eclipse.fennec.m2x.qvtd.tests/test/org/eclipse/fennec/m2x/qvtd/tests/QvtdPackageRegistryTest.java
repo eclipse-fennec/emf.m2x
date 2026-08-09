@@ -29,13 +29,14 @@ import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -92,7 +93,7 @@ class QvtdPackageRegistryTest {
 	@Test
 	@DisplayName("a typed model resolves through the registry supplied to the engine")
 	void typedModelResolvesThroughSuppliedRegistry() throws QvtdParseException {
-		QvtdEngineImpl engine = engineWith(builder -> builder.packageRegistry(registry));
+		QvtdEngine engine = engineWith(builder -> builder.packageRegistry(registry));
 
 		RelationalTransformation transformation = engine.parse(TRANSFORMATION, "registryTest");
 
@@ -107,7 +108,7 @@ class QvtdPackageRegistryTest {
 		ResourceSet resourceSet = new ResourceSetImpl();
 		resourceSet.getPackageRegistry().put(NS_URI, bookshelfPackage);
 
-		QvtdEngineImpl engine = engineWith(builder -> builder.resourceSet(resourceSet));
+		QvtdEngine engine = engineWith(builder -> builder.resourceSet(resourceSet));
 
 		assertEquals(bookshelfPackage, usedPackage(engine.parse(TRANSFORMATION, "registryTest")));
 	}
@@ -117,7 +118,7 @@ class QvtdPackageRegistryTest {
 	void staticRegistryAppliesWhenNoneConfigured() throws QvtdParseException {
 		EPackage.Registry.INSTANCE.put(NS_URI, bookshelfPackage);
 
-		QvtdEngineImpl engine = engineWith(builder -> builder);
+		QvtdEngine engine = engineWith(builder -> builder);
 
 		RelationalTransformation transformation = engine.parse(TRANSFORMATION, "registryTest");
 
@@ -128,7 +129,7 @@ class QvtdPackageRegistryTest {
 	@Test
 	@DisplayName("an unknown metamodel is reported instead of silently unresolved")
 	void unknownMetamodelIsReported() {
-		QvtdEngineImpl engine = engineWith(builder -> builder);
+		QvtdEngine engine = engineWith(builder -> builder);
 
 		QvtdParseException failure = assertThrows(QvtdParseException.class,
 				() -> engine.parse(TRANSFORMATION, "registryTest"),
@@ -141,9 +142,9 @@ class QvtdPackageRegistryTest {
 
 	// --- helpers ---
 
-	private QvtdEngineImpl engineWith(UnaryOperator<QvtdConfiguration.Builder> customizer) {
+	private QvtdEngine engineWith(UnaryOperator<QvtdConfiguration.Builder> customizer) {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
-		return new QvtdEngineImpl(customizer.apply(QvtdConfiguration.builder(oclConfig)).build());
+		return QvtdEngines.create(customizer.apply(QvtdConfiguration.builder(oclConfig)).build());
 	}
 
 	/**

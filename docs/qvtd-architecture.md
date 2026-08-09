@@ -82,7 +82,7 @@ Three EPackages following the spec structure:
 
 | Class | Purpose |
 |-------|---------|
-| `QvtdEngineImpl` | Facade: parse + execute, OCL engine composition (D36) |
+| `QvtdEngine` | Facade: parse + execute, OCL engine composition (D36) |
 | `QvtrEvaluator` | Core evaluator: relation execution, domain classification, when/where-clauses |
 | `QvtrEnforcer` | Target domain enforcement (§7.10.2), key-based identity (§7.4), property enforcement |
 | `QvtrBlackboxBridge` | Blackbox library invocation (§7.8), `implementedby` delegation (§7.11.3.6), M-R5 security |

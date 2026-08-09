@@ -30,6 +30,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tGenerationStrategy;
@@ -1253,10 +1255,10 @@ class M2tEngineTest {
 		}
 	}
 
-	// ==================== M2tEngineImpl Integration ====================
+	// ==================== M2tEngine Integration ====================
 
 	@Nested
-	@DisplayName("M2tEngineImpl")
+	@DisplayName("M2tEngine")
 	class EngineImplTests {
 
 		@Test
@@ -1278,7 +1280,7 @@ class M2tEngineTest {
 
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-			M2tEngineImpl engine = new M2tEngineImpl(config);
+			M2tEngine engine = M2tEngines.create(config);
 
 			M2tResult result = engine.execute(module, M2tContext.of(input));
 			assertTrue(result.isSuccess());
@@ -1338,7 +1340,7 @@ class M2tEngineTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.generationStrategy(strategy)
 					.build();
-			M2tEngineImpl engine = new M2tEngineImpl(config);
+			M2tEngine engine = M2tEngines.create(config);
 
 			M2tResult result = engine.execute(module, M2tContext.of(input));
 			assertTrue(result.isSuccess());
@@ -1375,7 +1377,7 @@ class M2tEngineTest {
 			// No strategy → no merge, always produces fresh default content
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-			M2tEngineImpl engine = new M2tEngineImpl(config);
+			M2tEngine engine = M2tEngines.create(config);
 
 			M2tResult result = engine.execute(module, M2tContext.of(input));
 			assertTrue(result.isSuccess());

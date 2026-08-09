@@ -27,6 +27,8 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -35,7 +37,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -125,7 +126,7 @@ class QvtoAliasQualifierTest {
 
 	private QvtoExecutionResult runWith(String source, EObject content) throws Exception {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
-		QvtoEngineImpl engine = new QvtoEngineImpl(QvtoConfiguration.builder(oclConfig)
+		QvtoEngine engine = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
 				.packageRegistry(registry)
 				.build());
 

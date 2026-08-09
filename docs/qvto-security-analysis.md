@@ -122,7 +122,7 @@ QvtoExecutionContext ctx = QvtoExecutionContext.of(
 | **Vector** | `engine.parse(URI)` reads arbitrary files via `Files.readString(Path.of(uri))` |
 | **Impact** | Reading arbitrary files on the filesystem |
 | **Prerequisite** | Attacker controls the URI passed to `parse()` |
-| **File** | `QvtoEngineImpl.java:86-94` |
+| **File** | `QvtoEngine.java:86-94` |
 
 **Analysis:** No path whitelisting or canonicalization. Path traversal possible:
 ```java

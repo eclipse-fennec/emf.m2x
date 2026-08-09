@@ -12,7 +12,7 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-package org.eclipse.fennec.m2x.m2t.engine;
+package org.eclipse.fennec.m2x.m2t.engine.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -307,6 +307,7 @@ public class M2tEngineImpl implements M2tEngine {
 	 *
 	 * @param module the module to forget, must not be {@code null}
 	 */
+	@Override
 	public void release(Module module) {
 		Objects.requireNonNull(module, "module must not be null");
 		parseResultCache.remove(module);
@@ -323,6 +324,7 @@ public class M2tEngineImpl implements M2tEngine {
 	 *
 	 * <p>After this call, previously parsed modules have to be parsed and linked again.
 	 */
+	@Override
 	public void clearCaches() {
 		parseResultCache.clear();
 		linkedModules.clear();

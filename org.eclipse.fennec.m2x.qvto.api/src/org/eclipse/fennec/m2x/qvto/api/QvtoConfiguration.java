@@ -25,6 +25,7 @@ import java.util.concurrent.Executors;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 
 /**
  * Immutable configuration for creating {@link QvtoEngine} instances.
@@ -45,6 +46,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 public final class QvtoConfiguration {
 
 	private final OclConfiguration oclConfiguration;
+	private final OclEngine oclEngine;
 	private final EPackage.Registry packageRegistry;
 	private final ResourceSet resourceSet;
 	private final QvtoBlackboxRegistry blackboxRegistry;
@@ -59,6 +61,7 @@ public final class QvtoConfiguration {
 
 	private QvtoConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
+		this.oclEngine = builder.oclEngine;
 		this.packageRegistry = builder.packageRegistry;
 		this.resourceSet = builder.resourceSet;
 		this.blackboxRegistry = builder.blackboxRegistry;
@@ -70,6 +73,20 @@ public final class QvtoConfiguration {
 		this.allowedUnitModules = Set.copyOf(builder.allowedUnitModules);
 		this.maxBlackboxLibraries = builder.maxBlackboxLibraries;
 		this.maxUnitResolvers = builder.maxUnitResolvers;
+	}
+
+	/**
+	 * Returns the OCL engine this configuration was given, or {@code null} if the engine
+	 * is to be derived from {@link #oclConfiguration()}.
+	 *
+	 * <p>Supplying an engine is how QVT-O uses the one that was configured elsewhere — the
+	 * injected service under OSGi, or one built with {@code OclEngines.create(...)} in
+	 * plain Java — with its cache and its operation providers.
+	 *
+	 * @return the OCL engine, or {@code null}
+	 */
+	public OclEngine oclEngine() {
+		return oclEngine;
 	}
 
 	public OclConfiguration oclConfiguration() {
@@ -172,6 +189,16 @@ public final class QvtoConfiguration {
 		return maxUnitResolvers;
 	}
 
+	/**
+	 * Creates a builder that uses the given OCL engine.
+	 *
+	 * @param oclEngine the engine to evaluate OCL expressions with, must not be {@code null}
+	 * @return a new builder
+	 */
+	public static Builder builder(OclEngine oclEngine) {
+		return new Builder(Objects.requireNonNull(oclEngine, "oclEngine must not be null"));
+	}
+
 	public static Builder builder(OclConfiguration oclConfiguration) {
 		return new Builder(oclConfiguration);
 	}
@@ -179,6 +206,7 @@ public final class QvtoConfiguration {
 	public static final class Builder {
 
 		private final OclConfiguration oclConfiguration;
+		private final OclEngine oclEngine;
 		private EPackage.Registry packageRegistry;
 		private ResourceSet resourceSet;
 		private QvtoBlackboxRegistry blackboxRegistry;
@@ -193,6 +221,12 @@ public final class QvtoConfiguration {
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
+			this.oclEngine = null;
+		}
+
+		private Builder(OclEngine oclEngine) {
+			this.oclConfiguration = null;
+			this.oclEngine = oclEngine;
 		}
 
 		/**

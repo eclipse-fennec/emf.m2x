@@ -30,6 +30,8 @@ import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
@@ -109,7 +111,7 @@ class M2tPackageRegistryTest {
 	@Test
 	@DisplayName("template parameter types resolve to the real EClass")
 	void parameterTypesResolve() throws Exception {
-		M2tEngineImpl engine = engineWith(builder -> builder.packageRegistry(registry));
+		M2tEngine engine = engineWith(builder -> builder.packageRegistry(registry));
 
 		Module module = engine.parse(TEMPLATE, "probe");
 
@@ -120,7 +122,7 @@ class M2tPackageRegistryTest {
 	@Test
 	@DisplayName("oclIsKindOf and override dispatch work on a custom metamodel")
 	void kindOfAndOverrideDispatchWork() throws Exception {
-		M2tEngineImpl engine = engineWith(builder -> builder.packageRegistry(registry));
+		M2tEngine engine = engineWith(builder -> builder.packageRegistry(registry));
 
 		String output = generate(engine);
 
@@ -136,7 +138,7 @@ class M2tPackageRegistryTest {
 		ResourceSet resourceSet = new ResourceSetImpl();
 		resourceSet.getPackageRegistry().put(NS_URI, bookshelfPackage);
 
-		M2tEngineImpl engine = engineWith(builder -> builder.resourceSet(resourceSet));
+		M2tEngine engine = engineWith(builder -> builder.resourceSet(resourceSet));
 
 		String output = generate(engine);
 
@@ -159,7 +161,7 @@ class M2tPackageRegistryTest {
 				.packageRegistry(new EPackageRegistryImpl())
 				.build();
 
-		assertThrows(M2tParseException.class, () -> new M2tEngineImpl(config).parse(TEMPLATE, "probe"),
+		assertThrows(M2tParseException.class, () -> M2tEngines.create(config).parse(TEMPLATE, "probe"),
 				"the empty registry was set explicitly and must be the one that counts");
 	}
 
@@ -168,7 +170,7 @@ class M2tPackageRegistryTest {
 	void staticRegistryAppliesWhenNoneConfigured() throws Exception {
 		EPackage.Registry.INSTANCE.put(NS_URI, bookshelfPackage);
 
-		M2tEngineImpl engine = engineWith(UnaryOperator.identity());
+		M2tEngine engine = engineWith(UnaryOperator.identity());
 
 		String output = generate(engine);
 
@@ -179,7 +181,7 @@ class M2tPackageRegistryTest {
 	@Test
 	@DisplayName("a type that resolves nowhere is reported instead of degrading")
 	void unknownTypeIsReported() {
-		M2tEngineImpl engine = engineWith(builder -> builder.packageRegistry(registry));
+		M2tEngine engine = engineWith(builder -> builder.packageRegistry(registry));
 
 		M2tParseException failure = assertThrows(M2tParseException.class,
 				() -> engine.parse("""
@@ -196,12 +198,12 @@ class M2tPackageRegistryTest {
 
 	// --- helpers ---
 
-	private M2tEngineImpl engineWith(UnaryOperator<M2tConfiguration.Builder> customizer) {
+	private M2tEngine engineWith(UnaryOperator<M2tConfiguration.Builder> customizer) {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
-		return new M2tEngineImpl(customizer.apply(M2tConfiguration.builder(oclConfig)).build());
+		return M2tEngines.create(customizer.apply(M2tConfiguration.builder(oclConfig)).build());
 	}
 
-	private String generate(M2tEngineImpl engine) throws Exception {
+	private String generate(M2tEngine engine) throws Exception {
 		Module module = engine.parse(TEMPLATE, "probe");
 		engine.link(module);
 

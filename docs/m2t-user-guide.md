@@ -56,7 +56,7 @@ Minimal example — parse an MOFM2T template and generate a Java file from an EC
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngineImpl;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngine;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -64,7 +64,7 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 // 1. Create engine
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-M2tEngineImpl engine = new M2tEngineImpl(config);
+M2tEngine engine = M2tEngines.create(config);
 
 // 2. Parse template
 Module module = engine.parse(
@@ -111,13 +111,13 @@ A supplied engine is used as it is: its cache, its operation providers, its eval
 
 ```java
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngineImpl;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-M2tEngineImpl engine = new M2tEngineImpl(config);
+M2tEngine engine = M2tEngines.create(config);
 ```
 
 ### 3.3 With Builder Options
@@ -140,7 +140,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
     .generationStrategy(myStrategy)
     .build();
 
-M2tEngineImpl engine = new M2tEngineImpl(config);
+M2tEngine engine = M2tEngines.create(config);
 ```
 
 ### 3.4 Configuration Options
@@ -217,7 +217,7 @@ The M2T engine currently does not register a DS component. Use standalone instan
 
 ```java
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngineImpl;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -227,13 +227,13 @@ import org.osgi.service.component.annotations.Component;
 @Component
 public class MyGenerator {
 
-    private M2tEngineImpl engine;
+    private M2tEngine engine;
 
     @Activate
     void activate() {
         OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
         M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-        engine = new M2tEngineImpl(config);
+        engine = M2tEngines.create(config);
     }
 }
 ```

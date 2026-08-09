@@ -23,6 +23,8 @@ import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
@@ -35,7 +37,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -52,7 +53,7 @@ class QvtoE2eBlackboxTest {
 
 	private static final QvtOperationalFactory QVTO = QvtOperationalFactory.eINSTANCE;
 
-	private static QvtoEngineImpl engine;
+	private static QvtoEngine engine;
 
 	@BeforeAll
 	static void setUpEngine() {
@@ -65,7 +66,7 @@ class QvtoE2eBlackboxTest {
 				.blackboxRegistry(registry)
 				.blackboxEnabled(true)
 				.build();
-		engine = new QvtoEngineImpl(config);
+		engine = QvtoEngines.create(config);
 	}
 
 	// ==================== Module-level operation ====================

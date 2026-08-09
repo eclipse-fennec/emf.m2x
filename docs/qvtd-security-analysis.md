@@ -144,7 +144,7 @@ The QVT-R Engine operates as an **embedded Java library** within a host applicat
 | **Vector** | `engine.parse(URI)` reads arbitrary files via `Files.readString(Path.of(uri))` |
 | **Impact** | Reading arbitrary files on the filesystem |
 | **Prerequisite** | Attacker controls the URI passed to `parse()` |
-| **File** | `QvtdEngineImpl.java:82-89` |
+| **File** | `QvtdEngine.java:82-89` |
 
 **Analysis:** No path whitelisting or canonicalization. Path traversal possible:
 ```java
@@ -163,9 +163,9 @@ engine.parse(URI.createFileURI("/etc/passwd"));  // reads /etc/passwd as "QVT-R 
 | **Vector** | Arbitrarily large `.qvtr` file read into memory |
 | **Impact** | OutOfMemoryError |
 | **Prerequisite** | Attacker controls the URI passed to `parse()` |
-| **File** | `QvtdEngineImpl.java:89` (`Files.readString`) |
+| **File** | `QvtdEngine.java:89` (`Files.readString`) |
 
-**Analysis:** Neither `QvtdEngineImpl.parse(URI)` nor the parser enforces a maximum source size. A multi-gigabyte `.qvtr` file would cause `OutOfMemoryError`. The OCL layer has `maxCollectionSize`, `maxRegexLength` limits, but there is no `maxSourceSize` at the QVT-R parser level.
+**Analysis:** Neither `QvtdEngine.parse(URI)` nor the parser enforces a maximum source size. A multi-gigabyte `.qvtr` file would cause `OutOfMemoryError`. The OCL layer has `maxCollectionSize`, `maxRegexLength` limits, but there is no `maxSourceSize` at the QVT-R parser level.
 
 **BSI reference:** BSI TR-03185 §4.6 (Availability), CWE-400 (Resource Exhaustion)
 
@@ -211,7 +211,7 @@ engine.parse(URI.createFileURI("/etc/passwd"));  // reads /etc/passwd as "QVT-R 
 | **Vector** | Concurrent `registerImplementationProvider()` + `execute()` causes data race |
 | **Impact** | `ConcurrentModificationException` or corrupted state |
 | **Prerequisite** | Multi-threaded usage of the engine |
-| **File** | `QvtdEngineImpl.java:64` (field), `:132-134` (`registerImplementationProvider`) |
+| **File** | `QvtdEngine.java:64` (field), `:132-134` (`registerImplementationProvider`) |
 
 **Analysis:** The class Javadoc (line 53) claims "the engine instance is safely shared across threads", but `implementationProviders` is a plain `ArrayList`. `registerImplementationProvider()` mutates it without synchronization, while `execute()` reads it via `List.copyOf()`. Concurrent calls create a data race.
 
@@ -227,7 +227,7 @@ engine.parse(URI.createFileURI("/etc/passwd"));  // reads /etc/passwd as "QVT-R 
 | **Vector** | Error messages expose internal file paths, available model extents, exception details |
 | **Impact** | Leaks configuration internals to callers |
 | **Prerequisite** | Engine used in multi-tenant or LSP deployment |
-| **File** | `QvtrExtentManager.java:73`, `QvtdEngineImpl.java:122-128` |
+| **File** | `QvtrExtentManager.java:73`, `QvtdEngine.java:122-128` |
 
 **Analysis:** Error messages include:
 - Full URIs (`"Only file URIs are supported: " + transformationUri`)
@@ -264,7 +264,7 @@ In a service-oriented deployment, this leaks internal state.
 | **Vector** | `parse(String, String)` uses global `EPackage.Registry.INSTANCE` |
 | **Impact** | Cross-tenant metamodel leakage in multi-tenant environments |
 | **Prerequisite** | OSGi or multi-tenant deployment |
-| **File** | `QvtdEngineImpl.java:100` |
+| **File** | `QvtdEngine.java:100` |
 
 **Analysis:** In a multi-tenant environment, one tenant's registered packages are visible to another tenant's parsing operations. A malicious package registration could cause the parser to resolve types from an attacker-controlled metamodel.
 
@@ -398,7 +398,7 @@ Throws `QvtdExecutionException` if deadline exceeded.
 
 **Implementation:** Replaced `ArrayList` with `CopyOnWriteArrayList` for `implementationProviders`.
 
-**Affected files:** `QvtdEngineImpl.java`
+**Affected files:** `QvtdEngine.java`
 
 ---
 
@@ -549,7 +549,7 @@ QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
     .timeoutMs(30_000)                   // 30 seconds (M-R4)
     .build();                            // blackbox disabled by default
 
-QvtdEngine engine = new QvtdEngineImpl(config);
+QvtdEngine engine = QvtdEngines.create(config);
 
 // 3. Parse and execute
 RelationalTransformation trafo = engine.parse(source, "myTransformation");
@@ -612,7 +612,7 @@ QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
 Implementation providers are registered by the **host application** (trusted):
 
 ```java
-QvtdEngineImpl engine = new QvtdEngineImpl(config);
+QvtdEngine engine = QvtdEngines.create(config);
 
 // Register QVT-O engine as implementation provider
 engine.registerImplementationProvider(qvtoEngine);

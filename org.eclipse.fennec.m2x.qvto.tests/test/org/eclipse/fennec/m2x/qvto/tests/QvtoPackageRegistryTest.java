@@ -27,13 +27,14 @@ import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModelType;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -88,7 +89,7 @@ class QvtoPackageRegistryTest {
 	@Test
 	@DisplayName("a modeltype resolves through the registry supplied to the engine")
 	void modeltypeResolvesThroughSuppliedRegistry() throws QvtoParseException {
-		QvtoEngineImpl engine = engineWith(builder -> builder.packageRegistry(registry));
+		QvtoEngine engine = engineWith(builder -> builder.packageRegistry(registry));
 
 		OperationalTransformation transformation = engine.parse(TRANSFORMATION, "registryTest");
 
@@ -103,7 +104,7 @@ class QvtoPackageRegistryTest {
 		ResourceSet resourceSet = new ResourceSetImpl();
 		resourceSet.getPackageRegistry().put(NS_URI, libraryPackage);
 
-		QvtoEngineImpl engine = engineWith(builder -> builder.resourceSet(resourceSet));
+		QvtoEngine engine = engineWith(builder -> builder.resourceSet(resourceSet));
 
 		assertEquals(libraryPackage,
 				resolvedMetamodel(engine.parse(TRANSFORMATION, "registryTest")));
@@ -114,7 +115,7 @@ class QvtoPackageRegistryTest {
 	void staticRegistryAppliesWhenNoneConfigured() throws QvtoParseException {
 		EPackage.Registry.INSTANCE.put(NS_URI, libraryPackage);
 
-		QvtoEngineImpl engine = engineWith(builder -> builder);
+		QvtoEngine engine = engineWith(builder -> builder);
 
 		OperationalTransformation transformation = engine.parse(TRANSFORMATION, "registryTest");
 
@@ -125,7 +126,7 @@ class QvtoPackageRegistryTest {
 	@Test
 	@DisplayName("an unknown metamodel URI is reported, not silently ignored")
 	void unknownMetamodelUriFails() {
-		QvtoEngineImpl engine = engineWith(builder -> builder);
+		QvtoEngine engine = engineWith(builder -> builder);
 
 		QvtoParseException failure = assertThrows(QvtoParseException.class,
 				() -> engine.parse(TRANSFORMATION, "registryTest"),
@@ -140,7 +141,7 @@ class QvtoPackageRegistryTest {
 	@Test
 	@DisplayName("a type that resolves nowhere is reported instead of being fabricated")
 	void unknownTypeIsReported() {
-		QvtoEngineImpl engine = engineWith(builder -> builder.packageRegistry(registry));
+		QvtoEngine engine = engineWith(builder -> builder.packageRegistry(registry));
 
 		QvtoParseException failure = assertThrows(QvtoParseException.class,
 				() -> engine.parse("""
@@ -161,10 +162,10 @@ class QvtoPackageRegistryTest {
 
 	// --- helpers ---
 
-	private QvtoEngineImpl engineWith(
+	private QvtoEngine engineWith(
 			java.util.function.UnaryOperator<QvtoConfiguration.Builder> customizer) {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
-		return new QvtoEngineImpl(customizer.apply(QvtoConfiguration.builder(oclConfig)).build());
+		return QvtoEngines.create(customizer.apply(QvtoConfiguration.builder(oclConfig)).build());
 	}
 
 	/**

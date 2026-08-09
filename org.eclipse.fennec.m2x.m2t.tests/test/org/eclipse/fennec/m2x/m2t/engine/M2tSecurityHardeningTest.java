@@ -24,6 +24,8 @@ import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
@@ -58,8 +60,8 @@ class M2tSecurityHardeningTest {
 		pkg.getEClassifiers().add(testClass);
 	}
 
-	private M2tEngineImpl createEngine(M2tConfiguration config) {
-		return new M2tEngineImpl(config);
+	private M2tEngine createEngine(M2tConfiguration config) {
+		return M2tEngines.create(config);
 	}
 
 	private M2tConfiguration defaultConfig() {
@@ -78,7 +80,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.maxTemplateDepth(5)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			// Template 'main' calls 'recurse', which calls itself
 			String src = "[module m(Ecore)/]\n"
@@ -106,7 +108,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.maxTemplateDepth(100)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			// Non-recursive template chain: main -> helper
 			String src = "[module m(Ecore)/]\n"
@@ -132,7 +134,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.maxForIterations(5)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			// For-loop over a sequence larger than the limit
 			String src = "[module m(Ecore)/]\n"
@@ -159,7 +161,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.maxForIterations(100)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			String src = "[module m(Ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
@@ -185,7 +187,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.maxCrossProductSize(5)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			// Template invocation with Set arguments — cross-product 3*3 = 9 > 5
 			String src = "[module m(Ecore)/]\n"
@@ -211,7 +213,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.maxCrossProductSize(100)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			String src = "[module m(Ecore)/]\n"
 					+ "[template public helper(a : Integer, b : Integer)]([a/],[b/])[/template]\n"
@@ -236,7 +238,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.protectedAreaEnabled(false)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			String src = "[module m(Ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
@@ -266,7 +268,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.protectedAreaEnabled(true)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			String src = "[module m(Ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
@@ -306,7 +308,7 @@ class M2tSecurityHardeningTest {
 					.maxOutputSize(50)
 					.maxForIterations(1_000_000)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			// Each iteration emits "ABCDEFGHIJ" (10 chars), 50 char limit → exceeded after 5+ iterations
 			String src = "[module m(Ecore)/]\n"
@@ -333,7 +335,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.maxOutputSize(10_000)
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			String src = "[module m(Ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
@@ -352,7 +354,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 					.maxOutputSize(0)  // unlimited
 					.build();
-			M2tEngineImpl engine = createEngine(config);
+			M2tEngine engine = createEngine(config);
 
 			String src = "[module m(Ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"

@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
@@ -34,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * <p>The engine caches parse results, link and normalization state and the indentation
  * of template invocations. Those caches used to be keyed by identity and never emptied:
  * a long-lived engine held every module it had ever parsed. They are keyed weakly now,
- * and {@link M2tEngineImpl#release(Module)} makes the release deterministic — garbage
+ * and {@link M2tEngine#release(Module)} makes the release deterministic — garbage
  * collection is a safety net, not a schedule, so the contract that is tested here is
  * the explicit one.
  */
@@ -60,7 +62,7 @@ class M2tEngineRetentionTest {
 	@Test
 	@DisplayName("a released module is unknown to the linker")
 	void releasedModuleIsForgotten() throws Exception {
-		M2tEngineImpl engine = engine();
+		M2tEngine engine = engine();
 		Module base = engine.parse(BASE, "base");
 		Module child = engine.parse(CHILD, "child");
 
@@ -78,7 +80,7 @@ class M2tEngineRetentionTest {
 	@Test
 	@DisplayName("clearCaches forgets every module")
 	void clearCachesForgetsEverything() throws Exception {
-		M2tEngineImpl engine = engine();
+		M2tEngine engine = engine();
 		Module base = engine.parse(BASE, "base");
 		Module child = engine.parse(CHILD, "child");
 		assertTrue(engine.link(base, child).isEmpty());
@@ -92,7 +94,7 @@ class M2tEngineRetentionTest {
 	@Test
 	@DisplayName("a module survives repeated execution — releasing is the caller's choice")
 	void moduleStaysUsableUntilReleased() throws Exception {
-		M2tEngineImpl engine = engine();
+		M2tEngine engine = engine();
 		Module module = engine.parse(TEMPLATE, "doc");
 		engine.link(module);
 
@@ -103,12 +105,12 @@ class M2tEngineRetentionTest {
 
 	// --- helpers ---
 
-	private M2tEngineImpl engine() {
-		return new M2tEngineImpl(M2tConfiguration.builder(
+	private M2tEngine engine() {
+		return M2tEngines.create(M2tConfiguration.builder(
 				OclConfiguration.builder(new OclParserSupport()).build()).build());
 	}
 
-	private String execute(M2tEngineImpl engine, Module module) {
+	private String execute(M2tEngine engine, Module module) {
 		M2tResult result = engine.execute(module, M2tContext.of(EcoreFactory.eINSTANCE.createEClass()));
 		assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
 		return result.generatedFiles().get("out.txt");

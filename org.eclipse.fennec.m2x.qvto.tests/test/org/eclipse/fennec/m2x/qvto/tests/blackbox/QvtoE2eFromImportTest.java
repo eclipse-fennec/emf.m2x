@@ -23,6 +23,8 @@ import java.util.Optional;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -33,7 +35,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +45,7 @@ import org.junit.jupiter.api.Test;
  */
 class QvtoE2eFromImportTest {
 
-	private static QvtoEngineImpl engine;
+	private static QvtoEngine engine;
 
 	@BeforeAll
 	static void setUpEngine() {
@@ -69,7 +70,7 @@ class QvtoE2eFromImportTest {
 				.blackboxEnabled(true)
 				.unitResolverEnabled(true)
 				.build();
-		engine = new QvtoEngineImpl(config);
+		engine = QvtoEngines.create(config);
 	}
 
 	private static final String HELPER_LIB_SOURCE = """

@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
@@ -43,12 +45,12 @@ import org.junit.jupiter.api.Test;
 /**
  * Tests for MOFM2T v1.0 §8.3 Standard Library operations.
  *
- * <p>Uses {@link M2tEngineImpl} to ensure the library is auto-registered
+ * <p>Uses {@link M2tEngine} to ensure the library is auto-registered
  * and operations are accessible from template expressions.
  */
 class M2tStandardLibraryTest {
 
-	private M2tEngineImpl engine;
+	private M2tEngine engine;
 	private EClass input;
 
 	@BeforeEach
@@ -56,7 +58,7 @@ class M2tStandardLibraryTest {
 		OclParserSupport parser = new OclParserSupport();
 		OclConfiguration oclConfig = OclConfiguration.builder(parser).build();
 		M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-		engine = new M2tEngineImpl(config);
+		engine = M2tEngines.create(config);
 		input = EcoreFactory.eINSTANCE.createEClass();
 		input.setName("TestClass");
 	}

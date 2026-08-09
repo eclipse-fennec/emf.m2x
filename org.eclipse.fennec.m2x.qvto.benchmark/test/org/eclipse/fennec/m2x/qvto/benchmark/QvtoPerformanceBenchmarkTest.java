@@ -30,6 +30,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
@@ -39,7 +41,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.eclipse.m2m.qvt.oml.BasicModelExtent;
 import org.eclipse.m2m.qvt.oml.ExecutionContextImpl;
@@ -71,9 +72,9 @@ class QvtoPerformanceBenchmarkTest {
 	private static final int MODEL_SIZE = 100;
 
 	// Three Fennec engine variants
-	static QvtoEngineImpl fennecPlain;
-	static QvtoEngineImpl fennecWithCache;
-	static QvtoEngineImpl fennecWithCacheAndWarmup;
+	static QvtoEngine fennecPlain;
+	static QvtoEngine fennecWithCache;
+	static QvtoEngine fennecWithCacheAndWarmup;
 
 	static EcoreHelper ecoreHelper;
 	static EPackage sourcePackage;
@@ -111,19 +112,19 @@ class QvtoPerformanceBenchmarkTest {
 
 		// Variant 1: plain (no cache, no warmUp)
 		OclConfiguration oclPlain = OclConfiguration.builder(new OclParserSupport()).build();
-		fennecPlain = new QvtoEngineImpl(QvtoConfiguration.builder(oclPlain).build());
+		fennecPlain = QvtoEngines.create(QvtoConfiguration.builder(oclPlain).build());
 
 		// Variant 2: with LRU expression cache
 		OclConfiguration oclCached = OclConfiguration.builder(new OclParserSupport())
 				.expressionCache(OclLruExpressionCache.ofSize(1024))
 				.build();
-		fennecWithCache = new QvtoEngineImpl(QvtoConfiguration.builder(oclCached).build());
+		fennecWithCache = QvtoEngines.create(QvtoConfiguration.builder(oclCached).build());
 
 		// Variant 3: with LRU cache + warmUp
 		OclConfiguration oclCachedWarm = OclConfiguration.builder(new OclParserSupport())
 				.expressionCache(OclLruExpressionCache.ofSize(1024))
 				.build();
-		fennecWithCacheAndWarmup = new QvtoEngineImpl(QvtoConfiguration.builder(oclCachedWarm).build());
+		fennecWithCacheAndWarmup = QvtoEngines.create(QvtoConfiguration.builder(oclCachedWarm).build());
 		fennecWithCacheAndWarmup.getOclEngine().warmUp(sourcePackage);
 		fennecWithCacheAndWarmup.getOclEngine().warmUp(targetPackage);
 

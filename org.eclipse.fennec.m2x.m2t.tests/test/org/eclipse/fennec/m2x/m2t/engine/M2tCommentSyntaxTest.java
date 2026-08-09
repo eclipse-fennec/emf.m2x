@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
@@ -74,7 +76,7 @@ class M2tCommentSyntaxTest {
 
 	private String generate(String template) throws Exception {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
-		M2tEngineImpl engine = new M2tEngineImpl(M2tConfiguration.builder(oclConfig).build());
+		M2tEngine engine = M2tEngines.create(M2tConfiguration.builder(oclConfig).build());
 
 		Module module = engine.parse(template, "doc");
 		engine.link(module);
