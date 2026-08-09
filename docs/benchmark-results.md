@@ -1,7 +1,7 @@
 # Fennec M2M — Benchmark Results
 
-Date: 2026-02-28
-Platform: Linux 6.17.0-1012-oem, Java 21
+Date: 2026-08-09
+Platform: Linux 6.17.0-1030-oem, Java 21
 Machine: mark-dell
 
 ## 1. OCL Benchmark (Fennec vs Eclipse OCL Classic)
@@ -25,11 +25,11 @@ Times are total for 1000 iterations (lower is better).
 
 | Expression | Fennec plain | Fennec+cache | Fennec+warmUp | Eclipse | Fennec plain/Eclipse |
 |-----------|-------------|-------------|--------------|---------|----------------------|
-| simple | 6.66 ms | 0.12 ms | 0.11 ms | 665.37 ms | **100x faster** |
-| medium | 34.52 ms | 0.15 ms | 0.14 ms | 9793.92 ms | **284x faster** |
-| complex | 51.31 ms | 0.16 ms | 0.15 ms | 16168.95 ms | **315x faster** |
+| simple | 8.07 ms | 0.12 ms | 0.11 ms | 642.60 ms | **80x faster** |
+| medium | 39.19 ms | 0.14 ms | 0.14 ms | 9448.56 ms | **241x faster** |
+| complex | 50.89 ms | 0.16 ms | 0.16 ms | 16310.06 ms | **320x faster** |
 
-**Summary:** Fennec parser is **~100–315x faster** without cache, **~100000x faster** with cache (cache hit = no re-parse). Eclipse OCL Classic uses heavyweight Ecore/pivot setup per parse.
+**Summary:** Fennec parser is **~80–320x faster** without cache, **~100000x faster** with cache (cache hit = no re-parse). Eclipse OCL Classic uses heavyweight Ecore/pivot setup per parse.
 
 ### 1.2 Parse + Eval Performance
 
@@ -37,9 +37,9 @@ Realistic workload: parse and evaluate in one call.
 
 | Expression | Fennec plain | Fennec+cache | Fennec+warmUp | Eclipse | Fennec plain/Eclipse |
 |-----------|-------------|-------------|--------------|---------|----------------------|
-| simple | 6.60 ms | 0.36 ms | 0.34 ms | 1165.15 ms | **176x faster** |
-| medium | 35.60 ms | 3.28 ms | 2.77 ms | 16152.72 ms | **454x faster** |
-| complex | 69.15 ms | 4.67 ms | 4.71 ms | 25816.78 ms | **373x faster** |
+| simple | 6.58 ms | 0.37 ms | 0.36 ms | 1153.48 ms | **175x faster** |
+| medium | 35.99 ms | 2.71 ms | 3.18 ms | 15701.08 ms | **436x faster** |
+| complex | 70.30 ms | 5.19 ms | 5.19 ms | 24427.42 ms | **347x faster** |
 
 ### 1.3 Eval Performance (pre-parsed)
 
@@ -47,16 +47,19 @@ Expression already parsed — measures pure evaluation engine.
 
 | Expression | Fennec plain | Fennec+warmUp | Eclipse | Fennec/Eclipse |
 |-----------|-------------|--------------|---------|----------------|
-| simple | 0.20 ms | 0.19 ms | 0.25 ms | **0.80x** (20% faster) |
-| medium | 2.61 ms | 2.60 ms | 6.30 ms | **0.41x** (59% faster) |
-| complex | 3.75 ms | 10.68 ms | 6.95 ms | **0.54x** plain / 1.54x warmUp* |
+| simple | 0.24 ms | 0.22 ms | 0.27 ms | **0.89x** (11% faster) |
+| medium | 2.54 ms | 2.49 ms | 6.58 ms | **0.39x** (61% faster) |
+| complex | 3.74 ms | 3.66 ms | 6.63 ms | **0.56x** (44% faster) |
 
-*Note: warmUp variant shows slower complex eval due to PropertyAccessorCache overhead on deeply nested expressions. Plain mode is faster here.
+The February run had the warmUp variant at 10.68 ms for `complex` and explained it as
+PropertyAccessorCache overhead on deeply nested expressions. It no longer reproduces —
+warmUp and plain are within noise of each other — so that explanation is withdrawn rather
+than carried forward.
 
 ### OCL Summary
 
 - **Parsing:** Fennec is 100x–100,000x faster (ANTLR4 vs Eclipse pivot/Xtext overhead)
-- **Evaluation:** Fennec is 20–59% faster for simple/medium expressions
+- **Evaluation:** Fennec is 11–61% faster
 - **Cache:** Provides massive speedup for repeated expressions (the common case in EMF delegates)
 
 ---
@@ -80,26 +83,30 @@ Expression already parsed — measures pure evaluation engine.
 
 | Metric | Fennec Plain | Fennec Cache | Fennec Cache+WU | Eclipse | Best Fennec/Eclipse |
 |--------|-------------|-------------|-----------------|---------|---------------------|
-| Parse (200 iter) | 79.09 ms | 75.98 ms | 80.11 ms | 164.72 ms | **0.46x** (2.2x faster) |
+| Parse (200 iter) | 81.09 ms | 77.20 ms | 76.89 ms | 162.02 ms | **0.47x** (2.1x faster) |
 
 ### 2.2 Execution Performance
 
 | Metric | Fennec Plain | Fennec Cache | Fennec Cache+WU | Eclipse | Best Fennec/Eclipse |
 |--------|-------------|-------------|-----------------|---------|---------------------|
-| Execute (200 iter × 100 elem) | 170.44 ms | 157.41 ms | 156.45 ms | 175.49 ms | **0.89x** (11% faster) |
-| ns/mapping | 8.522 ns | 7.871 ns | 7.822 ns | 8.774 ns | |
+| Execute (200 iter × 100 elem) | 167.67 ms | 166.55 ms | 171.96 ms | 173.98 ms | **0.96x** (4% faster) |
+| ns/mapping | 8.384 ns | 8.327 ns | 8.598 ns | 8.699 ns | |
 
 ### 2.3 Parse + Execute (End-to-End)
 
 | Metric | Fennec Plain | Fennec Cache | Fennec Cache+WU | Eclipse | Best Fennec/Eclipse |
 |--------|-------------|-------------|-----------------|---------|---------------------|
-| Parse+Exec (200 iter × 100 elem) | 262.96 ms | 256.93 ms | 257.41 ms | 593.65 ms | **0.43x** (2.3x faster) |
+| Parse+Exec (200 iter × 100 elem) | 287.23 ms | 265.57 ms | 279.92 ms | 480.33 ms | **0.55x** (1.8x faster) |
 
 ### QVT-O Summary
 
-- **Parsing:** Fennec is **2.2x faster** (ANTLR4 vs LPG)
-- **Execution:** Fennec is **11% faster** (with cache+warmup)
-- **End-to-End:** Fennec is **2.3x faster** overall
+- **Parsing:** Fennec is **2.1x faster** (ANTLR4 vs LPG)
+- **Execution:** at parity — 4% faster with cache, which is inside run-to-run variation
+- **End-to-End:** Fennec is **1.8x faster** overall
+
+Execution is the one place where the two are level. The end-to-end advantage comes from
+parsing, and it moves between runs mostly with the Eclipse side (593.65 ms in February,
+480.33 ms now).
 
 ---
 
