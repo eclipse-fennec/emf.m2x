@@ -34,7 +34,9 @@ jobs:
     with:
       # java-versions unset on purpose: the reusable default '["21","25"]' runs
       # both legs. m2x still targets Java 21; the 25 leg is a toolchain check.
-      run-perf-tests: false
+      # perfTest gates since #88 and costs ~38 s since #87 — a release is the last
+      # place to skip a check that cheap.
+      run-perf-tests: true
 
   release:
     name: Release to Maven Central

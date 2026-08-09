@@ -37,8 +37,12 @@ jobs:
     with:
       # java-versions unset on purpose: the reusable default '["21","25"]' runs
       # both legs. m2x still targets Java 21; the 25 leg is a toolchain check.
-      # perfTest sets ignoreFailures, so it carries no gate signal - keep it out.
-      run-perf-tests: false
+      # perfTest runs our own performance tests. Since #88 it no longer sets
+      # ignoreFailures, so a failure is a failure, and since #87 it takes ~38 s in
+      # CI — there is nothing left to keep it out for. The comparison against the
+      # Eclipse implementations is @Tag("benchmark") and has its own task, which no
+      # workflow invokes.
+      run-perf-tests: true
 
   release:
     name: Release snapshot
