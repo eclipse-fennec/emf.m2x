@@ -249,6 +249,17 @@ RelationalTransformation trafo = engine.parse(
 );
 ```
 
+Callers rarely start with an EMF URI. `UriHelper` in the shared `org.eclipse.fennec.m2x` bundle converts the forms you are likely to hold — and it is the right way to turn a *path* into a URI:
+
+```java
+import org.eclipse.fennec.m2x.utils.UriHelper;
+
+engine.parse(UriHelper.fromPath(Path.of("/srv/transforms/MyTrafo.qvtr")));
+engine.parse(UriHelper.fromJavaUri(someJavaUri));
+```
+
+`URI.createURI(path.toString())` is the trap it avoids: a path is not a URI, and on Windows `C:\transforms\MyTrafo.qvtr` would end up with `C` as its scheme. `UriHelper.toJavaUri(uri)` converts back for APIs that speak `java.net.URI`.
+
 ### 5.3 Reuse Parsed ASTs
 
 Parse once and execute many times — the `RelationalTransformation` AST is reusable:
