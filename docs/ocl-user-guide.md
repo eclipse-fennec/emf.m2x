@@ -850,6 +850,18 @@ List<Constraint> constraints = engine.parseDocument(oclDocument, myResourceSet);
 
 This resolves against the resource set's own package registry, for that one call. To make *every* parse of an engine use a specific registry, give it to the parser instead (see §3.7).
 
+### 10.3.1 Import declarations
+
+A Complete OCL document may open with `import`, `include` or `library` (§12.3). What each does here:
+
+| Form | Effect |
+|---|---|
+| `import company::Company` | **Nothing, and nothing is missing.** Type names resolve against the whole package registry the engine was given, so an import cannot add anything that is not already visible. |
+| `import c : company` | The alias is remembered — `c::Person` resolves for the rest of the document. |
+| `library company::Utilities` | **Reported as an error.** Additional operations reach the engine as `OclOperationProvider`s, not by being named in a document, so there is nothing to resolve this to. |
+
+The `library` form is reported rather than skipped on purpose: skipping it means the operations it was supposed to bring are missing, and the document then fails somewhere else with "unknown operation" — at a place that says nothing about the cause. See [§11](#11-custom-operations) for how to supply operations.
+
 ### 10.4 Locating Documents
 
 A Complete OCL document is passed as text, so where it comes from is the caller's business. When that means a file or a bundle resource, `UriHelper` in the shared `org.eclipse.fennec.m2x` bundle produces the EMF URI the resource set expects:
