@@ -16,9 +16,10 @@ Fennec M2T is a lightweight, spec-compliant MOFM2T v1.0 (Model to Text) engine t
 10. [Protected Areas](#10-protected-areas)
 11. [Standard Library](#11-standard-library)
 12. [Error Handling](#12-error-handling)
-13. [Engine Lifetime and Module Retention](#13-engine-lifetime-and-module-retention)
-14. [M2tGenerationStrategy](#14-m2tgenerationstrategy)
-15. [Whitespace Handling](#15-whitespace-handling)
+13. [Calling Operations from a Template](#13-calling-operations-from-a-template)
+14. [Engine Lifetime and Module Retention](#14-engine-lifetime-and-module-retention)
+15. [M2tGenerationStrategy](#15-m2tgenerationstrategy)
+16. [Whitespace Handling](#16-whitespace-handling)
 
 ---
 
@@ -134,8 +135,8 @@ M2tEngineImpl engine = new M2tEngineImpl(config);
 | `resourceSet(resourceSet)` | — | Resource set whose package registry resolves metamodel type names (see [§3.4](#34-which-metamodels-the-engine-sees)) |
 | `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | The registry itself; wins over `resourceSet` when both are set |
 | `defaultCharset(charset)` | UTF-8 | Charset for file output encoding |
-| `whitespaceMode(mode)` | `ACCELEO` | Whitespace normalization mode (see [§15](#15-whitespace-handling)) |
-| `generationStrategy(strategy)` | `null` (in-memory) | SPI for file output (see [§14](#14-m2tgenerationstrategy)) |
+| `whitespaceMode(mode)` | `ACCELEO` | Whitespace normalization mode (see [§16](#16-whitespace-handling)) |
+| `generationStrategy(strategy)` | `null` (in-memory) | SPI for file output (see [§15](#15-m2tgenerationstrategy)) |
 | `maxDiagnostics(int)` | 10,000 | Maximum diagnostics before truncation |
 | `maxTemplateDepth(int)` | 1,000 | Maximum template invocation depth (recursion limit) |
 | `maxForIterations(int)` | 1,000,000 | Maximum for-block iterations |
@@ -1010,7 +1011,23 @@ Common causes: private templates accessed from another module, typos in template
 
 ---
 
-## 13. Engine Lifetime and Module Retention
+## 13. Calling Operations from a Template
+
+`[book.displayLabel()/]` resolves in this order: an `EOperation` of the model first, then the OCL standard library, then registered custom operations.
+
+The first of those has a catch worth knowing before you design around it. A **generated** EMF model implements its operations in the generated `Impl`, so the call lands in your Java method. A **dynamic** model — an `.ecore` loaded at runtime — has no such code, and the call only works if the operation carries an OCL body annotation and the package declares the delegate; see [OCL User Guide §9.4](ocl-user-guide.md#94-operations-of-dynamic-models). Without that, generation reports:
+
+```
+Operation 'displayLabel' has no implementation. Either the model is generated and
+implements it, or the operation carries an OCL body annotation and the package
+declares the delegate (see installDelegates())
+```
+
+For generator concerns — output paths, cross-references, diagrams — an `EOperation` is the wrong home anyway. Those belong to the generator, not to the metamodel, and are better registered as OCL custom operations (see [OCL User Guide §11](ocl-user-guide.md#11-custom-operations)): the receiver is the real `EObject`, the implementation is an ordinary Java lambda, and the model stays free of documentation concerns.
+
+---
+
+## 14. Engine Lifetime and Module Retention
 
 The engine remembers what it parsed: a module's parse result, whether it has been linked and normalized, and the indentation of its template invocations. That is what makes repeated executions cheap.
 
@@ -1029,7 +1046,7 @@ After `release`, the engine no longer knows the module. Linking it again reports
 
 ---
 
-## 14. M2tGenerationStrategy
+## 15. M2tGenerationStrategy
 
 `M2tGenerationStrategy` is the SPI for controlling where generated text goes. When no strategy is configured, the engine collects all output in memory (`M2tResult.generatedFiles()`).
 
@@ -1096,7 +1113,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 
 ---
 
-## 15. Whitespace Handling
+## 16. Whitespace Handling
 
 MOFM2T §8.4 defines precise whitespace normalization rules. The engine supports three modes via `WhitespaceMode`:
 
