@@ -269,6 +269,17 @@ public interface OclEngine {
 	// --- Composition ---
 
 	/**
+	 * Returns the options this engine evaluates with when none are given.
+	 *
+	 * <p>For engines composing on top of OCL: they evaluate with the host engine's
+	 * settings plus their own operation providers, rather than inventing settings the
+	 * caller never configured.
+	 *
+	 * @return the default evaluation options, never {@code null}
+	 */
+	OclEvaluationOptions getDefaultOptions();
+
+	/**
 	 * Returns the operation providers active for the given options.
 	 *
 	 * <p>For engines composing on top of OCL: QVT-O and M2T resolve their own operations

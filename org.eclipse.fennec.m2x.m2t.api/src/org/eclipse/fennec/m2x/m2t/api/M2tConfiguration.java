@@ -21,6 +21,7 @@ import java.util.Objects;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 
 /**
  * Immutable configuration for creating {@link M2tEngine} instances.
@@ -52,6 +53,7 @@ public final class M2tConfiguration {
 	public static final long DEFAULT_MAX_OUTPUT_SIZE = 10_000_000L;
 
 	private final OclConfiguration oclConfiguration;
+	private final OclEngine oclEngine;
 	private final EPackage.Registry packageRegistry;
 	private final ResourceSet resourceSet;
 	private final M2tGenerationStrategy generationStrategy;
@@ -66,6 +68,7 @@ public final class M2tConfiguration {
 
 	private M2tConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
+		this.oclEngine = builder.oclEngine;
 		this.packageRegistry = builder.packageRegistry;
 		this.resourceSet = builder.resourceSet;
 		this.generationStrategy = builder.generationStrategy;
@@ -77,6 +80,20 @@ public final class M2tConfiguration {
 		this.maxCrossProductSize = builder.maxCrossProductSize;
 		this.maxOutputSize = builder.maxOutputSize;
 		this.protectedAreaEnabled = builder.protectedAreaEnabled;
+	}
+
+	/**
+	 * Returns the OCL engine this configuration was given, or {@code null} if the engine
+	 * is to be derived from {@link #oclConfiguration()}.
+	 *
+	 * <p>Supplying an engine is how M2T uses the one that was configured elsewhere — the
+	 * injected service under OSGi, or one built with {@code OclEngines.create(...)} in
+	 * plain Java — with its cache and its operation providers.
+	 *
+	 * @return the OCL engine, or {@code null}
+	 */
+	public OclEngine oclEngine() {
+		return oclEngine;
 	}
 
 	public OclConfiguration oclConfiguration() {
@@ -197,6 +214,17 @@ public final class M2tConfiguration {
 		return protectedAreaEnabled;
 	}
 
+	/**
+	 * Creates a builder that uses the given OCL engine.
+	 *
+	 * @param oclEngine the engine to evaluate template expressions with, must not be
+	 *        {@code null}
+	 * @return a new builder
+	 */
+	public static Builder builder(OclEngine oclEngine) {
+		return new Builder(Objects.requireNonNull(oclEngine, "oclEngine must not be null"));
+	}
+
 	public static Builder builder(OclConfiguration oclConfiguration) {
 		return new Builder(oclConfiguration);
 	}
@@ -204,6 +232,7 @@ public final class M2tConfiguration {
 	public static final class Builder {
 
 		private final OclConfiguration oclConfiguration;
+		private final OclEngine oclEngine;
 		private EPackage.Registry packageRegistry;
 		private ResourceSet resourceSet;
 		private M2tGenerationStrategy generationStrategy;
@@ -218,6 +247,12 @@ public final class M2tConfiguration {
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
+			this.oclEngine = null;
+		}
+
+		private Builder(OclEngine oclEngine) {
+			this.oclConfiguration = null;
+			this.oclEngine = oclEngine;
 		}
 
 		/**
