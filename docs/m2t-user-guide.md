@@ -191,6 +191,7 @@ Prefer it over `URI.createURI(path.toString())` — a path is not a URI, and on 
 > <dependency>
 >     <groupId>org.eclipse.fennec.m2x</groupId>
 >     <artifactId>org.eclipse.fennec.m2x</artifactId>
+>     <version>0.1.1-SNAPSHOT</version>
 > </dependency>
 > ```
 
