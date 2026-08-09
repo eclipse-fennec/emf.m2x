@@ -45,6 +45,10 @@ import org.osgi.service.metatype.annotations.Designate;
  * "DefaultOclEngine": { "ocl.maxDepth": 500 }
  * </pre>
  *
+ * <p>The reference is named {@code oclEngine}, so a consumer that wants a particular one
+ * can say so — {@code "oclEngine.target": "(component.name=MyTunedOclEngine)"} — rather than
+ * having to know the number bnd would otherwise assign it.
+ *
  * <p>Blackbox libraries and unit resolvers are deliberately absent: a script names what it
  * needs, so the engine resolves those by name when it parses rather than having them pushed
  * in here (#90).
@@ -58,7 +62,7 @@ public class M2tEngineComponent extends M2tEngineImpl {
 	@Activate
 	public M2tEngineComponent(
 			M2tEngineConfiguration config,
-			@Reference(scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine) {
+			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine) {
 		super(M2tConfigurationHelper.from(config, oclEngine));
 	}
 }

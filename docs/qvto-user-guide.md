@@ -127,27 +127,7 @@ QvtoConfiguration.builder(oclConfiguration).build();
 
 A supplied engine is used as it is: its cache, its operation providers, its evaluation settings. `QvtoEngine.getOclEngine()` returns the engine that actually runs — useful to warm it up, inspect its cache, or install EMF delegates on it.
 
-#### Under OSGi
-
-`DefaultQvtoEngine` publishes `QvtoEngine` as a prototype-scoped service, so every consumer gets its own engine with its own caches. Its configuration policy is optional: there is a working engine without configuring anything, and configuring one does not register a different service.
-
-It takes the OCL engine as a mandatory service reference, which is door 2 — the engine a consumer configured is the engine that evaluates. OCL limits therefore belong on `DefaultOclEngine`, not here:
-
-```json
-{
-  "DefaultQvtoEngine": { "qvto.blackboxEnabled": true },
-  "DefaultOclEngine":  { "ocl.maxDepth": 500 }
-}
-```
-
-| Property | Default |
-|---|---|
-| `qvto.blackboxEnabled` | `false` |
-| `qvto.allowedBlackboxModules` | *(empty — allows none)* |
-| `qvto.unitResolverEnabled` | `false` |
-| `qvto.allowedUnitModules` | *(empty — allows none)* |
-| `qvto.maxBlackboxLibraries` | 10 |
-| `qvto.maxUnitResolvers` | 5 |
+Under OSGi the engine is a service and door 2 is what the component uses — see [§3.4](#34-osgi-setup).
 
 ### 3.1.1 Configuring both sides
 
@@ -213,24 +193,77 @@ The standard library types of QVT v1.3 §8.3.1 — `Exception`, `StringException
 
 ### 3.4 OSGi Setup
 
-In OSGi, inject the engine via Declarative Services:
+`DefaultQvtoEngine` publishes `QvtoEngine` as a **PROTOTYPE**-scoped service. Every `@Reference` injection gets its own engine with its own caches, so one consumer's warm-up and another's memory footprint stay separate.
+
+Its configuration policy is **optional**: there is a working engine without configuring anything, and configuring one later does not register a second service that consumers would have to disambiguate.
 
 ```java
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.api.annotation.require.RequireQVTO;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 
+@RequireQVTO                     // resolver: a bundle providing the QVT-O engine must be present
 @Component
 public class MyTransformationRunner {
 
     @Reference
-    private QvtoEngine engine;
+    private QvtoEngine engine;   // fresh instance, own caches
 
     public void run(EObject input) throws QvtoParseException {
-        // Engine is fully configured via OSGi
         OperationalTransformation trafo = engine.parse(source, "MyTrafo");
-        // ...
+        engine.execute(trafo, QvtoExecutionContext.of(inExtent, outExtent));
     }
+}
+```
+
+**Components and scopes:**
+
+| Component | Scope | What's shared? |
+|---|---|---|
+| `DefaultQvtoEngine` | PROTOTYPE | Nothing — each consumer gets its own engine and trace state |
+| `DefaultOclEngine` | PROTOTYPE | Nothing — bound `prototype_required`, so each QVT-O engine evaluates on its own OCL engine |
+| `DefaultOclExpressionCacheComponent` | SINGLETON | The parsed-expression cache, shared by all OCL engines |
+
+The engine takes its OCL engine as a **mandatory** service reference. That is door 2 from [§3.1](#31-three-ways-to-give-qvt-o-its-ocl-engine): the OCL engine a consumer configured — with its cache and its operation providers — is the one that evaluates transformation expressions, rather than a second one built beside it.
+
+### 3.4.1 Configuration via ConfigAdmin
+
+All properties use the `qvto.` prefix. OCL limits are **not** repeated here; they are configured on `DefaultOclEngine` with `ocl.*`, so the two cannot drift apart.
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultQvtoEngine": {
+        "qvto.blackboxEnabled": true,
+        "qvto.allowedBlackboxModules": ["my.trusted.Library"]
+    },
+    "DefaultOclEngine": {
+        "ocl.maxDepth": 500
+    }
+}
+```
+
+**Available properties:**
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `qvto.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries |
+| `qvto.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; empty allows none |
+| `qvto.unitResolverEnabled` | boolean | `false` | Whether transformations may import units resolved from outside |
+| `qvto.allowedUnitModules` | String[] | *(empty)* | Qualified names that may be imported as a unit; empty allows none |
+| `qvto.maxBlackboxLibraries` | int | 10 | Blackbox libraries one engine will use |
+| `qvto.maxUnitResolvers` | int | 5 | Unit resolvers one engine will use |
+
+Blackboxes and unit resolvers are **off by default and gated by an allow-list**: both let a transformation reach code and files outside itself, so switching them on is a decision, not a default. An empty allow-list permits nothing even when the feature is enabled.
+
+The same settings are available to plain Java through `QvtoConfiguration.Builder` — see [§3.2](#32-configuration-options).
+
+**Running on a specific OCL engine:** the reference is unfiltered by default, so the engine binds whichever `OclEngine` service is there. To pin it to one you configured yourself, set a target filter:
+
+```json
+{
+    "DefaultQvtoEngine": { "oclEngine.target": "(component.name=MyTunedOclEngine)" }
 }
 ```
 

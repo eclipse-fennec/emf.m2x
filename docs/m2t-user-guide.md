@@ -112,29 +112,7 @@ A supplied engine is used as it is: its cache, its operation providers, its eval
 
 `M2tEngine.getOclEngine()` returns the engine that actually runs — useful to warm it up, inspect its cache, or install EMF delegates on it.
 
-### 3.1.1 Under OSGi
-
-`DefaultM2tEngine` publishes `M2tEngine` as a prototype-scoped service, so every consumer gets its own engine with its own caches. Its configuration policy is optional: there is a working engine without configuring anything, and configuring one does not register a different service.
-
-It takes the OCL engine as a mandatory service reference, which is door 2 — the engine a consumer configured is the engine that runs the templates. OCL limits therefore belong on `DefaultOclEngine`, not here:
-
-```json
-{
-  "DefaultM2tEngine": { "m2t.whitespaceMode": "SPEC" },
-  "DefaultOclEngine":  { "ocl.maxDepth": 500 }
-}
-```
-
-| Property | Default |
-|---|---|
-| `m2t.defaultCharset` | `UTF-8` |
-| `m2t.whitespaceMode` | `ACCELEO` |
-| `m2t.maxDiagnostics` | 10000 |
-| `m2t.maxTemplateDepth` | 1000 |
-| `m2t.maxForIterations` | 1000000 |
-| `m2t.maxCrossProductSize` | 1000000 |
-| `m2t.maxOutputSize` | 10000000 |
-| `m2t.protectedAreaEnabled` | `true` |
+Under OSGi the engine is a service and door 2 is what the component uses — see [§3.6](#36-osgi-declarative-services).
 
 ### 3.2 Minimal
 
@@ -242,28 +220,79 @@ Prefer it over `URI.createURI(path.toString())` — a path is not a URI, and on 
 
 ### 3.6 OSGi (Declarative Services)
 
-The M2T engine currently does not register a DS component. Use standalone instantiation in OSGi by creating the engine in your component's `@Activate` method:
+`DefaultM2tEngine` publishes `M2tEngine` as a **PROTOTYPE**-scoped service. Every `@Reference` injection gets its own engine with its own caches, so one consumer's warm-up and another's memory footprint stay separate.
+
+Its configuration policy is **optional**: there is a working engine without configuring anything, and configuring one later does not register a second service that consumers would have to disambiguate.
 
 ```java
-import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngine;
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
-import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
-import org.osgi.service.component.annotations.Activate;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.api.annotation.require.RequireM2T;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
 
+@RequireM2T                       // resolver: a bundle providing the M2T engine must be present
 @Component
 public class MyGenerator {
 
-    private M2tEngine engine;
+    @Reference
+    private M2tEngine engine;     // fresh instance, own caches
 
-    @Activate
-    void activate() {
-        OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
-        M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-        engine = M2tEngines.create(config);
+    public void generate(EObject model) throws M2tParseException {
+        Module module = engine.parse(templateSource, "myModule");
+        engine.link(module);
+        engine.execute(module, M2tContext.of(model));
     }
+}
+```
+
+**Components and scopes:**
+
+| Component | Scope | What's shared? |
+|---|---|---|
+| `DefaultM2tEngine` | PROTOTYPE | Nothing — each consumer gets its own engine, module cache and linker state |
+| `DefaultOclEngine` | PROTOTYPE | Nothing — bound `prototype_required`, so each M2T engine evaluates on its own OCL engine |
+| `DefaultOclExpressionCacheComponent` | SINGLETON | The parsed-expression cache, shared by all OCL engines |
+
+The engine takes its OCL engine as a **mandatory** service reference. That is door 2 from [§3.1](#31-three-ways-to-give-m2t-its-ocl-engine): the OCL engine a consumer configured — with its cache and its operation providers — is the one that evaluates the template expressions, rather than a second one built beside it.
+
+### 3.6.1 Configuration via ConfigAdmin
+
+All properties use the `m2t.` prefix. OCL limits are **not** repeated here; they are configured on `DefaultOclEngine` with `ocl.*`, so the two cannot drift apart.
+
+```json
+{
+    ":configurator:resource-version": 1,
+    "DefaultM2tEngine": {
+        "m2t.whitespaceMode": "SPEC",
+        "m2t.defaultCharset": "UTF-8",
+        "m2t.maxOutputSize": 5000000
+    },
+    "DefaultOclEngine": {
+        "ocl.maxDepth": 500
+    }
+}
+```
+
+**Available properties:**
+
+| Property | Type | Default | Description |
+|---|---|---|---|
+| `m2t.defaultCharset` | String | `UTF-8` | Charset for generated files that do not name one |
+| `m2t.whitespaceMode` | String | `ACCELEO` | `NONE`, `SPEC` or `ACCELEO` — see [§16](#16-whitespace-handling) |
+| `m2t.maxDiagnostics` | int | 10,000 | Diagnostics collected before generation gives up (T-2) |
+| `m2t.maxTemplateDepth` | int | 1,000 | Nesting depth of template invocations (T-1 runaway recursion) |
+| `m2t.maxForIterations` | int | 1,000,000 | Iterations of a single `for` block (T-3) |
+| `m2t.maxCrossProductSize` | int | 1,000,000 | Size of a `for` over several collections (T-3) |
+| `m2t.maxOutputSize` | long | 10,000,000 | Characters one generation may produce (T-4 output flooding) |
+| `m2t.protectedAreaEnabled` | boolean | `true` | Whether protected area markers in existing files are honoured (T-6) |
+
+The same settings are available to plain Java through `M2tConfiguration.Builder` — see [§3.4](#34-configuration-options).
+
+**Running on a specific OCL engine:** the reference is unfiltered by default, so the engine binds whichever `OclEngine` service is there. To pin it to one you configured yourself, set a target filter:
+
+```json
+{
+    "DefaultM2tEngine": { "oclEngine.target": "(component.name=MyTunedOclEngine)" }
 }
 ```
 
