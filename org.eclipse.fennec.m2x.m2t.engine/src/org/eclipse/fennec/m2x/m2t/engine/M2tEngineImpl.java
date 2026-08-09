@@ -119,25 +119,13 @@ public class M2tEngineImpl implements M2tEngine {
 	public M2tEngineImpl(M2tConfiguration config) {
 		this.config = Objects.requireNonNull(config, "config must not be null");
 		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
-		// Augment OCL config with MOFM2T standard library (§8.3)
-		OclConfiguration base = config.oclConfiguration();
-		OclConfiguration.Builder oclBuilder = OclConfiguration.builder(base.parser())
-				.customOperationsEnabled(true)
-				.nullHandling(base.nullHandling())
-				.errorRecovery(base.errorRecovery())
-				.maxDepth(base.maxDepth())
-				.maxCollectionSize(base.maxCollectionSize())
-				.maxClosureIterations(base.maxClosureIterations())
-				.maxRegexLength(base.maxRegexLength())
-				.operationProviders(base.operationProviders())
-				.addOperationProvider(new M2tStandardLibrary());
-		if (base.timeoutMs() > 0) {
-			oclBuilder.timeoutMs(base.timeoutMs());
-		}
-		if (base.expressionCache() != null) {
-			oclBuilder.expressionCache(base.expressionCache());
-		}
-		this.oclEngine = OclEngines.create(oclBuilder.build());
+		// The engine evaluates with the OCL engine it was given — its cache, its
+		// providers. Only when none was supplied is one built from the configuration;
+		// the MOFM2T standard library rides along per evaluation (M2tEvaluator), so a
+		// supplied engine needs no preparation.
+		this.oclEngine = config.oclEngine() != null
+				? config.oclEngine()
+				: OclEngines.create(config.oclConfiguration());
 		this.parserSupport = new M2tParserSupport();
 	}
 

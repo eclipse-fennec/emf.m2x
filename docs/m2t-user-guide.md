@@ -92,7 +92,22 @@ Five lines of setup, one template, one generated file.
 
 ## 3. Engine Setup
 
-### 3.1 Minimal
+### 3.1 Three ways to give M2T its OCL engine
+
+M2T evaluates template expressions with an OCL engine. Which one, is the caller's choice:
+
+```java
+// bring the engine you already have — the injected service under OSGi,
+// OclEngines.create(...) in plain Java
+M2tConfiguration.builder(oclEngine).build();
+
+// or configure the OCL side yourself
+M2tConfiguration.builder(oclConfiguration).build();
+```
+
+A supplied engine is used as it is: its cache, its operation providers, its evaluation settings. The MOFM2T §8.3 string operations travel with each evaluation, so an engine that knows nothing about M2T needs no preparation.
+
+### 3.2 Minimal
 
 ```java
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
@@ -105,7 +120,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
 M2tEngineImpl engine = new M2tEngineImpl(config);
 ```
 
-### 3.2 With Builder Options
+### 3.3 With Builder Options
 
 ```java
 import java.nio.charset.StandardCharsets;
@@ -128,11 +143,11 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 M2tEngineImpl engine = new M2tEngineImpl(config);
 ```
 
-### 3.3 Configuration Options
+### 3.4 Configuration Options
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `resourceSet(resourceSet)` | — | Resource set whose package registry resolves metamodel type names (see [§3.4](#34-which-metamodels-the-engine-sees)) |
+| `resourceSet(resourceSet)` | — | Resource set whose package registry resolves metamodel type names (see [§3.5](#35-which-metamodels-the-engine-sees)) |
 | `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | The registry itself; wins over `resourceSet` when both are set |
 | `defaultCharset(charset)` | UTF-8 | Charset for file output encoding |
 | `whitespaceMode(mode)` | `ACCELEO` | Whitespace normalization mode (see [§16](#16-whitespace-handling)) |
@@ -144,7 +159,7 @@ M2tEngineImpl engine = new M2tEngineImpl(config);
 | `maxOutputSize(long)` | 10,000,000 | Maximum total output size in characters (~10 MB), `0` for unlimited |
 | `protectedAreaEnabled(boolean)` | `true` | Enable/disable protected area markers and merging (see [§10.5](#105-disabling-protected-areas)) |
 
-### 3.4 Which Metamodels the Engine Sees
+### 3.5 Which Metamodels the Engine Sees
 
 Every metamodel type name in a template is resolved when the template is parsed — the `Book` in `[template public main(b : Book)]`, in `[b.oclIsKindOf(Book)/]`, in a `[for (b : Book | …)]` and in an `overrides` declaration. The engine looks them up in its `EPackage.Registry`.
 
@@ -196,7 +211,7 @@ Prefer it over `URI.createURI(path.toString())` — a path is not a URI, and on 
 > ```
 
 
-### 3.5 OSGi (Declarative Services)
+### 3.6 OSGi (Declarative Services)
 
 The M2T engine currently does not register a DS component. Use standalone instantiation in OSGi by creating the engine in your component's `@Activate` method:
 

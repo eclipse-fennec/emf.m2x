@@ -59,6 +59,8 @@ import org.eclipse.fennec.m2x.model.m2t.util.M2tSwitch;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 
 /**
@@ -83,6 +85,7 @@ public class M2tEvaluator {
 	private static final Object WRAPPED_NULL = new Object();
 
 	private final OclEngine oclEngine;
+	private final OclEvaluationOptions oclOptions;
 	private final M2tEvalEnvironment env;
 	private final M2tWriterStack writers;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
@@ -125,6 +128,11 @@ public class M2tEvaluator {
 			int maxTemplateDepth, int maxForIterations, int maxCrossProductSize,
 			boolean protectedAreaEnabled) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
+		// MOFM2T §8.3 string operations ride along with every evaluation: the engine
+		// belongs to the caller, so M2T adds what it needs instead of building its own.
+		this.oclOptions = oclEngine.getDefaultOptions()
+				.withCustomOperationsEnabled(true)
+				.withAdditionalProviders(withStandardLibrary(oclEngine.getDefaultOptions()));
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.writers = Objects.requireNonNull(writers, "writers must not be null");
 		this.indentationMap = Objects.requireNonNull(indentationMap, "indentationMap must not be null");
@@ -679,11 +687,21 @@ public class M2tEvaluator {
 		}
 
 		try {
-			return oclEngine.evaluate(expression, oclContext);
+			return oclEngine.evaluate(expression, oclContext, oclOptions);
 		} catch (RuntimeException e) {
 			addError("OCL evaluation error [" + e.getClass().getSimpleName() + "]: " + e.getMessage());
 			return null;
 		}
+	}
+
+	/**
+	 * Returns the additional providers of the given options with the MOFM2T standard
+	 * library appended, so a caller's own providers survive.
+	 */
+	private static List<OclOperationProvider> withStandardLibrary(OclEvaluationOptions options) {
+		List<OclOperationProvider> providers = new ArrayList<>(options.additionalProviders());
+		providers.add(new M2tStandardLibrary());
+		return List.copyOf(providers);
 	}
 
 	/**

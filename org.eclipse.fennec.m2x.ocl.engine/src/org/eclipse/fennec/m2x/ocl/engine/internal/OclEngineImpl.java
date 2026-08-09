@@ -482,6 +482,11 @@ public class OclEngineImpl implements OclEngine {
 	 *
 	 * @return the current delegate options
 	 */
+	@Override
+	public OclEvaluationOptions getDefaultOptions() {
+		return defaultOptions;
+	}
+
 	public OclEvaluationOptions getDelegateOptions() {
 		return delegateOptions;
 	}
