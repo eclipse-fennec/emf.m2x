@@ -53,6 +53,18 @@ public @interface M2tEngineConfiguration {
 	@AttributeDefinition(name = "Max Output Size", description = "Maximum number of characters a generation may produce")
 	long maxOutputSize() default 10_000_000L;
 
+	@AttributeDefinition(name = "Unit Resolver Enabled", description = "Whether modules may be reached beyond the ones handed to link")
+	boolean unitResolverEnabled() default false;
+
+	@AttributeDefinition(name = "Discover Unit Resolvers", description = "Whether the engine also asks unit resolvers registered as services, looked up by the name a template extends or imports")
+	boolean discoverUnitResolvers() default false;
+
+	@AttributeDefinition(name = "Allowed Unit Modules", description = "Module names that may be resolved; empty puts no restriction on the names")
+	String[] allowedUnitModules() default {};
+
+	@AttributeDefinition(name = "Max Unit Resolvers", description = "How many resolvers one generation may consult")
+	int maxUnitResolvers() default 5;
+
 	@AttributeDefinition(name = "Protected Areas Enabled", description = "Whether protected area markers in existing files are honoured")
 	boolean protectedAreaEnabled() default true;
 }

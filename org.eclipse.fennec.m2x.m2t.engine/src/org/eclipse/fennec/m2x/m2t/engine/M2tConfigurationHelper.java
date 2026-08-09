@@ -17,7 +17,10 @@ package org.eclipse.fennec.m2x.m2t.engine;
 import java.nio.charset.Charset;
 import java.util.Objects;
 
+import java.util.Set;
+
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
+import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 
@@ -45,9 +48,24 @@ public final class M2tConfigurationHelper {
 	 * @return the configuration
 	 */
 	public static M2tConfiguration from(M2tEngineConfiguration config, OclEngine oclEngine) {
+		return from(config, oclEngine, null);
+	}
+
+	/**
+	 * Creates an {@link M2tConfiguration} that evaluates on the given OCL engine and, when
+	 * the configuration asks for discovery, resolves modules through the given resolver.
+	 *
+	 * @param config          the OSGi configuration annotation, must not be {@code null}
+	 * @param oclEngine       the engine to evaluate with, must not be {@code null}
+	 * @param serviceResolver the resolver that looks modules up in the service registry, or
+	 *                        {@code null} when there is none
+	 * @return the configuration
+	 */
+	public static M2tConfiguration from(M2tEngineConfiguration config, OclEngine oclEngine,
+			M2tUnitResolver serviceResolver) {
 		Objects.requireNonNull(config, "config must not be null");
 		Objects.requireNonNull(oclEngine, "oclEngine must not be null");
-		return M2tConfiguration.builder(oclEngine)
+		M2tConfiguration.Builder builder = M2tConfiguration.builder(oclEngine)
 				.defaultCharset(Charset.forName(config.defaultCharset()))
 				.whitespaceMode(WhitespaceMode.valueOf(config.whitespaceMode()))
 				.maxDiagnostics(config.maxDiagnostics())
@@ -56,6 +74,12 @@ public final class M2tConfigurationHelper {
 				.maxCrossProductSize(config.maxCrossProductSize())
 				.maxOutputSize(config.maxOutputSize())
 				.protectedAreaEnabled(config.protectedAreaEnabled())
-				.build();
+				.unitResolverEnabled(config.unitResolverEnabled())
+				.allowedUnitModules(Set.of(config.allowedUnitModules()))
+				.maxUnitResolvers(config.maxUnitResolvers());
+		if (config.discoverUnitResolvers() && serviceResolver != null) {
+			builder.addUnitResolver(serviceResolver);
+		}
+		return builder.build();
 	}
 }

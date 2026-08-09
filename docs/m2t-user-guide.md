@@ -285,8 +285,35 @@ All properties use the `m2t.` prefix. OCL limits are **not** repeated here; they
 | `m2t.maxCrossProductSize` | int | 1,000,000 | Size of a `for` over several collections (T-3) |
 | `m2t.maxOutputSize` | long | 10,000,000 | Characters one generation may produce (T-4 output flooding) |
 | `m2t.protectedAreaEnabled` | boolean | `true` | Whether protected area markers in existing files are honoured (T-6) |
+| `m2t.unitResolverEnabled` | boolean | `false` | Whether modules may be reached beyond the ones handed to `link` |
+| `m2t.discoverUnitResolvers` | boolean | `false` | Whether resolvers registered as services are looked up by the name a template extends or imports |
+| `m2t.allowedUnitModules` | String[] | *(empty)* | Module names that may be resolved; **empty puts no restriction on the names** |
+| `m2t.maxUnitResolvers` | int | 5 | How many resolvers one generation may consult |
 
 The same settings are available to plain Java through `M2tConfiguration.Builder` — see [§3.4](#34-configuration-options).
+
+### 3.6.2 Modules the engine fetches
+
+`extends` and `[import/]` resolve against the modules handed to `link` — and, if you let them, against modules fetched by name:
+
+```java
+M2tEngines.create(M2tConfiguration.builder()
+    .addUnitResolver(name -> Optional.of(new M2tUnit.SourceUnit(name, uri, source)))
+    .unitResolverEnabled(true)
+    .allowedUnitModules(Set.of("base"))
+    .build());
+```
+
+Under OSGi a bundle offers a module by publishing a resolver under the name it answers for, and the engine looks it up when it links:
+
+```java
+@Component(service = M2tUnitResolver.class, property = "m2t.unit.name=base")
+public class BaseTemplates implements M2tUnitResolver { … }
+```
+
+**Off by default.** A resolver produces template source from a name a template chose, which is a way out of the set of modules the caller decided to generate from. `m2t.unitResolverEnabled` is the gate; `m2t.allowedUnitModules` narrows what may be reached once it is open, and an **empty** list narrows nothing.
+
+A name that stays unresolved is a warning from `link`, as it always was — a linker asked to link a partial set is not a failure.
 
 **Running on a specific OCL engine:** the reference is unfiltered by default, so the engine binds whichever `OclEngine` service is there. To pin it to one you configured yourself, set a target filter:
 

@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
 import org.eclipse.fennec.m2x.m2t.engine.M2tConfigurationHelper;
 import org.eclipse.fennec.m2x.m2t.engine.M2tEngineConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
@@ -49,9 +50,11 @@ import org.osgi.service.metatype.annotations.Designate;
  * can say so — {@code "oclEngine.target": "(component.name=MyTunedOclEngine)"} — rather than
  * having to know the number bnd would otherwise assign it.
  *
- * <p>Blackbox libraries and unit resolvers are deliberately absent: a script names what it
- * needs, so the engine resolves those by name when it parses rather than having them pushed
- * in here (#90).
+ * <p>Unit resolvers are not a whiteboard here. A template names what it extends or imports,
+ * so {@code M2tServiceUnitResolver} looks that name up in the service registry at link time
+ * — which is why binding it is one mandatory reference rather than a set of resolvers that
+ * would restart this component, and drop its caches, whenever one came or went. It is only
+ * consulted when {@code m2t.discoverUnitResolvers} is on.
  *
  * @since 1.0
  */
@@ -62,7 +65,10 @@ public class M2tEngineComponent extends M2tEngineImpl {
 	@Activate
 	public M2tEngineComponent(
 			M2tEngineConfiguration config,
-			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine) {
-		super(M2tConfigurationHelper.from(config, oclEngine));
+			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine,
+			@Reference(name = "unitDiscovery",
+					target = "(" + M2tServiceUnitResolver.RESOLVER_KIND + "=discovery)")
+			M2tUnitResolver unitDiscovery) {
+		super(M2tConfigurationHelper.from(config, oclEngine, unitDiscovery));
 	}
 }

@@ -24,6 +24,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
+import org.eclipse.fennec.m2x.m2t.api.M2tUnit;
+import java.util.stream.Stream;
+import java.util.Optional;
+import java.util.HashSet;
+import java.util.Deque;
+import java.util.ArrayDeque;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -168,12 +175,116 @@ public class M2tEngineImpl implements M2tEngine {
 		if (results.isEmpty()) {
 			return List.copyOf(warnings);
 		}
+		results.addAll(resolveMissingUnits(results, warnings));
 		M2tModuleLinker linker = new M2tModuleLinker();
 		warnings.addAll(linker.link(results));
 		for (Module m : modules) {
 			linkedModules.add(m);
 		}
 		return warnings;
+	}
+
+	/**
+	 * Fetches the modules a template extends or imports but that nobody handed in.
+	 *
+	 * <p>Without this, {@code extends} and {@code import} could only ever name a module the
+	 * same call already carried, so a template could not use a library that lives elsewhere
+	 * no matter how the engine was configured. Resolution runs before the linker so that
+	 * the linker keeps seeing one flat set of modules.
+	 *
+	 * <p>Repeated until nothing new turns up, because a resolved module may extend or import
+	 * in turn. Names that stay unresolved are left to the linker, which reports them as the
+	 * warnings it always did — a linker asked to link a partial set is not a failure.
+	 */
+	private List<M2tParseResult> resolveMissingUnits(List<M2tParseResult> known,
+			List<String> warnings) {
+		List<M2tUnitResolver> resolvers = effectiveUnitResolvers();
+		if (resolvers.isEmpty()) {
+			return List.of();
+		}
+		Set<String> haveOrTried = new HashSet<>();
+		for (M2tParseResult result : known) {
+			haveOrTried.add(result.module().getName());
+		}
+		List<M2tParseResult> resolved = new ArrayList<>();
+		Deque<M2tParseResult> pending = new ArrayDeque<>(known);
+		while (!pending.isEmpty()) {
+			M2tParseResult result = pending.removeFirst();
+			for (String name : referencedNames(result)) {
+				if (!haveOrTried.add(name)) {
+					continue;
+				}
+				// The allow-list narrows which names may be asked for, before anything is
+				// asked. An empty one puts no restriction on them.
+				if (!config.allowedUnitModules().isEmpty()
+						&& !config.allowedUnitModules().contains(name)) {
+					continue;
+				}
+				M2tParseResult fetched = resolveUnit(resolvers, name, warnings);
+				if (fetched != null) {
+					resolved.add(fetched);
+					pending.addLast(fetched);
+				}
+			}
+		}
+		return resolved;
+	}
+
+	private List<String> referencedNames(M2tParseResult result) {
+		List<String> names = new ArrayList<>(result.extendsNames());
+		names.addAll(result.importNames());
+		return names;
+	}
+
+	private M2tParseResult resolveUnit(List<M2tUnitResolver> resolvers, String name,
+			List<String> warnings) {
+		for (M2tUnitResolver resolver : resolvers) {
+			Optional<M2tUnit> unit = resolver.resolveUnit(name);
+			if (unit.isEmpty()) {
+				continue;
+			}
+			try {
+				return switch (unit.get()) {
+					case M2tUnit.CompiledUnit compiled -> parseResultCache.get(compiled.module());
+					case M2tUnit.SourceUnit source -> {
+						parse(source.source(), name);
+						yield parseResultCache.get(moduleByName(name));
+					}
+				};
+			} catch (M2tParseException failure) {
+				// One unusable module must not decide the fate of the others; the linker
+				// will report the name as unresolved.
+				warnings.add("Resolved module '" + name + "' could not be parsed: "
+						+ failure.getMessage());
+				return null;
+			}
+		}
+		return null;
+	}
+
+	private Module moduleByName(String name) {
+		for (Module module : parseResultCache.keySet()) {
+			if (name.equals(module.getName())) {
+				return module;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The resolvers this generation may consult: the configured ones, then the discovered
+	 * one, capped — and none at all unless resolution was switched on.
+	 */
+	private List<M2tUnitResolver> effectiveUnitResolvers() {
+		if (!config.unitResolverEnabled()) {
+			return List.of();
+		}
+		Stream<M2tUnitResolver> discovered = config.discoverUnitResolvers()
+				? Stream.of(new ServiceLoaderM2tUnitResolver())
+				: Stream.of();
+		return Stream.concat(config.unitResolvers().stream(), discovered)
+				.limit(config.maxUnitResolvers())
+				.toList();
 	}
 
 	@Override
