@@ -35,7 +35,6 @@ import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.trace.Trace;
-import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
@@ -191,6 +190,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	/**
 	 * Returns the underlying OCL engine (for testing and advanced use).
 	 */
+	@Override
 	public OclEngine getOclEngine() {
 		return oclEngine;
 	}

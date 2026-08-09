@@ -16,10 +16,9 @@ package org.eclipse.fennec.m2x.qvtd.engine;
 
 import java.util.Objects;
 
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtdEngineImpl;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtdEngineImpl;
 
 /**
  * Creates {@link QvtdEngine} instances outside OSGi.

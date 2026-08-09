@@ -30,6 +30,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
@@ -120,13 +122,14 @@ class QvtoPerformanceBenchmarkTest {
 				.build();
 		fennecWithCache = QvtoEngines.create(QvtoConfiguration.builder(oclCached).build());
 
-		// Variant 3: with LRU cache + warmUp
-		OclConfiguration oclCachedWarm = OclConfiguration.builder(new OclParserSupport())
+		// Variant 3: with LRU cache + warmUp — the OCL engine is created here and handed
+		// to QVT-O, so it can be warmed up before the first transformation runs
+		OclEngine warmedOcl = OclEngines.create(OclConfiguration.builder(new OclParserSupport())
 				.expressionCache(OclLruExpressionCache.ofSize(1024))
-				.build();
-		fennecWithCacheAndWarmup = QvtoEngines.create(QvtoConfiguration.builder(oclCachedWarm).build());
-		fennecWithCacheAndWarmup.getOclEngine().warmUp(sourcePackage);
-		fennecWithCacheAndWarmup.getOclEngine().warmUp(targetPackage);
+				.build());
+		warmedOcl.warmUp(sourcePackage);
+		warmedOcl.warmUp(targetPackage);
+		fennecWithCacheAndWarmup = QvtoEngines.create(QvtoConfiguration.builder(warmedOcl).build());
 
 		// Write .qvto file for Eclipse QVT-O (needs a URI)
 		tempQvtoFile = Files.createTempFile("benchmark", ".qvto");
