@@ -27,9 +27,10 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
@@ -44,7 +45,7 @@ import org.junit.jupiter.api.Test;
  */
 class OclDefExpressionTest {
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static EcoreHelper ecoreHelper;
 	static EPackage companyPackage;
 	static EClass personClass;
@@ -52,7 +53,7 @@ class OclDefExpressionTest {
 
 	@BeforeAll
 	static void setUp() throws IOException {
-		engine = new OclEngineImpl(new OclParserSupport());
+		engine = OclEngines.create(new OclParserSupport());
 		ecoreHelper = new EcoreHelper(OclDefExpressionTest.class);
 		companyPackage = ecoreHelper.loadEcore("company.ecore");
 		personClass = (EClass) companyPackage.getEClassifier("Person");
@@ -116,7 +117,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defProperty_booleanExpression() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -135,7 +136,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defProperty_stringConcat() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -150,7 +151,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defProperty_arithmeticExpression() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -165,7 +166,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defProperty_usedInInvariant() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		List<Constraint> constraints = eng.loadDocument("""
 				package company
 				context Person
@@ -190,7 +191,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defProperty_chainedDefs() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -209,7 +210,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defProperty_realPropertyNotOverridden() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -225,7 +226,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defProperty_multipleContexts() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -248,7 +249,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defOperation_withParameter() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -263,7 +264,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void defOperation_noParameters() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -279,7 +280,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void loadDocument_returnsAllConstraints() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		List<Constraint> constraints = eng.loadDocument("""
 				package company
 				context Person
@@ -343,7 +344,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void staticDefPropertyIsEvaluated() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person
@@ -358,7 +359,7 @@ class OclDefExpressionTest {
 
 	@Test
 	void staticDefOperationIsEvaluated() throws OclParseException {
-		OclEngineImpl eng = new OclEngineImpl(new OclParserSupport());
+		OclEngine eng = OclEngines.create(new OclParserSupport());
 		eng.loadDocument("""
 				package company
 				context Person

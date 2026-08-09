@@ -607,8 +607,8 @@ All engines and services must be **usable as plain Java libraries** without any 
 ┌─────────────────────────────────────────────────────────────┐
 │  .engine (pure Java, no OSGi imports)                       │
 │                                                             │
-│  OclEngineImpl implements OclEngine                         │
-│    - constructor injection: new OclEngineImpl(config)        │
+│  OclEngine implements OclEngine                         │
+│    - constructor injection: OclEngines.create(config)        │
 │    - works standalone as plain Java library                  │
 └──────────────────────────┬──────────────────────────────────┘
                            │
@@ -616,7 +616,7 @@ All engines and services must be **usable as plain Java libraries** without any 
 │  .engine (OSGi DS adapter, same bundle)                     │
 │                                                             │
 │  @Component(service = OclEngine.class)                      │
-│  OclEngineComponent extends OclEngineImpl                   │
+│  OclEngineComponent extends OclEngine                   │
 │    - @Reference injection for extensions                    │
 │    - DS whiteboard for dynamic extension discovery          │
 └─────────────────────────────────────────────────────────────┘

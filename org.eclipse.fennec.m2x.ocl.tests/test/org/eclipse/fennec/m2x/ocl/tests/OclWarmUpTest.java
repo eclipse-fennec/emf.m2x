@@ -27,8 +27,9 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
@@ -37,7 +38,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for {@link OclEngineImpl#warmUp(EPackage)}.
+ * Tests for {@link OclEngine#warmUp(EPackage)}.
  *
  * <p>Verifies that warm-up pre-populates:
  * <ul>
@@ -72,7 +73,7 @@ class OclWarmUpTest {
 	@Test
 	void warmUp_populatesAccessorCache_companyPackage() {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		// warmUp should not throw
 		assertDoesNotThrow(() -> engine.warmUp(companyPackage));
@@ -104,7 +105,7 @@ class OclWarmUpTest {
 		abstractClass.getEStructuralFeatures().add(nameAttr);
 		pkg.getEClassifiers().add(abstractClass);
 
-		OclEngineImpl engine = new OclEngineImpl(parser);
+		OclEngine engine = OclEngines.create(parser);
 
 		// Should not throw (abstract classes are skipped)
 		assertDoesNotThrow(() -> engine.warmUp(pkg));
@@ -116,7 +117,7 @@ class OclWarmUpTest {
 	void warmUp_preParsesDerivationAnnotations() {
 		EPackage pkg = createPackageWithDerivedFeature();
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		engine.warmUp(pkg);
 
@@ -128,7 +129,7 @@ class OclWarmUpTest {
 	void warmUp_preParsesConstraintAnnotations() {
 		EPackage pkg = createPackageWithConstraint();
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		engine.warmUp(pkg);
 
@@ -140,7 +141,7 @@ class OclWarmUpTest {
 	void warmUp_preParsesOperationBodyAnnotations() {
 		EPackage pkg = createPackageWithOperationBody();
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		engine.warmUp(pkg);
 
@@ -150,7 +151,7 @@ class OclWarmUpTest {
 	@Test
 	void warmUp_withoutCache_onlyWarmsAccessors() {
 		// Engine without expression cache — should still work (accessor warmup only)
-		OclEngineImpl engine = new OclEngineImpl(parser);
+		OclEngine engine = OclEngines.create(parser);
 		assertDoesNotThrow(() -> engine.warmUp(companyPackage));
 	}
 
@@ -178,7 +179,7 @@ class OclWarmUpTest {
 		pkg.getEClassifiers().add(cls);
 
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		// Should not throw even with invalid OCL
 		assertDoesNotThrow(() -> engine.warmUp(pkg));
@@ -187,7 +188,7 @@ class OclWarmUpTest {
 	@Test
 	void warmUp_multiplePackages() {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		EPackage pkg1 = createPackageWithDerivedFeature();
 		EPackage pkg2 = createPackageWithConstraint();
@@ -204,7 +205,7 @@ class OclWarmUpTest {
 	void warmUp_cachedExpressionsUsedByEvaluation() {
 		EPackage pkg = createPackageWithDerivedFeature();
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		engine.warmUp(pkg);
 		long missesAfterWarmup = cache.missCount();

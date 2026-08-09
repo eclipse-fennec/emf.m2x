@@ -79,13 +79,13 @@ import org.eclipse.fennec.m2x.model.qvtoperational.ResolveInExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.util.QvtOperationalSwitch;
 import org.eclipse.fennec.m2x.model.trace.Trace;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
@@ -99,7 +99,7 @@ import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.Retu
  * Imperative AST interpreter for QVT-O transformations.
  *
  * <p>Uses a 3-level switch dispatch: ImperativeOCL → QvtOperational → OCL delegation.
- * OCL sub-expressions are delegated to {@link OclEngineImpl} via snapshot contexts.
+ * OCL sub-expressions are delegated to {@link OclEngine} via snapshot contexts.
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -120,7 +120,7 @@ public class QvtoEvaluator {
 	/** Sentinel indicating a mapping's when-guard failed (§8.1.14: disjunct candidate selection). */
 	private static final Object GUARD_FAILED = new Object();
 
-	private final OclEngineImpl oclEngine;
+	private final OclEngine oclEngine;
 	private final QvtoEvalEnvironment env;
 	private final QvtoEvaluationOptions options;
 	private final OperationalTransformation transformation;
@@ -162,7 +162,7 @@ public class QvtoEvaluator {
 	/**
 	 * Creates a new evaluator for a single transformation execution.
 	 */
-	public QvtoEvaluator(OclEngineImpl oclEngine, QvtoEvalEnvironment env,
+	public QvtoEvaluator(OclEngine oclEngine, QvtoEvalEnvironment env,
 			QvtoEvaluationOptions options, OperationalTransformation transformation,
 			QvtoExtentManager extentManager, QvtoEngineImpl engine,
 			EPackage.Registry packageRegistry) {

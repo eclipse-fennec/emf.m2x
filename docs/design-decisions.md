@@ -969,6 +969,6 @@ Für den Bestand ist die Änderung verhaltensneutral: dieselbe Registry ist in G
 
 **Folge für OCL über das reine Durchreichen hinaus:** `OclParserSupport.parse(expression, contextType)` benutzte bisher überhaupt keine Registry — Typnamen in einem Ausdruck wurden nur über das Package des Kontexttyps aufgelöst, alles andere fiel still auf den Kontexttyp zurück. Mit D42 bekommt auch dieser Pfad die Registry, womit Typnamen aus fremden Packages korrekt auflösen. Das ändert Auflösungsergebnisse (bewusst: `self.oclIsKindOf(FremdesPackageTyp)` lieferte vorher `true`, weil der Name zum Kontexttyp degradierte).
 
-**Nicht betroffen:** EMFs Delegate-Registries (`EOperation.Internal.InvocationDelegate.Factory.Registry`, `EStructuralFeature.Internal.SettingDelegate.Factory.Registry`, `EValidator.ValidationDelegate.Registry`) in `OclEngineImpl`. Die sind von EMF als global vorgesehen und gehören zum Delegate-Mechanismus selbst (D11).
+**Nicht betroffen:** EMFs Delegate-Registries (`EOperation.Internal.InvocationDelegate.Factory.Registry`, `EStructuralFeature.Internal.SettingDelegate.Factory.Registry`, `EValidator.ValidationDelegate.Registry`) in `OclEngine`. Die sind von EMF als global vorgesehen und gehören zum Delegate-Mechanismus selbst (D11).
 
 **Nachgelagert:** Die OCL-Caches schlüsseln heute über nsURI bzw. einfachen Klassennamen und müssen auf Fingerprint-abgeleitete Schlüssel umgestellt werden (Issue #50) — dieselbe Identitätsfrage, eine Ebene tiefer.

@@ -31,10 +31,11 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
@@ -43,7 +44,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * Tests for {@link OclLruExpressionCache} and cache integration in {@link OclEngineImpl}.
+ * Tests for {@link OclLruExpressionCache} and cache integration in {@link OclEngine}.
  */
 class OclExpressionCacheTest {
 
@@ -72,7 +73,7 @@ class OclExpressionCacheTest {
 	@Test
 	void cache_hit_returnsCachedExpression() throws OclParseException {
 		OclExpressionCache cache = OclLruExpressionCache.ofSize(16);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		OclExpression first = engine.parse("self.name", personClass);
 		OclExpression second = engine.parse("self.name", personClass);
@@ -83,7 +84,7 @@ class OclExpressionCacheTest {
 	@Test
 	void cache_miss_parsesAndStores() throws OclParseException {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(16);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		assertEquals(0, cache.hitCount());
 		assertEquals(0, cache.missCount());
@@ -100,7 +101,7 @@ class OclExpressionCacheTest {
 	@Test
 	void cache_differentContext_separateEntries() throws OclParseException {
 		OclExpressionCache cache = OclLruExpressionCache.ofSize(16);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		OclExpression forPerson = engine.parse("self.name", personClass);
 		OclExpression forCompany = engine.parse("self.name", companyClass);
@@ -113,7 +114,7 @@ class OclExpressionCacheTest {
 	@Test
 	void cache_lruEviction_removesOldest() throws OclParseException {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(2);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		engine.parse("self.name", personClass);       // entry 1
 		engine.parse("self.age", personClass);         // entry 2
@@ -131,8 +132,8 @@ class OclExpressionCacheTest {
 	@Test
 	void cache_sharedAcrossEngines() throws OclParseException {
 		OclExpressionCache cache = OclLruExpressionCache.ofSize(16);
-		OclEngineImpl engine1 = new OclEngineImpl(parser, cache);
-		OclEngineImpl engine2 = new OclEngineImpl(parser, cache);
+		OclEngine engine1 = OclEngines.create(parser, cache);
+		OclEngine engine2 = OclEngines.create(parser, cache);
 
 		OclExpression fromEngine1 = engine1.parse("self.name", personClass);
 		OclExpression fromEngine2 = engine2.parse("self.name", personClass);
@@ -143,7 +144,7 @@ class OclExpressionCacheTest {
 	@Test
 	void cache_hitMissCounters() throws OclParseException {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(16);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		engine.parse("self.name", personClass);   // miss
 		engine.parse("self.age", personClass);    // miss
@@ -158,7 +159,7 @@ class OclExpressionCacheTest {
 	@Test
 	void cache_invalidate_removesEntry() throws OclParseException {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(16);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		engine.parse("self.name", personClass);
 		assertEquals(1, cache.size());
@@ -175,7 +176,7 @@ class OclExpressionCacheTest {
 	@Test
 	void cache_invalidateAll_clearsAll() throws OclParseException {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(16);
-		OclEngineImpl engine = new OclEngineImpl(parser, cache);
+		OclEngine engine = OclEngines.create(parser, cache);
 
 		engine.parse("self.name", personClass);
 		engine.parse("self.age", personClass);
@@ -188,7 +189,7 @@ class OclExpressionCacheTest {
 
 	@Test
 	void cache_null_engineWorksWithoutCache() throws OclParseException {
-		OclEngineImpl engine = new OclEngineImpl(parser);
+		OclEngine engine = OclEngines.create(parser);
 
 		assertNull(engine.getExpressionCache());
 
@@ -210,9 +211,9 @@ class OclExpressionCacheTest {
 		int engineCount = 4;
 		int opsPerThread = 100;
 
-		OclEngineImpl[] engines = new OclEngineImpl[engineCount];
+		OclEngine[] engines = new OclEngine[engineCount];
 		for (int i = 0; i < engineCount; i++) {
-			engines[i] = new OclEngineImpl(parser, cache);
+			engines[i] = OclEngines.create(parser, cache);
 		}
 
 		String[] expressions = {
@@ -230,7 +231,7 @@ class OclExpressionCacheTest {
 			futures.add(executor.submit(() -> {
 				try {
 					barrier.await();
-					OclEngineImpl engine = engines[threadIndex % engineCount];
+					OclEngine engine = engines[threadIndex % engineCount];
 					for (int i = 0; i < opsPerThread; i++) {
 						String expr = expressions[i % expressions.length];
 						engine.parse(expr, personClass);

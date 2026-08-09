@@ -164,7 +164,7 @@ OCL is a **pure query language** — it has no side effects, no I/O, no file acc
 | **Vector** | Repeated parsing of the same expression without caching |
 | **Impact** | CPU exhaustion via repeated ANTLR4 parser invocations |
 | **Prerequisite** | Attacker triggers evaluation in a hot path without caching |
-| **File** | `OclEngineImpl.java` — `parse()` |
+| **File** | `OclEngine.java` — `parse()` |
 
 **Analysis:** The engine provides an LRU expression cache (`OclExpressionCache`) that eliminates redundant parsing.
 
@@ -534,7 +534,7 @@ OclConfiguration config = OclConfiguration.builder(parserSupport)
     .customOperationsEnabled(true)                  // engine-wide enable
     .build();
 
-OclEngine engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 
 // 2. Enable per-evaluation (AND-linked with config flag)
 OclEvaluationOptions opts = OclEvaluationOptions.strict()

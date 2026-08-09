@@ -120,14 +120,14 @@ public interface OclEngine {
 
 ### 4.2 OclConfiguration (Builder Pattern)
 
-Bundles parser + expression cache + operation providers. Primary constructor for `OclEngineImpl`.
+Bundles parser + expression cache + operation providers. Primary constructor for `OclEngine`.
 
 ```java
 OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
     .expressionCache(OclLruExpressionCache.ofSize(1024))
     .operationProvider(myProvider)
     .build();
-OclEngine engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 ```
 
 Multiple engines sharing the same configuration share the expression cache but have
@@ -347,9 +347,9 @@ An unqualified name that matches no property and no classifier stays an external
 
 **Bundle:** `org.eclipse.fennec.m2x.ocl.engine`
 
-### 6.1 OclEngineImpl — Facade
+### 6.1 OclEngine — Facade
 
-- Primary constructor: `OclEngineImpl(OclConfiguration)`
+- Primary constructor: `OclEngine(OclConfiguration)`
 - Backward-compatible constructors delegate to it
 - 3-level operation dispatch: Ecore `eInvoke` → stdlib → custom providers
 - `installDelegates()` / `uninstallDelegates()` for standalone EMF delegate registration
@@ -542,7 +542,7 @@ typed getters (~5 ns) but `eGet()` never uses them.
 **Optimization:** `PropertyAccessorCache` uses `LambdaMetafactory` to generate accessors
 wrapping typed getters. JIT can inline to ~5 ns.
 
-- Instance-based: each `OclEngineImpl` has its own cache
+- Instance-based: each `OclEngine` has its own cache
 - `ConcurrentHashMap` for lock-free reads
 - Dynamic models: `sf.getContainerClass() == null` → returns null (zero overhead)
 - Autoboxing handled via `autobox()` mapping
@@ -550,7 +550,7 @@ wrapping typed getters. JIT can inline to ~5 ns.
 
 ### 7.4 Warm-Up
 
-`OclEngineImpl.warmUp(EPackage)` pre-populates all cache layers:
+`OclEngine.warmUp(EPackage)` pre-populates all cache layers:
 
 1. **Property Accessor Cache:** Creates temp EObject per non-abstract EClass, pre-populates
    accessor entries. Cost: ~4 µs per package.
@@ -566,7 +566,7 @@ Designed for integration with fennec's `MetadataService` / `AspectProvider` patt
 1. `OclAspectProvider` registers as `AspectProvider` in `MetadataService`
 2. When an EPackage is registered, the provider receives it
 3. Builds `OclConfiguration` with pre-populated caches, calls `warmUp(EPackage)`
-4. New `OclEngineImpl` instances created from pre-warmed configuration
+4. New `OclEngine` instances created from pre-warmed configuration
 
 The `OclConfiguration` builder pattern and instance-based `PropertyAccessorCache` are
 already prepared for this integration.
@@ -615,7 +615,7 @@ Example in Ecore:
 
 ```java
 OclConfiguration config = OclConfiguration.builder(new OclParserSupport()).build();
-OclEngineImpl engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 engine.installDelegates();  // registers all three delegates
 
 // Equivalent manual registration:
@@ -630,7 +630,7 @@ EValidator.ValidationDelegate.Registry.INSTANCE
 
 ### 8.5 Delegate Options
 
-EMF delegates use `OclEngineImpl.delegateOptions` (configurable via `setDelegateOptions()`).
+EMF delegates use `OclEngine.delegateOptions` (configurable via `setDelegateOptions()`).
 Configure before `installDelegates()` for untrusted models:
 
 ```java
@@ -659,10 +659,10 @@ emf.osgi whiteboard pattern:
 The emf.osgi delegate registry whiteboard components pick up these services automatically —
 no manual `installDelegates()` call needed.
 
-Each delegate factory injects `OclEngineImpl` via `@Reference` (not the `OclEngine` API
+Each delegate factory injects `OclEngine` via `@Reference` (not the `OclEngine` API
 interface) because delegates need internal methods (`getDelegateOptions()`,
 `evaluatePostcondition()`). The `OclEngineComponent` registers as both `OclEngine` and
-`OclEngineImpl` services to support this.
+`OclEngine` services to support this.
 
 ### 8.8 emf.osgi Delegate Registry Analysis
 
@@ -687,7 +687,7 @@ providing service discovery, whiteboard patterns, and lifecycle management.
 OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
     .expressionCache(OclLruExpressionCache.ofSize(1024))
     .build();
-OclEngine engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 
 OclContext context = OclContext.of(myEObject);
 Object result = engine.evaluate("self.name", context);
@@ -725,7 +725,7 @@ engine.installDelegates();
                │ @Reference(name="operationProvider")
 ┌──────────────▼──────────────────────────────────────────────┐
 │  OclEngineComponent (PROTOTYPE)                             │
-│  → OclEngine + OclEngineImpl services                       │
+│  → OclEngine + OclEngine services                       │
 │  @Designate(ocd = OclEngineConfiguration.class)             │
 │  Each consumer gets its own engine instance with:           │
 │  - own PropertyAccessorCache (per-engine, not shared)       │
@@ -734,7 +734,7 @@ engine.installDelegates();
 │  - single OclOperationProvider (via @Reference target)      │
 │  Engine-wide defaults from ConfigAdmin (ocl.* properties)   │
 └──────────────┬──────────────────────────────────────────────┘
-               │ @Reference OclEngineImpl
+               │ @Reference OclEngine
 ┌──────────────▼──────────────────────────────────────────────┐
 │  EMF Delegates (emf.osgi whiteboard, see §8.7)              │
 └─────────────────────────────────────────────────────────────┘
@@ -752,13 +752,13 @@ engine.installDelegates();
 **Key:** Every `@Reference OclEngine` injection yields a **fresh, isolated engine instance**. The parser and engine are never shared between consumers. Only the expression cache is shared (by default) — this is intentional, since parsed ASTs are immutable and safe to reuse.
 
 **Key components:**
-- `OclEngineComponent` — PROTOTYPE scope, extends `OclEngineImpl`, `@Designate`d with `OclEngineConfiguration`
+- `OclEngineComponent` — PROTOTYPE scope, extends `OclEngine`, `@Designate`d with `OclEngineConfiguration`
 - `OclParserSupport` — PROTOTYPE scope, ANTLR4-based parser
 - `OclEngineConfiguration` — `@ObjectClassDefinition` annotation with `ocl.*` prefixed properties
 - `OclConfigurationHelper` — maps `OclEngineConfiguration` to `OclConfiguration`
 - `DefaultOclExpressionCacheComponent` — SINGLETON, provides default LRU cache (1024 entries)
 - `NoOpOclOperationProvider` — SINGLETON default `OclOperationProvider` (empty operations list)
-- Delegate factories — separate `@Component` services with emf.osgi properties, inject `OclEngineImpl`
+- Delegate factories — separate `@Component` services with emf.osgi properties, inject `OclEngine`
 
 ### 9.4 Engine-Wide Defaults via ConfigAdmin
 
@@ -1020,7 +1020,7 @@ When evaluating OCL expressions from untrusted sources:
 
 | Component | Strategy | Status |
 |-----------|----------|--------|
-| `OclEngineImpl` | Stateless evaluation — each `evaluate()` creates fresh `OclEvaluator` | Thread-safe by design |
+| `OclEngine` | Stateless evaluation — each `evaluate()` creates fresh `OclEvaluator` | Thread-safe by design |
 | `OclEvaluator` | Per-evaluation instance, no shared mutable state | Thread-safe by design |
 | `OclStdlib` | Static methods, no state | Thread-safe by design |
 | `OclEvalEnvironment` | Per-evaluation chain-of-scopes, not shared | Thread-safe by design |
@@ -1028,7 +1028,7 @@ When evaluating OCL expressions from untrusted sources:
 | `defProviders` | `CopyOnWriteArrayList` — for `loadDocument()` def-operations | Thread-safe |
 | `additionalProviders` | Per-evaluation via `OclEvaluationOptions` — no shared state | Thread-safe by design |
 | `expressionCache` | `ConcurrentHashMap` in delegates | Thread-safe |
-| `delegateOptions` | `volatile` field on `OclEngineImpl` | Visibility guaranteed |
+| `delegateOptions` | `volatile` field on `OclEngine` | Visibility guaranteed |
 | Parser (ANTLR4) | New `OclLexer`/`OclParser` per parse call | Thread-safe |
 
 ### 11.2 Performance Design Principles
@@ -1094,7 +1094,7 @@ not active — only benefits generated models).
 | P8–P12 | Concurrent evaluations | 16 threads, various patterns |
 | P13–P15 | Security limit stress | Rapid-fire range/closure/regex limits |
 | P16 | Memory footprint | Parse 1000 expressions, measure heap |
-| P17 | Engine startup time | Cold-start: new OclEngineImpl() |
+| P17 | Engine startup time | Cold-start: OclEngines.create() |
 
 ---
 

@@ -496,12 +496,12 @@ QvtoEvaluator
   │                  AssertExp, LogExp, ComputeExp, VariableInitExp, ...
   ├── QvtOpDispatch (inner class, extends QvtOperationalSwitch<Object>)
   │     └── handles: ObjectExp, MappingCallExp, ResolveExp, ResolveInExp, ...
-  └── OCL delegation → OclEngineImpl via snapshot OclContext
+  └── OCL delegation → OclEngine via snapshot OclContext
         └── handles: PropertyCallExp, IteratorExp, literals, stdlib, ...
 ```
 
 **Dispatch flow:** `eval(OclExpression)` tries ImperativeDispatch first, then QvtOpDispatch,
-then delegates to OclEngineImpl for standard OCL expressions.
+then delegates to OclEngine for standard OCL expressions.
 
 **Source evaluation invariant:** For `OperationCallExp`, intermediate dispatch steps
 (model extent/element operation checks, imperative source handling) must not eagerly
@@ -530,9 +530,9 @@ Implements `OclOperationProvider` to enable OCL expressions calling back into QV
 
 ```
 QvtoEvaluator
-  ├── owns: OclEngineImpl (created internally)
+  ├── owns: OclEngine (created internally)
   │     └── registered provider: QvtoOperationProvider
-  └── delegates OCL sub-expressions → OclEngineImpl
+  └── delegates OCL sub-expressions → OclEngine
 
 QvtoOperationProvider implements OclOperationProvider
   ├── recognizes QVT-O helpers/mappings → re-enters QvtoEvaluator

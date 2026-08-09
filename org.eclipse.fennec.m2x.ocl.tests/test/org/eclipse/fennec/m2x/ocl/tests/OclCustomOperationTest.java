@@ -23,13 +23,14 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -53,12 +54,12 @@ class OclCustomOperationTest extends AbstractOclTest {
 	}
 
 	/** Creates a custom engine with the given provider. */
-	private static OclEngineImpl engineWith(OclOperationProvider provider) {
+	private static OclEngine engineWith(OclOperationProvider provider) {
 		OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
 				.addOperationProvider(provider)
 				.customOperationsEnabled(true)
 				.build();
-		return new OclEngineImpl(config);
+		return OclEngines.create(config);
 	}
 
 	// --- Custom no-arg operation ---
@@ -73,7 +74,7 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation op = OclOperation.of("shout", anyType, stringType,
 				(source, args) -> source.toString().toUpperCase() + "!");
 
-		OclEngineImpl eng = engineWith(() -> List.of(op));
+		OclEngine eng = engineWith(() -> List.of(op));
 		var parsed = eng.parse("self.name.shout()", personClass);
 		assertEquals("ALICE!", eng.evaluate(parsed, OclContext.of(self), CUSTOM_OPTS));
 	}
@@ -90,7 +91,7 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation op = new OclOperation("addN", anyType, List.of(intType), intType,
 				(source, args) -> ((Number) source).longValue() + ((Number) args[0]).longValue());
 
-		OclEngineImpl eng = engineWith(() -> List.of(op));
+		OclEngine eng = engineWith(() -> List.of(op));
 		var parsed = eng.parse("self.age.addN(5)", personClass);
 		assertEquals(35, eng.evaluate(parsed, OclContext.of(self), CUSTOM_OPTS));
 	}
@@ -111,7 +112,7 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation exclaim = OclOperation.of("exclaim", anyType, stringType,
 				(source, args) -> source.toString() + "!!!");
 
-		OclEngineImpl eng = engineWith(() -> List.of(doubleOp, exclaim));
+		OclEngine eng = engineWith(() -> List.of(doubleOp, exclaim));
 		var parsedDouble = eng.parse("self.age.double()", personClass);
 		var parsedExclaim = eng.parse("self.name.exclaim()", personClass);
 		assertEquals(60, eng.evaluate(parsedDouble, OclContext.of(self), CUSTOM_OPTS));
@@ -130,7 +131,7 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation isLong = OclOperation.of("isLongName", anyType, boolType,
 				(source, args) -> source.toString().length() > 3);
 
-		OclEngineImpl eng = engineWith(() -> List.of(isLong));
+		OclEngine eng = engineWith(() -> List.of(isLong));
 		var parsed = eng.parse("self.name.isLongName()", personClass);
 		assertEquals(true, eng.evaluate(parsed, OclContext.of(self), CUSTOM_OPTS));
 	}
@@ -147,7 +148,7 @@ class OclCustomOperationTest extends AbstractOclTest {
 		OclOperation reverse = OclOperation.of("reverse", anyType, stringType,
 				(source, args) -> new StringBuilder(source.toString()).reverse().toString());
 
-		OclEngineImpl eng = engineWith(() -> List.of(reverse));
+		OclEngine eng = engineWith(() -> List.of(reverse));
 		var parsed = eng.parse("self.name.reverse()", personClass);
 		assertEquals("ecilA", eng.evaluate(parsed, OclContext.of(self), CUSTOM_OPTS));
 	}

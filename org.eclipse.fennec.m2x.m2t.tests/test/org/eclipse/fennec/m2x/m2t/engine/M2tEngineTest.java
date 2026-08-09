@@ -60,8 +60,9 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -77,14 +78,14 @@ import org.junit.jupiter.api.Test;
 @SuppressWarnings("restriction")
 class M2tEngineTest {
 
-	private OclEngineImpl oclEngine;
+	private OclEngine oclEngine;
 	private M2tFactory m2t;
 	private OclFactory ocl;
 
 	@BeforeEach
 	void setUp() {
 		OclParserSupport parser = new OclParserSupport();
-		oclEngine = new OclEngineImpl(parser);
+		oclEngine = OclEngines.create(parser);
 		m2t = M2tFactory.eINSTANCE;
 		ocl = OclFactory.eINSTANCE;
 	}

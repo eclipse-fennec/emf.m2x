@@ -23,9 +23,10 @@ import java.util.Map;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.ocl.ParserException;
@@ -39,8 +40,8 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Three Fennec engine variants are measured against Eclipse OCL Classic:
  * <ol>
- *   <li><b>No cache</b> — plain {@code OclEngineImpl(parser)}, every call re-parses</li>
- *   <li><b>LRU cache</b> — {@code OclEngineImpl(parser, cache)}, repeated expressions hit cache</li>
+ *   <li><b>No cache</b> — plain {@code OclEngine(parser)}, every call re-parses</li>
+ *   <li><b>LRU cache</b> — {@code OclEngine(parser, cache)}, repeated expressions hit cache</li>
  *   <li><b>LRU cache + warmUp</b> — additionally calls {@code warmUp(EPackage)} to prime accessor caches</li>
  * </ol>
  *
@@ -58,10 +59,10 @@ class OclPerformanceBenchmarkTest extends AbstractComparisonTest {
 	// fennecEngine is already set up in super class — no cache, no warmUp
 
 	/** Fennec with LRU expression cache. */
-	static OclEngineImpl fennecWithCache;
+	static OclEngine fennecWithCache;
 
 	/** Fennec with LRU expression cache + warmUp. */
-	static OclEngineImpl fennecWithCacheAndWarmup;
+	static OclEngine fennecWithCacheAndWarmup;
 
 	static EObject alice;
 	static EObject acme;
@@ -76,12 +77,12 @@ class OclPerformanceBenchmarkTest extends AbstractComparisonTest {
 		// Variant 2: with LRU cache
 		OclParserSupport parser2 = new OclParserSupport();
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(1024);
-		fennecWithCache = new OclEngineImpl(parser2, cache);
+		fennecWithCache = OclEngines.create(parser2, cache);
 
 		// Variant 3: with LRU cache + warmUp
 		OclParserSupport parser3 = new OclParserSupport();
 		OclLruExpressionCache cache3 = OclLruExpressionCache.ofSize(1024);
-		fennecWithCacheAndWarmup = new OclEngineImpl(parser3, cache3);
+		fennecWithCacheAndWarmup = OclEngines.create(parser3, cache3);
 		fennecWithCacheAndWarmup.warmUp(companyPackage);
 
 		// JIT warmup: exercise all engines and Eclipse thoroughly so the JVM
@@ -344,7 +345,7 @@ class OclPerformanceBenchmarkTest extends AbstractComparisonTest {
 	// Helper: measure a single engine's parse loop
 	// =====================================================================
 
-	private long measureParseFennec(OclEngineImpl engine, String expression, EObject self)
+	private long measureParseFennec(OclEngine engine, String expression, EObject self)
 			throws OclParseException {
 		long start = System.nanoTime();
 		for (int i = 0; i < MEASURE_ITERATIONS; i++) {

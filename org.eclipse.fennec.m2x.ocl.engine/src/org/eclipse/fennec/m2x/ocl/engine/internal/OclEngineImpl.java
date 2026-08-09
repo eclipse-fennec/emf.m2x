@@ -12,8 +12,10 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-package org.eclipse.fennec.m2x.ocl.engine;
+package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefKey;
+import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefEntry;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,20 +60,6 @@ import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
-import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefEntry;
-import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefKey;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclBag;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclDelegateUtil;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclEvalEnvironment;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclEvaluator;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclInvocationDelegateFactory;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclOrderedSet;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclSet;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclSettingDelegateFactory;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclUnlimitedNatural;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclValidationDelegateFactory;
-import org.eclipse.fennec.m2x.ocl.engine.internal.PreStateSnapshot;
-import org.eclipse.fennec.m2x.ocl.engine.internal.PropertyAccessorCache;
 
 /**
  * Plain Java implementation of the {@link OclEngine} facade.

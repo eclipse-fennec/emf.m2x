@@ -340,7 +340,7 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 				.addOperationProvider(provider)
 				.customOperationsEnabled(true)
 				.build();
-		var eng1 = new org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl(config1);
+		var eng1 = org.eclipse.fennec.m2x.ocl.engine.OclEngines.create(config1);
 		var providers1 = eng1.getOperationProviders(OclEvaluationOptions.strict());
 		assertEquals(0, providers1.size(), "Options flag false → no config providers");
 
@@ -349,7 +349,7 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 				new org.eclipse.fennec.m2x.ocl.parser.OclParserSupport())
 				.addOperationProvider(provider)
 				.build(); // customOperationsEnabled defaults to false
-		var eng2 = new org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl(config2);
+		var eng2 = org.eclipse.fennec.m2x.ocl.engine.OclEngines.create(config2);
 		var providers2 = eng2.getOperationProviders(
 				OclEvaluationOptions.strict().withCustomOperationsEnabled(true));
 		assertEquals(0, providers2.size(), "Config flag false → no config providers");

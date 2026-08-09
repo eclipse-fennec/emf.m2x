@@ -22,6 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.lang.annotation.Annotation;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
@@ -31,7 +33,6 @@ import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.engine.OclConfigurationHelper;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineConfiguration;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.Test;
 
@@ -106,7 +107,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 		OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
 				.maxDepth(3)
 				.build();
-		OclEngineImpl customEngine = new OclEngineImpl(config);
+		OclEngine customEngine = OclEngines.create(config);
 
 		EObject self = createPerson("Alice", 30, 50000.0, true);
 
@@ -123,7 +124,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 		OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
 				.maxDepth(3)
 				.build();
-		OclEngineImpl customEngine = new OclEngineImpl(config);
+		OclEngine customEngine = OclEngines.create(config);
 
 		EObject self = createPerson("Alice", 30, 50000.0, true);
 
@@ -143,7 +144,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 		OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
 				.nullHandling(NullHandling.LENIENT)
 				.build();
-		OclEngineImpl lenientEngine = new OclEngineImpl(config);
+		OclEngine lenientEngine = OclEngines.create(config);
 
 		EObject self = createPerson("Alice", 30, 50000.0, true);
 		// null.oclIsUndefined() with lenient config should return true (null propagates as null)
