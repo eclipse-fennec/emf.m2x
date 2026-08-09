@@ -7,6 +7,18 @@
 
 -runfw: org.apache.felix.framework
 
+# Aries SPI Fly, the Service Loader Mediator of OSGi Compendium 133, so that
+# QvtoServiceDiscoveryOSGiTest makes its point in a framework that actually has one: a
+# mediator weaves ServiceLoader.load in bundles that ask for it, and the engine bundle
+# deliberately does not — so the class-path route stays inert and the service registry
+# remains the only thing answering an import.
+#
+# The dynamic bundle rather than the framework extension, because it weaves through a
+# WeavingHook and so has to read the class files it is handed: that needs ASM new enough
+# for Java 21, which is why the ASM bundles are here and pinned alongside it.
+-runrequires.spifly: \
+	bnd.identity;id='org.apache.aries.spifly.dynamic.bundle'
+
 -runee: JavaSE-21
 
 -runbundles: \
