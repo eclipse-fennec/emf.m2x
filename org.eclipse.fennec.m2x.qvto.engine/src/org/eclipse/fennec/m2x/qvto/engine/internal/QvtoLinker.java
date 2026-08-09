@@ -66,19 +66,25 @@ public class QvtoLinker {
 	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final Set<String> allowedBlackboxModules;
 	private final Set<String> allowedUnitModules;
+	private final int maxBlackboxLibraries;
+
+	/** Blackbox modules resolved during this link, to hold {@code maxBlackboxLibraries}. */
+	private final Set<String> resolvedBlackboxModules = new HashSet<>();
 
 	public QvtoLinker(QvtoParserSupport parserSupport,
 			List<QvtoUnitResolver> unitResolvers,
 			EPackage.Registry packageRegistry,
 			QvtoBlackboxRegistry blackboxRegistry,
 			Set<String> allowedBlackboxModules,
-			Set<String> allowedUnitModules) {
+			Set<String> allowedUnitModules,
+			int maxBlackboxLibraries) {
 		this.parserSupport = Objects.requireNonNull(parserSupport);
 		this.unitResolvers = Objects.requireNonNull(unitResolvers);
 		this.packageRegistry = Objects.requireNonNull(packageRegistry);
 		this.blackboxRegistry = blackboxRegistry; // nullable
 		this.allowedBlackboxModules = Objects.requireNonNull(allowedBlackboxModules);
 		this.allowedUnitModules = Objects.requireNonNull(allowedUnitModules);
+		this.maxBlackboxLibraries = maxBlackboxLibraries;
 	}
 
 	/**
@@ -220,11 +226,19 @@ public class QvtoLinker {
 		if (!allowedBlackboxModules.isEmpty() && !allowedBlackboxModules.contains(qualifiedName)) {
 			return null;
 		}
+		// D29: and a ceiling on how many distinct libraries one link may pull in, counted
+		// over the whole link rather than per import, so a chain of imports cannot walk
+		// past it one module at a time.
+		if (!resolvedBlackboxModules.contains(qualifiedName)
+				&& resolvedBlackboxModules.size() >= maxBlackboxLibraries) {
+			return null;
+		}
 		Optional<QvtoBlackboxLibrary> optLib = blackboxRegistry.getLibrary(qualifiedName);
 		if (optLib.isEmpty()) {
 			return null;
 		}
 		QvtoBlackboxLibrary bbLib = optLib.get();
+		resolvedBlackboxModules.add(qualifiedName);
 
 		// Create synthetic Library module
 		Library library = QVTO.createLibrary();

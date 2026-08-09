@@ -85,6 +85,8 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	private final Set<String> allowedBlackboxModules;
 	private final boolean unitResolverEnabled;
 	private final Set<String> allowedUnitModules;
+	private final int maxUnitResolvers;
+	private final int maxBlackboxLibraries;
 
 	/** Loaded transformation for RelationImplementationProvider (D39, Phase 4b). */
 	private volatile OperationalTransformation loadedTransformation;
@@ -109,6 +111,8 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		this.allowedBlackboxModules = config.allowedBlackboxModules();
 		this.unitResolverEnabled = config.unitResolverEnabled();
 		this.allowedUnitModules = config.allowedUnitModules();
+		this.maxUnitResolvers = config.maxUnitResolvers();
+		this.maxBlackboxLibraries = config.maxBlackboxLibraries();
 	}
 
 	// --- Parsing ---
@@ -148,7 +152,13 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 
 		// §8.1.13: Link phase — resolve stub imports via unit resolvers and blackbox registry
 		// D29: Enforce enable flags — only pass resolvers/registry when enabled
-		List<QvtoUnitResolver> effectiveResolvers = unitResolverEnabled ? unitResolvers : List.of();
+		// D29: the enable flag decides whether resolvers are reachable at all, the limit
+		// how far one import may travel — every resolver is code asked to produce a unit
+		// for a name the transformation chose. Applied here rather than at construction,
+		// so it still holds once the set of resolvers can change between executions.
+		List<QvtoUnitResolver> effectiveResolvers = unitResolverEnabled
+				? unitResolvers.stream().limit(maxUnitResolvers).toList()
+				: List.of();
 		QvtoBlackboxRegistry effectiveRegistry = blackboxEnabled ? blackboxRegistry : null;
 		Set<String> effectiveBbAllow = blackboxEnabled ? allowedBlackboxModules : Set.of();
 		Set<String> effectiveUrAllow = unitResolverEnabled ? allowedUnitModules : Set.of();
@@ -159,7 +169,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		try {
 			QvtoLinker linker = new QvtoLinker(parserSupport, effectiveResolvers,
 					packageRegistry, effectiveRegistry,
-					effectiveBbAllow, effectiveUrAllow);
+					effectiveBbAllow, effectiveUrAllow, maxBlackboxLibraries);
 			linker.link(transformation);
 		} catch (QvtoParseException e) {
 			return new QvtoExecutionResult(
