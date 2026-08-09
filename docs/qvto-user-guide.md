@@ -270,6 +270,19 @@ OperationalTransformation trafo = engine.parse(URI.createURI("file:/path/to/MyTr
 
 The source is read through the `URIConverter` of the configured resource set — or of a default one, when none is configured — so `file:`, `http:` and `archive:` URIs work out of the box, and `platform:`/`bundleresource:` as soon as you hand over a resource set that knows them (§3.3).
 
+Callers rarely start with an EMF URI. `UriHelper` in the shared `org.eclipse.fennec.m2x` bundle converts the forms you are likely to hold:
+
+```java
+import org.eclipse.fennec.m2x.utils.UriHelper;
+
+engine.parse(UriHelper.fromPath(Path.of("/srv/templates/report.mtl")));
+engine.parse(UriHelper.fromJavaUri(request.getUri()));
+engine.parse(UriHelper.fromFile(chooser.getSelectedFile()));
+```
+
+Use it rather than `URI.createURI(path.toString())`: a path is not a URI. On Windows `C:\templates\report.mtl` would become a URI whose scheme is `C`, while `fromPath` uses `createFileURI`, which knows about drive letters and separators. `UriHelper.toJavaUri(uri)` goes back the other way, for APIs that speak `java.net.URI`.
+
+
 ### 5.3 Reuse Parsed ASTs
 
 Parse once and execute many times — the `OperationalTransformation` AST is reusable:

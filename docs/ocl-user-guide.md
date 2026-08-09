@@ -846,7 +846,23 @@ List<Constraint> constraints = engine.parseDocument(oclDocument, myResourceSet);
 
 This resolves against the resource set's own package registry, for that one call. To make *every* parse of an engine use a specific registry, give it to the parser instead (see §3.7).
 
-### 10.4 OSGi: CompleteOclContribution
+### 10.4 Locating Documents
+
+A Complete OCL document is passed as text, so where it comes from is the caller's business. When that means a file or a bundle resource, `UriHelper` in the shared `org.eclipse.fennec.m2x` bundle produces the EMF URI the resource set expects:
+
+```java
+import org.eclipse.fennec.m2x.utils.UriHelper;
+
+URI uri = UriHelper.fromPath(Path.of("/srv/constraints/company.ocl"));
+String document = new String(resourceSet.getURIConverter()
+        .createInputStream(uri).readAllBytes(), StandardCharsets.UTF_8);
+
+engine.parseDocument(document, resourceSet);
+```
+
+`UriHelper.fromJavaUri` and `fromFile` cover the other forms; `toJavaUri` converts back. Do not build a URI with `URI.createURI(path.toString())` — a path is not a URI, and on Windows the drive letter becomes the scheme.
+
+### 10.5 OSGi: CompleteOclContribution
 
 In OSGi, deploy Complete OCL documents as whiteboard services:
 

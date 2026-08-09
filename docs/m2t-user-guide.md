@@ -174,6 +174,17 @@ A type name that resolves nowhere is now an error — `parse` fails with `M2tPar
 
 So a missing or wrong registry announces itself at parse time instead of producing quietly wrong output.
 
+
+Templates are loaded with `engine.parse(URI)`, taking an EMF URI, and read through the resource set's `URIConverter`. `UriHelper` in the shared `org.eclipse.fennec.m2x` bundle converts what a caller usually holds:
+
+```java
+import org.eclipse.fennec.m2x.utils.UriHelper;
+
+Module module = engine.parse(UriHelper.fromPath(Path.of("/srv/templates/report.mtl")));
+```
+
+Prefer it over `URI.createURI(path.toString())` — a path is not a URI, and on Windows that would produce a URI whose scheme is the drive letter.
+
 ### 3.5 OSGi (Declarative Services)
 
 The M2T engine currently does not register a DS component. Use standalone instantiation in OSGi by creating the engine in your component's `@Activate` method:
