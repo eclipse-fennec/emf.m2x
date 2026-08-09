@@ -1,11 +1,15 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
 Bundle-Name: Fennec M2T Tests
 Bundle-Description: Unit and spec compliance tests for MOFM2T v1.0
 
--library: enableEMF
+-library: \
+	enableEMF,\
+	enableOSGi-Test
 
 src=${^src}
 
 -buildpath: \
+	org.osgi.test.junit5.cm;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.m2t.engine;version=snapshot;packages='*',\
 	org.eclipse.fennec.m2x.m2t.parser;version=snapshot,\

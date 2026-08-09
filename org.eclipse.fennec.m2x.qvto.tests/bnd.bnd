@@ -1,13 +1,17 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
 Bundle-Name: Fennec QVT-O Tests
 Bundle-Description: Parser and integration tests for QVT-O
 
--library: enableEMF
+-library: \
+	enableEMF,\
+	enableOSGi-Test
 
 src=${^src}
 
 -includeresource.model: model=model
 
 -buildpath: \
+	org.osgi.test.junit5.cm;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.qvto.parser;version=snapshot,\
 	org.eclipse.fennec.m2x.qvto.engine;version=snapshot,\

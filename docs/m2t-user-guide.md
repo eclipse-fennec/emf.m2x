@@ -94,18 +94,47 @@ Five lines of setup, one template, one generated file.
 
 ### 3.1 Three ways to give M2T its OCL engine
 
-M2T evaluates template expressions with an OCL engine. Which one, is the caller's choice:
+M2T evaluates template expressions with an OCL engine. Which one, is the caller's choice — and the first door needs no OCL knowledge at all:
 
 ```java
-// bring the engine you already have — the injected service under OSGi,
-// OclEngines.create(...) in plain Java
+// 1. don't care: M2T settings alone, the factory supplies a default OCL engine
+M2tConfiguration.builder().whitespaceMode(WhitespaceMode.ACCELEO).build();
+
+// 2. bring the engine you already have — the injected service under OSGi,
+//    OclEngines.create(...) in plain Java
 M2tConfiguration.builder(oclEngine).build();
 
-// or configure the OCL side yourself
+// 3. configure the OCL side yourself
 M2tConfiguration.builder(oclConfiguration).build();
 ```
 
 A supplied engine is used as it is: its cache, its operation providers, its evaluation settings. The MOFM2T §8.3 string operations travel with each evaluation, so an engine that knows nothing about M2T needs no preparation.
+
+`M2tEngine.getOclEngine()` returns the engine that actually runs — useful to warm it up, inspect its cache, or install EMF delegates on it.
+
+### 3.1.1 Under OSGi
+
+`DefaultM2tEngine` publishes `M2tEngine` as a prototype-scoped service, so every consumer gets its own engine with its own caches. Its configuration policy is optional: there is a working engine without configuring anything, and configuring one does not register a different service.
+
+It takes the OCL engine as a mandatory service reference, which is door 2 — the engine a consumer configured is the engine that runs the templates. OCL limits therefore belong on `DefaultOclEngine`, not here:
+
+```json
+{
+  "DefaultM2tEngine": { "m2t.whitespaceMode": "SPEC" },
+  "DefaultOclEngine":  { "ocl.maxDepth": 500 }
+}
+```
+
+| Property | Default |
+|---|---|
+| `m2t.defaultCharset` | `UTF-8` |
+| `m2t.whitespaceMode` | `ACCELEO` |
+| `m2t.maxDiagnostics` | 10000 |
+| `m2t.maxTemplateDepth` | 1000 |
+| `m2t.maxForIterations` | 1000000 |
+| `m2t.maxCrossProductSize` | 1000000 |
+| `m2t.maxOutputSize` | 10000000 |
+| `m2t.protectedAreaEnabled` | `true` |
 
 ### 3.2 Minimal
 

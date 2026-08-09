@@ -95,9 +95,53 @@ if (result.isSuccess()) {
 
 ## 3. Engine Setup
 
-### 3.1 QvtdConfiguration + OclConfiguration
+### 3.1 Three ways to give QVT-R its OCL engine
 
-The QVT-R engine wraps the OCL engine. Both need configuration:
+QVT-R evaluates relation expressions with an OCL engine. Which one, is the caller's choice — and the first door needs no OCL knowledge at all:
+
+```java
+// 1. don't care: QVT-R settings alone, the factory supplies a default OCL engine
+QvtdConfiguration.builder().build();
+
+// 2. bring the engine you already have — the injected service under OSGi,
+//    OclEngines.create(...) in plain Java
+QvtdConfiguration.builder(oclEngine).build();
+
+// 3. configure the OCL side yourself
+QvtdConfiguration.builder(oclConfiguration).build();
+```
+
+A supplied engine is used as it is: its cache, its operation providers, its evaluation settings. `QvtdEngine.getOclEngine()` returns the engine that actually runs — useful to warm it up, inspect its cache, or install EMF delegates on it.
+
+#### Under OSGi
+
+`DefaultQvtdEngine` publishes `QvtdEngine` as a prototype-scoped service, so every consumer gets its own engine with its own caches. Its configuration policy is optional: there is a working engine without configuring anything, and configuring one does not register a different service.
+
+It takes the OCL engine as a mandatory service reference, which is door 2 — the engine a consumer configured is the engine that evaluates. OCL limits therefore belong on `DefaultOclEngine`, not here:
+
+```json
+{
+  "DefaultQvtdEngine": { "qvtd.blackboxEnabled": true },
+  "DefaultOclEngine":  { "ocl.maxDepth": 500 }
+}
+```
+
+| Property | Default |
+|---|---|
+| `qvtd.blackboxEnabled` | `false` |
+| `qvtd.allowedBlackboxModules` | *(empty — allows none)* |
+| `qvtd.unitResolverEnabled` | `false` |
+| `qvtd.allowedUnitModules` | *(empty — allows none)* |
+| `qvtd.maxBlackboxLibraries` | 10 |
+| `qvtd.maxUnitResolvers` | 5 |
+| `qvtd.maxRelationDepth` | 200 |
+| `qvtd.maxBindings` | 10000 |
+| `qvtd.timeout` | 0 |
+| `qvtd.maxTraceRecords` | 100000 |
+
+### 3.1.1 Configuring both sides
+
+The full form, when the OCL side needs configuration too:
 
 ```java
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
