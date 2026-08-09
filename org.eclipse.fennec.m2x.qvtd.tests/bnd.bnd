@@ -10,7 +10,7 @@ src=${^src}
 -buildpath: \
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.qvtd.parser;version=snapshot,\
-	org.eclipse.fennec.m2x.qvtd.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.qvtd.engine;version=snapshot;packages='*',\
 	org.eclipse.fennec.m2x.qvtd.api;version=snapshot,\
 	org.eclipse.fennec.m2x.qvt.model;version=snapshot,\
 	org.eclipse.fennec.m2x.qvtd.model;version=snapshot,\

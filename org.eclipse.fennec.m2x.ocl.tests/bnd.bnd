@@ -20,7 +20,7 @@ src=${^src},src-gen
 -buildpath: \
 	org.osgi.test.junit5.cm;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
-	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot;packages='*',\
 	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
