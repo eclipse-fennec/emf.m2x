@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -90,6 +91,9 @@ public class AbstractExpressionBuilder {
 
 	private final EClassifier contextType;
 	private final EPackage.Registry packageRegistry;
+
+	/** Aliases a Complete OCL document introduced with {@code import alias : path} (§12.3). */
+	private Map<String, String> packageAliases = Map.of();
 	private OclEnvironment environment;
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 
@@ -134,6 +138,19 @@ public class AbstractExpressionBuilder {
 	}
 
 	// ==================== State Accessors ====================
+
+	/**
+	 * Makes the aliases of a Complete OCL document usable in qualified names.
+	 *
+	 * <p>{@code import c : company} lets the rest of the document say {@code c::Person};
+	 * without this the alias resolves to nothing and the type comes out unknown, far from
+	 * the line that introduced it.
+	 *
+	 * @param aliases alias to package path, must not be {@code null}
+	 */
+	public void registerPackageAliases(Map<String, String> aliases) {
+		this.packageAliases = Map.copyOf(Objects.requireNonNull(aliases, "aliases must not be null"));
+	}
 
 	public EClassifier getContextType() {
 		return contextType;
@@ -730,6 +747,7 @@ public class AbstractExpressionBuilder {
 		}
 		String classifierName = segments.get(segments.size() - 1);
 		String packageName = String.join("::", segments.subList(0, segments.size() - 1));
+		packageName = packageAliases.getOrDefault(packageName, packageName);
 
 		if (contextType instanceof EClass contextClass) {
 			EPackage ctxPkg = contextClass.getEPackage();

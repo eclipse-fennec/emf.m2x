@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -52,6 +54,9 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	private final EPackage.Registry packageRegistry;
 	private final List<Constraint> constraints = new ArrayList<>();
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
+
+	/** Aliases from {@code import alias : path} declarations, usable in qualified names. */
+	private final Map<String, String> packageAliases = new HashMap<>();
 	private String currentPackagePath;
 
 	OclDocumentBuilder(EPackage.Registry packageRegistry) {
@@ -98,10 +103,41 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		return null;
 	}
 
+	/**
+	 * Handles {@code import}, {@code include} and {@code library} declarations (§12.3).
+	 *
+	 * <p>Importing a package is a no-op, and correctly so: type names resolve against the
+	 * whole package registry the engine was given, whether or not a document says it wants
+	 * them, so there is nothing an import could add.
+	 *
+	 * <p>An alias is remembered, so {@code import c : company} makes {@code c::Person}
+	 * resolve for the rest of the document. Without that the alias resolves to nothing and
+	 * the type comes out unknown, at a place that gives no hint about the cause.
+	 *
+	 * <p>{@code library} is reported. It names a library of additional operations, and in
+	 * Fennec those are given to the engine as operation providers rather than named by the
+	 * document — so there is nothing to resolve it to, and saying so beats a later
+	 * "unknown operation".
+	 */
 	@Override
 	public Object visitImportDeclaration(OclParser.ImportDeclarationContext ctx) {
-		LOG.fine(() -> "Skipping import declaration: " + ctx.getText());
+		String path = ctx.pathName() != null ? ctx.pathName().getText() : "";
+		if (ctx.getStart() != null && "library".equals(ctx.getStart().getText())) {
+			addError("Library imports are not supported (library " + path
+					+ "). Additional operations are given to the engine as operation "
+					+ "providers rather than named by the document.");
+		} else if (ctx.identifier() != null) {
+			packageAliases.put(OclAstBuilder.identifierText(ctx.identifier()), path);
+		} else {
+			LOG.fine(() -> "Package import needs no resolution, the registry already "
+					+ "carries every package: " + ctx.getText());
+		}
 		return null;
+	}
+
+	/** Records a diagnostic for the document being built. */
+	private void addError(String message) {
+		diagnostics.add(new OclParseDiagnostic(message, 0, 0));
 	}
 
 	@Override
@@ -371,6 +407,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
 			EClassifier contextType, String selfAlias) {
 		OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry);
+		builder.support.registerPackageAliases(packageAliases);
 		if (selfAlias != null) {
 			builder.registerSelfAlias(selfAlias);
 		}
