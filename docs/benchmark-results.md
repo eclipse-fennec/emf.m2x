@@ -113,6 +113,7 @@ The following optimizations were applied to achieve the above results:
 |---|-------------|--------|
 | 1 | LRU expression cache (String → parsed OclExpression) | Eliminates re-parsing for repeated expressions |
 | 2 | PropertyAccessorCache warmUp for EPackages | Pre-caches EStructuralFeature reflective access |
+| 3 | **Hashed unique collections** — `OclSet` backed by `LinkedHashMap`, `OclOrderedSet` by a key set, both keyed on `OclEqualityUtil.lookupKey` | O(1) instead of O(n) per `contains`/`add`. Building a set was quadratic: `Person.allInstances()->select(...)` over 50 000 instances took 10.9 s per evaluation, now 52 ms |
 
 ### QVT-O Engine
 

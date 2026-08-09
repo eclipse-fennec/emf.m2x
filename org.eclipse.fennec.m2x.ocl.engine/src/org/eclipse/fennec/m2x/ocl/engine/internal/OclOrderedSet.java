@@ -16,6 +16,9 @@ package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.function.UnaryOperator;
 
 /**
  * OCL OrderedSet — an ordered collection with unique elements.
@@ -26,12 +29,23 @@ import java.util.Collection;
  *
  * <p>Extends {@link ArrayList} for storage and order-sensitive equality.
  *
+ * <p>Uniqueness is decided against a set of
+ * {@linkplain OclEqualityUtil#lookupKey(Object) lookup keys} rather than by scanning the
+ * elements, which is what keeps building an OrderedSet linear instead of quadratic. Because
+ * this is a {@link java.util.List}, callers can also change it through inherited operations
+ * that know nothing about that set, so it is rebuilt whenever the list has moved on: for
+ * structural changes {@code modCount} says so, and the two operations that replace elements
+ * without being structural drop it explicitly.
+ *
  * @param <E> element type
  * @since 1.0
  */
 public class OclOrderedSet<E> extends ArrayList<E> {
 
 	private static final long serialVersionUID = 1L;
+
+	private transient Set<Object> keys;
+	private transient int keysModCount;
 
 	public OclOrderedSet() {
 		super();
@@ -54,19 +68,52 @@ public class OclOrderedSet<E> extends ArrayList<E> {
 
 	@Override
 	public boolean contains(Object o) {
-		for (int i = 0; i < size(); i++) {
-			if (OclEqualityUtil.oclEquals(get(i), o)) {
-				return true;
-			}
-		}
-		return false;
+		return keys().contains(OclEqualityUtil.lookupKey(o));
 	}
 
 	@Override
 	public boolean add(E e) {
-		if (contains(e)) {
+		Object key = OclEqualityUtil.lookupKey(e);
+		Set<Object> known = keys();
+		if (known.contains(key)) {
 			return false;
 		}
-		return super.add(e);
+		if (!super.add(e)) {
+			return false;
+		}
+		known.add(key);
+		keysModCount = modCount;
+		return true;
+	}
+
+	@Override
+	public E set(int index, E element) {
+		keys = null; // replacing an element is not a structural change, so modCount stays put
+		return super.set(index, element);
+	}
+
+	@Override
+	public void replaceAll(UnaryOperator<E> operator) {
+		keys = null;
+		super.replaceAll(operator);
+	}
+
+	@Override
+	public Object clone() {
+		OclOrderedSet<?> copy = (OclOrderedSet<?>) super.clone();
+		copy.keys = null; // the shallow copy would otherwise share this instance's key set
+		return copy;
+	}
+
+	private Set<Object> keys() {
+		if (keys == null || keysModCount != modCount) {
+			Set<Object> rebuilt = new HashSet<>(Math.max(16, size() * 2));
+			for (int i = 0; i < size(); i++) {
+				rebuilt.add(OclEqualityUtil.lookupKey(get(i)));
+			}
+			keys = rebuilt;
+			keysModCount = modCount;
+		}
+		return keys;
 	}
 }

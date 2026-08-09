@@ -15,10 +15,10 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.util.AbstractSet;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * OCL Set implementation that uses OCL equality for element comparison.
@@ -28,24 +28,25 @@ import java.util.List;
  * {@code 4 = 4.0} is {@code true}). This ensures that {@code Set{4, 4.0}}
  * correctly deduplicates to a single element.
  *
- * <p>Internally backed by an {@link ArrayList} with linear-scan containment
- * checks using {@link OclEqualityUtil#oclEquals(Object, Object)}.
- * Performance is O(n) for contains/add, which is acceptable for typical
- * OCL collection sizes.
+ * <p>Backed by a {@link LinkedHashMap} from
+ * {@linkplain OclEqualityUtil#lookupKey(Object) lookup key} to element, which keeps
+ * containment and insertion at constant cost while preserving encounter order. The
+ * straightforward reading — a list with a linear scan per {@code add} — makes building a
+ * set quadratic, which a {@code Person.allInstances()} over a real model runs into hard.
  *
  * @param <E> element type
  * @since 1.0
  */
 public class OclSet<E> extends AbstractSet<E> {
 
-	private final List<E> elements;
+	private final Map<Object, E> elements;
 
 	public OclSet() {
-		this.elements = new ArrayList<>();
+		this.elements = new LinkedHashMap<>();
 	}
 
 	public OclSet(int initialCapacity) {
-		this.elements = new ArrayList<>(initialCapacity);
+		this.elements = new LinkedHashMap<>(initialCapacity);
 	}
 
 	/**
@@ -53,13 +54,13 @@ public class OclSet<E> extends AbstractSet<E> {
 	 * elements using OCL equality.
 	 */
 	public OclSet(Collection<? extends E> c) {
-		this.elements = new ArrayList<>(c.size());
+		this.elements = new LinkedHashMap<>(c.size());
 		addAll(c);
 	}
 
 	@Override
 	public Iterator<E> iterator() {
-		return elements.iterator();
+		return elements.values().iterator();
 	}
 
 	@Override
@@ -74,38 +75,33 @@ public class OclSet<E> extends AbstractSet<E> {
 
 	@Override
 	public boolean contains(Object o) {
-		return indexOf(o) >= 0;
+		return elements.containsKey(OclEqualityUtil.lookupKey(o));
 	}
 
 	@Override
 	public boolean add(E e) {
-		if (contains(e)) {
+		Object key = OclEqualityUtil.lookupKey(e);
+		// Not putIfAbsent: null is a legitimate element, and it would be indistinguishable
+		// from an absent key.
+		if (elements.containsKey(key)) {
 			return false;
 		}
-		return elements.add(e);
+		elements.put(key, e);
+		return true;
 	}
 
 	@Override
 	public boolean remove(Object o) {
-		int idx = indexOf(o);
-		if (idx >= 0) {
-			elements.remove(idx);
-			return true;
+		Object key = OclEqualityUtil.lookupKey(o);
+		if (!elements.containsKey(key)) {
+			return false;
 		}
-		return false;
+		elements.remove(key);
+		return true;
 	}
 
 	@Override
 	public void clear() {
 		elements.clear();
-	}
-
-	private int indexOf(Object o) {
-		for (int i = 0; i < elements.size(); i++) {
-			if (OclEqualityUtil.oclEquals(elements.get(i), o)) {
-				return i;
-			}
-		}
-		return -1;
 	}
 }
