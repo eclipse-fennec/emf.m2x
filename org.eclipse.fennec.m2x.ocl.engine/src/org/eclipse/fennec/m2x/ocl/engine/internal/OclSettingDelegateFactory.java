@@ -57,13 +57,13 @@ import org.osgi.service.component.annotations.Reference;
 		})
 public class OclSettingDelegateFactory implements EStructuralFeature.Internal.SettingDelegate.Factory {
 
-	private final OclEngineImpl engine;
+	private final OclDelegateSupport engine;
 
 	/**
 	 * DS constructor — engine is injected as a service.
 	 */
 	@Activate
-	public OclSettingDelegateFactory(@Reference OclEngineImpl engine) {
+	public OclSettingDelegateFactory(@Reference OclDelegateSupport engine) {
 		this.engine = Objects.requireNonNull(engine, "engine must not be null");
 	}
 

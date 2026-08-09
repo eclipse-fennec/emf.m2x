@@ -153,7 +153,7 @@ public class MyComponent {
 | Component | Scope | What's shared? |
 |-----------|-------|----------------|
 | `OclParserSupport` | PROTOTYPE | Nothing — each engine gets its own parser |
-| `OclEngineComponent` | PROTOTYPE | Nothing — each consumer gets its own engine with isolated `PropertyAccessorCache` |
+| `OclEngineComponent` (`DefaultOclEngine`) | PROTOTYPE | Nothing — each consumer gets its own engine with isolated `PropertyAccessorCache`. Published as `OclEngine` and, for the EMF delegates in the same bundle, as the internal `OclDelegateSupport` |
 | `DefaultOclExpressionCacheComponent` | SINGLETON | **Shared by default** — all engines share the same LRU parse cache (1024 entries) |
 
 The expression cache is shared because parsed `OclExpression` ASTs are immutable and thread-safe. This means a parse result from one engine benefits all others.
