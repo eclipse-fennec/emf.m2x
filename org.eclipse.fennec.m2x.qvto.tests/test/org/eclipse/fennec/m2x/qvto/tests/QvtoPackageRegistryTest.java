@@ -25,6 +25,8 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModelType;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -93,6 +95,18 @@ class QvtoPackageRegistryTest {
 		assertNotNull(transformation);
 		assertEquals(libraryPackage, resolvedMetamodel(transformation),
 				"the engine must resolve the modeltype against the supplied registry");
+	}
+
+	@Test
+	@DisplayName("a resource set is enough — its package registry is used")
+	void resourceSetSuppliesTheRegistry() throws QvtoParseException {
+		ResourceSet resourceSet = new ResourceSetImpl();
+		resourceSet.getPackageRegistry().put(NS_URI, libraryPackage);
+
+		QvtoEngineImpl engine = engineWith(builder -> builder.resourceSet(resourceSet));
+
+		assertEquals(libraryPackage,
+				resolvedMetamodel(engine.parse(TRANSFORMATION, "registryTest")));
 	}
 
 	@Test

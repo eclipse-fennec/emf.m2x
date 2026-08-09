@@ -123,7 +123,8 @@ QvtdEngineImpl engine = new QvtdEngineImpl(config);
 
 | Method | Default | Description |
 |--------|---------|-------------|
-| `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | `EPackage.Registry` used to resolve the transformation's typed models |
+| `resourceSet(resourceSet)` | — | Resource set whose package registry resolves the transformation's typed models |
+| `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | The registry itself; wins over `resourceSet` when both are set |
 | `blackboxRegistry(registry)` | empty | Registry for blackbox Java libraries |
 | `blackboxEnabled(boolean)` | `false` | Enable blackbox library imports |
 | `allowedBlackboxModules(Set)` | empty | Allow-list for blackbox module names |
@@ -137,14 +138,18 @@ QvtdEngineImpl engine = new QvtdEngineImpl(config);
 The typed models of a transformation — `transformation t(uml : simpleuml, rdbms : simplerdbms)` — are resolved by package name when the transformation is parsed. By default the engine looks in `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Hand it your own registry when you hold the packages yourself:
 
 ```java
-EPackage.Registry registry = new EPackageRegistryImpl();
-registry.put(UML_NS, umlPackage);
-registry.put(RDBMS_NS, rdbmsPackage);
+// the ResourceSet you already have — under OSGi this is what emf.osgi injects
+QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
+    .resourceSet(resourceSet)
+    .build();
 
+// or the registry itself, if that is what you hold
 QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
     .packageRegistry(registry)
     .build();
 ```
+
+If both are set, the explicitly configured registry wins — the more specific setting beats the more general one. Only the resource set's package registry is used; nothing is loaded through it.
 
 Parser and engine use exactly that registry; nothing reaches for the global one on its own (D42). Under OSGi, or wherever two versions of one nsURI can coexist, this is what keeps the engine from forming its own opinion about which version an nsURI names. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
 

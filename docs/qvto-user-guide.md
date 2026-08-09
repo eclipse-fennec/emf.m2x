@@ -140,7 +140,8 @@ QvtoEngine engine = new QvtoEngineImpl(qvtoConfig);
 
 | Method | Description |
 |--------|-------------|
-| `packageRegistry(registry)` | `EPackage.Registry` used to resolve `modeltype … uses '<nsURI>'` (default: `EPackage.Registry.INSTANCE`) |
+| `resourceSet(resourceSet)` | Resource set whose package registry resolves `modeltype … uses '<nsURI>'` |
+| `packageRegistry(registry)` | The registry itself (default: `EPackage.Registry.INSTANCE`); wins over `resourceSet` when both are set |
 | `blackboxRegistry(registry)` | Registry for blackbox Java libraries |
 | `addUnitResolver(resolver)` | Add a unit resolver for multi-file composition |
 | `unitResolvers(list)` | Set all unit resolvers at once |
@@ -151,13 +152,18 @@ QvtoEngine engine = new QvtoEngineImpl(qvtoConfig);
 A `modeltype LIB uses 'http://example.org/library/1.0';` declaration is resolved when the transformation is parsed. By default the engine looks in `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Hand it your own registry when you hold the packages yourself:
 
 ```java
-EPackage.Registry registry = new EPackageRegistryImpl();
-registry.put(LIBRARY_NS, libraryPackage);
+// the ResourceSet you already have — under OSGi this is what emf.osgi injects
+QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig)
+    .resourceSet(resourceSet)
+    .build();
 
+// or the registry itself, if that is what you hold
 QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig)
     .packageRegistry(registry)
     .build();
 ```
+
+If both are set, the explicitly configured registry wins — the more specific setting beats the more general one. Only the resource set's package registry is used; nothing is loaded through it.
 
 Everything downstream — parser, linker, alias resolution, nested blackbox invocations — uses exactly that registry; nothing reaches for the global one on its own (D42). Under OSGi, or wherever two versions of one nsURI can coexist, this is what keeps the engine from forming its own opinion about which version an nsURI names. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
 

@@ -59,7 +59,7 @@ public class OclParserSupport implements OclExpressionParser {
 	 * <p>This is the plain-Java case, where the static registry is the correct
 	 * answer and no model version ambiguity exists. Callers that hold their own
 	 * packages — under OSGi, or wherever two versions of one nsURI can coexist —
-	 * use {@link #OclParserSupport(EPackage.Registry)} instead (D42).
+	 * use {@link #OclParserSupport(ResourceSet)} instead (D42).
 	 */
 	public OclParserSupport() {
 		this(EPackage.Registry.INSTANCE);
@@ -73,6 +73,26 @@ public class OclParserSupport implements OclExpressionParser {
 	public OclParserSupport(EPackage.Registry packageRegistry) {
 		this.packageRegistry = Objects.requireNonNull(packageRegistry,
 				"packageRegistry must not be null");
+	}
+
+	/**
+	 * Creates a parser that resolves classifier names against the package registry of
+	 * the given resource set.
+	 *
+	 * <p>This is the form to reach for: a {@link ResourceSet} is what EMF hands around,
+	 * and under OSGi it is what {@code emf.osgi} injects — a configured, isolated stack
+	 * comes as a resource set, not as a bare registry (D42).
+	 *
+	 * <p>Only the resource set's {@linkplain ResourceSet#getPackageRegistry() package
+	 * registry} is used. Nothing is loaded through it: template and document sources are
+	 * passed to the parser as text.
+	 *
+	 * @param resourceSet the resource set whose package registry resolves classifier
+	 *        names, must not be {@code null}
+	 */
+	public OclParserSupport(ResourceSet resourceSet) {
+		this(Objects.requireNonNull(resourceSet, "resourceSet must not be null")
+				.getPackageRegistry());
 	}
 
 	/**

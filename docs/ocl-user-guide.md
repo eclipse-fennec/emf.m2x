@@ -257,13 +257,23 @@ Classifier names are resolved when an expression is parsed — `self.oclIsTypeOf
 // plain Java: the global registry, which is the correct answer there
 OclEngine engine = new OclEngineImpl(new OclParserSupport());
 
-// your own packages — under OSGi, or when two versions of one nsURI coexist
-EPackage.Registry registry = new EPackageRegistryImpl();
-registry.put(LIBRARY_NS, libraryPackage);
-registry.put(MEDIA_NS, mediaPackage);
+// your own packages — hand over the ResourceSet you already have
+OclEngine engine = new OclEngineImpl(new OclParserSupport(resourceSet));
 
+// or the registry itself, if that is what you hold
 OclEngine engine = new OclEngineImpl(new OclParserSupport(registry));
 ```
+
+Under OSGi the resource set is what `emf.osgi` injects — a configured, isolated stack arrives as a `ResourceSetFactory`, never as a bare registry:
+
+```java
+@Reference(target = "(rsf.name=myapp)")
+ResourceSetFactory factory;
+
+OclEngine engine = new OclEngineImpl(new OclParserSupport(factory.createResourceSet()));
+```
+
+Only the resource set's package registry is used; nothing is loaded through it.
 
 The registry is the parser's, not the engine's: hand it over when constructing `OclParserSupport`, and every expression and Complete OCL document parsed by that engine resolves against it. Nothing inside the engine reaches for the global registry on its own (D42), so what you pass in is what the parser sees.
 

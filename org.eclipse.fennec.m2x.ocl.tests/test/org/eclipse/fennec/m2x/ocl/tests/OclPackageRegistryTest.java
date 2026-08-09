@@ -26,6 +26,8 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
@@ -110,6 +112,21 @@ class OclPackageRegistryTest {
 			OclExpression expression = parser.parse("self.oclIsTypeOf(Book)", bookClass);
 
 			assertEquals(Boolean.TRUE, engine.evaluate(expression, OclContext.of(newBook())));
+		}
+
+		@Test
+		@DisplayName("a resource set is enough — its package registry is used")
+		void resourceSetSuppliesTheRegistry() throws OclParseException {
+			ResourceSet resourceSet = new ResourceSetImpl();
+			resourceSet.getPackageRegistry().put(LIBRARY_NS, libraryPackage);
+			resourceSet.getPackageRegistry().put(MEDIA_NS, mediaPackage);
+
+			OclParserSupport parser = new OclParserSupport(resourceSet);
+			OclEngineImpl engine = new OclEngineImpl(parser);
+
+			OclExpression expression = parser.parse("self.oclIsTypeOf(Novel)", bookClass);
+
+			assertEquals(Boolean.TRUE, engine.evaluate(expression, OclContext.of(newNovel())));
 		}
 
 		@Test
