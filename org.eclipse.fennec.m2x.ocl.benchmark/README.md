@@ -4,34 +4,17 @@ Correctness comparison and performance benchmarks: **Fennec OCL vs Eclipse OCL C
 
 ## Prerequisites
 
-The benchmark requires Eclipse OCL Classic JARs that are **not checked into the repository**.
-They must be provided locally as symlinks in the `lib/` directory.
+None. The Eclipse OCL Classic bundles this benchmark measures against are fetched into
+`lib/` by the Gradle build (see `gradle/benchmark-dependencies.gradle`), which is also where
+the exact versions are pinned. They are not checked in.
 
-### Required JARs
+They come from the Eclipse simultaneous release p2 repository, because Eclipse OCL was last
+published to a Maven repository in 2014 and `lpg.runtime.java` only ever shipped through
+Orbit. They are fetched as files rather than declared as a bnd repository on purpose: a bnd
+repository applies to the whole workspace, and that p2 site also carries JUnit 6, which would
+outrank the JUnit the shared `fennecTest` library resolves with `version=latest`.
 
-| Symlink (in `lib/`) | Source (in `/opt/git/m2m/tools/`) |
-|----------------------|-----------------------------------|
-| `lpg.runtime.java_2.0.17.jar` | `lpg.runtime.java_2.0.17.v201004271640.jar` |
-| `org.eclipse.ocl_3.22.0.jar` | `org.eclipse.ocl_3.22.0.v20240902-1518.jar` |
-| `org.eclipse.ocl.common_1.22.0.jar` | `org.eclipse.ocl.common_1.22.0.v20240902-1518.jar` |
-| `org.eclipse.ocl.ecore_3.22.0.jar` | `org.eclipse.ocl.ecore_3.22.0.v20240902-1518.jar` |
-
-### Setup
-
-Create the symlinks from the project's `lib/` directory:
-
-```bash
-cd /opt/git/m2m/workspace/org.eclipse.fennec.m2x.ocl.benchmark/lib
-
-ln -s /opt/git/m2m/tools/lpg.runtime.java_2.0.17.v201004271640.jar lpg.runtime.java_2.0.17.jar
-ln -s /opt/git/m2m/tools/org.eclipse.ocl_3.22.0.v20240902-1518.jar org.eclipse.ocl_3.22.0.jar
-ln -s /opt/git/m2m/tools/org.eclipse.ocl.common_1.22.0.v20240902-1518.jar org.eclipse.ocl.common_1.22.0.jar
-ln -s /opt/git/m2m/tools/org.eclipse.ocl.ecore_3.22.0.v20240902-1518.jar org.eclipse.ocl.ecore_3.22.0.jar
-```
-
-The JARs can be downloaded from:
-- **Eclipse OCL Classic 3.22.0** — [Eclipse OCL Downloads](https://projects.eclipse.org/projects/modeling.mdt.ocl/downloads)
-- **LPG Runtime 2.0.17** — bundled with Eclipse OCL Classic
+Building with `--offline` leaves this project out as long as `lib/` is empty.
 
 ## Running the Benchmarks
 
@@ -43,6 +26,9 @@ cd /opt/git/m2m/workspace
 ```
 
 This runs only tests annotated with `@Tag("perf")`.
+
+`OclCorrectnessComparisonTest` carries no `perf` tag, so its 57 differential checks against
+Eclipse OCL run as part of the ordinary `./gradlew build`.
 
 ## Test Classes
 

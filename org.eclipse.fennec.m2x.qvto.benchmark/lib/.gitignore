@@ -1,21 +1,3 @@
-/lpg.runtime.java_2.0.17.jar
-/org.eclipse.core.contenttype_3.9.800.jar
-/org.eclipse.core.expressions_3.9.500.jar
-/org.eclipse.core.filesystem_1.11.400.jar
-/org.eclipse.core.jobs_3.15.700.jar
-/org.eclipse.core.resources_3.23.100.jar
-/org.eclipse.core.runtime_3.34.100.jar
-/org.eclipse.equinox.common_3.20.300.jar
-/org.eclipse.equinox.registry_3.12.600.jar
-/org.eclipse.equinox.supplement_1.12.100.jar
-/org.eclipse.m2m.qvt.oml.common_3.11.0.jar
-/org.eclipse.m2m.qvt.oml.cst.parser_3.11.0.jar
-/org.eclipse.m2m.qvt.oml.ecore.imperativeocl_3.11.0.jar
-/org.eclipse.m2m.qvt.oml.emf.util_3.11.0.jar
-/org.eclipse.m2m.qvt.oml.ocl_3.11.0.jar
-/org.eclipse.m2m.qvt.oml.runtime_3.11.0.jar
-/org.eclipse.m2m.qvt.oml_3.11.0.jar
-/org.eclipse.ocl.common_1.22.0.jar
-/org.eclipse.ocl.ecore_3.22.0.jar
-/org.eclipse.ocl_3.22.0.jar
-/org.osgi.service.prefs_1.1.2.jar
+# Fetched from the Eclipse simultaneous release p2 repository during the Gradle build,
+# see settings.gradle.
+*.jar

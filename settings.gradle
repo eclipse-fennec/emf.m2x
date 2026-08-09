@@ -14,6 +14,11 @@ pluginManagement {
     mavenCentral()
     gradlePluginPortal()
   }
+
+  // Must run before the bnd workspace plugin below: applying it reads every bnd.bnd,
+  // and the benchmark projects reference their Eclipse dependencies as files on the
+  // -testpath. See the script for why they are files and not a bnd repository.
+  apply from: "$rootDir/gradle/benchmark-dependencies.gradle"
 }
 plugins {
   id 'biz.aQute.bnd.workspace'
@@ -23,9 +28,8 @@ rootProject.name = "fennec-m2x"
 // Exclude non-standard projects from Gradle build
 def excludedProjects = [
   'docs',                                          // documentation, not build targets
-  'org.eclipse.fennec.m2x.ocl.benchmark',          // requires local Eclipse JARs in lib/
-  'org.eclipse.fennec.m2x.qvto.benchmark',         // requires local Eclipse JARs in lib/
 ] as Set
+excludedProjects.addAll(gradle.benchmarkProjectsWithoutDependencies)
 
 gradle.beforeProject { project ->
   if (project.name in excludedProjects) {

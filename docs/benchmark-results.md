@@ -129,6 +129,10 @@ The following optimizations were applied to achieve the above results:
 
 ## 4. How to Reproduce
 
+No setup is needed. The Eclipse bundles that Fennec is measured against are fetched into the
+benchmark projects' `lib/` folders by the Gradle build; `gradle/benchmark-dependencies.gradle`
+pins the versions and explains where they come from.
+
 ```bash
 cd /opt/git/m2m/workspace
 

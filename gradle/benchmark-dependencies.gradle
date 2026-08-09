@@ -1,0 +1,94 @@
+/*
+ * Provides the Eclipse bundles that the benchmark projects measure Fennec against.
+ *
+ * None of them is on Maven: Eclipse OCL was last published to a Maven repository in 2014
+ * (repo.eclipse.org/acceleo-maven2-releases tops out at 3.4.2), Eclipse QVT-O never was,
+ * and lpg.runtime.java only ever shipped through Orbit. The one place that carries all of
+ * them at the versions the benchmarks were written against is the simultaneous release p2
+ * repository, so they are fetched from there.
+ *
+ * They are fetched into lib/ rather than declared as a bnd repository, because a bnd
+ * repository is workspace-wide: this p2 site also carries JUnit 6, which would outrank the
+ * JUnit that the shared fennecTest library resolves with version=latest, and every test
+ * project in the workspace would then run against a JUnit its launcher does not know.
+ * Fetching keeps the Eclipse bundles scoped to the two projects that want them.
+ *
+ * This is applied from within pluginManagement, because the bnd workspace plugin reads
+ * every bnd.bnd — and with it the -testpath these files are on — while it is being applied.
+ */
+
+def p2Plugins = 'https://download.eclipse.org/releases/2025-12/202512101000/plugins'
+
+def dependencies = [
+	'org.eclipse.fennec.m2x.ocl.benchmark': [
+		'org.eclipse.ocl_3.22.0.v20240902-1518.jar',
+		'org.eclipse.ocl.ecore_3.22.0.v20240902-1518.jar',
+		'org.eclipse.ocl.common_1.22.0.v20240902-1518.jar',
+		'lpg.runtime.java_2.0.17.v201004271640.jar',
+	],
+	'org.eclipse.fennec.m2x.qvto.benchmark': [
+		'org.eclipse.m2m.qvt.oml_3.11.0.v20251124-1059.jar',
+		'org.eclipse.m2m.qvt.oml.common_3.11.0.v20251124-1059.jar',
+		'org.eclipse.m2m.qvt.oml.cst.parser_3.11.0.v20251124-1059.jar',
+		'org.eclipse.m2m.qvt.oml.ecore.imperativeocl_3.11.0.v20251124-1059.jar',
+		'org.eclipse.m2m.qvt.oml.emf.util_3.11.0.v20251124-1059.jar',
+		'org.eclipse.m2m.qvt.oml.ocl_3.11.0.v20251124-1059.jar',
+		'org.eclipse.m2m.qvt.oml.runtime_3.11.0.v20251124-1059.jar',
+		'org.eclipse.ocl_3.22.0.v20240902-1518.jar',
+		'org.eclipse.ocl.ecore_3.22.0.v20240902-1518.jar',
+		'org.eclipse.ocl.common_1.22.0.v20240902-1518.jar',
+		'lpg.runtime.java_2.0.17.v201004271640.jar',
+		'org.eclipse.core.contenttype_3.9.800.v20251105-1620.jar',
+		'org.eclipse.core.expressions_3.9.500.v20250608-0434.jar',
+		'org.eclipse.core.filesystem_1.11.400.v20251107-0507.jar',
+		'org.eclipse.core.jobs_3.15.700.v20250725-1147.jar',
+		'org.eclipse.core.resources_3.23.100.v20251106-1705.jar',
+		'org.eclipse.core.runtime_3.34.100.v20251111-1421.jar',
+		'org.eclipse.equinox.common_3.20.300.v20251111-0312.jar',
+		'org.eclipse.equinox.registry_3.12.600.v20250906-0651.jar',
+		'org.eclipse.equinox.supplement_1.12.100.v20250505-2005.jar',
+		'org.osgi.service.prefs_1.1.2.202109301733.jar',
+	],
+]
+
+/* Strips the build qualifier: foo_1.2.3.v20240902-1518.jar -> foo_1.2.3.jar, which is the
+ * name the -testpath entries use. */
+def withoutQualifier = { String jar -> jar.replaceFirst(/^(.*_\d+\.\d+\.\d+)\..*\.jar$/, '$1.jar') }
+
+def unavailable = [] as Set
+
+dependencies.each { projectName, jars ->
+	def lib = new File(rootDir, "$projectName/lib")
+	jars.each { jar ->
+		def target = new File(lib, withoutQualifier(jar))
+		if (target.length() > 0) {
+			return
+		}
+		if (startParameter.offline) {
+			unavailable << projectName
+			return
+		}
+		lib.mkdirs()
+		// Downloaded aside and renamed, so that an interrupted build cannot leave a
+		// truncated jar behind that the next build would accept as present.
+		def partial = new File(lib, "${target.name}.part")
+		try {
+			new URL("$p2Plugins/$jar").withInputStream { source ->
+				partial.withOutputStream { it << source }
+			}
+			partial.renameTo(target)
+		} catch (IOException failure) {
+			partial.delete()
+			throw new GradleException("Cannot fetch the benchmark dependency $jar from " +
+					"$p2Plugins. The benchmark projects compare Fennec against the Eclipse " +
+					"implementations and cannot be built without them — build with --offline " +
+					"to leave the benchmark projects out.", failure)
+		}
+	}
+}
+
+unavailable.each {
+	logger.lifecycle("Leaving $it out: --offline, and its Eclipse dependencies are not in lib/ yet.")
+}
+
+gradle.ext.benchmarkProjectsWithoutDependencies = unavailable
