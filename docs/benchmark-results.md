@@ -137,13 +137,18 @@ pins the versions and explains where they come from.
 ```bash
 cd /opt/git/m2m/workspace
 
-# OCL benchmarks
-./gradlew org.eclipse.fennec.m2x.ocl.benchmark:perfTest
+# Both comparisons against Eclipse
+./gradlew benchmarkTest
 
-# QVT-O benchmarks
-./gradlew org.eclipse.fennec.m2x.qvto.benchmark:perfTest
+# Or one at a time
+./gradlew org.eclipse.fennec.m2x.ocl.benchmark:benchmarkTest
+./gradlew org.eclipse.fennec.m2x.qvto.benchmark:benchmarkTest
 ```
 
+The comparisons carry `@Tag("benchmark")` and no workflow runs them — their numbers are
+relative to the machine. Our own performance tests (`@Tag("perf")`, task `perfTest`) do run
+in CI.
+
 Results are printed to stdout and saved in JUnit XML format under:
-- `org.eclipse.fennec.m2x.ocl.benchmark/generated/test-reports/perfTest/`
-- `org.eclipse.fennec.m2x.qvto.benchmark/generated/test-reports/perfTest/`
+- `org.eclipse.fennec.m2x.ocl.benchmark/generated/test-reports/benchmarkTest/`
+- `org.eclipse.fennec.m2x.qvto.benchmark/generated/test-reports/benchmarkTest/`

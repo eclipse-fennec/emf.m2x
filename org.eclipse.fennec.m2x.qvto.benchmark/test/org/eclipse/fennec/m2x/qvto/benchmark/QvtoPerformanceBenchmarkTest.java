@@ -66,7 +66,7 @@ import org.junit.jupiter.api.Test;
  * <p>All tests are tagged with {@code "perf"}.
  * Run with: {@code ./gradlew org.eclipse.fennec.m2x.qvto.benchmark:perfTest}
  */
-@Tag("perf")
+@Tag("benchmark")
 class QvtoPerformanceBenchmarkTest {
 
 	private static final int JIT_WARMUP = 500;

@@ -546,7 +546,8 @@ workspace/
 | **Spec compliance** | Examples from OCL/QVT/MOFM2T specs | JUnit 5 | `@Tag("spec")` |
 | **Edge cases** | Error handling, boundary conditions | JUnit 5 | - |
 | **Eclipse spec tests** | Migrated from Eclipse OCL/QVTo/Acceleo test suites | JUnit 5 (adapted) | `@Tag("spec")` |
-| **Performance** | Benchmarks comparing Fennec vs Eclipse implementations | JUnit 5 + JMH | `@Tag("perf")` |
+| **Performance** | How fast our own engines are | JUnit 5 | `@Tag("perf")`, task `perfTest` |
+| **Benchmark** | Comparison against the Eclipse implementations | JUnit 5 | `@Tag("benchmark")`, task `benchmarkTest` |
 | **OSGi integration** | DS wiring, whiteboard, emf.osgi | OSGi test (separate `*.itest` project) | - |
 
 ### 10.4 Migrating Eclipse Spec Tests

@@ -23,10 +23,11 @@ Building with `--offline` leaves this project out as long as `lib/` is empty.
 cd /opt/git/m2m/workspace
 
 # Run QVT-O performance benchmarks
-./gradlew org.eclipse.fennec.m2x.qvto.benchmark:perfTest
+./gradlew org.eclipse.fennec.m2x.qvto.benchmark:benchmarkTest
 ```
 
-This runs only tests annotated with `@Tag("perf")`.
+This runs only tests annotated with `@Tag("benchmark")`. No CI workflow does — the
+numbers are relative to the machine they were measured on.
 
 ## Test Classes
 
@@ -38,7 +39,7 @@ This runs only tests annotated with `@Tag("perf")`.
 
 Results are printed to stdout and saved as JUnit XML under:
 ```
-generated/test-reports/perfTest/
+generated/test-reports/benchmarkTest/
 ```
 
 See `workspace/docs/benchmark-results.md` for latest benchmark results.

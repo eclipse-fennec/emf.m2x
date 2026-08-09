@@ -1134,7 +1134,8 @@ Package: company (nsURI: http://company)
 | Integration (parse → evaluate) | JUnit 5 | — |
 | Spec compliance (spec examples) | JUnit 5 | `@Tag("spec")` |
 | Edge cases | JUnit 5 | — |
-| Performance benchmarks | JUnit 5 + JMH | `@Tag("perf")` |
+| Performance tests | JUnit 5 | `@Tag("perf")` |
+| Eclipse comparison benchmarks | JUnit 5 | `@Tag("benchmark")` |
 | OSGi integration | `*.itest` bundle | — |
 
 ### 12.4 Thread-Safety Testing
