@@ -72,14 +72,13 @@ class QvtdSecurityHardeningTest {
 
 	private static EcoreHelper ecoreHelper;
 	private static EPackage umlPackage;
-	private static EPackage rdbmsPackage;
 
 	@BeforeAll
 	static void setUp() throws IOException {
 		ecoreHelper = new EcoreHelper(QvtdSecurityHardeningTest.class);
 		umlPackage = ecoreHelper.loadEcore("simpleuml.ecore");
 		// Register simplerdbms in EPackage.Registry so parser can resolve Schema etc.
-		rdbmsPackage = ecoreHelper.loadEcore("simplerdbms.ecore");
+		ecoreHelper.loadEcore("simplerdbms.ecore");
 	}
 
 	@AfterAll

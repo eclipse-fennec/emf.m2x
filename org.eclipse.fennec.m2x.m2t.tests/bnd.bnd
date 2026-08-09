@@ -7,7 +7,7 @@ src=${^src}
 
 -buildpath: \
 	org.antlr.antlr4-runtime;version=latest,\
-	org.eclipse.fennec.m2x.m2t.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.engine;version=snapshot;packages='*',\
 	org.eclipse.fennec.m2x.m2t.parser;version=snapshot,\
 	org.eclipse.fennec.m2x.m2t.api;version=snapshot,\
 	org.eclipse.fennec.m2x.m2t.model;version=snapshot,\

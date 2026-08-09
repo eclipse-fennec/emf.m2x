@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Test;
  *   <li>User-modified content (hash mismatch) is preserved on re-generation</li>
  * </ul>
  */
-@SuppressWarnings("restriction")
 class M2tProtectedAreaMergerTest {
 
 	private M2tProtectedAreaMerger merger;

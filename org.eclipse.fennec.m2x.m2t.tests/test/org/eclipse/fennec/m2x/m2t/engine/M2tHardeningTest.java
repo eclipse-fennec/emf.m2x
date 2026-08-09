@@ -163,7 +163,6 @@ class M2tHardeningTest {
 	@DisplayName("Standard library null-safety")
 	class StandardLibraryNullSafety {
 
-		@SuppressWarnings("restriction")
 		@Test
 		@DisplayName("Operations return non-null for null self")
 		void operationsHandleNullSelf() {
@@ -176,7 +175,6 @@ class M2tHardeningTest {
 			assertEquals("", result);
 		}
 
-		@SuppressWarnings("restriction")
 		@Test
 		@DisplayName("first(n) with negative n returns empty string")
 		void firstNegativeN() {
@@ -188,7 +186,6 @@ class M2tHardeningTest {
 			assertEquals("", result);
 		}
 
-		@SuppressWarnings("restriction")
 		@Test
 		@DisplayName("last(n) with negative n returns empty string")
 		void lastNegativeN() {
@@ -205,7 +202,6 @@ class M2tHardeningTest {
 	@DisplayName("ProtectedAreaMerger null-safety")
 	class MergerNullSafety {
 
-		@SuppressWarnings("restriction")
 		@Test
 		@DisplayName("merge — null newContent throws NPE")
 		void mergeNullNewContent() {
@@ -214,7 +210,6 @@ class M2tHardeningTest {
 					() -> merger.merge(null, "existing"));
 		}
 
-		@SuppressWarnings("restriction")
 		@Test
 		@DisplayName("merge — null existingContent returns newContent")
 		void mergeNullExistingContent() {
@@ -222,7 +217,6 @@ class M2tHardeningTest {
 			assertEquals("new", merger.merge("new", null));
 		}
 
-		@SuppressWarnings("restriction")
 		@Test
 		@DisplayName("startMarker — null markerId throws NPE")
 		void startMarkerNullId() {
