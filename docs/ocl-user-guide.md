@@ -654,7 +654,7 @@ http://www.eclipse.org/fennec/m2x/ocl/1.0
 ```
 
 The engine also serves the legacy Eclipse OCL Pivot delegate URI for
-interop (see [9.5](#95-legacy-eclipse-ocl-pivot-namespace)):
+interop (see [9.6](#96-legacy-eclipse-ocl-pivot-namespace)):
 
 ```
 http://www.eclipse.org/emf/2002/Ecore/OCL/Pivot
@@ -693,7 +693,65 @@ In your `.ecore` model, add annotations with this delegate URI:
 </eAnnotations>
 ```
 
-### 9.4 OSGi
+### 9.4 Operations of Dynamic Models
+
+An `.ecore` loaded at runtime has no generated `XxxImpl` and therefore no `eInvoke`
+switch. That does **not** mean its operations cannot run — it means EMF asks a delegate
+instead, and the OCL engine is one. Three things have to come together:
+
+```java
+// 1. the package declares which delegate URI it uses
+EAnnotation packageAnnotation = EcoreFactory.eINSTANCE.createEAnnotation();
+packageAnnotation.setSource("http://www.eclipse.org/emf/2002/Ecore");
+packageAnnotation.getDetails().put("invocationDelegates",
+        "http://www.eclipse.org/fennec/m2x/ocl/1.0");
+bookPackage.getEAnnotations().add(packageAnnotation);
+
+// 2. the operation carries its body
+EAnnotation body = EcoreFactory.eINSTANCE.createEAnnotation();
+body.setSource("http://www.eclipse.org/fennec/m2x/ocl/1.0");
+body.getDetails().put("body", "self.title.toUpper()");
+shout.getEAnnotations().add(body);
+
+// 3. the factory is registered
+engine.installDelegates();
+
+book.eInvoke(shout, ECollections.emptyEList());   // → "MOBY DICK"
+```
+
+In an `.ecore` file the same three parts look like this — the package annotation is the
+one that is easy to forget:
+
+```xml
+<ecore:EPackage ...>
+  <eAnnotations source="http://www.eclipse.org/emf/2002/Ecore">
+    <details key="invocationDelegates" value="http://www.eclipse.org/fennec/m2x/ocl/1.0"/>
+  </eAnnotations>
+  <eClassifiers xsi:type="ecore:EClass" name="Book">
+    <eOperations name="shout" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/fennec/m2x/ocl/1.0">
+        <details key="body" value="self.title.toUpper()"/>
+      </eAnnotations>
+    </eOperations>
+  </eClassifiers>
+</ecore:EPackage>
+```
+
+**Without a body annotation there is nothing to invoke.** An operation declared in a
+dynamic `.ecore` and meant to be implemented in Java needs generated model code — with a
+dynamic package, evaluating such a call reports:
+
+```
+Operation 'displayLabel' has no implementation. Either the model is generated and
+implements it, or the operation carries an OCL body annotation and the package
+declares the delegate (see installDelegates())
+```
+
+So the rule of thumb: **generated model code → implement in Java; dynamic model →
+express the body in OCL.** Mixing the two — a dynamic model with an operation that
+expects a Java implementation — is the one combination that cannot work.
+
+### 9.5 OSGi
 
 In OSGi, the delegate factories (`OclInvocationDelegateFactory`, `OclSettingDelegateFactory`,
 `OclValidationDelegateFactory`) are registered automatically as DS components with
@@ -704,7 +762,7 @@ Each delegate factory injects `OclEngineImpl` via `@Reference` to access both th
 public API methods (`parse`, `evaluate`) and internal delegate methods
 (`getDelegateOptions`, `evaluatePostcondition`).
 
-### 9.5 Legacy Eclipse OCL Pivot Namespace
+### 9.6 Legacy Eclipse OCL Pivot Namespace
 
 The Fennec engine also serves the legacy **Eclipse OCL Pivot** delegate URI:
 
