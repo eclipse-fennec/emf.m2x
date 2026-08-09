@@ -1079,6 +1079,7 @@ not active — only benefits generated models).
 | 2 | resolveFeature O(1) + PropertyAccessorCache | EMF eGet() dispatch bypassed (generated models) |
 | 3 | warmUp(EPackage) | First-access latency eliminated (~4 µs/pkg) |
 | 4 | Feature Resolution Cache (1-entry) | Iterator hotpath: P7 −52%, P4 −7% |
+| 5 | `OclSet`/`OclOrderedSet` hashed on `OclEqualityUtil.lookupKey` | Unique collections linear instead of quadratic: P5 (`allInstances()->select` over 50 000 instances) 10.9 s → 52 ms per evaluation |
 
 ### 11.5 Benchmark Test Plan (P1–P17)
 
