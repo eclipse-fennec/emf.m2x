@@ -1,0 +1,18 @@
+jacocoTestReport {
+    additionalClassDirs(files(
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.qvtd.engine/bin",
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.qvtd.parser/bin"
+    ))
+    additionalSourceDirs(files(
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.qvtd.engine/src",
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.qvtd.parser/src"
+    ))
+}
+
+def resolveTask = tasks.named("resolve.test") {
+	outputBndrun = layout.buildDirectory.file("test.bndrun")
+}
+
+tasks.named("testOSGi") {
+	bndrun = resolveTask.flatMap { it.outputBndrun }
+}

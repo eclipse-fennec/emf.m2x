@@ -972,3 +972,29 @@ Für den Bestand ist die Änderung verhaltensneutral: dieselbe Registry ist in G
 **Nicht betroffen:** EMFs Delegate-Registries (`EOperation.Internal.InvocationDelegate.Factory.Registry`, `EStructuralFeature.Internal.SettingDelegate.Factory.Registry`, `EValidator.ValidationDelegate.Registry`) in `OclEngine`. Die sind von EMF als global vorgesehen und gehören zum Delegate-Mechanismus selbst (D11).
 
 **Nachgelagert:** Die OCL-Caches schlüsseln heute über nsURI bzw. einfachen Klassennamen und müssen auf Fingerprint-abgeleitete Schlüssel umgestellt werden (Issue #50) — dieselbe Identitätsfrage, eine Ebene tiefer.
+
+---
+
+### DR-D43: Eine DS-Komponente je Engine, die OCL-Engine als mandatorische Referenz
+
+**Entscheidung:** M2T, QVT-O und QVT-R veröffentlichen je **eine** DS-Komponente (`DefaultM2tEngine`, `DefaultQvtoEngine`, `DefaultQvtdEngine`), `scope = PROTOTYPE`, `configurationPolicy = OPTIONAL`, mit einer **mandatorischen** `@Reference(scope = PROTOTYPE_REQUIRED) OclEngine`. Die eigene OCD trägt ausschließlich die eigenen Settings; OCL-Grenzwerte werden am `DefaultOclEngine` über `ocl.*` konfiguriert und **nicht** gespiegelt.
+
+**Warum eine Komponente statt zwei (Default + konfigurierbar):** `configurationPolicy = OPTIONAL` kann beides. Es gibt eine Engine ohne jede Konfiguration, und Konfigurieren registriert keinen zweiten Service. Zwei Komponenten würden zwei `M2tEngine`-Services veröffentlichen und jeden Konsumenten zu Ranking oder Target-Filtern zwingen.
+
+**Warum mandatorisch statt optional:** Weil `DefaultOclEngine` selbst `OPTIONAL` ist, existiert immer ein `OclEngine`-Service. Eine optionale Referenz hätte die Wahl zwischen `RELUCTANT` (eine später erscheinende Engine wird nie gebunden) und `GREEDY` (die Komponente startet durch und verliert ihre Caches) — eine Wahl, die es hier gar nicht zu treffen gibt.
+
+**Warum Konstruktor-Injection:** Die Komponente erweitert die Impl und reicht die Konfiguration an `super(…)` durch. Feld- und Methoden-Injection passieren laut DS **nach** dem Konstruktor (`Activate`-Javadoc: *"The field must be set after the constructor is called"*), taugen also nicht für etwas, das die Konstruktion braucht. Konstruktor-Injection ist zudem ohnehin statisch — bnd lehnt dynamische Konstruktor-Parameter ab (`DSAnnotationReader`: *"constructor parameters may not be dynamic"*).
+
+**Warum keine Whiteboard-Listen für Unit-Resolver und Blackboxes:** Eine statische `MULTIPLE`-Referenz würde die Engine bei jedem kommenden und gehenden Resolver deaktivieren und neu aufbauen — mitten im Betrieb, samt Cache-Verlust. `cardinality.minimum` plus Target-Filter löst das, verlangt dem Nutzer aber ein Mechanismuswissen ab, das er nicht haben sollte. Vor allem aber ist Push die falsche Richtung: alle vier Sprachen benennen ihre Abhängigkeiten **im Skript** (`Ocl.g4:45`, `QvtO.g4:48`, `QvtR.g4:39`, `M2tParser.g4:44`), die Engine weiß beim Parsen, was sie braucht, und sollte danach fragen. Siehe Issue #90.
+
+**Drei Türen für den Aufrufer** — der einfache Fall verlangt kein OCL-Wissen:
+
+```java
+M2tConfiguration.builder().whitespaceMode(ACCELEO).build();  // 1
+M2tConfiguration.builder(oclEngine).build();                 // 2
+M2tConfiguration.builder(oclConfiguration).build();           // 3
+```
+
+Tür 1 liegt bewusst auf der Factory, nicht auf der Configuration: die `*.api`-Bundles sehen `ocl.api`, aber nicht `ocl.parser`, und ein Parser gehört auch nicht in die API-Schicht. Die Configuration trägt in diesem Fall keine OCL-Seite; die Factory setzt sie ein.
+
+**Scope:** M2T, QVT-O, QVT-R. OCL hat diese Form bereits (`OclEngineComponent`).

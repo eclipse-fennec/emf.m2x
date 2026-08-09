@@ -7,6 +7,7 @@ Bundle-Description: QVT-Operational v1.3 execution engine
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
 	org.eclipse.fennec.m2x.qvto.api;version=snapshot,\
 	org.eclipse.fennec.m2x.qvt.model;version=snapshot,\
 	org.eclipse.fennec.m2x.qvto.model;version=snapshot,\

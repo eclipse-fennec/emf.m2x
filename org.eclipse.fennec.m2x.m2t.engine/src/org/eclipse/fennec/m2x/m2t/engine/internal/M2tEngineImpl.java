@@ -50,6 +50,7 @@ import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 
 /**
  * Plain Java implementation of the {@link M2tEngine} facade.
@@ -116,9 +117,7 @@ public class M2tEngineImpl implements M2tEngine {
 		// providers. Only when none was supplied is one built from the configuration;
 		// the MOFM2T standard library rides along per evaluation (M2tEvaluator), so a
 		// supplied engine needs no preparation.
-		this.oclEngine = config.oclEngine() != null
-				? config.oclEngine()
-				: OclEngines.create(config.oclConfiguration());
+		this.oclEngine = resolveOclEngine(config);
 		this.parserSupport = new M2tParserSupport();
 	}
 
@@ -361,5 +360,28 @@ public class M2tEngineImpl implements M2tEngine {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Returns the OCL engine this engine evaluates with — the one it was given, one built
+	 * from the OCL configuration it was given, or a default one.
+	 *
+	 * <p>The third case is what lets a caller configure M2t without knowing anything about
+	 * OCL ({@link M2tConfiguration#builder()}). It is the single point where this engine falls back,
+	 * so there is one place to look when the question is which OCL engine ran (D42).
+	 */
+	@Override
+	public OclEngine getOclEngine() {
+		return oclEngine;
+	}
+
+	private static OclEngine resolveOclEngine(M2tConfiguration config) {
+		if (config.oclEngine() != null) {
+			return config.oclEngine();
+		}
+		if (config.oclConfiguration() != null) {
+			return OclEngines.create(config.oclConfiguration());
+		}
+		return OclEngines.create(new OclParserSupport());
 	}
 }

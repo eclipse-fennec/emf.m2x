@@ -195,6 +195,20 @@ public final class QvtoConfiguration {
 	 * @param oclEngine the engine to evaluate OCL expressions with, must not be {@code null}
 	 * @return a new builder
 	 */
+	/**
+	 * Creates a builder that needs no OCL knowledge.
+	 *
+	 * <p>The engine built from this configuration evaluates transformation expressions with a default
+	 * OCL engine that the factory creates. Use {@link #builder(OclEngine)} to run on an
+	 * engine that already exists — the injected service under OSGi — or
+	 * {@link #builder(OclConfiguration)} to configure the OCL side as well.
+	 *
+	 * @return a new builder
+	 */
+	public static Builder builder() {
+		return new Builder();
+	}
+
 	public static Builder builder(OclEngine oclEngine) {
 		return new Builder(Objects.requireNonNull(oclEngine, "oclEngine must not be null"));
 	}
@@ -221,6 +235,11 @@ public final class QvtoConfiguration {
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
+			this.oclEngine = null;
+		}
+
+		private Builder() {
+			this.oclConfiguration = null;
 			this.oclEngine = null;
 		}
 

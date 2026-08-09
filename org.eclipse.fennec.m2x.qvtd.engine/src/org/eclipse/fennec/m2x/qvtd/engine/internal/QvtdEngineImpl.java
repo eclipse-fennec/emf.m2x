@@ -29,6 +29,7 @@ import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
@@ -80,9 +81,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
 		// The engine evaluates with the OCL engine it was given — its cache, its
 		// providers; only when none was supplied is one built from the configuration.
-		this.oclEngine = config.oclEngine() != null
-				? config.oclEngine()
-				: OclEngines.create(config.oclConfiguration());
+		this.oclEngine = resolveOclEngine(config);
 	}
 
 	// --- Parsing ---
@@ -145,5 +144,23 @@ public class QvtdEngineImpl implements QvtdEngine {
 	@Override
 	public OclEngine getOclEngine() {
 		return oclEngine;
+	}
+
+	/**
+	 * Returns the OCL engine this engine evaluates with — the one it was given, one built
+	 * from the OCL configuration it was given, or a default one.
+	 *
+	 * <p>The third case is what lets a caller configure Qvtd without knowing anything about
+	 * OCL ({@link QvtdConfiguration#builder()}). It is the single point where this engine falls back,
+	 * so there is one place to look when the question is which OCL engine ran (D42).
+	 */
+	private static OclEngine resolveOclEngine(QvtdConfiguration config) {
+		if (config.oclEngine() != null) {
+			return config.oclEngine();
+		}
+		if (config.oclConfiguration() != null) {
+			return OclEngines.create(config.oclConfiguration());
+		}
+		return OclEngines.create(new OclParserSupport());
 	}
 }

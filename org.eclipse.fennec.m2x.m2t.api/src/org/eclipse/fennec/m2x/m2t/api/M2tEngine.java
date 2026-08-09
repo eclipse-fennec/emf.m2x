@@ -18,6 +18,7 @@ import org.eclipse.emf.common.util.URI;
 import java.util.List;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -113,4 +114,15 @@ public interface M2tEngine {
 	 * <p>After this call, previously parsed modules have to be parsed and linked again.
 	 */
 	void clearCaches();
+
+	/**
+	 * Returns the OCL engine this engine evaluates template expressions with.
+	 *
+	 * <p>Either the engine that was supplied through the configuration, or the one built
+	 * from it. Callers use this to warm it up, inspect its cache, or install EMF delegates
+	 * on the very engine that M2T runs on.
+	 *
+	 * @return the OCL engine, never {@code null}
+	 */
+	OclEngine getOclEngine();
 }
