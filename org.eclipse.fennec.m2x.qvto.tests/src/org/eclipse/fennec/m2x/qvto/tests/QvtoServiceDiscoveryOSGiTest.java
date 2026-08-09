@@ -20,10 +20,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.ocl.api.annotation.require.RequireOCL;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.annotation.require.RequireQVTO;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,6 +65,15 @@ class QvtoServiceDiscoveryOSGiTest {
 			}
 			""".formatted(EcorePackage.eNS_URI);
 
+	private static final String CLASSPATH_TRANSFORMATION = """
+			modeltype ECORE uses '%s';
+			import discovered.library;
+			transformation classpath(in source : ECORE, out target : ECORE) {
+			    main() {
+			    }
+			}
+			""".formatted(EcorePackage.eNS_URI);
+
 	@Test
 	@DisplayName("an import resolves to a unit found in the service registry")
 	@WithConfiguration(pid = "DefaultQvtoEngine", properties = {
@@ -90,6 +103,29 @@ class QvtoServiceDiscoveryOSGiTest {
 	})
 	void allowListStillNarrows(@InjectService QvtoEngine engine) throws Exception {
 		assertFalse(run(engine).isSuccess());
+	}
+
+	@Test
+	@DisplayName("the class-path route finds nothing here — one mechanism per environment")
+	void serviceLoaderRouteIsInert() throws Exception {
+		// DiscoveredTestUnitResolver sits in this bundle's META-INF/services and answers for
+		// discovered.library. ServiceLoaderUnitResolver looks through the class loader of
+		// QvtoUnitResolver, which is the api bundle's and cannot see into this one — so the
+		// class-path route is inert under OSGi by construction, and the service route is the
+		// only one that answers. Two mechanisms racing for the same import is exactly what a
+		// Service Loader Mediator such as Aries SPI Fly would create, which is why this
+		// bundle declares no osgi.serviceloader requirement.
+		QvtoEngine engine = QvtoEngines.create(QvtoConfiguration.builder(
+				OclEngines.create(new OclParserSupport()))
+				.unitResolverEnabled(true)
+				.discoverUnitResolvers(true)
+				.build());
+
+		QvtoExecutionResult result = engine.execute(
+				engine.parse(CLASSPATH_TRANSFORMATION, "classpath"),
+				QvtoExecutionContext.of(new BasicQvtoModelExtent(), new BasicQvtoModelExtent()));
+
+		assertFalse(result.isSuccess());
 	}
 
 	private static QvtoExecutionResult run(QvtoEngine engine) throws Exception {
