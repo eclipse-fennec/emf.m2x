@@ -1055,6 +1055,103 @@ OclConfiguration config = OclConfiguration.builder(parser)
 
 ---
 
+### 11.5 Tutorial: compiled OCL that follows the model version
+
+A model states its own constraints. Until something asks for one, each is a string in an
+annotation, so the first validation of a model pays for parsing and the second does not — and
+an LRU inside the engine cannot help with the part that actually matters: it knows how many
+entries it may keep, not what a model version is. An expression compiled against a model long
+retired survives because it was used recently; one belonging to a live model is dropped
+because it was not.
+
+This wires up the other arrangement: **a model's OCL is compiled when the model registers, and
+filed under that model version.** Four configurations, no code.
+
+Everything below is what `OclMetadataCacheOSGiTest` runs, so the tutorial and the test cannot
+drift apart.
+
+### What the pieces do
+
+| Piece | Role |
+|---|---|
+| `EObjectRegistry` | holds the compiled expressions, each anchored with `emf.nsURI` and `emf.fingerprint` |
+| `OclMetadataExpressionCache` | the `OclExpressionCache` service over that registry, with an LRU for what has no model version to anchor to |
+| `OclConstraintPrecompiler` | a `MetadataHandler`: when a package registers, compiles the OCL it declares |
+| `EObjectRegistryMetadataBridge` | optional — puts registry content onto the metadata tree of every live model version |
+
+### The configuration
+
+```json
+{
+  ":configurator:resource-version": 1,
+
+  "EObjectRegistry~ocl": {
+    "name": "ocl-compiled",
+    "initialProvider.target": "(emf.eobject.provider.name=ocl-empty-provider)"
+  },
+
+  "OclMetadataExpressionCache": {
+    "writer.target": "(emf.eobject.registry.name=ocl-compiled)",
+    "ocl.metadata.lruSize": 256
+  },
+
+  "OclConstraintPrecompiler": {
+    "cache.target": "(cache.name=metadata)"
+  },
+
+  "DefaultOclEngine": {
+    "expressionCache.target": "(cache.name=metadata)"
+  }
+}
+```
+
+The last one is what makes an engine use it. Without it everything above still runs and simply
+holds nothing anyone reads — nothing here displaces the default cache by existing.
+
+### The initial provider
+
+A registry publishes only once its initial provider has finished loading, which is what keeps
+a consumer from ever seeing a half-filled one. Compiled OCL does not come from a content
+source — it is written as expressions are compiled — so the provider here loads nothing, and
+says so:
+
+```java
+@Component(service = EObjectProvider.class,
+           property = "emf.eobject.provider.name=ocl-empty-provider")
+public class EmptyEObjectProvider implements EObjectProvider {
+
+    @Override
+    public CompletableFuture<Void> load(EObjectRegistryWriter writer) {
+        return CompletableFuture.completedFuture(null);
+    }
+}
+```
+
+If the registry should also carry **authored** expression libraries from files, use
+`FileEObjectProvider` instead and the compiled ones join them.
+
+### What you get
+
+- A model's invariants, derivations and operation bodies are compiled once, when it registers.
+- Each is filed under the fingerprint of the version it was compiled against, so two versions
+  of one nsURI never answer for each other — the failure that is otherwise silent, since
+  feature access falls back to resolving by name while a type reference does not.
+- A version that goes takes its compiled OCL with it.
+- With the bridge configured, `getClassAspect(eClass, …)` finds registry content on the tree of
+  every live version, including a model that registers later.
+
+### Limits worth knowing
+
+- **Changing a model after registration is out of contract.** A fingerprint describes the
+  package as it was; nothing here re-checks a model that changed underneath.
+- **The registry is the read face, not the aspect.** A class carries at most one aspect per
+  type id, and an OCL context type has as many expressions as someone writes.
+- A constraint that does not parse is logged and skipped. Refusing the model would turn a
+  validation error into a model that cannot be loaded at all; the delegate still reports it
+  when someone asks.
+
+---
+
 ## 12. Thread Safety
 
 | Component | Thread-Safe? | Notes |

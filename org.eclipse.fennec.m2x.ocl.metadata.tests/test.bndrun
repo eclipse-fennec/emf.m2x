@@ -1,0 +1,16 @@
+-library: enableOSGi-Test
+
+-runrequires: \
+	bnd.identity;id='org.eclipse.fennec.m2x.ocl.metadata.tests',\
+	bnd.identity;id='org.eclipse.fennec.m2x.ocl.metadata',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.component',\
+	bnd.identity;id='org.eclipse.fennec.emf.osgi.eobject.registry.metadata'
+
+-runbundles.test: \
+	org.eclipse.fennec.m2x.ocl.metadata.tests;version=snapshot
+
+-runfw: org.apache.felix.framework
+
+-runee: JavaSE-21
+
+-runbundles: \
