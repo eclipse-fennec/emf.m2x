@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.m2t.engine;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.Charset;
 import java.net.URI;
@@ -31,6 +32,8 @@ import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
@@ -75,6 +78,15 @@ public class M2tEngineImpl implements M2tEngine {
 
 	private final OclEngineImpl oclEngine;
 	private final M2tConfiguration config;
+	/**
+	 * Resolves {@code parse(URI)} through its {@link ResourceSet#getURIConverter()
+	 * URIConverter}: the configured resource set, or a default one when none was given,
+	 * so that every URI takes the same road (D42).
+	 *
+	 * <p>Its package registry is deliberately not consulted for type resolution — that
+	 * follows {@link M2tConfiguration#packageRegistry()}.
+	 */
+	private final ResourceSet resourceSet;
 	private final M2tParserSupport parserSupport;
 
 	/** Cache of parse results keyed by module identity, for auto-linking. */
@@ -100,6 +112,7 @@ public class M2tEngineImpl implements M2tEngine {
 	 */
 	public M2tEngineImpl(M2tConfiguration config) {
 		this.config = Objects.requireNonNull(config, "config must not be null");
+		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
 		// Augment OCL config with MOFM2T standard library (§8.3)
 		OclConfiguration base = config.oclConfiguration();
 		OclConfiguration.Builder oclBuilder = OclConfiguration.builder(base.parser())
@@ -127,9 +140,11 @@ public class M2tEngineImpl implements M2tEngine {
 	@Override
 	public Module parse(URI moduleUri) throws M2tParseException {
 		Objects.requireNonNull(moduleUri, "moduleUri must not be null");
-		try {
-			String source = Files.readString(Path.of(moduleUri));
-			String unitName = Path.of(moduleUri).getFileName().toString();
+		org.eclipse.emf.common.util.URI emfUri =
+				org.eclipse.emf.common.util.URI.createURI(moduleUri.toString());
+		try (InputStream in = resourceSet.getURIConverter().createInputStream(emfUri)) {
+			String source = new String(in.readAllBytes(), config.defaultCharset());
+			String unitName = emfUri.lastSegment() != null ? emfUri.lastSegment() : moduleUri.toString();
 			return parse(source, unitName);
 		} catch (IOException e) {
 			throw new M2tParseException("Failed to read module: " + moduleUri, e, List.of());

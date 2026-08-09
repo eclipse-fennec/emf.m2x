@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2x.qvto.engine;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -30,6 +32,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.trace.Trace;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -72,6 +76,13 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 
 	private final QvtoParserSupport parserSupport;
 	private final EPackage.Registry packageRegistry;
+	/**
+	 * Resolves {@code parse(URI)} through its {@link ResourceSet#getURIConverter()
+	 * URIConverter}: the configured resource set, or a default one when none was given,
+	 * so that every URI takes the same road (D42). Its package registry is deliberately
+	 * not consulted for type resolution — that follows the configuration.
+	 */
+	private final ResourceSet resourceSet;
 	private final OclEngineImpl oclEngine;
 	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final List<QvtoUnitResolver> unitResolvers;
@@ -93,6 +104,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		Objects.requireNonNull(config, "config must not be null");
 		this.parserSupport = new QvtoParserSupport();
 		this.packageRegistry = config.packageRegistry();
+		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
 		OclConfiguration oclConfig = config.oclConfiguration();
 		this.oclEngine = new OclEngineImpl(oclConfig);
 		this.blackboxRegistry = config.blackboxRegistry();
@@ -109,8 +121,10 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	@Override
 	public OperationalTransformation parse(URI transformationUri) throws QvtoParseException {
 		Objects.requireNonNull(transformationUri, "transformationUri must not be null");
-		try {
-			String source = Files.readString(Path.of(transformationUri));
+		org.eclipse.emf.common.util.URI emfUri =
+				org.eclipse.emf.common.util.URI.createURI(transformationUri.toString());
+		try (InputStream in = resourceSet.getURIConverter().createInputStream(emfUri)) {
+			String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
 			return parse(source, transformationUri.toString());
 		} catch (IOException e) {
 			throw new QvtoParseException("Failed to read transformation: " + transformationUri, e);

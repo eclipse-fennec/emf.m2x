@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2x.qvtd.engine;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -24,6 +26,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -59,6 +63,13 @@ import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
 public class QvtdEngineImpl implements QvtdEngine {
 
 	private final QvtrParserSupport parserSupport;
+	/**
+	 * Resolves {@code parse(URI)} through its {@link ResourceSet#getURIConverter()
+	 * URIConverter}: the configured resource set, or a default one when none was given,
+	 * so that every URI takes the same road (D42). Its package registry is deliberately
+	 * not consulted for type resolution — that follows the configuration.
+	 */
+	private final ResourceSet resourceSet;
 	private final OclEngineImpl oclEngine;
 	private final QvtdConfiguration config;
 	private final List<RelationImplementationProvider> implementationProviders = new CopyOnWriteArrayList<>();
@@ -72,6 +83,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 		Objects.requireNonNull(config, "config must not be null");
 		this.config = config;
 		this.parserSupport = new QvtrParserSupport();
+		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
 		OclConfiguration oclConfig = config.oclConfiguration();
 		this.oclEngine = new OclEngineImpl(oclConfig);
 	}
@@ -81,12 +93,8 @@ public class QvtdEngineImpl implements QvtdEngine {
 	@Override
 	public RelationalTransformation parse(URI transformationUri) throws QvtdParseException {
 		Objects.requireNonNull(transformationUri, "transformationUri must not be null");
-		try {
-			String fileUri = transformationUri.toFileString();
-			if (fileUri == null) {
-				throw new QvtdParseException("Only file URIs are supported: " + transformationUri);
-			}
-			String source = Files.readString(Path.of(fileUri));
+		try (InputStream in = resourceSet.getURIConverter().createInputStream(transformationUri)) {
+			String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
 			return parse(source, transformationUri.toString());
 		} catch (IOException e) {
 			throw new QvtdParseException("Failed to read transformation: " + transformationUri, e);
