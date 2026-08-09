@@ -16,10 +16,9 @@ package org.eclipse.fennec.m2x.m2t.engine;
 
 import java.util.Objects;
 
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.m2t.engine.internal.M2tEngineImpl;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.internal.M2tEngineImpl;
 
 /**
  * Creates {@link M2tEngine} instances outside OSGi.

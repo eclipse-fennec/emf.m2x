@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.api;
 import java.util.Objects;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.osgi.annotation.versioning.ProviderType;
 
@@ -86,4 +87,15 @@ public interface QvtdEngine {
 		Objects.requireNonNull(provider, "provider must not be null");
 		// Default no-op for backward compatibility
 	}
+
+	/**
+	 * Returns the OCL engine this engine evaluates expressions with.
+	 *
+	 * <p>Either the engine that was supplied through the configuration, or the one built
+	 * from it. Callers use this to warm it up, inspect its cache, or install EMF
+	 * delegates on the very engine that QVT-R runs on.
+	 *
+	 * @return the OCL engine, never {@code null}
+	 */
+	OclEngine getOclEngine();
 }

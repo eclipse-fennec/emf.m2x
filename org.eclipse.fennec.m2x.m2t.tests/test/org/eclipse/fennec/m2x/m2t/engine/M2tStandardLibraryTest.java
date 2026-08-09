@@ -20,10 +20,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EcoreFactory;
-import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;

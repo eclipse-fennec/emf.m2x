@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.api;
 
 import org.eclipse.emf.common.util.URI;
 
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.osgi.annotation.versioning.ProviderType;
 
@@ -96,4 +97,15 @@ public interface QvtoEngine {
 	 * @param transformation the transformation whose mappings implement relations
 	 */
 	void loadTransformation(OperationalTransformation transformation);
+
+	/**
+	 * Returns the OCL engine this engine evaluates expressions with.
+	 *
+	 * <p>Either the engine that was supplied through the configuration, or the one built
+	 * from it. Callers use this to warm it up, inspect its cache, or install EMF
+	 * delegates on the very engine that QVT-O runs on.
+	 *
+	 * @return the OCL engine, never {@code null}
+	 */
+	OclEngine getOclEngine();
 }

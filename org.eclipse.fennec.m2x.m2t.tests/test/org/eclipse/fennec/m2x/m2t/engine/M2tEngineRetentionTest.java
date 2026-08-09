@@ -19,10 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EcoreFactory;
-import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;

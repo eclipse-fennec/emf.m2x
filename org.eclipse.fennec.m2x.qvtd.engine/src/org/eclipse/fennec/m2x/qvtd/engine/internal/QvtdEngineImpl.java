@@ -27,7 +27,6 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
-import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
@@ -143,6 +142,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 	/**
 	 * Returns the underlying OCL engine (for testing and advanced use).
 	 */
+	@Override
 	public OclEngine getOclEngine() {
 		return oclEngine;
 	}

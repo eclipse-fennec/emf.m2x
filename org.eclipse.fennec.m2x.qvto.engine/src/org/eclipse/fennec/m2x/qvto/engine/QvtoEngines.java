@@ -16,10 +16,9 @@ package org.eclipse.fennec.m2x.qvto.engine;
 
 import java.util.Objects;
 
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoEngineImpl;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoEngineImpl;
 
 /**
  * Creates {@link QvtoEngine} instances outside OSGi.

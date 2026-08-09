@@ -18,20 +18,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+
 import org.eclipse.emf.ecore.EClass;
-import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
-import org.eclipse.fennec.m2x.model.ocl.OclFactory;
-import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
-import org.eclipse.fennec.m2x.ocl.api.OclOperation;
-import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.model.m2t.Module;
+import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.api.OclOperation;
+import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.DisplayName;
