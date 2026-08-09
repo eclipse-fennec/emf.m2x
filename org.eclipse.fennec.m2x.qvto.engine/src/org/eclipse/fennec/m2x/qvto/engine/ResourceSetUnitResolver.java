@@ -97,8 +97,7 @@ public class ResourceSetUnitResolver implements QvtoUnitResolver {
 				.appendFileExtension(extension);
 		try (InputStream in = resourceSet.getURIConverter().createInputStream(unitUri)) {
 			String source = new String(in.readAllBytes(), charset);
-			return Optional.of(new QvtoUnit.SourceUnit(qualifiedName,
-					java.net.URI.create(unitUri.toString()), source));
+			return Optional.of(new QvtoUnit.SourceUnit(qualifiedName, unitUri, source));
 		} catch (IOException | RuntimeException e) {
 			// Not found through this resolver — the engine asks the next one
 			return Optional.empty();

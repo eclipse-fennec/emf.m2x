@@ -14,7 +14,7 @@
  */
 package org.eclipse.fennec.m2x.m2t.api;
 
-import java.net.URI;
+import org.eclipse.emf.common.util.URI;
 import java.util.List;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;

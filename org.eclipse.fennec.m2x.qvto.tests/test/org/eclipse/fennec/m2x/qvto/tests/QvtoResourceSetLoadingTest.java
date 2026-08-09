@@ -70,7 +70,7 @@ class QvtoResourceSetLoadingTest {
 				.build());
 
 		OperationalTransformation t =
-				engine.parse(java.net.URI.create("mem:/transforms/loaded.qvto"));
+				engine.parse(URI.createURI("mem:/transforms/loaded.qvto"));
 
 		assertNotNull(t);
 		assertEquals("loaded", t.getName());

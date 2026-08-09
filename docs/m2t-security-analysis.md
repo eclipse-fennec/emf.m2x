@@ -136,7 +136,7 @@ Unlike OCL (pure query) and QVT-O (model transformation), MOFM2T **generates tex
 | | |
 |---|---|
 | **Severity** | MEDIUM |
-| **Vector** | `engine.parse(URI.create("file:///etc/passwd"))` — reads arbitrary files as template source |
+| **Vector** | `engine.parse(URI.createURI("file:///etc/passwd"))` — reads arbitrary files as template source |
 | **Impact** | Reading arbitrary files on the filesystem |
 | **Prerequisite** | Attacker controls the URI passed to `parse()` |
 | **File** | `M2tEngineImpl.java:parse(URI)` (line 124) |

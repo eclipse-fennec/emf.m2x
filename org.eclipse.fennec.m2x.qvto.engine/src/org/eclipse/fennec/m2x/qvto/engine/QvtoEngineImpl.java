@@ -17,7 +17,7 @@ package org.eclipse.fennec.m2x.qvto.engine;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.net.URI;
+import org.eclipse.emf.common.util.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -121,9 +121,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	@Override
 	public OperationalTransformation parse(URI transformationUri) throws QvtoParseException {
 		Objects.requireNonNull(transformationUri, "transformationUri must not be null");
-		org.eclipse.emf.common.util.URI emfUri =
-				org.eclipse.emf.common.util.URI.createURI(transformationUri.toString());
-		try (InputStream in = resourceSet.getURIConverter().createInputStream(emfUri)) {
+		try (InputStream in = resourceSet.getURIConverter().createInputStream(transformationUri)) {
 			String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
 			return parse(source, transformationUri.toString());
 		} catch (IOException e) {

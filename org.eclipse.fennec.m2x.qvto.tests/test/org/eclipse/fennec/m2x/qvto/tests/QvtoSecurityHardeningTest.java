@@ -38,6 +38,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
+import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.Test;
@@ -299,7 +300,7 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 		QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 				.addUnitResolver(name -> java.util.Optional.of(
 						new QvtoUnit.SourceUnit(name,
-								java.net.URI.create("inline:" + name),
+								URI.createURI("inline:" + name),
 								"library " + name + " { helper greet() : String { return 'hi'; } }")))
 				// unitResolverEnabled NOT set — defaults to false
 				.build();
