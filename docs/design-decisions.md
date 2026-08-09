@@ -379,11 +379,28 @@ These are trust boundaries: a malicious provider/library/resolver has full JVM a
 
 **Decision:** All extension points are **disabled by default** and require explicit opt-in. Two enforcement levels (AND-linked).
 
-**OCL operation provider wiring:** Instead of a whiteboard (MULTIPLE, DYNAMIC), the `OclEngineComponent`
-uses a **single mandatory `@Reference(name="operationProvider")`** with a configurable target filter.
-The deployer explicitly selects which provider is bound via `operationProvider.target`. A built-in
-`NoOpOclOperationProvider` (empty list) is bound by default. If multiple providers are needed,
-a compound provider aggregating them must be registered as a single service.
+**OCL operation provider wiring:** `OclEngineComponent` binds **every** registered
+`OclOperationProvider` — `@Reference(name="operationProvider", cardinality = MULTIPLE)`. A target
+filter still narrows the set when a deployment wants that, but nothing forces one.
+
+*Revised.* This decision originally specified a single mandatory reference, so that the deployer
+had to select one provider explicitly, with a `NoOpOclOperationProvider` filling the slot when
+none was wanted and a compound provider as the way to have several. Checked against the
+specification, that had no basis and a real cost:
+
+- OCL v2.4 does not use the word "blackbox" and does not define a provider mechanism at all.
+- §11.8.1 says the standard library **is** extensible, without any notion of how many extensions.
+- §7.3.5: "An OCL file may contain any number package statements", and `def:` declarations
+  contribute additional operations — again with no cardinality.
+
+Meanwhile a single provider meant the MOFM2T standard library and any set of domain operations
+excluded each other in an OSGi runtime, and the placeholder existed only to fill a mandatory slot.
+
+**Security by default is unchanged, because it never lived here.** `customOperationsEnabled`
+(`OclConfiguration`, default `false`) decides whether config-registered operations are resolved at
+all; binding a provider does not switch it on. What the revision changes is only what happens once
+a deployment has opened that gate: previously the one targeted provider was active, now every
+registered one is. A deployment that wants exactly one still writes `operationProvider.target`.
 
 #### OCL: Boolean Enable Flag
 

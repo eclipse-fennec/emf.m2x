@@ -1194,6 +1194,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// §8.1.14.3: most-specific-type-first dispatch
 		// Priority: exact match > widening (Integer→Real) > OclAny/AnyType catch-all
 		// OCL §7.4.7: null (OclVoid) conforms to all types → first named match wins
+		//
+		// Within one priority the first match wins, whichever provider it came from. An
+		// exact match always did, by returning on the spot; a catch-all did not, because
+		// the candidate was overwritten — so which provider answered depended on the order
+		// they were bound in. That mattered little while only one provider could exist.
 		OclOperation fallback = null;
 		OclOperation wideningMatch = null;
 		for (OclOperationProvider provider : customProviders) {
@@ -1212,22 +1217,30 @@ public class OclEvaluator extends OclSwitch<Object> {
 					if (OclStdlib.matchesPrimitiveType(source, typeName)) {
 						return op.implementation().apply(source, args);
 					}
-					// Widening: Integer→Real
+					// Widening: Integer→Real. The first is kept, as for an exact match:
+					// several providers may define the same name, and which one answers
+					// must not depend on the order they happen to be bound in.
 					if ("Real".equals(typeName)
 							&& (source instanceof Long || source instanceof Integer)) {
-						wideningMatch = op;
+						if (wideningMatch == null) {
+							wideningMatch = op;
+						}
 						continue;
 					}
 					// OclAny catches all
 					if ("OclAny".equals(typeName)) {
-						fallback = op;
+						if (fallback == null) {
+							fallback = op;
+						}
 						continue;
 					}
 					continue;
 				}
 				// AnyType catches all
 				if (ownerType instanceof AnyType) {
-					fallback = op;
+					if (fallback == null) {
+						fallback = op;
+					}
 					continue;
 				}
 				// Other types: use isCompatibleOwner

@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.util.List;
+
 import org.eclipse.fennec.m2x.ocl.engine.OclConfigurationHelper;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
@@ -24,6 +26,7 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -51,10 +54,20 @@ import org.osgi.service.metatype.annotations.Designate;
  * }
  * </pre>
  *
- * <p>By default, a {@link NoOpOclOperationProvider} is bound (no custom operations).
- * To use custom operations, register a custom {@link org.eclipse.fennec.m2x.ocl.api.OclOperationProvider}
- * and configure the target filter to select it. The {@code customOperationsEnabled} gate
- * must also be set to {@code true} for operations to be resolved at evaluation time.
+ * <p>Every registered {@link org.eclipse.fennec.m2x.ocl.api.OclOperationProvider} is bound,
+ * not one of them: a runtime can hold several at once — the MOFM2T standard library, a set
+ * of domain operations, the operations a generator brings — and they have no reason to
+ * exclude each other. The reference used to be a single mandatory one, which meant a
+ * placeholder had to exist for the common case of none, and that only one provider could
+ * ever be in play.
+ *
+ * <p>The {@code customOperationsEnabled} gate still decides whether config-registered
+ * operations are resolved at evaluation time; binding a provider does not switch it on.
+ *
+ * <p>The reference is static, so a provider appearing or disappearing rebuilds the engine.
+ * That costs its property accessor cache and nothing else — the expression cache is a
+ * service of its own and survives — and it keeps the set of operations fixed for the life
+ * of an engine, which is what makes a resolved operation stay resolved.
  *
  * <p>Engine-wide defaults (security limits, null handling, error recovery) can
  * be configured via ConfigurationAdmin using {@code ocl.*} properties:
@@ -77,7 +90,8 @@ public class OclEngineComponent extends OclEngineImpl {
 			OclEngineConfiguration config,
 			@Reference(name = "parser", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclExpressionParser parser,
 			@Reference(name = "expressionCache") OclExpressionCache cache,
-			@Reference(name = "operationProvider") OclOperationProvider operationProvider) {
-		super(OclConfigurationHelper.from(config, parser, cache, operationProvider));
+			@Reference(name = "operationProvider", cardinality = ReferenceCardinality.MULTIPLE)
+			List<OclOperationProvider> operationProviders) {
+		super(OclConfigurationHelper.from(config, parser, cache, operationProviders));
 	}
 }

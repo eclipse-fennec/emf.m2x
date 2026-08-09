@@ -42,7 +42,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
  *
  * <p>Verifies that:
  * <ul>
- *   <li>The default engine uses the {@code NoOpOclOperationProvider} (no custom ops)</li>
+ *   <li>An engine with no provider registered has no custom operations</li>
  *   <li>A custom provider with {@code customOperationsEnabled=true} makes operations available</li>
  *   <li>A custom provider with {@code customOperationsEnabled=false} (default) blocks operations</li>
  * </ul>
@@ -89,6 +89,31 @@ class OclOperationProviderOSGiTest {
 		Object result = engine.evaluate("self.testOp()",
 				OclContext.of(EcoreFactory.eINSTANCE.createEClass()));
 		assertEquals(42, result);
+	}
+
+	// --- Test 2b: Several providers coexist ---
+
+	@WithFactoryConfiguration(factoryPid = "DefaultOclEngine", location = "?", name = "two-providers", properties = {
+			@Property(key = "ocl.customOperationsEnabled", scalar = Scalar.Boolean, value = "true"),
+			@Property(key = "engine.tag", value = "two-providers-eng")
+	})
+	@Test
+	void oclEngine_severalProviders_allOperationsAvailable(
+			@InjectService(filter = "(engine.tag=two-providers-eng)", timeout = 5000) ServiceAware<OclEngine> engineAware)
+			throws OclParseException {
+		// No operationProvider.target here: every registered provider is bound. While the
+		// engine took exactly one, these two could not both be reached — which is the
+		// situation a real runtime is in as soon as the MOFM2T standard library and any set
+		// of domain operations are both wanted. The OCL specification has no notion of one
+		// source of additional operations: §11.8.1 says the standard library is extensible,
+		// and a document may carry any number of def: declarations.
+		OclEngine engine = engineAware.getService();
+		assertNotNull(engine);
+
+		assertEquals(42, engine.evaluate("self.testOp()",
+				OclContext.of(EcoreFactory.eINSTANCE.createEClass())));
+		assertEquals(7, engine.evaluate("self.secondOp()",
+				OclContext.of(EcoreFactory.eINSTANCE.createEClass())));
 	}
 
 	// --- Test 3: Custom provider + gate disabled (default) → operation not available ---

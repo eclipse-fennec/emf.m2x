@@ -104,7 +104,13 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	}
 
 	/**
-	 * Handles {@code import}, {@code include} and {@code library} declarations (§12.3).
+	 * Handles {@code import}, {@code include} and {@code library} declarations.
+	 *
+	 * <p>Not from the OCL specification: its Complete OCL concrete syntax has no import at
+	 * all — {@code packageDeclarationCS ::= "package" pathNameCS contextDeclarationCS*
+	 * "endpackage"} (§12.12.1), and the word "import" does not occur in the document. These
+	 * are accepted for compatibility with Eclipse OCL, which is why what they mean here is a
+	 * decision rather than a reading of the spec.
 	 *
 	 * <p>Importing a package is a no-op, and correctly so: type names resolve against the
 	 * whole package registry the engine was given, whether or not a document says it wants
