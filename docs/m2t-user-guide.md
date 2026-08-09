@@ -16,8 +16,9 @@ Fennec M2T is a lightweight, spec-compliant MOFM2T v1.0 (Model to Text) engine t
 10. [Protected Areas](#10-protected-areas)
 11. [Standard Library](#11-standard-library)
 12. [Error Handling](#12-error-handling)
-13. [M2tGenerationStrategy](#13-m2tgenerationstrategy)
-14. [Whitespace Handling](#14-whitespace-handling)
+13. [Engine Lifetime and Module Retention](#13-engine-lifetime-and-module-retention)
+14. [M2tGenerationStrategy](#14-m2tgenerationstrategy)
+15. [Whitespace Handling](#15-whitespace-handling)
 
 ---
 
@@ -133,8 +134,8 @@ M2tEngineImpl engine = new M2tEngineImpl(config);
 | `resourceSet(resourceSet)` | — | Resource set whose package registry resolves metamodel type names (see [§3.4](#34-which-metamodels-the-engine-sees)) |
 | `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | The registry itself; wins over `resourceSet` when both are set |
 | `defaultCharset(charset)` | UTF-8 | Charset for file output encoding |
-| `whitespaceMode(mode)` | `ACCELEO` | Whitespace normalization mode (see [§14](#14-whitespace-handling)) |
-| `generationStrategy(strategy)` | `null` (in-memory) | SPI for file output (see [§13](#13-m2tgenerationstrategy)) |
+| `whitespaceMode(mode)` | `ACCELEO` | Whitespace normalization mode (see [§15](#15-whitespace-handling)) |
+| `generationStrategy(strategy)` | `null` (in-memory) | SPI for file output (see [§14](#14-m2tgenerationstrategy)) |
 | `maxDiagnostics(int)` | 10,000 | Maximum diagnostics before truncation |
 | `maxTemplateDepth(int)` | 1,000 | Maximum template invocation depth (recursion limit) |
 | `maxForIterations(int)` | 1,000,000 | Maximum for-block iterations |
@@ -1009,7 +1010,26 @@ Common causes: private templates accessed from another module, typos in template
 
 ---
 
-## 13. M2tGenerationStrategy
+## 13. Engine Lifetime and Module Retention
+
+The engine remembers what it parsed: a module's parse result, whether it has been linked and normalized, and the indentation of its template invocations. That is what makes repeated executions cheap.
+
+Those caches are keyed weakly, so a module is let go once you drop it. Garbage collection is a safety net, not a schedule — an engine that lives as long as the application and parses modules in a loop should say when it is done with one:
+
+```java
+Module module = engine.parse(source, "report");
+engine.link(module);
+engine.execute(module, context);
+
+engine.release(module);      // this module is done
+// engine.clearCaches();     // or: forget everything
+```
+
+After `release`, the engine no longer knows the module. Linking it again reports it as unknown until it is parsed again — `link` returns a warning per module it has no parse result for, instead of quietly reporting success.
+
+---
+
+## 14. M2tGenerationStrategy
 
 `M2tGenerationStrategy` is the SPI for controlling where generated text goes. When no strategy is configured, the engine collects all output in memory (`M2tResult.generatedFiles()`).
 
@@ -1076,7 +1096,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 
 ---
 
-## 14. Whitespace Handling
+## 15. Whitespace Handling
 
 MOFM2T §8.4 defines precise whitespace normalization rules. The engine supports three modes via `WhitespaceMode`:
 

@@ -29,9 +29,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
@@ -89,21 +91,27 @@ public class M2tEngineImpl implements M2tEngine {
 	private final ResourceSet resourceSet;
 	private final M2tParserSupport parserSupport;
 
+	// The four caches below are keyed weakly. They used to hold every module ever
+	// parsed for the lifetime of the engine, which for a long-lived instance means a
+	// leak. EMF model objects do not override equals/hashCode, so a WeakHashMap keys by
+	// identity exactly as the IdentityHashMap did — it just lets go once the caller
+	// drops the module. Callers who want to be certain use release(Module).
+
 	/** Cache of parse results keyed by module identity, for auto-linking. */
 	private final Map<Module, M2tParseResult> parseResultCache =
-			Collections.synchronizedMap(new IdentityHashMap<>());
+			Collections.synchronizedMap(new WeakHashMap<>());
 
 	/** Tracks which modules have been linked to avoid re-linking. */
 	private final Set<Module> linkedModules =
-			Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
+			Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
 	/** Tracks which modules have been whitespace-normalized. */
 	private final Set<Module> normalizedModules =
-			Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
+			Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
 	/** Indentation map for standalone template invocations (§8.4). */
 	private final Map<TemplateInvocation, String> globalIndentationMap =
-			Collections.synchronizedMap(new IdentityHashMap<>());
+			Collections.synchronizedMap(new WeakHashMap<>());
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -167,18 +175,24 @@ public class M2tEngineImpl implements M2tEngine {
 	public List<String> link(Module... modules) {
 		Objects.requireNonNull(modules, "modules must not be null");
 		List<M2tParseResult> results = new ArrayList<>();
+		List<String> warnings = new ArrayList<>();
 		for (Module m : modules) {
 			Objects.requireNonNull(m, "module element must not be null");
 			M2tParseResult pr = parseResultCache.get(m);
 			if (pr != null) {
 				results.add(pr);
+			} else {
+				// Parsed by someone else, or released — either way this engine has
+				// nothing to link it against, and saying nothing would look like success
+				warnings.add("Module '" + m.getName()
+						+ "' was not parsed by this engine and cannot be linked");
 			}
 		}
 		if (results.isEmpty()) {
-			return List.of();
+			return List.copyOf(warnings);
 		}
 		M2tModuleLinker linker = new M2tModuleLinker();
-		List<String> warnings = linker.link(results);
+		warnings.addAll(linker.link(results));
 		for (Module m : modules) {
 			linkedModules.add(m);
 		}
@@ -297,13 +311,48 @@ public class M2tEngineImpl implements M2tEngine {
 	}
 
 	/**
+	 * Drops everything this engine remembers about the given module.
+	 *
+	 * <p>The engine caches a module's parse result, its link and normalization state and
+	 * the indentation of its template invocations, so that repeated executions do not
+	 * re-parse and re-link. Those caches are keyed weakly and let go once the caller
+	 * drops the module, but garbage collection is not a schedule: an engine that lives
+	 * as long as the application and parses modules in a loop should say when it is done
+	 * with one.
+	 *
+	 * @param module the module to forget, must not be {@code null}
+	 */
+	public void release(Module module) {
+		Objects.requireNonNull(module, "module must not be null");
+		parseResultCache.remove(module);
+		linkedModules.remove(module);
+		normalizedModules.remove(module);
+		synchronized (globalIndentationMap) {
+			globalIndentationMap.keySet().removeIf(
+					invocation -> EcoreUtil.isAncestor(module, invocation));
+		}
+	}
+
+	/**
+	 * Drops everything this engine remembers about every module.
+	 *
+	 * <p>After this call, previously parsed modules have to be parsed and linked again.
+	 */
+	public void clearCaches() {
+		parseResultCache.clear();
+		linkedModules.clear();
+		normalizedModules.clear();
+		globalIndentationMap.clear();
+	}
+
+	/**
 	 * Returns all modules in the link set that includes the given module.
 	 * Collects from linkedModules set, or just the module itself if not linked.
 	 */
 	private List<Module> getAllLinkedModules(Module module) {
 		List<Module> all = new ArrayList<>();
-		for (Module m : linkedModules) {
-			all.add(m);
+		synchronized (linkedModules) {
+			all.addAll(linkedModules);
 		}
 		if (all.isEmpty()) {
 			all.add(module);
