@@ -15,7 +15,10 @@
 package org.eclipse.fennec.m2x.qvto.tests;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Arrays;
 
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.ocl.api.annotation.require.RequireOCL;
@@ -29,11 +32,13 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.annotation.require.RequireQVTO;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.osgi.framework.Bundle;
+import org.osgi.framework.BundleContext;
 import org.osgi.framework.Constants;
 import org.osgi.framework.FrameworkUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.annotation.Property;
 import org.osgi.test.common.annotation.Property.Scalar;
@@ -106,6 +111,22 @@ class QvtoServiceDiscoveryOSGiTest {
 	})
 	void allowListStillNarrows(@InjectService QvtoEngine engine) throws Exception {
 		assertFalse(run(engine).isSuccess());
+	}
+
+	@Test
+	@DisplayName("a Service Loader Mediator is running, so the isolation is tested against one")
+	void mediatorIsInTheRuntime(@InjectBundleContext BundleContext context) {
+		// Without this the isolation test below would pass in a framework that has no
+		// mediator at all, which proves nothing about mediators. Aries SPI Fly weaves
+		// through a WeavingHook, so it has to be ACTIVE, not merely installed.
+		Bundle mediator = Arrays.stream(context.getBundles())
+				.filter(b -> "org.apache.aries.spifly.dynamic.bundle".equals(b.getSymbolicName()))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("SPI Fly is not in this runtime"));
+
+		assertEquals(Bundle.ACTIVE, mediator.getState(),
+				() -> "SPI Fly has to be running to weave anything, state was "
+						+ mediator.getState());
 	}
 
 	@Test
