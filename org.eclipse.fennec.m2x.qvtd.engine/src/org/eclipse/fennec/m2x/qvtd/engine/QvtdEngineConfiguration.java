@@ -25,9 +25,10 @@ import org.osgi.service.metatype.annotations.ObjectClassDefinition;
  * where they belong — on {@code DefaultOclEngine} through {@code ocl.*} — and are not
  * mirrored into a second place that could disagree with the first.
  *
- * <p>Blackbox libraries and unit resolvers are off by default and gated by an allow-list:
- * both let a transformation reach code and files outside itself, so switching them on is a
- * decision, not a default.
+ * <p>Blackbox libraries and unit resolvers are off by default: both let a transformation
+ * reach code and files outside itself, so switching them on is a decision. The allow-lists
+ * narrow what may be reached once they are on — an empty one does not narrow anything, so
+ * enabling a feature without also naming what it may reach permits every name.
  *
  * @since 1.0
  */
@@ -39,13 +40,13 @@ public @interface QvtdEngineConfiguration {
 	@AttributeDefinition(name = "Blackbox Enabled", description = "Whether transformations may call Java blackbox libraries")
 	boolean blackboxEnabled() default false;
 
-	@AttributeDefinition(name = "Allowed Blackbox Modules", description = "Qualified names a transformation may import as a blackbox; empty allows none")
+	@AttributeDefinition(name = "Allowed Blackbox Modules", description = "Qualified names a transformation may import as a blackbox; empty puts no restriction on the names")
 	String[] allowedBlackboxModules() default {};
 
 	@AttributeDefinition(name = "Unit Resolver Enabled", description = "Whether transformations may import units resolved from outside")
 	boolean unitResolverEnabled() default false;
 
-	@AttributeDefinition(name = "Allowed Unit Modules", description = "Qualified names a transformation may import as a unit; empty allows none")
+	@AttributeDefinition(name = "Allowed Unit Modules", description = "Qualified names a transformation may import as a unit; empty puts no restriction on the names")
 	String[] allowedUnitModules() default {};
 
 	@AttributeDefinition(name = "Max Blackbox Libraries", description = "Maximum number of blackbox libraries one engine will use")
