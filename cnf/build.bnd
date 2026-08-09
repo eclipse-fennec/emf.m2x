@@ -9,7 +9,12 @@
 	fennecEMF
 
 # Needed because we enabled library 'fennec'
-# Activate baselining
+# Activate baselining — deliberately still off, see #33.
+# Setting it to true would currently switch on nothing: the baseline.bnd that the
+# shared fennec bnd library 0.0.9 includes for this flag is commented out in its
+# entirety, so there is neither a -baselinerepo nor a repository plugin behind it.
+# Enabling it before that is fixed upstream, and before a release exists to baseline
+# against, would look like API-evolution enforcement without being any.
 #fennec-baselining: true
 github-orga: eclipse-fennec
 github-project: emf.m2x
