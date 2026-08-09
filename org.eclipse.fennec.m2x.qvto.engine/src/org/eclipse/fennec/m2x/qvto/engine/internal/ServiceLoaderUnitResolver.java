@@ -35,6 +35,16 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
  * <p>A provider that fails to load is skipped rather than allowed to abort the link: one
  * broken jar on the class path should not decide whether an unrelated import resolves.
  *
+ * <p>The lookup is bound to the class loader of {@link QvtoUnitResolver} rather than to the
+ * thread context class loader, which is what the one-argument {@code ServiceLoader.load}
+ * would use. Outside OSGi the two are the same in practice; inside it the context loader is
+ * whatever the caller happened to leave there, so the result would depend on who called the
+ * engine. Under OSGi discovery goes through {@link QvtoServiceUnitResolver} and the service
+ * registry instead, which is why this bundle deliberately declares no
+ * {@code osgi.serviceloader} requirement: with one, a Service Loader Mediator such as Aries
+ * SPI Fly would weave this call and feed it from the same registry, and the two mechanisms
+ * would answer the same import.
+ *
  * @since 1.0
  */
 public final class ServiceLoaderUnitResolver implements QvtoUnitResolver {
@@ -44,7 +54,7 @@ public final class ServiceLoaderUnitResolver implements QvtoUnitResolver {
 	private final ServiceLoader<QvtoUnitResolver> loader;
 
 	public ServiceLoaderUnitResolver() {
-		this(ServiceLoader.load(QvtoUnitResolver.class));
+		this(ServiceLoader.load(QvtoUnitResolver.class, QvtoUnitResolver.class.getClassLoader()));
 	}
 
 	ServiceLoaderUnitResolver(ServiceLoader<QvtoUnitResolver> loader) {

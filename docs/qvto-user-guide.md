@@ -282,6 +282,8 @@ The engine looks that up when it links `import my.company.Utilities;` — not be
 
 Outside OSGi the same thing happens through `ServiceLoader`, via `QvtoConfiguration.Builder.discoverUnitResolvers(true)` and a `META-INF/services` entry.
 
+**One mechanism per environment, on purpose.** The class-path route looks through the class loader of `QvtoUnitResolver`, not through the thread context class loader — inside OSGi that loader belongs to the api bundle and cannot see into others, so the route is inert there and the service registry is the only one that answers. This bundle also declares no `osgi.serviceloader` requirement, so a Service Loader Mediator such as Aries SPI Fly does not weave the call and feed it from that same registry; otherwise two mechanisms would answer the same import.
+
 **Both are off by default, and that is deliberate.** `unitResolverEnabled` alone leaves the allow-list empty, which puts no restriction on names — so discovery would let anything registered, or anything on the class path, answer an import. Turning discovery on is a second decision, and the sensible companion to it is naming what may be reached:
 
 ```json
