@@ -657,7 +657,7 @@ Each of our `.model` bundles must register its EPackages. Each `.parser` bundle 
 
 | Extension | Eclipse extension point | Without OSGi | With OSGi |
 |---|---|---|---|
-| **OCL Custom Operations** | `org.eclipse.ocl.pivot.standard_library` | `OclConfiguration.builder(parser).addOperationProvider(...).customOperationsEnabled(true)` (D29: disabled by default) | Single `@Reference(name="operationProvider")` on `OclEngineComponent` — default: `NoOpOclOperationProvider`; custom: register `@Component(service = OclOperationProvider.class, property = "provider.name=myProvider")` and set `operationProvider.target=(provider.name=myProvider)` via ConfigAdmin |
+| **OCL Custom Operations** | `org.eclipse.ocl.pivot.standard_library` | `OclConfiguration.builder(parser).addOperationProvider(...).customOperationsEnabled(true)` (D29: disabled by default) | `@Reference(name="operationProvider", cardinality = MULTIPLE)` on `OclEngineComponent` — every registered `@Component(service = OclOperationProvider.class)` is bound; `operationProvider.target` narrows the set when a deployment wants that. The gate stays `ocl.customOperationsEnabled` |
 | **OCL Standard Library** | `org.eclipse.ocl.pivot.standard_library` | Built-in, loaded at startup | DS whiteboard: `@Component(service = OclStandardLibraryContribution.class)` |
 | **Complete OCL Documents** | `org.eclipse.ocl.pivot.complete_ocl_registry` | `OclEngine.registerCompleteOclDocument(contribution)` / `unregisterCompleteOclDocument(contribution)` | DS whiteboard: `@Component(service = CompleteOclContribution.class)` |
 | **Model Extents / Resource Providers** | N/A (programmatic in Eclipse too) | Pass `Resource` / `ResourceSet` directly | DS `@Reference` |

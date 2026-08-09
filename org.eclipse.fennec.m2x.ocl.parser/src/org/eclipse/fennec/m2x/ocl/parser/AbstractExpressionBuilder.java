@@ -92,7 +92,7 @@ public class AbstractExpressionBuilder {
 	private final EClassifier contextType;
 	private final EPackage.Registry packageRegistry;
 
-	/** Aliases a Complete OCL document introduced with {@code import alias : path} (§12.3). */
+	/** Aliases a Complete OCL document introduced with {@code import alias : path}. */
 	private Map<String, String> packageAliases = Map.of();
 	private OclEnvironment environment;
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();

@@ -26,7 +26,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * What a Complete OCL document's {@code import} declarations do (§12.3).
+ * What a Complete OCL document's {@code import} declarations do.
+ *
+ * <p>They are an Eclipse OCL compatibility feature, not a specification one: OCL v2.4 has no
+ * import in its Complete OCL concrete syntax (§12.12.1) and does not use the word anywhere.
+ * So what they mean here is decided, not read off the spec.
  *
  * <p>They used to do nothing at all — {@code visitImportDeclaration} logged at
  * {@code FINE} and returned, which nobody sees. That is fine for one of the three forms

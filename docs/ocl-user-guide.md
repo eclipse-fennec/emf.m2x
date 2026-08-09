@@ -852,7 +852,7 @@ This resolves against the resource set's own package registry, for that one call
 
 ### 10.3.1 Import declarations
 
-A Complete OCL document may open with `import`, `include` or `library` (§12.3). What each does here:
+A Complete OCL document may open with `import`, `include` or `library`. These are **not** part of OCL v2.4 — its Complete OCL concrete syntax is `packageDeclarationCS ::= "package" pathNameCS contextDeclarationCS* "endpackage"` (§12.12.1), and the specification does not use the word "import" at all. Fennec accepts them for compatibility with Eclipse OCL, so what each one does is a decision:
 
 | Form | Effect |
 |---|---|
@@ -968,12 +968,13 @@ OclEngine engine = OclEngines.create(config);
 
 ### 11.3 OSGi Registration
 
-In OSGi, the `OclEngineComponent` injects exactly one `OclOperationProvider` via a
-mandatory `@Reference`. By default, the built-in `NoOpOclOperationProvider` is bound
-(returns an empty list — no custom operations).
+In OSGi, `OclEngineComponent` binds **every** registered `OclOperationProvider`. Several can
+coexist — the MOFM2T standard library, a set of domain operations, the operations a generator
+brings — and they have no reason to exclude each other. The OCL specification has no notion of
+one source of additional operations either: §11.8.1 makes the standard library extensible, and
+a document may carry any number of `def:` declarations.
 
-To provide custom operations, register your provider as a DS component and configure
-the engine to select it via `operationProvider.target`:
+Register a provider as a DS component and it is bound:
 
 ```java
 @Component(service = OclOperationProvider.class,
@@ -986,23 +987,31 @@ public class MyOperations implements OclOperationProvider {
 }
 ```
 
-Then configure `OclEngineComponent` via ConfigAdmin or OSGi Configurator:
+Binding a provider does not make its operations usable. The gate does that, and it is shut by
+default (D29, see §14 Security):
 
 ```json
 {
     "DefaultOclEngine": {
-        "operationProvider.target": "(provider.name=myProvider)",
         "ocl.customOperationsEnabled": true
     }
 }
 ```
 
-Both `operationProvider.target` and `customOperationsEnabled` are required —
-the target selects the provider, and the D29 gate enables operation resolution
-at evaluation time (see §14 Security).
+That is the whole security decision: with the gate shut, no config-registered operation resolves,
+however many providers a runtime happens to hold. With it open, all of them do.
 
-If you need multiple providers combined, create a compound provider that
-aggregates them and register it as a single service.
+A deployment that wants exactly one provider says so with a target filter — the reference is
+named `operationProvider`:
+
+```json
+{
+    "DefaultOclEngine": {
+        "ocl.customOperationsEnabled": true,
+        "operationProvider.target": "(provider.name=myProvider)"
+    }
+}
+```
 
 ### 11.4 Using OclConfiguration
 

@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine;
 
+import java.util.List;
+
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.ErrorRecovery;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
@@ -49,21 +51,27 @@ public final class OclConfigurationHelper {
 	}
 
 	/**
-	 * Creates an {@link OclConfiguration} from the given OSGi configuration
-	 * annotation, parser, cache, and operation provider.
+	 * Creates an {@link OclConfiguration} from the given OSGi configuration annotation,
+	 * parser, cache and operation providers.
 	 *
-	 * @param config            the OSGi configuration annotation
-	 * @param parser            the OCL expression parser
-	 * @param cache             the expression cache, or {@code null}
-	 * @param operationProvider the custom operation provider
+	 * <p>Every provider is taken, not one: a runtime can hold several at once — the MOFM2T
+	 * standard library, a set of domain operations, the operations a generator brings — and
+	 * they have no reason to exclude each other.
+	 *
+	 * @param config             the OSGi configuration annotation
+	 * @param parser             the OCL expression parser
+	 * @param cache              the expression cache, or {@code null}
+	 * @param operationProviders the custom operation providers, may be empty
 	 * @return the configuration
 	 */
 	public static OclConfiguration from(OclEngineConfiguration config,
 			OclExpressionParser parser, OclExpressionCache cache,
-			OclOperationProvider operationProvider) {
-		return buildCommon(config, parser, cache)
-				.addOperationProvider(operationProvider)
-				.build();
+			List<OclOperationProvider> operationProviders) {
+		OclConfiguration.Builder builder = buildCommon(config, parser, cache);
+		for (OclOperationProvider provider : operationProviders) {
+			builder.addOperationProvider(provider);
+		}
+		return builder.build();
 	}
 
 	private static OclConfiguration.Builder buildCommon(OclEngineConfiguration config,
