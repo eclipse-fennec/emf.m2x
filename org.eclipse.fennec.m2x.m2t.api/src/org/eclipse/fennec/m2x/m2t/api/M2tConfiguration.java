@@ -16,6 +16,9 @@ package org.eclipse.fennec.m2x.m2t.api;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EPackage;
@@ -65,6 +68,11 @@ public final class M2tConfiguration {
 	private final int maxCrossProductSize;
 	private final long maxOutputSize;
 	private final boolean protectedAreaEnabled;
+	private final List<M2tUnitResolver> unitResolvers;
+	private final boolean unitResolverEnabled;
+	private final boolean discoverUnitResolvers;
+	private final Set<String> allowedUnitModules;
+	private final int maxUnitResolvers;
 
 	private M2tConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
@@ -80,6 +88,11 @@ public final class M2tConfiguration {
 		this.maxCrossProductSize = builder.maxCrossProductSize;
 		this.maxOutputSize = builder.maxOutputSize;
 		this.protectedAreaEnabled = builder.protectedAreaEnabled;
+		this.unitResolvers = List.copyOf(builder.unitResolvers);
+		this.unitResolverEnabled = builder.unitResolverEnabled;
+		this.discoverUnitResolvers = builder.discoverUnitResolvers;
+		this.allowedUnitModules = Set.copyOf(builder.allowedUnitModules);
+		this.maxUnitResolvers = builder.maxUnitResolvers;
 	}
 
 	/**
@@ -222,6 +235,58 @@ public final class M2tConfiguration {
 	 * @return a new builder
 	 */
 	/**
+	 * The resolvers that can produce a module this generation imports or extends by name.
+	 *
+	 * @return the resolvers, never {@code null}
+	 */
+	public List<M2tUnitResolver> unitResolvers() {
+		return unitResolvers;
+	}
+
+	/**
+	 * Whether modules may be reached beyond the ones handed to {@code link}.
+	 *
+	 * <p>Off by default: a resolver produces template source from a name a template chose,
+	 * which is a way out of the set of modules the caller decided to generate from.
+	 *
+	 * @return {@code true} if resolvers are consulted
+	 */
+	public boolean unitResolverEnabled() {
+		return unitResolverEnabled;
+	}
+
+	/**
+	 * Whether the engine also asks {@link M2tUnitResolver} implementations it finds itself.
+	 *
+	 * <p>Off by default, and a decision of its own: with an empty
+	 * {@link #allowedUnitModules()} every name is permitted, so discovery there would let
+	 * anything on the class path answer an import.
+	 *
+	 * @return {@code true} if implementations are discovered
+	 */
+	public boolean discoverUnitResolvers() {
+		return discoverUnitResolvers;
+	}
+
+	/**
+	 * The module names that may be resolved; empty puts no restriction on the names.
+	 *
+	 * @return the allowed names, never {@code null}
+	 */
+	public Set<String> allowedUnitModules() {
+		return allowedUnitModules;
+	}
+
+	/**
+	 * How many resolvers one generation may consult.
+	 *
+	 * @return the limit
+	 */
+	public int maxUnitResolvers() {
+		return maxUnitResolvers;
+	}
+
+	/**
 	 * Creates a builder that needs no OCL knowledge.
 	 *
 	 * <p>The engine built from this configuration evaluates template expressions with a default
@@ -258,6 +323,11 @@ public final class M2tConfiguration {
 		private int maxCrossProductSize = DEFAULT_MAX_CROSS_PRODUCT_SIZE;
 		private long maxOutputSize = DEFAULT_MAX_OUTPUT_SIZE;
 		private boolean protectedAreaEnabled = true;
+		private final List<M2tUnitResolver> unitResolvers = new ArrayList<>();
+		private boolean unitResolverEnabled;
+		private boolean discoverUnitResolvers;
+		private Set<String> allowedUnitModules = Set.of();
+		private int maxUnitResolvers = 5;
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
@@ -425,6 +495,67 @@ public final class M2tConfiguration {
 		 * @param enabled {@code true} to enable (default), {@code false} to disable
 		 * @return this builder
 		 */
+		/**
+		 * Adds a resolver that can produce a module by the name a template names it with.
+		 *
+		 * <p>Needs {@link #unitResolverEnabled(boolean)}; without it the resolvers are not
+		 * consulted, which is the default.
+		 *
+		 * @param resolver the resolver, must not be {@code null}
+		 * @return this builder
+		 */
+		public Builder addUnitResolver(M2tUnitResolver resolver) {
+			this.unitResolvers.add(Objects.requireNonNull(resolver, "resolver must not be null"));
+			return this;
+		}
+
+		/**
+		 * Lets modules be reached beyond the ones handed to {@code link}.
+		 *
+		 * @param enabled whether resolvers are consulted
+		 * @return this builder
+		 */
+		public Builder unitResolverEnabled(boolean enabled) {
+			this.unitResolverEnabled = enabled;
+			return this;
+		}
+
+		/**
+		 * Lets the engine ask {@link M2tUnitResolver} implementations it discovers, on top
+		 * of the ones named here — {@link java.util.ServiceLoader} in plain Java, the
+		 * service registry under OSGi.
+		 *
+		 * @param discover whether to discover implementations
+		 * @return this builder
+		 */
+		public Builder discoverUnitResolvers(boolean discover) {
+			this.discoverUnitResolvers = discover;
+			return this;
+		}
+
+		/**
+		 * Narrows which module names may be resolved. Empty puts no restriction on them —
+		 * the enable flag is the gate, this is what narrows once it is open.
+		 *
+		 * @param modules the allowed names, must not be {@code null}
+		 * @return this builder
+		 */
+		public Builder allowedUnitModules(Set<String> modules) {
+			this.allowedUnitModules = Objects.requireNonNull(modules, "modules must not be null");
+			return this;
+		}
+
+		/**
+		 * Bounds how many resolvers one generation may consult.
+		 *
+		 * @param max the limit
+		 * @return this builder
+		 */
+		public Builder maxUnitResolvers(int max) {
+			this.maxUnitResolvers = max;
+			return this;
+		}
+
 		public Builder protectedAreaEnabled(boolean enabled) {
 			this.protectedAreaEnabled = enabled;
 			return this;
