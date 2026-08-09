@@ -862,6 +862,16 @@ engine.parseDocument(document, resourceSet);
 
 `UriHelper.fromJavaUri` and `fromFile` cover the other forms; `toJavaUri` converts back. Do not build a URI with `URI.createURI(path.toString())` — a path is not a URI, and on Windows the drive letter becomes the scheme.
 
+> `UriHelper` ships in the bundle **`org.eclipse.fennec.m2x`** (package `org.eclipse.fennec.m2x.utils`) — the shared commons of this workspace, separate from the engine bundles:
+>
+> ```xml
+> <dependency>
+>     <groupId>org.eclipse.fennec.m2x</groupId>
+>     <artifactId>org.eclipse.fennec.m2x</artifactId>
+> </dependency>
+> ```
+
+
 ### 10.5 OSGi: CompleteOclContribution
 
 In OSGi, deploy Complete OCL documents as whiteboard services:

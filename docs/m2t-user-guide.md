@@ -185,6 +185,16 @@ Module module = engine.parse(UriHelper.fromPath(Path.of("/srv/templates/report.m
 
 Prefer it over `URI.createURI(path.toString())` — a path is not a URI, and on Windows that would produce a URI whose scheme is the drive letter.
 
+> `UriHelper` ships in the bundle **`org.eclipse.fennec.m2x`** (package `org.eclipse.fennec.m2x.utils`) — the shared commons of this workspace, separate from the engine bundles:
+>
+> ```xml
+> <dependency>
+>     <groupId>org.eclipse.fennec.m2x</groupId>
+>     <artifactId>org.eclipse.fennec.m2x</artifactId>
+> </dependency>
+> ```
+
+
 ### 3.5 OSGi (Declarative Services)
 
 The M2T engine currently does not register a DS component. Use standalone instantiation in OSGi by creating the engine in your component's `@Activate` method:
