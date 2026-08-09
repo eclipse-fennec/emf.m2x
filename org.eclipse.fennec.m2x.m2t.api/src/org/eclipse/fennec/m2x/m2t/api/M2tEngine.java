@@ -90,4 +90,27 @@ public interface M2tEngine {
 	 * @return warnings encountered during linking (empty if all references resolved)
 	 */
 	List<String> link(Module... modules);
+
+	// --- Retention ---
+
+	/**
+	 * Drops everything this engine remembers about the given module.
+	 *
+	 * <p>The engine caches a module's parse result, its link and normalization state and
+	 * the indentation of its template invocations, so that repeated executions do not
+	 * re-parse and re-link. Those caches are keyed weakly and let go once the caller
+	 * drops the module, but garbage collection is not a schedule: an engine that lives
+	 * as long as the application and parses modules in a loop should say when it is done
+	 * with one.
+	 *
+	 * @param module the module to forget, must not be {@code null}
+	 */
+	void release(Module module);
+
+	/**
+	 * Drops everything this engine remembers about every module.
+	 *
+	 * <p>After this call, previously parsed modules have to be parsed and linked again.
+	 */
+	void clearCaches();
 }

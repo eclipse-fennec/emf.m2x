@@ -22,7 +22,6 @@ import org.eclipse.emf.ecore.impl.DynamicEObjectImpl;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 
 /**
  * Runtime wrapper for an instantiated transformation (§8.1.13).

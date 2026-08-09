@@ -139,7 +139,7 @@ Unlike OCL (pure query) and QVT-O (model transformation), MOFM2T **generates tex
 | **Vector** | `engine.parse(URI.createURI("file:///etc/passwd"))` — reads arbitrary files as template source |
 | **Impact** | Reading arbitrary files on the filesystem |
 | **Prerequisite** | Attacker controls the URI passed to `parse()` |
-| **File** | `M2tEngineImpl.java:parse(URI)` (line 124) |
+| **File** | `M2tEngine.java:parse(URI)` (line 124) |
 
 **Analysis:** Same pattern as Q-3 in QVT-O. `Files.readString(Path.of(moduleUri))` reads any file accessible to the JVM process. No path whitelisting or canonicalization.
 
@@ -475,7 +475,7 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngineImpl;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngine;
 
 // 1. Configure OCL with conservative limits
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport())
@@ -497,7 +497,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
     .build();
 
 // 3. Create engine and execute
-M2tEngineImpl engine = new M2tEngineImpl(config);
+M2tEngine engine = M2tEngines.create(config);
 Module module = engine.parse(untrustedTemplate, "template");
 M2tResult result = engine.execute(module, M2tContext.of(inputElement));
 

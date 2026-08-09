@@ -2022,7 +2022,7 @@ Für jede Testklasse systematisch:
 
 1. **`access` keyword** — Parser + Linker: `QvtoUnitResolver`-basierte Import-Auflösung
 2. **`new T(models)`** — `TransformationInstantiationExp` im Parser, `QvtoTransformationInstance` Runtime-Wrapper
-3. **`transform()`** — Synchrone Ausführung via nested `QvtoEngineImpl.execute()`
+3. **`transform()`** — Synchrone Ausführung via nested `QvtoEngine.execute()`
 4. **`parallelTransform()`** — Async via konfigurierbarem `Executor` (Default: Virtual Threads) + `CompletableFuture`
 5. **`wait(Set{status})`** — Blockiert bis alle `PendingStatus`-Futures aufgelöst sind
 6. **`Status`-Typ** — EMF EClass mit `succeeded()`, `failed()`, `raisedException()`, `PendingStatus` für async

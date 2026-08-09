@@ -30,13 +30,14 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.URIHandler;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.resource.impl.URIHandlerImpl;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.eclipse.fennec.m2x.qvto.engine.ResourceSetUnitResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,7 +65,7 @@ class QvtoResourceSetLoadingTest {
 		ResourceSet resourceSet = resourceSetServing(Map.of(
 				"mem:/transforms/loaded.qvto", TRANSFORMATION));
 
-		QvtoEngineImpl engine = new QvtoEngineImpl(QvtoConfiguration.builder(
+		QvtoEngine engine = QvtoEngines.create(QvtoConfiguration.builder(
 				OclConfiguration.builder(new OclParserSupport()).build())
 				.resourceSet(resourceSet)
 				.build());

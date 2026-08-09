@@ -12,7 +12,7 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-package org.eclipse.fennec.m2x.qvto.engine;
+package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,11 +51,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
-import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoEvalEnvironment;
-import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoEvaluator;
-import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoExtentManager;
-import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoLinker;
-import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoOperationProvider;
 import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
 
 /**
@@ -104,8 +99,11 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		this.parserSupport = new QvtoParserSupport();
 		this.packageRegistry = config.packageRegistry();
 		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
-		OclConfiguration oclConfig = config.oclConfiguration();
-		this.oclEngine = OclEngines.create(oclConfig);
+		// The engine evaluates with the OCL engine it was given — its cache, its
+		// providers; only when none was supplied is one built from the configuration.
+		this.oclEngine = config.oclEngine() != null
+				? config.oclEngine()
+				: OclEngines.create(config.oclConfiguration());
 		this.blackboxRegistry = config.blackboxRegistry();
 		this.unitResolvers = List.copyOf(config.unitResolvers());
 		this.parallelExecutor = config.parallelExecutor();
@@ -219,6 +217,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	 *
 	 * @param transformation the parsed operational transformation
 	 */
+	@Override
 	public void loadTransformation(OperationalTransformation transformation) {
 		this.loadedTransformation = Objects.requireNonNull(transformation);
 	}

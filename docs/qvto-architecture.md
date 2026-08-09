@@ -164,7 +164,7 @@ QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
     .addUnitResolver(myResolver)
     .packageRegistry(myPackageRegistry)   // optional, see below
     .build();
-QvtoEngine engine = new QvtoEngineImpl(config);
+QvtoEngine engine = QvtoEngines.create(config);
 ```
 
 `packageRegistry` resolves `modeltype … uses '<nsURI>'` declarations and everything below them. It defaults to `EPackage.Registry.INSTANCE`, and **this default is the single place in QVT-O where the static registry is applied** (D42) — parser, linker, evaluator, alias resolution and nested blackbox contexts all receive the resolved registry as a parameter.
@@ -478,7 +478,7 @@ Type names resolve in this order: the module's own `typedef`s → the package re
 
 **Bundle:** `org.eclipse.fennec.m2x.qvto.engine`
 
-### 6.1 QvtoEngineImpl — Facade
+### 6.1 QvtoEngine — Facade
 
 - Implements `QvtoEngine`
 - Plain Java (OSGi-optional), no OSGi dependencies

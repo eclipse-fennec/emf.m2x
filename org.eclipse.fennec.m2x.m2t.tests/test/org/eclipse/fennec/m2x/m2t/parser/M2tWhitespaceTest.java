@@ -20,12 +20,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
-import org.eclipse.fennec.m2x.m2t.engine.M2tEngineImpl;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -42,14 +43,14 @@ import org.junit.jupiter.api.Test;
  */
 class M2tWhitespaceTest {
 
-	private M2tEngineImpl engine;
+	private M2tEngine engine;
 	private EPackage inputPackage;
 
 	@BeforeEach
 	void setUp() {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 		M2tConfiguration config = M2tConfiguration.builder(oclConfig).build(); // default = ACCELEO
-		engine = new M2tEngineImpl(config);
+		engine = M2tEngines.create(config);
 
 		inputPackage = EcoreFactory.eINSTANCE.createEPackage();
 		inputPackage.setName("test");
@@ -65,19 +66,19 @@ class M2tWhitespaceTest {
 		return execute(engine, mtlSource);
 	}
 
-	private String execute(M2tEngineImpl eng, String mtlSource) throws M2tParseException {
+	private String execute(M2tEngine eng, String mtlSource) throws M2tParseException {
 		Module module = eng.parse(mtlSource, "test");
 		M2tResult result = eng.execute(module, M2tContext.of(inputPackage));
 		assertTrue(result.isSuccess(), "Execution should succeed: " + result.diagnostics());
 		return result.generatedFiles().values().iterator().next();
 	}
 
-	private M2tEngineImpl engineWithMode(WhitespaceMode mode) {
+	private M2tEngine engineWithMode(WhitespaceMode mode) {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 		M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 				.whitespaceMode(mode)
 				.build();
-		return new M2tEngineImpl(config);
+		return M2tEngines.create(config);
 	}
 
 	// ==================== Body Trimming (§8.4 Rule 1+2) ====================
@@ -234,7 +235,7 @@ class M2tWhitespaceTest {
 		@Test
 		@DisplayName("SPEC: BOL indicator strips leading whitespace on line")
 		void bolIndicatorStripsLeadingWhitespace() throws M2tParseException {
-			M2tEngineImpl specEngine = engineWithMode(WhitespaceMode.SPEC);
+			M2tEngine specEngine = engineWithMode(WhitespaceMode.SPEC);
 			String mtl =
 					"[module m(Ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
@@ -248,7 +249,7 @@ class M2tWhitespaceTest {
 		@Test
 		@DisplayName("SPEC: BOL indicator mid-line")
 		void bolIndicatorMidLine() throws M2tParseException {
-			M2tEngineImpl specEngine = engineWithMode(WhitespaceMode.SPEC);
+			M2tEngine specEngine = engineWithMode(WhitespaceMode.SPEC);
 			String mtl =
 					"[module m(Ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
@@ -345,7 +346,7 @@ class M2tWhitespaceTest {
 		@Test
 		@DisplayName("SPEC mode injects default newline separator for standalone for")
 		void specModeDefaultNewlineSeparator() throws M2tParseException {
-			M2tEngineImpl specEngine = engineWithMode(WhitespaceMode.SPEC);
+			M2tEngine specEngine = engineWithMode(WhitespaceMode.SPEC);
 			String mtl =
 					"[module m(Ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
@@ -369,7 +370,7 @@ class M2tWhitespaceTest {
 		@Test
 		@DisplayName("no normalization when NONE mode")
 		void noNormalizationWhenNoneMode() throws M2tParseException {
-			M2tEngineImpl noneEngine = engineWithMode(WhitespaceMode.NONE);
+			M2tEngine noneEngine = engineWithMode(WhitespaceMode.NONE);
 			String mtl =
 					"[module m(Ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +

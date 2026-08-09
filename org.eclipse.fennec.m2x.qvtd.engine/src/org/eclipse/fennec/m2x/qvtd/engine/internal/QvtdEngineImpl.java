@@ -12,7 +12,7 @@
  *   Data In Motion Consulting - initial implementation
  * ******************************************************************
  */
-package org.eclipse.fennec.m2x.qvtd.engine;
+package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,9 +37,6 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
-import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvalEnvironment;
-import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvaluator;
-import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrExtentManager;
 import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
 
 /**
@@ -82,8 +79,11 @@ public class QvtdEngineImpl implements QvtdEngine {
 		this.config = config;
 		this.parserSupport = new QvtrParserSupport();
 		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
-		OclConfiguration oclConfig = config.oclConfiguration();
-		this.oclEngine = OclEngines.create(oclConfig);
+		// The engine evaluates with the OCL engine it was given — its cache, its
+		// providers; only when none was supplied is one built from the configuration.
+		this.oclEngine = config.oclEngine() != null
+				? config.oclEngine()
+				: OclEngines.create(config.oclConfiguration());
 	}
 
 	// --- Parsing ---

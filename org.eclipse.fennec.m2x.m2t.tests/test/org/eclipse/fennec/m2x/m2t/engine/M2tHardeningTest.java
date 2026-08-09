@@ -28,6 +28,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
@@ -52,7 +54,7 @@ import org.junit.jupiter.api.Test;
  */
 class M2tHardeningTest {
 
-	private M2tEngineImpl engine;
+	private M2tEngine engine;
 	private EClass testClass;
 
 	@BeforeEach
@@ -60,7 +62,7 @@ class M2tHardeningTest {
 		OclParserSupport parser = new OclParserSupport();
 		OclConfiguration oclConfig = OclConfiguration.builder(parser).build();
 		M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-		engine = new M2tEngineImpl(config);
+		engine = M2tEngines.create(config);
 
 		EPackage pkg = EcoreFactory.eINSTANCE.createEPackage();
 		pkg.setName("test");
@@ -304,7 +306,7 @@ class M2tHardeningTest {
 			M2tConfiguration limitConfig = M2tConfiguration.builder(oclConfig)
 					.maxDiagnostics(3)
 					.build();
-			M2tEngineImpl limitedEngine = new M2tEngineImpl(limitConfig);
+			M2tEngine limitedEngine = M2tEngines.create(limitConfig);
 
 			// Template with many errors — each OCL expression fails
 			String src = "[module m(Ecore)/]\n"

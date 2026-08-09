@@ -22,6 +22,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -31,7 +33,6 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineImpl;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -42,7 +43,7 @@ import org.junit.jupiter.api.BeforeAll;
  */
 public abstract class AbstractQvtdEngineTest {
 
-	protected static QvtdEngineImpl engine;
+	protected static QvtdEngine engine;
 	protected static EcoreHelper ecoreHelper;
 	protected static EPackage umlPackage;
 	protected static EPackage rdbmsPackage;
@@ -51,7 +52,7 @@ public abstract class AbstractQvtdEngineTest {
 	static void setUpEngine() throws IOException {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 		QvtdConfiguration config = QvtdConfiguration.builder(oclConfig).build();
-		engine = new QvtdEngineImpl(config);
+		engine = QvtdEngines.create(config);
 		ecoreHelper = new EcoreHelper(AbstractQvtdEngineTest.class);
 		umlPackage = ecoreHelper.loadEcore("simpleuml.ecore");
 		rdbmsPackage = ecoreHelper.loadEcore("simplerdbms.ecore");

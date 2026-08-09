@@ -23,6 +23,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -33,10 +37,8 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineImpl;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -94,14 +96,17 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			// 3. Set up QVT-O engine as provider
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(qvtoConfig);
+			QvtoEngine qvtoEngine = QvtoEngines.create(qvtoConfig);
 			OperationalTransformation ot = qvtoEngine.parse(qvtoSource, "QvtoImpl");
 			qvtoEngine.loadTransformation(ot);
 
 			// 4. Set up QVT-R engine with provider registered
 			QvtdConfiguration qvtdConfig = QvtdConfiguration.builder(oclConfig).build();
-			QvtdEngineImpl qvtdEngine = new QvtdEngineImpl(qvtdConfig);
-			qvtdEngine.registerImplementationProvider(qvtoEngine);
+			QvtdEngine qvtdEngine = QvtdEngines.create(qvtdConfig);
+			// The QVT-O engine also serves as a relation implementation provider (§7.8,
+			// D39). In OSGi that is a second service registration; here the created
+			// engine carries both roles.
+			qvtdEngine.registerImplementationProvider(asProvider(qvtoEngine));
 
 			// 5. Execute
 			EObject cls = createClass("Employee", null);
@@ -130,12 +135,12 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(config);
+			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 			OperationalTransformation ot = qvtoEngine.parse(qvtoSource, "test");
 			qvtoEngine.loadTransformation(ot);
 
-			assertTrue(qvtoEngine.canProvide("classToTableOp"));
-			assertFalse(qvtoEngine.canProvide("nonExistentMapping"));
+			assertTrue(asProvider(qvtoEngine).canProvide("classToTableOp"));
+			assertFalse(asProvider(qvtoEngine).canProvide("nonExistentMapping"));
 		}
 
 		@Test
@@ -143,9 +148,9 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 		void canProvideWithoutLoadedTransformation() {
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(config);
+			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 
-			assertFalse(qvtoEngine.canProvide("anyMapping"),
+			assertFalse(asProvider(qvtoEngine).canProvide("anyMapping"),
 					"Without loaded transformation, canProvide should return false");
 		}
 
@@ -168,7 +173,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			// Register a provider that doesn't match
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(qvtoConfig);
+			QvtoEngine qvtoEngine = QvtoEngines.create(qvtoConfig);
 			// No transformation loaded → canProvide will always return false
 
 			// Set up blackbox that handles createTableOp
@@ -197,8 +202,11 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 					.blackboxRegistry(registry)
 					.blackboxEnabled(true)
 					.build();
-			QvtdEngineImpl qvtdEngine = new QvtdEngineImpl(config);
-			qvtdEngine.registerImplementationProvider(qvtoEngine);
+			QvtdEngine qvtdEngine = QvtdEngines.create(config);
+			// The QVT-O engine also serves as a relation implementation provider (§7.8,
+			// D39). In OSGi that is a second service registration; here the created
+			// engine carries both roles.
+			qvtdEngine.registerImplementationProvider(asProvider(qvtoEngine));
 
 			EObject cls = createClass("Employee", null);
 			QvtdModelExtent uml = QvtdModelExtent.of(cls);
@@ -231,7 +239,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			// declared as the 'refinement' of a relational transformation."
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(config);
+			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 
 			String qvtoSource = """
 					modeltype SRC uses 'http://test/simpleuml/1.0';
@@ -254,7 +262,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			// corresponds to a typed model in the relational transformation"
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(config);
+			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 
 			String qvtoSource = """
 					modeltype SRC uses 'http://test/simpleuml/1.0';
@@ -276,7 +284,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 		void refinesWithScopedName() throws QvtoParseException {
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(config);
+			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 
 			String qvtoSource = """
 					modeltype SRC uses 'http://test/simpleuml/1.0';
@@ -305,7 +313,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			// Implementation: EAnnotation on MappingOperation (Rule is abstract, D40)
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(config);
+			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 
 			String qvtoSource = """
 					modeltype SRC uses 'http://test/simpleuml/1.0';
@@ -334,7 +342,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			// When explicitly declared, the refinedRelation name is stored.
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(config);
+			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 
 			String qvtoSource = """
 					modeltype SRC uses 'http://test/simpleuml/1.0';
@@ -375,14 +383,14 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 	class EngineDecoupling {
 
 		@Test
-		@DisplayName("QvtoEngineImpl implements RelationImplementationProvider")
+		@DisplayName("QvtoEngine implements RelationImplementationProvider")
 		void qvtoEngineIsProvider() {
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
-			QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(config);
+			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 
 			assertTrue(qvtoEngine instanceof RelationImplementationProvider,
-					"QvtoEngineImpl should implement RelationImplementationProvider");
+					"QvtoEngine should implement RelationImplementationProvider");
 		}
 
 		@Test
@@ -390,7 +398,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 		void multipleProvidersRegistered() throws QvtdParseException {
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			QvtdConfiguration config = QvtdConfiguration.builder(oclConfig).build();
-			QvtdEngineImpl qvtdEngine = new QvtdEngineImpl(config);
+			QvtdEngine qvtdEngine = QvtdEngines.create(config);
 
 			// Register two no-op providers — should not throw
 			qvtdEngine.registerImplementationProvider(new RelationImplementationProvider() {
@@ -452,5 +460,14 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * A QVT-O engine also serves as a relation implementation provider (§7.8, D39).
+	 * Under OSGi that role arrives as its own service registration; in plain Java the
+	 * engine created by {@code QvtoEngines} carries both.
+	 */
+	private static RelationImplementationProvider asProvider(QvtoEngine engine) {
+		return (RelationImplementationProvider) engine;
 	}
 }

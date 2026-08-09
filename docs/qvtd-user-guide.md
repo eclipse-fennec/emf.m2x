@@ -57,13 +57,13 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineImpl;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngine;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 
 // 1. Create engine
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 QvtdConfiguration config = QvtdConfiguration.builder(oclConfig).build();
-QvtdEngineImpl engine = new QvtdEngineImpl(config);
+QvtdEngine engine = QvtdEngines.create(config);
 
 // 2. Parse transformation
 RelationalTransformation trafo = engine.parse("""
@@ -114,7 +114,7 @@ QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
     .blackboxRegistry(new BasicQvtdBlackboxRegistry())
     .build();
 
-QvtdEngineImpl engine = new QvtdEngineImpl(config);
+QvtdEngine engine = QvtdEngines.create(config);
 ```
 
 ### 3.2 Configuration Options
@@ -707,21 +707,21 @@ QvtdEngine (Relations)
 
 ### 10.2 Registering a QVT-O Provider
 
-`QvtoEngineImpl` implements `RelationImplementationProvider`. Register it with the QVT-R engine:
+`QvtoEngine` implements `RelationImplementationProvider`. Register it with the QVT-R engine:
 
 ```java
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineImpl;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngine;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngine;
 
 // Create QVT-O engine
-QvtoEngineImpl qvtoEngine = new QvtoEngineImpl(qvtoConfig);
+QvtoEngine qvtoEngine = QvtoEngines.create(qvtoConfig);
 
 // Load the operational transformation that implements relations
 OperationalTransformation ot = qvtoEngine.parse(qvtoSource, "MyImpl");
 qvtoEngine.loadTransformation(ot);
 
 // Register as provider with the QVT-R engine
-QvtdEngineImpl qvtdEngine = new QvtdEngineImpl(qvtdConfig);
+QvtdEngine qvtdEngine = QvtdEngines.create(qvtdConfig);
 qvtdEngine.registerImplementationProvider(qvtoEngine);
 
 // Now execute — implementedby clauses try the QVT-O engine first

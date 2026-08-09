@@ -26,6 +26,8 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
@@ -46,7 +48,7 @@ import org.junit.jupiter.api.Test;
 class M2tModuleCompositionTest {
 
 	private M2tParserSupport parserSupport;
-	private M2tEngineImpl engine;
+	private M2tEngine engine;
 	private EPackage testPkg;
 	private EClass elementClass;
 	private EClass specialClass;
@@ -57,7 +59,7 @@ class M2tModuleCompositionTest {
 		OclParserSupport oclParser = new OclParserSupport();
 		OclConfiguration oclConfig = OclConfiguration.builder(oclParser).build();
 		M2tConfiguration config = M2tConfiguration.builder(oclConfig).build();
-		engine = new M2tEngineImpl(config);
+		engine = M2tEngines.create(config);
 
 		// Build test metamodel
 		EcoreFactory ef = EcoreFactory.eINSTANCE;

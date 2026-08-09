@@ -28,6 +28,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.eclipse.fennec.m2x.model.qvtrelation.QvtrelationFactory;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
@@ -48,7 +50,6 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineImpl;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrTraceManager;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
@@ -119,7 +120,7 @@ class QvtdSecurityHardeningTest {
 				}
 				""";
 
-		QvtdEngineImpl engine = createEngine(b -> b.maxRelationDepth(5));
+		QvtdEngine engine = createEngine(b -> b.maxRelationDepth(5));
 		RelationalTransformation t = engine.parse(source, "recursiveTest");
 
 		QvtdModelExtent umlExtent = createUmlExtent("TestPkg");
@@ -153,7 +154,7 @@ class QvtdSecurityHardeningTest {
 				OclConfiguration.builder(new OclParserSupport()).build())
 				.timeoutMs(1)
 				.build();
-		RelationalTransformation t = new QvtdEngineImpl(config).parse(source, "timeoutTest");
+		RelationalTransformation t = QvtdEngines.create(config).parse(source, "timeoutTest");
 
 		QvtdExecutionContext ctx = QvtdExecutionContext.enforce("rdbms",
 				Map.of("uml", createUmlExtentMany(3), "rdbms", new BasicQvtdModelExtent()));
@@ -183,7 +184,7 @@ class QvtdSecurityHardeningTest {
 				""";
 
 		// Generous timeout — should not trigger
-		QvtdEngineImpl engine = createEngine(b -> b.timeoutMs(30_000));
+		QvtdEngine engine = createEngine(b -> b.timeoutMs(30_000));
 		RelationalTransformation t = engine.parse(source, "normalTest");
 
 		QvtdModelExtent umlExtent = createUmlExtent("TestPkg");
@@ -246,7 +247,7 @@ class QvtdSecurityHardeningTest {
 				""";
 
 		// Very low binding limit — should trigger on 50+ classes
-		QvtdEngineImpl engine = createEngine(b -> b.maxBindings(3));
+		QvtdEngine engine = createEngine(b -> b.maxBindings(3));
 		RelationalTransformation t = engine.parse(source, "bindingTest");
 
 		QvtdModelExtent umlExtent = createUmlExtentMany(50);
@@ -302,7 +303,7 @@ class QvtdSecurityHardeningTest {
 		});
 
 		// Enable blackbox but restrict to "otherlib" — "TypeMap" not in allow-list
-		QvtdEngineImpl engine = createEngine(b -> b
+		QvtdEngine engine = createEngine(b -> b
 				.blackboxRegistry(registry)
 				.blackboxEnabled(true)
 				.allowedBlackboxModules(Set.of("otherlib")));
@@ -349,11 +350,11 @@ class QvtdSecurityHardeningTest {
 		void customize(QvtdConfiguration.Builder builder);
 	}
 
-	private QvtdEngineImpl createEngine(ConfigCustomizer customizer) {
+	private QvtdEngine createEngine(ConfigCustomizer customizer) {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 		QvtdConfiguration.Builder builder = QvtdConfiguration.builder(oclConfig);
 		customizer.customize(builder);
-		return new QvtdEngineImpl(builder.build());
+		return QvtdEngines.create(builder.build());
 	}
 
 	private QvtdModelExtent createUmlExtent(String packageName) {

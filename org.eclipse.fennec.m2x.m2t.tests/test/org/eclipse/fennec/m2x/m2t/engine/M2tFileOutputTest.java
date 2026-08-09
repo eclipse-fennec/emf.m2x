@@ -26,6 +26,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.engine.M2tEngines;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
@@ -135,7 +137,7 @@ class M2tFileOutputTest {
 
 	private M2tResult generate(String template) throws Exception {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
-		M2tEngineImpl engine = new M2tEngineImpl(M2tConfiguration.builder(oclConfig)
+		M2tEngine engine = M2tEngines.create(M2tConfiguration.builder(oclConfig)
 				.generationStrategy(new FileSystemGenerationStrategy(outputDirectory))
 				.build());
 

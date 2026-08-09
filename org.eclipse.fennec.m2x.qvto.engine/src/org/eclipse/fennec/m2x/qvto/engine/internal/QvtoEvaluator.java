@@ -88,7 +88,6 @@ import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.BreakException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.ContinueException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.FatalAssertionException;

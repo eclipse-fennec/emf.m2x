@@ -70,13 +70,13 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngine;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 
 // 1. Create engine
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig).build();
-QvtoEngine engine = new QvtoEngineImpl(qvtoConfig);
+QvtoEngine engine = QvtoEngines.create(qvtoConfig);
 
 // 2. Parse transformation
 OperationalTransformation trafo = engine.parse("""
@@ -125,13 +125,13 @@ OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport())
     .expressionCache(OclLruExpressionCache.ofSize(4096))
     .build();
 
-// QVT-O configuration
+// QVT-O configuration — or builder(oclEngine) to use an engine you already have
 QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig)
     .blackboxRegistry(new BasicQvtoBlackboxRegistry())
     .addUnitResolver(myUnitResolver)
     .build();
 
-QvtoEngine engine = new QvtoEngineImpl(qvtoConfig);
+QvtoEngine engine = QvtoEngines.create(qvtoConfig);
 ```
 
 ### 3.2 Configuration Options

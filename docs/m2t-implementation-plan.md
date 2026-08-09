@@ -58,7 +58,7 @@ Phase 1 (OCL) and Phase 2 (QVT-O) are complete. Phase 3 implements MOFM2T 1.0 �
 - AbstractExpressionBuilder refactoring (shared OCL expression building)
 - M2tEvalEnvironment (mutable scope-stack)
 - M2tEvaluator (switch-based interpreter)
-- M2tEngineImpl (facade, parse + execute)
+- M2tEngine (facade, parse + execute)
 - M2tWriterStack (nested file/string output)
 - M2tProtectedAreaMerger (hash-based smart merge — D31)
 - 21 engine tests (M2tEngineTest)
@@ -157,7 +157,7 @@ Phase 1 (OCL) and Phase 2 (QVT-O) are complete. Phase 3 implements MOFM2T 1.0 �
 
 **GAP-M2T-6: Standard Library** (§8.3) — ✅ FIXED
 - `M2tStandardLibrary` implements `OclOperationProvider` with 13 String operations
-- Auto-registered by `M2tEngineImpl` via `addOperationProvider()`
+- Auto-registered by `M2tEngine` via `addOperationProvider()`
 - 21 tests in `M2tStandardLibraryTest`
 
 ### Priority 2 — ✅ ALL FIXED
@@ -183,7 +183,7 @@ Phase 1 (OCL) and Phase 2 (QVT-O) are complete. Phase 3 implements MOFM2T 1.0 �
 **GAP-M2T-7: Whitespace Handling** (§8.4) → ✅ FIXED in P3-5
 - `M2tWhitespaceNormalizer`: body-trimming, standalone block detection, BOL indicator `^`, indent extraction
 - `WhitespaceMode` enum: `NONE` (raw), `SPEC` (strict §8.4 incl. BOL `^`), `ACCELEO` (default, like SPEC but without BOL `^` — passed through as literal)
-- Normalizer runs after linking in `M2tEngineImpl.execute()` (needs resolved TemplateInvocations)
+- Normalizer runs after linking in `M2tEngine.execute()` (needs resolved TemplateInvocations)
 - Indent-propagation via `fitIndentationTo()` in `M2tEvaluator.caseTemplateInvocation()`
 - 17 tests in `M2tWhitespaceTest` — see D32
 

@@ -707,7 +707,7 @@ public class MyBlackbox implements QvtoBlackboxLibrary {
 
 // Engine (consumer) - discovers all blackbox libraries
 @Component(service = QvtoEngine.class)
-public class QvtoEngineComponent extends QvtoEngineImpl {
+public class QvtoEngineComponent extends QvtoEngine {
 
     @Reference(cardinality = ReferenceCardinality.MULTIPLE,
                policy = ReferencePolicy.DYNAMIC)
@@ -860,7 +860,7 @@ See [QVT-O Architecture](qvto-architecture.md) for full details, [QVT-O Test Pla
 | Sub-Phase | Description | Status |
 |-----------|-------------|--------|
 | P4b-1 | Parser: `refines` keyword (§8.4.7) — Grammar, UnitBuilder, Stub/EAnnotation | ✅ 12 Tests |
-| P4b-2 | D39 Brücke: `QvtoEngineImpl` implements `RelationImplementationProvider` | ✅ |
+| P4b-2 | D39 Brücke: `QvtoEngine` implements `RelationImplementationProvider` | ✅ |
 | P4b-3 | Runtime Stub-Auflösung: `OT.refined` → echte `RelationalTransformation` via QvtdEngine | ⏳ Phase 5 |
 | P4b-4 | Integration-Tests | ✅ 13 Tests |
 

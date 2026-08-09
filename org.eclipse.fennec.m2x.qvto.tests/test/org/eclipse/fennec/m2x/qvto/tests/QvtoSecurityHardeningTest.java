@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -40,7 +42,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineImpl;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -269,7 +270,7 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 				.blackboxRegistry(registry)
 				// blackboxEnabled NOT set — defaults to false
 				.build();
-		QvtoEngineImpl eng = new QvtoEngineImpl(config);
+		QvtoEngine eng = QvtoEngines.create(config);
 
 		var t = eng.parse("""
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
@@ -304,7 +305,7 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 								"library " + name + " { helper greet() : String { return 'hi'; } }")))
 				// unitResolverEnabled NOT set — defaults to false
 				.build();
-		QvtoEngineImpl eng = new QvtoEngineImpl(config);
+		QvtoEngine eng = QvtoEngines.create(config);
 
 		var t = eng.parse("""
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
