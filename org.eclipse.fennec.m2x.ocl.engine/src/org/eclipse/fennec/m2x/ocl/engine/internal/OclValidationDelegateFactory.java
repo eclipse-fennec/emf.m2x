@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
@@ -106,9 +107,28 @@ public class OclValidationDelegateFactory implements EValidator.ValidationDelega
 		}
 	}
 
+	/**
+	 * The key a compiled constraint is cached under.
+	 *
+	 * <p>The nsURI belongs in it. Without it, two unrelated models that both define a class
+	 * of the same name — and both constrain it with the same text — share one entry, and
+	 * whichever was validated first decides which model the compiled expression refers to.
+	 * The failure is quiet: property access falls back to resolving a feature by name on the
+	 * runtime class, so a constraint that only navigates keeps working by accident, while one
+	 * that names a type reports a perfectly valid object as invalid.
+	 *
+	 * <p>An nsURI is not a model <em>version</em>, so this is the smaller half of the
+	 * identity question — see #50 for keying on a fingerprint instead.
+	 */
+	private static String cacheKey(EClass contextType, String expression) {
+		EPackage ePackage = contextType.getEPackage();
+		String nsURI = ePackage != null ? ePackage.getNsURI() : "";
+		return nsURI + "#" + contextType.getName() + "#" + expression;
+	}
+
 	private boolean evaluateConstraint(String expression, EObject eObject, EClass contextType) {
 		try {
-			String cacheKey = contextType.getName() + "#" + expression;
+			String cacheKey = cacheKey(contextType, expression);
 			OclExpression parsed = expressionCache.computeIfAbsent(cacheKey, k -> {
 				try {
 					return engine.parse(expression, contextType);
