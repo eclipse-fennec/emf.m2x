@@ -36,11 +36,12 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.InternalEObject;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
@@ -64,7 +65,7 @@ class OclThreadSafetyTest {
 	private static final int THREAD_COUNT = 16;
 	private static final int ITERATIONS_PER_THREAD = 1000;
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static EcoreHelper ecoreHelper;
 	static EPackage companyPackage;
 	static EClass companyClass;
@@ -74,7 +75,7 @@ class OclThreadSafetyTest {
 
 	@BeforeAll
 	static void setUp() throws IOException {
-		engine = new OclEngineImpl(new OclParserSupport());
+		engine = OclEngines.create(new OclParserSupport());
 		ecoreHelper = new EcoreHelper(OclThreadSafetyTest.class);
 		companyPackage = ecoreHelper.loadEcore("company.ecore");
 		companyClass = ecoreHelper.getEClass(companyPackage, "Company");

@@ -33,10 +33,10 @@ import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvalEnvironment;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvaluator;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrExtentManager;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
@@ -161,7 +161,7 @@ class QvtdSecurityHardeningTest {
 
 		AtomicLong now = new AtomicLong();
 		QvtrEvaluator evaluator = new QvtrEvaluator(
-				new OclEngineImpl(new OclParserSupport()), new QvtrEvalEnvironment(),
+				OclEngines.create(new OclParserSupport()), new QvtrEvalEnvironment(),
 				t, new QvtrExtentManager(t, ctx), ctx, config, null, List.of(),
 				// first reading sets the deadline, every later one is past it
 				() -> now.getAndAdd(TimeUnit.SECONDS.toNanos(1)));

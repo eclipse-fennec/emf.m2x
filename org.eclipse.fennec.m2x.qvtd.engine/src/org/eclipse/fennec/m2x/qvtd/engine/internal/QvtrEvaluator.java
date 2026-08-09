@@ -40,8 +40,8 @@ import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
@@ -74,7 +74,7 @@ public class QvtrEvaluator {
 
 	private static final String SOURCE_ID = "org.eclipse.fennec.m2x.qvtd.engine";
 
-	private final OclEngineImpl oclEngine;
+	private final OclEngine oclEngine;
 	private final QvtrEvalEnvironment env;
 	private final RelationalTransformation transformation;
 	private final QvtrExtentManager extentManager;
@@ -93,7 +93,7 @@ public class QvtrEvaluator {
 	private int relationCallDepth;
 	private long deadlineNanos;
 
-	public QvtrEvaluator(OclEngineImpl oclEngine, QvtrEvalEnvironment env,
+	public QvtrEvaluator(OclEngine oclEngine, QvtrEvalEnvironment env,
 			RelationalTransformation transformation, QvtrExtentManager extentManager,
 			QvtdExecutionContext context, QvtdConfiguration config,
 			QvtdBlackboxRegistry blackboxRegistry,
@@ -113,7 +113,7 @@ public class QvtrEvaluator {
 	 *
 	 * @param nanoTimeSource the source of monotonic nanoseconds, must not be {@code null}
 	 */
-	public QvtrEvaluator(OclEngineImpl oclEngine, QvtrEvalEnvironment env,
+	public QvtrEvaluator(OclEngine oclEngine, QvtrEvalEnvironment env,
 			RelationalTransformation transformation, QvtrExtentManager extentManager,
 			QvtdExecutionContext context, QvtdConfiguration config,
 			QvtdBlackboxRegistry blackboxRegistry,

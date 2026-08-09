@@ -68,11 +68,12 @@ Minimal example — parse and evaluate an OCL expression against an EMF object:
 ```java
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 
 // Create engine
-OclEngine engine = new OclEngineImpl(new OclParserSupport());
+OclEngine engine = OclEngines.create(new OclParserSupport());
 
 // Evaluate an expression
 Object result = engine.evaluate("self.name.size() > 0", OclContext.of(myEObject));
@@ -88,20 +89,22 @@ That's it. Three lines to set up, one line to evaluate.
 ### 3.1 Minimal (No Cache)
 
 ```java
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 
-OclEngine engine = new OclEngineImpl(new OclParserSupport());
+OclEngine engine = OclEngines.create(new OclParserSupport());
 ```
 
 ### 3.2 With LRU Expression Cache
 
 ```java
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 
-OclEngine engine = new OclEngineImpl(
+OclEngine engine = OclEngines.create(
     new OclParserSupport(),
     OclLruExpressionCache.ofSize(2048)
 );
@@ -111,7 +114,8 @@ OclEngine engine = new OclEngineImpl(
 
 ```java
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 
@@ -120,7 +124,7 @@ OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
     .addOperationProvider(myCustomOps)
     .build();
 
-OclEngine engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 ```
 
 ### 3.4 OSGi (Declarative Services)
@@ -239,7 +243,7 @@ OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
     .maxRegexLength(200)
     .build();
 
-OclEngine engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 
 // evaluate() without options uses the engine-wide defaults
 Object result = engine.evaluate("self.name", OclContext.of(obj));
@@ -255,13 +259,13 @@ Classifier names are resolved when an expression is parsed — `self.oclIsTypeOf
 
 ```java
 // plain Java: the global registry, which is the correct answer there
-OclEngine engine = new OclEngineImpl(new OclParserSupport());
+OclEngine engine = OclEngines.create(new OclParserSupport());
 
 // your own packages — hand over the ResourceSet you already have
-OclEngine engine = new OclEngineImpl(new OclParserSupport(resourceSet));
+OclEngine engine = OclEngines.create(new OclParserSupport(resourceSet));
 
 // or the registry itself, if that is what you hold
-OclEngine engine = new OclEngineImpl(new OclParserSupport(registry));
+OclEngine engine = OclEngines.create(new OclParserSupport(registry));
 ```
 
 Under OSGi the resource set is what `emf.osgi` injects — a configured, isolated stack arrives as a `ResourceSetFactory`, never as a bare registry:
@@ -270,7 +274,7 @@ Under OSGi the resource set is what `emf.osgi` injects — a configured, isolate
 @Reference(target = "(rsf.name=myapp)")
 ResourceSetFactory factory;
 
-OclEngine engine = new OclEngineImpl(new OclParserSupport(factory.createResourceSet()));
+OclEngine engine = OclEngines.create(new OclParserSupport(factory.createResourceSet()));
 ```
 
 Only the resource set's package registry is used; nothing is loaded through it.
@@ -516,7 +520,7 @@ it:
 OclConfiguration config = OclConfiguration.builder(parser)
     .useEMFTypes(true)
     .build();
-OclEngine engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 ```
 
 > **Delegate note:** The EMF invocation delegate always returns an `EList` for
@@ -537,7 +541,7 @@ The `OclLruExpressionCache` caches parsed `OclExpression` ASTs keyed by `(expres
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 
 OclLruExpressionCache cache = OclLruExpressionCache.ofSize(2048);
-OclEngine engine = new OclEngineImpl(new OclParserSupport(), cache);
+OclEngine engine = OclEngines.create(new OclParserSupport(), cache);
 
 // Cache statistics
 long hits = cache.hitCount();
@@ -555,7 +559,7 @@ double hitRate = (double) hits / (hits + misses);
 Pre-populate the PropertyAccessorCache and parse common expressions:
 
 ```java
-OclEngineImpl engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 engine.warmUp(MyPackage.eINSTANCE);
 ```
 
@@ -633,7 +637,7 @@ Register the OCL engine as an EMF delegate for derived features, operation bodie
 ### 9.1 Standalone Registration
 
 ```java
-OclEngineImpl engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 engine.installDelegates();
 
 // Now EMF will use Fennec OCL for:
@@ -758,7 +762,7 @@ In OSGi, the delegate factories (`OclInvocationDelegateFactory`, `OclSettingDele
 emf.osgi whiteboard properties. The emf.osgi delegate registry components discover
 them and populate the global EMF registries. No manual `installDelegates()` call needed.
 
-Each delegate factory injects `OclEngineImpl` via `@Reference` to access both the
+Each delegate factory injects `OclEngine` via `@Reference` to access both the
 public API methods (`parse`, `evaluate`) and internal delegate methods
 (`getDelegateOptions`, `evaluatePostcondition`).
 
@@ -947,7 +951,7 @@ OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
     .operationProviders(List.of(new MyOperations()))
     .customOperationsEnabled(true)  // D29: required opt-in
     .build();
-OclEngine engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 ```
 
 ### 11.3 OSGi Registration
@@ -1003,7 +1007,7 @@ OclConfiguration config = OclConfiguration.builder(parser)
 
 | Component | Thread-Safe? | Notes |
 |-----------|:---:|-------|
-| `OclEngineImpl` | Yes | Stateless evaluation; shared parser and cache are synchronized |
+| `OclEngine` | Yes | Stateless evaluation; shared parser and cache are synchronized |
 | `OclLruExpressionCache` | Yes | Internally synchronized with atomic counters |
 | `OclContext` | Yes | Immutable record |
 | `OclEvaluationOptions` | Yes | Immutable record |
@@ -1016,7 +1020,7 @@ OclConfiguration config = OclConfiguration.builder(parser)
 
 ```java
 // Create once, share across threads
-OclEngine engine = new OclEngineImpl(config);
+OclEngine engine = OclEngines.create(config);
 
 // Each thread creates its own context
 ExecutorService pool = Executors.newFixedThreadPool(8);

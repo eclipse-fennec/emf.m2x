@@ -16,7 +16,7 @@ EPackage registered
   → OclAspectProvider.buildAspect(EPackage)
       → scan OCL annotations → populate ExpressionCache
       → build PropertyAccessorCache for all concrete EClasses
-      → create pre-warmed OclEngineImpl(s) (engine pool/factory)
+      → create pre-warmed OclEngine(s) (engine pool/factory)
 ```
 
 ## Current State (Bridge-Ready)
@@ -50,7 +50,7 @@ public class OclAspectProvider implements AspectProvider<OclAspect> {
         OclConfiguration config = OclConfiguration.builder(parser)
             .expressionCache(cache)
             .build();
-        OclEngineImpl engine = new OclEngineImpl(config);
+        OclEngine engine = OclEngines.create(config);
         engine.warmUp(pkg);
         return new OclAspect(config, engine);
     }
@@ -59,17 +59,17 @@ public class OclAspectProvider implements AspectProvider<OclAspect> {
 
 ### Step 4: OclAspect Record
 ```java
-public record OclAspect(OclConfiguration config, OclEngineImpl warmEngine) {
+public record OclAspect(OclConfiguration config, OclEngine warmEngine) {
     public OclEngine createEngine() {
         // Creates new engine sharing the same pre-warmed config
-        return new OclEngineImpl(config);
+        return OclEngines.create(config);
     }
 }
 ```
 
 ### Step 5: Engine Pool (Optional)
 - If multiple concurrent engines needed → pool pattern
-- OclEngineImpl is lightweight (~340ns startup) so pool may not be necessary
+- OclEngine is lightweight (~340ns startup) so pool may not be necessary
 - Real benefit: shared pre-warmed caches, not the engine instances themselves
 
 ## Key Design Decisions

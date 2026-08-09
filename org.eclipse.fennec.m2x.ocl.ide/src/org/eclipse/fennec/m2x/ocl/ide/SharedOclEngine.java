@@ -14,7 +14,8 @@
  */
 package org.eclipse.fennec.m2x.ocl.ide;
 
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 
 /**
@@ -35,7 +36,7 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
  */
 final class SharedOclEngine {
 
-	private static volatile OclEngineImpl instance;
+	private static volatile OclEngine instance;
 
 	private SharedOclEngine() {
 		// no instances
@@ -44,15 +45,15 @@ final class SharedOclEngine {
 	/**
 	 * Returns the shared OCL engine, creating it on first access.
 	 *
-	 * @return the shared {@link OclEngineImpl}
+	 * @return the shared {@link OclEngine}
 	 */
-	static OclEngineImpl get() {
-		OclEngineImpl result = instance;
+	static OclEngine get() {
+		OclEngine result = instance;
 		if (result == null) {
 			synchronized (SharedOclEngine.class) {
 				result = instance;
 				if (result == null) {
-					result = new OclEngineImpl(new OclParserSupport());
+					result = OclEngines.create(new OclParserSupport());
 					instance = result;
 				}
 			}

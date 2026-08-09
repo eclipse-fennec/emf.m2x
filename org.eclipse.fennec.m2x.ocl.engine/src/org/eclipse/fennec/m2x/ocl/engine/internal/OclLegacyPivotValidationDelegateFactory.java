@@ -15,7 +15,6 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import org.eclipse.emf.ecore.EValidator;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;

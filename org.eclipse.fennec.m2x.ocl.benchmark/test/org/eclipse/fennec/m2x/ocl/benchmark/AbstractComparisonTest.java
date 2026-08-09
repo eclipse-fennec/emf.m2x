@@ -25,10 +25,11 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.eclipse.ocl.ParserException;
@@ -46,7 +47,7 @@ import org.junit.jupiter.api.BeforeAll;
 abstract class AbstractComparisonTest {
 
 	// --- Fennec engine ---
-	static OclEngineImpl fennecEngine;
+	static OclEngine fennecEngine;
 	static EcoreHelper ecoreHelper;
 
 	// --- Eclipse OCL Classic engine ---
@@ -61,7 +62,7 @@ abstract class AbstractComparisonTest {
 	@BeforeAll
 	static void setUpEngines() throws IOException {
 		// Fennec
-		fennecEngine = new OclEngineImpl(new OclParserSupport());
+		fennecEngine = OclEngines.create(new OclParserSupport());
 		ecoreHelper = new EcoreHelper(AbstractComparisonTest.class);
 		companyPackage = ecoreHelper.loadEcore("company.ecore");
 		companyClass = ecoreHelper.getEClass(companyPackage, "Company");

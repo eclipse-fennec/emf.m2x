@@ -40,11 +40,12 @@ import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclEvaluator;
 import org.eclipse.fennec.m2x.ocl.engine.internal.PreStateSnapshot;
@@ -67,7 +68,7 @@ class OclPreStateTest {
 
 	private static final OclFactory F = OclFactory.eINSTANCE;
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static EcoreHelper ecoreHelper;
 
 	// company.ecore types (for unit tests with navigation chains)
@@ -93,7 +94,7 @@ class OclPreStateTest {
 
 	@BeforeAll
 	static void setUp() throws IOException {
-		engine = new OclEngineImpl(new OclParserSupport());
+		engine = OclEngines.create(new OclParserSupport());
 		ecoreHelper = new EcoreHelper(OclPreStateTest.class);
 
 		companyPackage = ecoreHelper.loadEcore("company.ecore");

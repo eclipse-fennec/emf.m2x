@@ -30,8 +30,9 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
@@ -70,7 +71,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 	 * not consulted for type resolution — that follows the configuration.
 	 */
 	private final ResourceSet resourceSet;
-	private final OclEngineImpl oclEngine;
+	private final OclEngine oclEngine;
 	private final QvtdConfiguration config;
 	private final List<RelationImplementationProvider> implementationProviders = new CopyOnWriteArrayList<>();
 
@@ -85,7 +86,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 		this.parserSupport = new QvtrParserSupport();
 		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
 		OclConfiguration oclConfig = config.oclConfiguration();
-		this.oclEngine = new OclEngineImpl(oclConfig);
+		this.oclEngine = OclEngines.create(oclConfig);
 	}
 
 	// --- Parsing ---
@@ -145,7 +146,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 	/**
 	 * Returns the underlying OCL engine (for testing and advanced use).
 	 */
-	public OclEngineImpl getOclEngine() {
+	public OclEngine getOclEngine() {
 		return oclEngine;
 	}
 }

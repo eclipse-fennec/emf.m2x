@@ -58,15 +58,15 @@ import org.eclipse.fennec.m2x.model.m2t.TraceBlock;
 import org.eclipse.fennec.m2x.model.m2t.util.M2tSwitch;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 
 /**
  * Switch-based interpreter for MOFM2T template evaluation.
  *
  * <p>Evaluates the EMF-based M2T AST by dispatching each node type via
  * {@link M2tSwitch}. OCL expressions are evaluated by delegating to the
- * composed {@link OclEngineImpl}.
+ * composed {@link OclEngine}.
  *
  * <p>Usage:
  * <pre>
@@ -82,7 +82,7 @@ public class M2tEvaluator {
 	private static final String SOURCE_ID = "m2t.engine";
 	private static final Object WRAPPED_NULL = new Object();
 
-	private final OclEngineImpl oclEngine;
+	private final OclEngine oclEngine;
 	private final M2tEvalEnvironment env;
 	private final M2tWriterStack writers;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
@@ -119,7 +119,7 @@ public class M2tEvaluator {
 	 * @param maxCrossProductSize maximum cross-product size (T-3)
 	 * @param protectedAreaEnabled whether to emit protected area markers (T-6)
 	 */
-	public M2tEvaluator(OclEngineImpl oclEngine, M2tEvalEnvironment env,
+	public M2tEvaluator(OclEngine oclEngine, M2tEvalEnvironment env,
 			M2tWriterStack writers, Module module, Collection<Module> allLinkedModules,
 			Map<TemplateInvocation, String> indentationMap, int maxDiagnostics,
 			int maxTemplateDepth, int maxForIterations, int maxCrossProductSize,
@@ -140,7 +140,7 @@ public class M2tEvaluator {
 	/**
 	 * Creates a new evaluator without indentation map (for programmatic AST usage).
 	 */
-	public M2tEvaluator(OclEngineImpl oclEngine, M2tEvalEnvironment env,
+	public M2tEvaluator(OclEngine oclEngine, M2tEvalEnvironment env,
 			M2tWriterStack writers, Module module, Collection<Module> allLinkedModules) {
 		this(oclEngine, env, writers, module, allLinkedModules, Map.of(), 10_000, 1_000, 1_000_000, 1_000_000, true);
 	}

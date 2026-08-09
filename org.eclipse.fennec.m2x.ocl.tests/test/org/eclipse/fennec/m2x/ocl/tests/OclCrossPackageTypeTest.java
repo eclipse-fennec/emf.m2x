@@ -29,9 +29,10 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -46,7 +47,7 @@ import org.junit.jupiter.api.Test;
  */
 class OclCrossPackageTypeTest {
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static OclParserSupport parser;
 	static EPackage orderPackage;
 	static EPackage productPackage;
@@ -56,7 +57,7 @@ class OclCrossPackageTypeTest {
 	@BeforeAll
 	static void setUp() {
 		parser = new OclParserSupport();
-		engine = new OclEngineImpl(parser);
+		engine = OclEngines.create(parser);
 
 		// Create "product" package with Product class
 		productPackage = EcoreFactory.eINSTANCE.createEPackage();

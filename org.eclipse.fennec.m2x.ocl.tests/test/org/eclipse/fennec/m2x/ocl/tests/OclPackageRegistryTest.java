@@ -31,9 +31,10 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -95,7 +96,7 @@ class OclPackageRegistryTest {
 		@DisplayName("a type of a foreign package resolves through the supplied registry")
 		void foreignPackageTypeResolves() throws OclParseException {
 			OclParserSupport parser = new OclParserSupport(registry);
-			OclEngineImpl engine = new OclEngineImpl(parser);
+			OclEngine engine = OclEngines.create(parser);
 
 			OclExpression expression = parser.parse("self.oclIsTypeOf(Novel)", bookClass);
 
@@ -107,7 +108,7 @@ class OclPackageRegistryTest {
 		@DisplayName("a type of the context type's own package resolves without any registry")
 		void ownPackageTypeResolvesWithoutRegistry() throws OclParseException {
 			OclParserSupport parser = new OclParserSupport();
-			OclEngineImpl engine = new OclEngineImpl(parser);
+			OclEngine engine = OclEngines.create(parser);
 
 			OclExpression expression = parser.parse("self.oclIsTypeOf(Book)", bookClass);
 
@@ -122,7 +123,7 @@ class OclPackageRegistryTest {
 			resourceSet.getPackageRegistry().put(MEDIA_NS, mediaPackage);
 
 			OclParserSupport parser = new OclParserSupport(resourceSet);
-			OclEngineImpl engine = new OclEngineImpl(parser);
+			OclEngine engine = OclEngines.create(parser);
 
 			OclExpression expression = parser.parse("self.oclIsTypeOf(Novel)", bookClass);
 
@@ -135,7 +136,7 @@ class OclPackageRegistryTest {
 			EPackage.Registry.INSTANCE.put(MEDIA_NS, mediaPackage);
 
 			OclParserSupport parser = new OclParserSupport();
-			OclEngineImpl engine = new OclEngineImpl(parser);
+			OclEngine engine = OclEngines.create(parser);
 
 			OclExpression expression = parser.parse("self.oclIsTypeOf(Novel)", bookClass);
 
@@ -196,7 +197,7 @@ class OclPackageRegistryTest {
 		@DisplayName("the context classifier resolves through the supplied registry")
 		void contextClassifierResolves() throws OclParseException {
 			OclParserSupport parser = new OclParserSupport(registry);
-			OclEngineImpl engine = new OclEngineImpl(parser);
+			OclEngine engine = OclEngines.create(parser);
 
 			var constraints = engine.parseDocument("""
 					context Novel

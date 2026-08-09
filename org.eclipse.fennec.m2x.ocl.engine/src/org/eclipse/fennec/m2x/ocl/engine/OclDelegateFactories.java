@@ -19,7 +19,9 @@ import java.util.Objects;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclDelegateUtil;
+import org.eclipse.fennec.m2x.ocl.engine.internal.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclInvocationDelegateFactory;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclSettingDelegateFactory;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclValidationDelegateFactory;
@@ -64,8 +66,8 @@ public final class OclDelegateFactories {
 	 * @param engine the OCL engine that parses and evaluates the constraints
 	 * @return a new validation delegate
 	 */
-	public static EValidator.ValidationDelegate newValidationDelegate(OclEngineImpl engine) {
-		return new OclValidationDelegateFactory(Objects.requireNonNull(engine, "engine must not be null"));
+	public static EValidator.ValidationDelegate newValidationDelegate(OclEngine engine) {
+		return new OclValidationDelegateFactory(requireOwnEngine(engine));
 	}
 
 	/**
@@ -75,8 +77,8 @@ public final class OclDelegateFactories {
 	 * @param engine the OCL engine that parses and evaluates the derivations
 	 * @return a new setting delegate factory
 	 */
-	public static EStructuralFeature.Internal.SettingDelegate.Factory newSettingDelegateFactory(OclEngineImpl engine) {
-		return new OclSettingDelegateFactory(Objects.requireNonNull(engine, "engine must not be null"));
+	public static EStructuralFeature.Internal.SettingDelegate.Factory newSettingDelegateFactory(OclEngine engine) {
+		return new OclSettingDelegateFactory(requireOwnEngine(engine));
 	}
 
 	/**
@@ -86,7 +88,26 @@ public final class OclDelegateFactories {
 	 * @param engine the OCL engine that parses and evaluates the operation bodies
 	 * @return a new invocation delegate factory
 	 */
-	public static EOperation.Internal.InvocationDelegate.Factory newInvocationDelegateFactory(OclEngineImpl engine) {
-		return new OclInvocationDelegateFactory(Objects.requireNonNull(engine, "engine must not be null"));
+	public static EOperation.Internal.InvocationDelegate.Factory newInvocationDelegateFactory(OclEngine engine) {
+		return new OclInvocationDelegateFactory(requireOwnEngine(engine));
+	}
+
+	/**
+	 * Delegates evaluate pre- and postconditions against engine state that the
+	 * {@link OclEngine} interface deliberately does not expose, so they need this
+	 * implementation rather than any implementation.
+	 *
+	 * @param engine the engine to back the delegate with
+	 * @return the engine, narrowed
+	 * @throws IllegalArgumentException if the engine is not one of ours
+	 */
+	private static OclEngineImpl requireOwnEngine(OclEngine engine) {
+		Objects.requireNonNull(engine, "engine must not be null");
+		if (engine instanceof OclEngineImpl impl) {
+			return impl;
+		}
+		throw new IllegalArgumentException(
+				"EMF delegates need an engine created by OclEngines, got "
+						+ engine.getClass().getName());
 	}
 }

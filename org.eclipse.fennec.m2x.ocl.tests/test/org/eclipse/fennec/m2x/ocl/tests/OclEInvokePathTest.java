@@ -24,11 +24,12 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
@@ -47,7 +48,7 @@ import org.junit.jupiter.api.Test;
  */
 class OclEInvokePathTest {
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static EcoreHelper ecoreHelper;
 	static EPackage prestatePackage;
 	static EClass accountClass;
@@ -56,7 +57,7 @@ class OclEInvokePathTest {
 
 	@BeforeAll
 	static void setUp() throws IOException {
-		engine = new OclEngineImpl(new OclParserSupport());
+		engine = OclEngines.create(new OclParserSupport());
 		engine.installDelegates();
 		ecoreHelper = new EcoreHelper(OclEInvokePathTest.class);
 		prestatePackage = ecoreHelper.loadEcore("prestate-test.ecore");

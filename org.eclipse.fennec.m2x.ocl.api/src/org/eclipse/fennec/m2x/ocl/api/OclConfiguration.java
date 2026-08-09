@@ -33,7 +33,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
  *     .expressionCache(new OclLruExpressionCache(2048))
  *     .addOperationProvider(myProvider)
  *     .build();
- * OclEngine engine = new OclEngineImpl(config);
+ * OclEngine engine = OclEngines.create(config);
  * </pre>
  *
  * <p>A single configuration can be shared across multiple engine instances,

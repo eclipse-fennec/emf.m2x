@@ -21,6 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.InvocationTargetException;
 import org.eclipse.emf.common.util.ECollections;
 import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclDelegateUtil;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -35,7 +37,6 @@ import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -57,7 +58,7 @@ class OclDynamicOperationTest {
 
 	private EClass bookClass;
 	private OclParserSupport parser;
-	private OclEngineImpl engine;
+	private OclEngine engine;
 
 	@BeforeEach
 	void setUp() {
@@ -85,7 +86,7 @@ class OclDynamicOperationTest {
 		registry.put(NS_URI, ePackage);
 
 		parser = new OclParserSupport(registry);
-		engine = new OclEngineImpl(parser);
+		engine = OclEngines.create(parser);
 	}
 
 	@Test

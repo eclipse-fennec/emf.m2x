@@ -27,10 +27,11 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclModelExtent;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
@@ -63,7 +64,7 @@ class OclPerformanceTest {
 	private static final int COLLECTION_ITERATIONS = 10_000;
 	private static final int LARGE_MODEL_SIZE = 50_000;
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static EcoreHelper ecoreHelper;
 	static EPackage companyPackage;
 	static EClass companyClass;
@@ -77,7 +78,7 @@ class OclPerformanceTest {
 
 	@BeforeAll
 	static void setUp() throws IOException {
-		engine = new OclEngineImpl(new OclParserSupport());
+		engine = OclEngines.create(new OclParserSupport());
 		ecoreHelper = new EcoreHelper(OclPerformanceTest.class);
 		companyPackage = ecoreHelper.loadEcore("company.ecore");
 		companyClass = ecoreHelper.getEClass(companyPackage, "Company");
@@ -339,13 +340,13 @@ class OclPerformanceTest {
 	void p17_engineStartupTime(TestInfo info) {
 		// Warmup: create + discard a few engines
 		for (int i = 0; i < 10; i++) {
-			new OclEngineImpl(new OclParserSupport());
+			OclEngines.create(new OclParserSupport());
 		}
 
 		int iterations = 1_000;
 		long start = System.nanoTime();
 		for (int i = 0; i < iterations; i++) {
-			OclEngineImpl e = new OclEngineImpl(new OclParserSupport());
+			OclEngine e = OclEngines.create(new OclParserSupport());
 			assertNotNull(e);
 		}
 		long elapsed = System.nanoTime() - start;
@@ -433,7 +434,7 @@ class OclPerformanceTest {
 	@Test
 	void p18_cacheHitThroughput(TestInfo info) throws OclParseException {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(1024);
-		OclEngineImpl cachedEngine = new OclEngineImpl(new OclParserSupport(), cache);
+		OclEngine cachedEngine = OclEngines.create(new OclParserSupport(), cache);
 		String expr = "self.employees->select(e | e.salary > 50000)->collect(e | e.name)->size()";
 
 		// Prime the cache
@@ -503,7 +504,7 @@ class OclPerformanceTest {
 	@Test
 	void p20_warmUpTime(TestInfo info) {
 		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(1024);
-		OclEngineImpl warmEngine = new OclEngineImpl(new OclParserSupport(), cache);
+		OclEngine warmEngine = OclEngines.create(new OclParserSupport(), cache);
 
 		// Warmup the JIT
 		for (int i = 0; i < 10; i++) {

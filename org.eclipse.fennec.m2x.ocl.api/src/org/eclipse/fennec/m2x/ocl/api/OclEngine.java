@@ -18,6 +18,7 @@ import java.util.List;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
@@ -30,7 +31,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * (OSGi-optional, see architecture section 10). The typical standalone usage is:
  * <pre>
  * OclConfiguration config = OclConfiguration.builder(parser).build();
- * OclEngine engine = new OclEngineImpl(config);
+ * OclEngine engine = OclEngines.create(config);
  * Object result = engine.evaluate("self.name", OclContext.of(myEObject));
  * </pre>
  *
@@ -218,4 +219,64 @@ public interface OclEngine {
 	 * @param contribution the Complete OCL contribution to unregister
 	 */
 	void unregisterCompleteOclDocument(CompleteOclContribution contribution);
+
+	// --- EMF delegate integration ---
+
+	/**
+	 * Registers this engine as the EMF delegate for operation bodies, derived features
+	 * and validation constraints annotated with the OCL delegate URI.
+	 *
+	 * @see #uninstallDelegates()
+	 */
+	void installDelegates();
+
+	/**
+	 * Removes the delegate registrations made by {@link #installDelegates()}.
+	 */
+	void uninstallDelegates();
+
+	/**
+	 * Returns the options delegate evaluation runs with.
+	 *
+	 * @return the delegate options, never {@code null}
+	 */
+	OclEvaluationOptions getDelegateOptions();
+
+	/**
+	 * Sets the options delegate evaluation runs with.
+	 *
+	 * @param options the delegate options, must not be {@code null}
+	 */
+	void setDelegateOptions(OclEvaluationOptions options);
+
+	// --- Performance ---
+
+	/**
+	 * Parses and caches the OCL annotations of a package ahead of first use, so that the
+	 * first evaluation does not pay for parsing.
+	 *
+	 * @param ePackage the package to warm up, must not be {@code null}
+	 */
+	void warmUp(EPackage ePackage);
+
+	/**
+	 * Returns the expression cache this engine parses through.
+	 *
+	 * @return the expression cache, never {@code null}
+	 */
+	OclExpressionCache getExpressionCache();
+
+	// --- Composition ---
+
+	/**
+	 * Returns the operation providers active for the given options.
+	 *
+	 * <p>For engines composing on top of OCL: QVT-O and M2T resolve their own operations
+	 * through the same dispatch and have to know what is in play. Ordinary evaluation
+	 * does not need this.
+	 *
+	 * @param options the evaluation options for this evaluation
+	 * @return the active providers, in dispatch order
+	 */
+	List<OclOperationProvider> getOperationProviders(OclEvaluationOptions options);
 }

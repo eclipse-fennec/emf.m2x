@@ -30,13 +30,14 @@ import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclOrderedSet;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclUnlimitedNatural;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -404,12 +405,12 @@ class OclGapFixesTest extends AbstractOclTest {
 		private static final OclEvaluationOptions CUSTOM_OPTS =
 				OclEvaluationOptions.strict().withCustomOperationsEnabled(true);
 
-		private OclEngineImpl engineWith(OclOperationProvider provider) {
+		private OclEngine engineWith(OclOperationProvider provider) {
 			OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
 					.addOperationProvider(provider)
 					.customOperationsEnabled(true)
 					.build();
-			return new OclEngineImpl(config);
+			return OclEngines.create(config);
 		}
 
 		@Test
@@ -425,7 +426,7 @@ class OclGapFixesTest extends AbstractOclTest {
 			OclOperation strOp = OclOperation.of("myOp", stringType, stringType,
 					(source, args) -> source.toString().toUpperCase());
 
-			OclEngineImpl eng = engineWith(() -> List.of(intOp, strOp));
+			OclEngine eng = engineWith(() -> List.of(intOp, strOp));
 			var parsed1 = eng.parse("42.myOp()", personClass);
 			var parsed2 = eng.parse("'alice'.myOp()", personClass);
 			assertEquals(420, eng.evaluate(parsed1, OclContext.of(self), CUSTOM_OPTS));
@@ -442,7 +443,7 @@ class OclGapFixesTest extends AbstractOclTest {
 			OclOperation op = OclOperation.of("describe", anyType, stringType,
 					(source, args) -> "value=" + source);
 
-			OclEngineImpl eng = engineWith(() -> List.of(op));
+			OclEngine eng = engineWith(() -> List.of(op));
 			var parsed1 = eng.parse("42.describe()", personClass);
 			var parsed2 = eng.parse("'hello'.describe()", personClass);
 			assertEquals("value=42", eng.evaluate(parsed1, OclContext.of(self), CUSTOM_OPTS));

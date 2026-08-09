@@ -21,11 +21,11 @@ import java.io.IOException;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
@@ -40,7 +40,7 @@ import org.junit.jupiter.api.BeforeAll;
  */
 abstract class AbstractOclTest {
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static EcoreHelper ecoreHelper;
 	static EPackage companyPackage;
 	static EClass companyClass;
@@ -48,7 +48,7 @@ abstract class AbstractOclTest {
 
 	@BeforeAll
 	static void setUpEngine() throws IOException {
-		engine = new OclEngineImpl(new OclParserSupport());
+		engine = OclEngines.create(new OclParserSupport());
 		ecoreHelper = new EcoreHelper(AbstractOclTest.class);
 		companyPackage = ecoreHelper.loadEcore("company.ecore");
 		companyClass = ecoreHelper.getEClass(companyPackage, "Company");

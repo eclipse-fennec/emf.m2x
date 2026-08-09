@@ -57,8 +57,9 @@ import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
 import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 
 /**
  * Plain Java implementation of the {@link M2tEngine} facade.
@@ -78,7 +79,7 @@ import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
  */
 public class M2tEngineImpl implements M2tEngine {
 
-	private final OclEngineImpl oclEngine;
+	private final OclEngine oclEngine;
 	private final M2tConfiguration config;
 	/**
 	 * Resolves {@code parse(URI)} through its {@link ResourceSet#getURIConverter()
@@ -139,7 +140,7 @@ public class M2tEngineImpl implements M2tEngine {
 		if (base.expressionCache() != null) {
 			oclBuilder.expressionCache(base.expressionCache());
 		}
-		this.oclEngine = new OclEngineImpl(oclBuilder.build());
+		this.oclEngine = OclEngines.create(oclBuilder.build());
 		this.parserSupport = new M2tParserSupport();
 	}
 

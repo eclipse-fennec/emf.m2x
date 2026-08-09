@@ -474,7 +474,7 @@ The spec defines how OCL integrates with UML metamodel features that have no dir
 
 **Implementation:**
 - `OclDocumentBuilder.buildDefinition()` — extracts feature name (last IDENTIFIER), detects operation defs via `(` token, stores parameter names in synthetic `EOperation`, detects `static` keyword and sets `isStatic` flag
-- `OclEngineImpl.loadDocument()` — parses document, populates `ConcurrentHashMap<DefKey, DefEntry>` for properties, registers `OclOperationProvider` for operations
+- `OclEngine.loadDocument()` — parses document, populates `ConcurrentHashMap<DefKey, DefEntry>` for properties, registers `OclOperationProvider` for operations
 - `OclEvaluator` — `lookupDefProperty()` with supertype search, `evaluateDefBody()` with nested environment. Real EAttributes take precedence over def-properties.
 - `DefRegistry.java` — `DefKey` and `DefEntry` records (DefEntry carries `isStatic` flag)
 - `Constraint.isStatic` — metamodel attribute (OCL v2.4 §12.12.6), `static def:` syntax in grammar

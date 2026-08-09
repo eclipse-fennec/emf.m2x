@@ -16,7 +16,6 @@ package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import org.eclipse.fennec.m2x.ocl.engine.OclConfigurationHelper;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineConfiguration;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;

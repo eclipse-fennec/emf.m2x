@@ -27,10 +27,11 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclModelExtent;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,7 @@ import org.junit.jupiter.api.Test;
  */
 class OclAllInstancesSubtypeTest {
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static EPackage vehiclePackage;
 	static EClass vehicleClass;
 	static EClass carClass;
@@ -58,7 +59,7 @@ class OclAllInstancesSubtypeTest {
 
 	@BeforeAll
 	static void setUp() {
-		engine = new OclEngineImpl(new OclParserSupport());
+		engine = OclEngines.create(new OclParserSupport());
 
 		// Create "vehicle" package with Vehicle superclass
 		vehiclePackage = EcoreFactory.eINSTANCE.createEPackage();

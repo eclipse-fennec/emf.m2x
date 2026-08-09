@@ -27,8 +27,9 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
@@ -40,13 +41,13 @@ import org.junit.jupiter.api.Test;
  */
 class OclCompleteDocumentTest {
 
-	static OclEngineImpl engine;
+	static OclEngine engine;
 	static EcoreHelper ecoreHelper;
 	static EPackage companyPackage;
 
 	@BeforeAll
 	static void setUp() throws IOException {
-		engine = new OclEngineImpl(new OclParserSupport());
+		engine = OclEngines.create(new OclParserSupport());
 		ecoreHelper = new EcoreHelper(OclCompleteDocumentTest.class);
 		companyPackage = ecoreHelper.loadEcore("company.ecore");
 	}

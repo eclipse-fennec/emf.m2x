@@ -35,8 +35,8 @@ import org.eclipse.fennec.m2x.model.qvttemplate.CollectionTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineImpl;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 
 /**
@@ -60,11 +60,11 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
  */
 public class QvtrPatternMatcher {
 
-	private final OclEngineImpl oclEngine;
+	private final OclEngine oclEngine;
 	private final QvtrExtentManager extentManager;
 	private final int maxBindings;
 
-	public QvtrPatternMatcher(OclEngineImpl oclEngine, QvtrExtentManager extentManager,
+	public QvtrPatternMatcher(OclEngine oclEngine, QvtrExtentManager extentManager,
 			int maxBindings) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.extentManager = Objects.requireNonNull(extentManager, "extentManager must not be null");
