@@ -28,6 +28,9 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.annotation.require.RequireQVTO;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
+import org.osgi.framework.Bundle;
+import org.osgi.framework.Constants;
+import org.osgi.framework.FrameworkUtil;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -126,6 +129,22 @@ class QvtoServiceDiscoveryOSGiTest {
 				QvtoExecutionContext.of(new BasicQvtoModelExtent(), new BasicQvtoModelExtent()));
 
 		assertFalse(result.isSuccess());
+	}
+
+	@Test
+	@DisplayName("the engine bundle asks no Service Loader Mediator to weave it")
+	void noServiceLoaderRequirement() {
+		// A mediator such as Aries SPI Fly only processes bundles that declare an
+		// osgi.serviceloader requirement, and weaving ServiceLoader.load would feed the
+		// class-path route from the very service registry the other route already uses.
+		// SPI Fly is not in this runtime, so the guard is the manifest rather than a
+		// behavioural test — and the manifest is what would change, by someone adding a
+		// @ServiceConsumer annotation to the engine bundle.
+		Bundle engineBundle = FrameworkUtil.getBundle(QvtoEngines.class);
+		String requirements = engineBundle.getHeaders().get(Constants.REQUIRE_CAPABILITY);
+
+		assertFalse(requirements != null && requirements.contains("osgi.serviceloader"),
+				() -> "Require-Capability: " + requirements);
 	}
 
 	private static QvtoExecutionResult run(QvtoEngine engine) throws Exception {
