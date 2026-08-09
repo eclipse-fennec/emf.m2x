@@ -19,6 +19,7 @@ import java.util.Set;
 
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
+import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 
 /**
  * Translates the OSGi configuration of the QVT-O engine component into a
@@ -44,15 +45,38 @@ public final class QvtoConfigurationHelper {
 	 * @return the configuration
 	 */
 	public static QvtoConfiguration from(QvtoEngineConfiguration config, OclEngine oclEngine) {
+		return from(config, oclEngine, null);
+	}
+
+	/**
+	 * Creates a {@link QvtoConfiguration} that evaluates on the given OCL engine and, when
+	 * the configuration asks for discovery, resolves units through the given resolver.
+	 *
+	 * <p>Under OSGi discovery means the service registry, so the resolver that performs the
+	 * lookup is handed in rather than found: {@code QvtoConfiguration.discoverUnitResolvers}
+	 * stays off, because that flag means the {@code ServiceLoader} of plain Java, and only
+	 * one of the two should ever be in play.
+	 *
+	 * @param config          the OSGi configuration annotation, must not be {@code null}
+	 * @param oclEngine       the engine to evaluate with, must not be {@code null}
+	 * @param serviceResolver the resolver that looks units up in the service registry, or
+	 *                        {@code null} when there is none
+	 * @return the configuration
+	 */
+	public static QvtoConfiguration from(QvtoEngineConfiguration config, OclEngine oclEngine,
+			QvtoUnitResolver serviceResolver) {
 		Objects.requireNonNull(config, "config must not be null");
 		Objects.requireNonNull(oclEngine, "oclEngine must not be null");
-		return QvtoConfiguration.builder(oclEngine)
+		QvtoConfiguration.Builder builder = QvtoConfiguration.builder(oclEngine)
 				.blackboxEnabled(config.blackboxEnabled())
 				.allowedBlackboxModules(Set.of(config.allowedBlackboxModules()))
 				.unitResolverEnabled(config.unitResolverEnabled())
 				.allowedUnitModules(Set.of(config.allowedUnitModules()))
 				.maxBlackboxLibraries(config.maxBlackboxLibraries())
-				.maxUnitResolvers(config.maxUnitResolvers())
-				.build();
+				.maxUnitResolvers(config.maxUnitResolvers());
+		if (config.discoverUnitResolvers() && serviceResolver != null) {
+			builder.addUnitResolver(serviceResolver);
+		}
+		return builder.build();
 	}
 }

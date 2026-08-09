@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.stream.Stream;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
@@ -86,6 +87,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	private final boolean unitResolverEnabled;
 	private final Set<String> allowedUnitModules;
 	private final int maxUnitResolvers;
+	private final boolean discoverUnitResolvers;
 	private final int maxBlackboxLibraries;
 
 	/** Loaded transformation for RelationImplementationProvider (D39, Phase 4b). */
@@ -112,6 +114,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		this.unitResolverEnabled = config.unitResolverEnabled();
 		this.allowedUnitModules = config.allowedUnitModules();
 		this.maxUnitResolvers = config.maxUnitResolvers();
+		this.discoverUnitResolvers = config.discoverUnitResolvers();
 		this.maxBlackboxLibraries = config.maxBlackboxLibraries();
 	}
 
@@ -157,7 +160,9 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		// for a name the transformation chose. Applied here rather than at construction,
 		// so it still holds once the set of resolvers can change between executions.
 		List<QvtoUnitResolver> effectiveResolvers = unitResolverEnabled
-				? unitResolvers.stream().limit(maxUnitResolvers).toList()
+				? Stream.concat(unitResolvers.stream(), discoveredResolvers())
+						.limit(maxUnitResolvers)
+						.toList()
 				: List.of();
 		QvtoBlackboxRegistry effectiveRegistry = blackboxEnabled ? blackboxRegistry : null;
 		Set<String> effectiveBbAllow = blackboxEnabled ? allowedBlackboxModules : Set.of();
@@ -317,6 +322,14 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		public void add(EObject object) {
 			contents.add(object);
 		}
+	}
+
+	/**
+	 * The discovery resolver, if this engine was told to discover — asked after the
+	 * configured ones, and counting as one resolver towards the limit.
+	 */
+	private Stream<QvtoUnitResolver> discoveredResolvers() {
+		return discoverUnitResolvers ? Stream.of(new ServiceLoaderUnitResolver()) : Stream.of();
 	}
 
 	/**

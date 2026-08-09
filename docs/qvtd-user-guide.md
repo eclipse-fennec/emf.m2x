@@ -232,9 +232,9 @@ All properties use the `qvtd.` prefix. OCL limits are **not** repeated here; the
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `qvtd.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries |
-| `qvtd.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; empty allows none |
+| `qvtd.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; **empty puts no restriction on the names** |
 | `qvtd.unitResolverEnabled` | boolean | `false` | Whether transformations may import units resolved from outside |
-| `qvtd.allowedUnitModules` | String[] | *(empty)* | Qualified names that may be imported as a unit; empty allows none |
+| `qvtd.allowedUnitModules` | String[] | *(empty)* | Qualified names that may be imported as a unit; **empty puts no restriction on the names** |
 | `qvtd.maxBlackboxLibraries` | int | 10 | Blackbox libraries one engine will use |
 | `qvtd.maxUnitResolvers` | int | 5 | Unit resolvers one engine will use |
 | `qvtd.maxRelationDepth` | int | 200 | Recursion depth of relation invocation (§7.10) |
@@ -242,7 +242,9 @@ All properties use the `qvtd.` prefix. OCL limits are **not** repeated here; the
 | `qvtd.timeout` | long | 0 | Transformation timeout in ms (0 = no timeout) |
 | `qvtd.maxTraceRecords` | int | 100,000 | Trace records one transformation may create |
 
-Blackboxes and unit resolvers are **off by default and gated by an allow-list**: both let a transformation reach code and files outside itself, so switching them on is a decision, not a default. An empty allow-list permits nothing even when the feature is enabled.
+Blackboxes and unit resolvers are **off by default**: both let a transformation reach code and files outside itself, so switching them on is a decision.
+
+The allow-lists narrow what may be reached once a feature is on. An **empty** allow-list does not narrow anything — enabling `blackboxEnabled` or `unitResolverEnabled` without also naming what may be reached permits every name. Name them.
 
 The same settings are available to plain Java through `QvtdConfiguration.Builder` — see [§3.2](#32-configuration-options).
 

@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoConfigurationHelper;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngineConfiguration;
 import org.osgi.service.component.annotations.Activate;
@@ -50,9 +51,11 @@ import org.osgi.service.metatype.annotations.Designate;
  * can say so — {@code "oclEngine.target": "(component.name=MyTunedOclEngine)"} — rather than
  * having to know the number bnd would otherwise assign it.
  *
- * <p>Blackbox libraries and unit resolvers are deliberately absent: a transformation names
- * what it imports, so the engine resolves those by name when it parses rather than having
- * them pushed in here (#90).
+ * <p>Unit resolvers are not a whiteboard here. A transformation names what it imports, so
+ * {@code QvtoServiceUnitResolver} looks that name up in the service registry at link time —
+ * which is why binding it is one mandatory reference rather than a set of resolvers that
+ * would restart this component, and drop its caches, whenever one came or went. It is only
+ * consulted when {@code qvto.discoverUnitResolvers} is on.
  *
  * @since 1.0
  */
@@ -63,7 +66,10 @@ public class QvtoEngineComponent extends QvtoEngineImpl {
 	@Activate
 	public QvtoEngineComponent(
 			QvtoEngineConfiguration config,
-			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine) {
-		super(QvtoConfigurationHelper.from(config, oclEngine));
+			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine,
+			@Reference(name = "unitDiscovery",
+					target = "(" + QvtoServiceUnitResolver.RESOLVER_KIND + "=discovery)")
+			QvtoUnitResolver unitDiscovery) {
+		super(QvtoConfigurationHelper.from(config, oclEngine, unitDiscovery));
 	}
 }

@@ -249,15 +249,52 @@ All properties use the `qvto.` prefix. OCL limits are **not** repeated here; the
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `qvto.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries |
-| `qvto.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; empty allows none |
+| `qvto.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; **empty puts no restriction on the names** |
 | `qvto.unitResolverEnabled` | boolean | `false` | Whether transformations may import units resolved from outside |
-| `qvto.allowedUnitModules` | String[] | *(empty)* | Qualified names that may be imported as a unit; empty allows none |
+| `qvto.discoverUnitResolvers` | boolean | `false` | Whether resolvers registered as services are looked up by the name a transformation imports |
+| `qvto.allowedUnitModules` | String[] | *(empty)* | Qualified names that may be imported as a unit; **empty puts no restriction on the names** |
 | `qvto.maxBlackboxLibraries` | int | 10 | Blackbox libraries one engine will use |
 | `qvto.maxUnitResolvers` | int | 5 | Unit resolvers one engine will use |
 
-Blackboxes and unit resolvers are **off by default and gated by an allow-list**: both let a transformation reach code and files outside itself, so switching them on is a decision, not a default. An empty allow-list permits nothing even when the feature is enabled.
+Blackboxes and unit resolvers are **off by default**: both let a transformation reach code and files outside itself, so switching them on is a decision.
+
+The allow-lists narrow what may be reached once a feature is on. An **empty** allow-list does not narrow anything — enabling `blackboxEnabled` or `unitResolverEnabled` without also naming what may be reached permits every name. Name them.
 
 The same settings are available to plain Java through `QvtoConfiguration.Builder` — see [§3.2](#32-configuration-options).
+
+### 3.4.2 Units the engine finds itself
+
+A transformation names what it imports, so the engine knows at link time which name it needs and can ask for exactly that. A bundle offers a unit by publishing a resolver under the name it answers for:
+
+```java
+@Component(service = QvtoUnitResolver.class,
+           property = "qvto.unit.name=my.company.Utilities")
+public class UtilitiesUnit implements QvtoUnitResolver {
+
+    @Override
+    public Optional<QvtoUnit> resolveUnit(String qualifiedName) {
+        return Optional.of(new QvtoUnit.SourceUnit(qualifiedName, uri, source));
+    }
+}
+```
+
+The engine looks that up when it links `import my.company.Utilities;` — not before. It is deliberately not a whiteboard: a declarative reference would have to bind every resolver in the framework up front, and a static one would restart the engine, and drop its caches, each time one came or went.
+
+Outside OSGi the same thing happens through `ServiceLoader`, via `QvtoConfiguration.Builder.discoverUnitResolvers(true)` and a `META-INF/services` entry.
+
+**Both are off by default, and that is deliberate.** `unitResolverEnabled` alone leaves the allow-list empty, which puts no restriction on names — so discovery would let anything registered, or anything on the class path, answer an import. Turning discovery on is a second decision, and the sensible companion to it is naming what may be reached:
+
+```json
+{
+    "DefaultQvtoEngine": {
+        "qvto.unitResolverEnabled": true,
+        "qvto.discoverUnitResolvers": true,
+        "qvto.allowedUnitModules": ["my.company.Utilities"]
+    }
+}
+```
+
+Discovery widens **who may answer**, never **which names may be asked**: the allow-list is checked before any resolver is consulted, and the discovering resolver counts as one against `qvto.maxUnitResolvers`.
 
 **Running on a specific OCL engine:** the reference is unfiltered by default, so the engine binds whichever `OclEngine` service is there. To pin it to one you configured yourself, set a target filter:
 
