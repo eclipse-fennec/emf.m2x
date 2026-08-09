@@ -47,7 +47,7 @@ public class OclLegacyPivotSettingDelegateFactory extends OclSettingDelegateFact
 	 * DS constructor — engine is injected as a service.
 	 */
 	@Activate
-	public OclLegacyPivotSettingDelegateFactory(@Reference OclEngineImpl engine) {
+	public OclLegacyPivotSettingDelegateFactory(@Reference OclDelegateSupport engine) {
 		super(engine);
 	}
 }

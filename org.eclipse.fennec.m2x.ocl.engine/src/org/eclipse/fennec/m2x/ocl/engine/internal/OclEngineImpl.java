@@ -81,7 +81,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclResult;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-public class OclEngineImpl implements OclEngine {
+public class OclEngineImpl implements OclDelegateSupport {
 
 	private final OclExpressionParser parser;
 	private final OclExpressionCache expressionCache;
@@ -286,6 +286,7 @@ public class OclEngineImpl implements OclEngine {
 	 * Used by the invocation delegate for postcondition evaluation with
 	 * {@code @pre} support.
 	 */
+	@Override
 	public Object evaluatePostcondition(OclExpression expression, OclContext context,
 			PreStateSnapshot snapshot) {
 		OclEvalEnvironment env = OclEvalEnvironment.root(context);

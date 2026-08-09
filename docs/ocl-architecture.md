@@ -659,10 +659,14 @@ emf.osgi whiteboard pattern:
 The emf.osgi delegate registry whiteboard components pick up these services automatically —
 no manual `installDelegates()` call needed.
 
-Each delegate factory injects `OclEngine` via `@Reference` (not the `OclEngine` API
-interface) because delegates need internal methods (`getDelegateOptions()`,
-`evaluatePostcondition()`). The `OclEngineComponent` registers as both `OclEngine` and
-`OclEngine` services to support this.
+Each delegate factory injects `OclDelegateSupport` via `@Reference` — an internal
+interface extending `OclEngine` with the one method the public API has no reason to carry,
+`evaluatePostcondition()`, since `@pre` snapshots exist only for postcondition delegates.
+`OclEngineComponent` therefore registers as `OclEngine` and `OclDelegateSupport`.
+
+Before, the factories took `OclEngineImpl` and the component published that class as a
+service type. Nothing outside the bundle could use it — `…engine.internal` is not exported —
+so it was a service type that existed only to let one internal class find another.
 
 ### 8.8 emf.osgi Delegate Registry Analysis
 

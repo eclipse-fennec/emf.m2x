@@ -47,7 +47,7 @@ public class OclLegacyPivotInvocationDelegateFactory extends OclInvocationDelega
 	 * DS constructor — engine is injected as a service.
 	 */
 	@Activate
-	public OclLegacyPivotInvocationDelegateFactory(@Reference OclEngineImpl engine) {
+	public OclLegacyPivotInvocationDelegateFactory(@Reference OclDelegateSupport engine) {
 		super(engine);
 	}
 }

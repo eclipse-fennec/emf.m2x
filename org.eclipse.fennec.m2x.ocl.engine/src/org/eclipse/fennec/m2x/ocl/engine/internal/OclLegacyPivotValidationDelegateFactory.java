@@ -47,7 +47,7 @@ public class OclLegacyPivotValidationDelegateFactory extends OclValidationDelega
 	 * DS constructor — engine is injected as a service.
 	 */
 	@Activate
-	public OclLegacyPivotValidationDelegateFactory(@Reference OclEngineImpl engine) {
+	public OclLegacyPivotValidationDelegateFactory(@Reference OclDelegateSupport engine) {
 		super(engine);
 	}
 }

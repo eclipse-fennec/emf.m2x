@@ -20,8 +20,8 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.engine.internal.OclDelegateSupport;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclDelegateUtil;
-import org.eclipse.fennec.m2x.ocl.engine.internal.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclInvocationDelegateFactory;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclSettingDelegateFactory;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclValidationDelegateFactory;
@@ -101,9 +101,9 @@ public final class OclDelegateFactories {
 	 * @return the engine, narrowed
 	 * @throws IllegalArgumentException if the engine is not one of ours
 	 */
-	private static OclEngineImpl requireOwnEngine(OclEngine engine) {
+	private static OclDelegateSupport requireOwnEngine(OclEngine engine) {
 		Objects.requireNonNull(engine, "engine must not be null");
-		if (engine instanceof OclEngineImpl impl) {
+		if (engine instanceof OclDelegateSupport impl) {
 			return impl;
 		}
 		throw new IllegalArgumentException(

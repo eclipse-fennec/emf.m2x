@@ -44,7 +44,8 @@ import org.osgi.service.metatype.annotations.Designate;
  *
  * <p>The expression cache and operation provider can be targeted via OSGi Configurator:
  * <pre>
- * "org.eclipse.fennec.m2x.ocl.engine.OclEngineComponent": {
+ * "DefaultOclEngine": {
+ *     "parser.target": "(...)",
  *     "expressionCache.target": "(cache.name=myCustomCache)",
  *     "operationProvider.target": "(provider.name=myProvider)"
  * }
@@ -68,13 +69,13 @@ import org.osgi.service.metatype.annotations.Designate;
  * @since 1.0
  */
 @Designate(ocd = OclEngineConfiguration.class)
-@Component(name="DefaultOclEngine", service = { OclEngine.class, OclEngineImpl.class }, scope = ServiceScope.PROTOTYPE, configurationPolicy = ConfigurationPolicy.OPTIONAL)
+@Component(name="DefaultOclEngine", service = { OclEngine.class, OclDelegateSupport.class }, scope = ServiceScope.PROTOTYPE, configurationPolicy = ConfigurationPolicy.OPTIONAL)
 public class OclEngineComponent extends OclEngineImpl {
 
 	@Activate
 	public OclEngineComponent(
 			OclEngineConfiguration config,
-			@Reference(scope = ReferenceScope.PROTOTYPE_REQUIRED) OclExpressionParser parser,
+			@Reference(name = "parser", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclExpressionParser parser,
 			@Reference(name = "expressionCache") OclExpressionCache cache,
 			@Reference(name = "operationProvider") OclOperationProvider operationProvider) {
 		super(OclConfigurationHelper.from(config, parser, cache, operationProvider));

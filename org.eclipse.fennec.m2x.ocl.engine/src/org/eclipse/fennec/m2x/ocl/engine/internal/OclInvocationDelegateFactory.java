@@ -65,13 +65,13 @@ import org.osgi.service.component.annotations.Reference;
 		})
 public class OclInvocationDelegateFactory implements EOperation.Internal.InvocationDelegate.Factory {
 
-	private final OclEngineImpl engine;
+	private final OclDelegateSupport engine;
 
 	/**
 	 * DS constructor — engine is injected as a service.
 	 */
 	@Activate
-	public OclInvocationDelegateFactory(@Reference OclEngineImpl engine) {
+	public OclInvocationDelegateFactory(@Reference OclDelegateSupport engine) {
 		this.engine = Objects.requireNonNull(engine, "engine must not be null");
 	}
 
