@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import org.eclipse.fennec.m2x.ocl.api.OclDelegates;
+
 import java.util.List;
 
 import org.eclipse.emf.ecore.EAnnotation;
@@ -39,10 +41,10 @@ import org.eclipse.emf.ecore.EModelElement;
 public class OclDelegateUtil {
 
 	/** The Fennec OCL delegate URI. */
-	public static final String DELEGATE_URI = "http://www.eclipse.org/fennec/m2x/ocl/1.0";
+	public static final String DELEGATE_URI = OclDelegates.DELEGATE_URI;
 
 	/** The legacy Eclipse OCL Pivot delegate URI, also served by the Fennec engine. */
-	public static final String LEGACY_PIVOT_URI = "http://www.eclipse.org/emf/2002/Ecore/OCL/Pivot";
+	public static final String LEGACY_PIVOT_URI = OclDelegates.LEGACY_PIVOT_URI;
 
 	/**
 	 * The delegate URIs served by the Fennec OCL engine, in priority order.

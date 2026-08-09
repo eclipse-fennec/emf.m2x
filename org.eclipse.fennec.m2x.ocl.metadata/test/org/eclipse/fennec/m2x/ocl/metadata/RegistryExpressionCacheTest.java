@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.ocl.metadata;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -135,7 +136,76 @@ class RegistryExpressionCacheTest {
 				"the other source's entry is none of this cache's business");
 	}
 
+	@Test
+	@DisplayName("a model's own constraints are compiled when it registers")
+	void constraintsArePrecompiledOnRegistration() {
+		EPackage ePackage = bookPackage(false);
+		EClass book = bookOf(ePackage);
+		invariant(book, "PagesArePositive", "self.pages > 0");
+		RegistryExpressionCache cache = cache();
+
+		new OclConstraintPrecompiler(new OclParserSupport(registryOf(ePackage)), cache)
+				.onPackageRegistered(packageMetadataOf(ePackage));
+
+		assertNotNull(cache.get("self.pages > 0", book),
+				"the invariant the model declares is compiled before anyone asks for it");
+	}
+
+	@Test
+	@DisplayName("one unusable constraint does not stop the others")
+	void abrokenConstraintIsSkipped() {
+		EPackage ePackage = bookPackage(false);
+		EClass book = bookOf(ePackage);
+		invariant(book, "Broken", "self.pages >");
+		invariant(book, "Fine", "self.pages > 0");
+		RegistryExpressionCache cache = cache();
+
+		new OclConstraintPrecompiler(new OclParserSupport(registryOf(ePackage)), cache)
+				.onPackageRegistered(packageMetadataOf(ePackage));
+
+		assertNotNull(cache.get("self.pages > 0", book),
+				"refusing the model over one bad invariant is not this handler's decision");
+	}
+
 	// --- helpers ---
+
+	/** Adds an invariant the way an .ecore carries one: named by Ecore, bodied by the delegate. */
+	private static void invariant(EClass eClass, String name, String body) {
+		org.eclipse.emf.ecore.EAnnotation names =
+				eClass.getEAnnotation(org.eclipse.fennec.m2x.ocl.api.OclDelegates.ECORE_URI);
+		if (names == null) {
+			names = EcoreFactory.eINSTANCE.createEAnnotation();
+			names.setSource(org.eclipse.fennec.m2x.ocl.api.OclDelegates.ECORE_URI);
+			eClass.getEAnnotations().add(names);
+		}
+		String existing = names.getDetails().get(
+				org.eclipse.fennec.m2x.ocl.api.OclDelegates.CONSTRAINTS_KEY);
+		names.getDetails().put(org.eclipse.fennec.m2x.ocl.api.OclDelegates.CONSTRAINTS_KEY,
+				existing == null ? name : existing + " " + name);
+
+		org.eclipse.emf.ecore.EAnnotation bodies =
+				eClass.getEAnnotation(org.eclipse.fennec.m2x.ocl.api.OclDelegates.DELEGATE_URI);
+		if (bodies == null) {
+			bodies = EcoreFactory.eINSTANCE.createEAnnotation();
+			bodies.setSource(org.eclipse.fennec.m2x.ocl.api.OclDelegates.DELEGATE_URI);
+			eClass.getEAnnotations().add(bodies);
+		}
+		bodies.getDetails().put(name, body);
+	}
+
+	private static EPackage.Registry registryOf(EPackage ePackage) {
+		EPackage.Registry registry = new EPackageRegistryImpl();
+		registry.put(NS_URI, ePackage);
+		return registry;
+	}
+
+	private static org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata packageMetadataOf(
+			EPackage ePackage) {
+		var metadata = org.eclipse.fennec.emf.osgi.model.metadata.MetadataFactory.eINSTANCE
+				.createPackageMetadata();
+		metadata.setEPackage(ePackage);
+		return metadata;
+	}
 
 	private RegistryExpressionCache cache() {
 		return new RegistryExpressionCache(writer,
