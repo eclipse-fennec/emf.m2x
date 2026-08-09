@@ -14,7 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvto.api;
 
-import java.net.URI;
+import org.eclipse.emf.common.util.URI;
 import java.util.Objects;
 
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;

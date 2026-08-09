@@ -263,7 +263,9 @@ OperationalTransformation trafo = engine.parse(
 ### 5.2 From URI
 
 ```java
-OperationalTransformation trafo = engine.parse(URI.create("file:/path/to/MyTrafo.qvto"));
+import org.eclipse.emf.common.util.URI;
+
+OperationalTransformation trafo = engine.parse(URI.createURI("file:/path/to/MyTrafo.qvto"));
 ```
 
 The source is read through the `URIConverter` of the configured resource set — or of a default one, when none is configured — so `file:`, `http:` and `archive:` URIs work out of the box, and `platform:`/`bundleresource:` as soon as you hand over a resource set that knows them (§3.3).

@@ -26,6 +26,7 @@ import java.util.List;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
@@ -151,7 +152,7 @@ class M2tHardeningTest {
 		@Test
 		@DisplayName("parse(URI) — IOException cause is preserved")
 		void parseUriIoExceptionCause() {
-			java.net.URI nonExistent = java.net.URI.create("file:///nonexistent/template.mtl");
+			URI nonExistent = URI.createURI("file:///nonexistent/template.mtl");
 			M2tParseException ex = assertThrows(M2tParseException.class,
 					() -> engine.parse(nonExistent));
 			assertNotNull(ex.getCause(), "IOException cause should be preserved");

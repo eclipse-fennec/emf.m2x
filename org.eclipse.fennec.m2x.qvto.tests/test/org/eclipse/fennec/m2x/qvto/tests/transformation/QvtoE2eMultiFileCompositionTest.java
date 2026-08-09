@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.net.URI;
+import org.eclipse.emf.common.util.URI;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 
@@ -62,9 +62,9 @@ class QvtoE2eMultiFileCompositionTest {
 		// Register the inline unit resolver that provides imported transformations
 		QvtoUnitResolver inlineResolver = qualifiedName -> switch (qualifiedName) {
 			case "Nested" -> Optional.of(new QvtoUnit.SourceUnit("Nested",
-					URI.create("inline:Nested"), NESTED_SOURCE));
+					URI.createURI("inline:Nested"), NESTED_SOURCE));
 			case "Appender" -> Optional.of(new QvtoUnit.SourceUnit("Appender",
-					URI.create("inline:Appender"), APPENDER_SOURCE));
+					URI.createURI("inline:Appender"), APPENDER_SOURCE));
 			default -> Optional.empty();
 		};
 
@@ -157,7 +157,7 @@ class QvtoE2eMultiFileCompositionTest {
 		QvtoUnitResolver failResolver = qualifiedName -> {
 			if ("Failing".equals(qualifiedName)) {
 				return Optional.of(new QvtoUnit.SourceUnit("Failing",
-						URI.create("inline:Failing"),
+						URI.createURI("inline:Failing"),
 						"""
 						modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
 						transformation Failing(inout m : ECORE) {
@@ -354,7 +354,7 @@ class QvtoE2eMultiFileCompositionTest {
 		QvtoUnitResolver failResolver = qualifiedName -> {
 			if ("Failing".equals(qualifiedName)) {
 				return Optional.of(new QvtoUnit.SourceUnit("Failing",
-						URI.create("inline:Failing"),
+						URI.createURI("inline:Failing"),
 						"""
 						modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
 						transformation Failing(inout m : ECORE) {
@@ -441,7 +441,7 @@ class QvtoE2eMultiFileCompositionTest {
 		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 		QvtoUnitResolver resolver = qualifiedName -> switch (qualifiedName) {
 			case "Nested" -> Optional.of(new QvtoUnit.SourceUnit("Nested",
-					URI.create("inline:Nested"), NESTED_SOURCE));
+					URI.createURI("inline:Nested"), NESTED_SOURCE));
 			default -> Optional.empty();
 		};
 

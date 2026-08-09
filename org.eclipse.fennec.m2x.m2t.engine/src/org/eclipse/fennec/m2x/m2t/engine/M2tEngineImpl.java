@@ -18,7 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Writer;
 import java.nio.charset.Charset;
-import java.net.URI;
+import org.eclipse.emf.common.util.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -148,11 +148,10 @@ public class M2tEngineImpl implements M2tEngine {
 	@Override
 	public Module parse(URI moduleUri) throws M2tParseException {
 		Objects.requireNonNull(moduleUri, "moduleUri must not be null");
-		org.eclipse.emf.common.util.URI emfUri =
-				org.eclipse.emf.common.util.URI.createURI(moduleUri.toString());
-		try (InputStream in = resourceSet.getURIConverter().createInputStream(emfUri)) {
+		try (InputStream in = resourceSet.getURIConverter().createInputStream(moduleUri)) {
 			String source = new String(in.readAllBytes(), config.defaultCharset());
-			String unitName = emfUri.lastSegment() != null ? emfUri.lastSegment() : moduleUri.toString();
+			String unitName = moduleUri.lastSegment() != null
+					? moduleUri.lastSegment() : moduleUri.toString();
 			return parse(source, unitName);
 		} catch (IOException e) {
 			throw new M2tParseException("Failed to read module: " + moduleUri, e, List.of());

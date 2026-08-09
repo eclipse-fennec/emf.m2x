@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.net.URI;
+import org.eclipse.emf.common.util.URI;
 import java.util.Optional;
 
 import org.eclipse.emf.ecore.EObject;
@@ -58,7 +58,7 @@ class QvtoE2eFromImportTest {
 		QvtoUnitResolver resolver = qualifiedName -> {
 			if ("HelperLib".equals(qualifiedName)) {
 				return Optional.of(new QvtoUnit.SourceUnit("HelperLib",
-						URI.create("inline:HelperLib"), HELPER_LIB_SOURCE));
+						URI.createURI("inline:HelperLib"), HELPER_LIB_SOURCE));
 			}
 			return Optional.empty();
 		};
