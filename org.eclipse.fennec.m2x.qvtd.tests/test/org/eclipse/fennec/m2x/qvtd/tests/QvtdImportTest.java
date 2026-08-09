@@ -183,6 +183,24 @@ class QvtdImportTest {
 		assertEquals(3, asked.get(), "the fourth resolver is past the limit");
 	}
 
+	@Test
+	@DisplayName("executing twice does not import twice")
+	void repeatedExecutionIsIdempotent() throws Exception {
+		// The linker runs per execution, so a second run resolves the import again and
+		// merges again. Merging skips a rule whose name the transformation already carries,
+		// which is what keeps the second run from producing a second copy of every relation.
+		QvtdEngine engine = engine(builder -> builder
+				.addUnitResolver(library())
+				.unitResolverEnabled(true));
+
+		RelationalTransformation transformation = engine.parse(IMPORTER, "importer");
+		int afterFirst = executeAndCountRules(engine, transformation);
+		int afterSecond = executeAndCountRules(engine, transformation);
+
+		assertEquals(afterFirst, afterSecond,
+				"the imported relations must not accumulate with every execution");
+	}
+
 	// --- helpers ---
 
 	private QvtdUnitResolver library() {
@@ -199,6 +217,15 @@ class QvtdImportTest {
 	}
 
 	private record Run(QvtdExecutionResult result, QvtdModelExtent target) {
+	}
+
+	private int executeAndCountRules(QvtdEngine engine, RelationalTransformation transformation)
+			throws Exception {
+		EObject book = EcoreUtil.create(bookClass);
+		book.eSet(bookClass.getEStructuralFeature("title"), "Moby Dick");
+		engine.execute(transformation, QvtdExecutionContext.enforce("target",
+				Map.of("source", QvtdModelExtent.of(book), "target", QvtdModelExtent.of())));
+		return transformation.getRule().size();
 	}
 
 	private Run run(QvtdEngine engine) throws Exception {
