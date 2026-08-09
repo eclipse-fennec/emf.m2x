@@ -46,7 +46,6 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -57,13 +56,25 @@ import org.junit.jupiter.api.Test;
  * per-evaluation {@code OclEvaluator}, {@code CopyOnWriteArrayList} for
  * providers, {@code ConcurrentHashMap} for expression caches.
  *
+ * <p>These assert behaviour, not speed — there is no timing anywhere, only safety
+ * timeouts on {@code Future.get}. They carried {@code @Tag("perf")} for a while, which
+ * kept them out of every ordinary build, so a thread-safety regression would have gone
+ * unseen. They run with the rest now.
+ *
+ * <p>The load is adjustable through {@code ocl.test.threads} and
+ * {@code ocl.test.iterations}. The defaults saturate a developer machine for the fraction
+ * of a second the whole class takes; CI runs a smaller shape, because a race shows up at
+ * any load — just less often — and a build agent has fewer cores to give.
+ *
  * @see <a href="../../../../../docs/architecture.md">§15 Thread-Safety Architecture</a>
  */
-@Tag("perf")
 class OclThreadSafetyTest {
 
-	private static final int THREAD_COUNT = 16;
-	private static final int ITERATIONS_PER_THREAD = 1000;
+	private static final int THREAD_COUNT = Integer.getInteger("ocl.test.threads", 16);
+	private static final int ITERATIONS_PER_THREAD = Integer.getInteger("ocl.test.iterations", 1000);
+
+	/** Delegate invocation is the expensive path, so it runs a tenth — but never zero. */
+	private static final int DELEGATE_ITERATIONS = Math.max(1, ITERATIONS_PER_THREAD / 10);
 
 	static OclEngine engine;
 	static EcoreHelper ecoreHelper;
@@ -202,7 +213,7 @@ class OclThreadSafetyTest {
 				futures.add(pool.submit(() -> {
 					try {
 						startLatch.await();
-						for (int i = 0; i < ITERATIONS_PER_THREAD / 10; i++) {
+						for (int i = 0; i < DELEGATE_ITERATIONS; i++) {
 							String expr = expressions[(threadId + i) % expressions.length];
 							// Parse AND evaluate in the same thread — tests parser thread safety
 							OclExpression parsed = engine.parse(expr, personClass);
@@ -251,7 +262,7 @@ class OclThreadSafetyTest {
 				futures.add(pool.submit(() -> {
 					try {
 						startLatch.await();
-						for (int i = 0; i < ITERATIONS_PER_THREAD / 10; i++) {
+						for (int i = 0; i < DELEGATE_ITERATIONS; i++) {
 							EObject account = createAccount(
 									"Acct" + threadId, 1000.0 + threadId * 100);
 							// Alternate between two delegates

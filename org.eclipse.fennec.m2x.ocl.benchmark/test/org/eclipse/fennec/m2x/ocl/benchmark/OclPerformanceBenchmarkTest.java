@@ -48,7 +48,7 @@ import org.junit.jupiter.api.Test;
  * <p>All tests are tagged with {@code "perf"} and excluded from normal test runs.
  * Run with: {@code ./gradlew org.eclipse.fennec.m2x.ocl.benchmark:perfTest}
  */
-@Tag("perf")
+@Tag("benchmark")
 class OclPerformanceBenchmarkTest extends AbstractComparisonTest {
 
 	private static final int JIT_WARMUP_ITERATIONS = 2_000;

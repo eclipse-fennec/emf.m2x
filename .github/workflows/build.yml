@@ -29,6 +29,10 @@ jobs:
       # leg checks that the toolchain builds under 25 while the artifacts stay
       # Java 21 bytecode.
       #
-      # perfTest runs the heavy, informational (@Tag("perf")) benchmarks. They
-      # set ignoreFailures, so they carry no gate signal and just add ~25 min.
-      run-perf-tests: false
+      # perfTest runs our own performance tests (@Tag("perf")). It used to take
+      # ~25 min and was kept out for that reason, but 92% of it was one test
+      # measuring the quadratic set build fixed in #87 — it is ~30 s now, and it
+      # fails on a real failure since the tag split (#88). The comparison against
+      # the Eclipse implementations is @Tag("benchmark") and has its own task,
+      # which no workflow invokes.
+      run-perf-tests: true

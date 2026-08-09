@@ -19,19 +19,32 @@ subprojects {
         mavenCentral()
     }
     // Allow gradle to enable JUnit support in submodules
-    // Exclude @Tag("perf") tests from normal builds — run via perfTest task
+    // The ordinary build runs everything that asserts behaviour. The two tags below
+    // measure instead, and are excluded from it.
     test {
         useJUnitPlatform {
-            excludeTags 'perf'
+            excludeTags 'perf', 'benchmark'
         }
+        // The thread-safety tests saturate whatever cores they find. A build agent has
+        // fewer to give than a developer machine, and a race shows up at any load.
+        systemProperty 'ocl.test.threads', findProperty('ocl.test.threads') ?: '4'
+        systemProperty 'ocl.test.iterations', findProperty('ocl.test.iterations') ?: '200'
     }
 
-    // Dedicated task for performance and thread-safety tests (@Tag("perf"))
+    // Our own performance tests (@Tag("perf")) — how fast the engines are.
     tasks.register('perfTest', Test) {
         useJUnitPlatform {
             includeTags 'perf'
         }
-        // Don't fail the build on perf test failures — results are informational
+    }
+
+    // The comparison against the Eclipse implementations (@Tag("benchmark")). These need
+    // the Eclipse bundles in the benchmark projects' lib/ and produce relative numbers,
+    // which vary with the machine — so a slow run is not a broken build.
+    tasks.register('benchmarkTest', Test) {
+        useJUnitPlatform {
+            includeTags 'benchmark'
+        }
         ignoreFailures = true
     }
     

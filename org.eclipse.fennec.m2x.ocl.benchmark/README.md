@@ -22,10 +22,11 @@ Building with `--offline` leaves this project out as long as `lib/` is empty.
 cd /opt/git/m2m/workspace
 
 # Run OCL performance benchmarks
-./gradlew org.eclipse.fennec.m2x.ocl.benchmark:perfTest
+./gradlew org.eclipse.fennec.m2x.ocl.benchmark:benchmarkTest
 ```
 
-This runs only tests annotated with `@Tag("perf")`.
+This runs only tests annotated with `@Tag("benchmark")`. No CI workflow does — the
+numbers are relative to the machine they were measured on.
 
 `OclCorrectnessComparisonTest` carries no `perf` tag, so its 57 differential checks against
 Eclipse OCL run as part of the ordinary `./gradlew build`.
@@ -42,7 +43,7 @@ Eclipse OCL run as part of the ordinary `./gradlew build`.
 
 Results are printed to stdout and saved as JUnit XML under:
 ```
-generated/test-reports/perfTest/
+generated/test-reports/benchmarkTest/
 ```
 
 See `workspace/docs/benchmark-results.md` for latest benchmark results.
