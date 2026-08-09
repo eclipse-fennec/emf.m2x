@@ -158,6 +158,27 @@ public class MyComponent {
 
 The expression cache is shared because parsed `OclExpression` ASTs are immutable and thread-safe. This means a parse result from one engine benefits all others.
 
+**That sharing has a limit worth knowing.** The default cache keys by nsURI, which names a model but not a *version* of it. Where two versions of one nsURI are live at once, they share an entry, and whichever was compiled first decides what the other gets. Navigation survives that by accident — feature access falls back to resolving by name on the runtime class — but an expression naming a type does not, and reports a perfectly valid object as invalid with nothing said about why.
+
+`org.eclipse.fennec.m2x.ocl.fingerprint` keys by the model fingerprint instead, so two versions are two entries and two loads of the same content are one. Select it where two versions can coexist:
+
+```json
+{
+    "DefaultOclEngine": { "expressionCache.target": "(cache.name=fingerprint)" }
+}
+```
+
+Outside OSGi:
+
+```java
+OclConfiguration.builder(parser)
+    .expressionCache(new FingerprintExpressionCache(OclLruExpressionCache.ofSize(1024),
+            FingerprintHelper.getDefaultFingerprintService()))
+    .build();
+```
+
+It is not the default because the shipped cache is right whenever one version of an nsURI is live at a time, which is the ordinary case. Note also that **changing a model after expressions have been compiled against it is out of contract** — a fingerprint is computed per package instance, and neither cache tries to notice a mutation.
+
 To use **individual caches** (e.g. for different metamodels), create factory configurations with `expressionCache.target` — see [§3.5](#35-osgi-configuration-via-configadmin) and the [Architecture Doc §9.5](ocl-architecture.md#95-expression-cache-sharing-and-isolation).
 
 ### 3.5 OSGi Configuration via ConfigAdmin
