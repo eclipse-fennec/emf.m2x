@@ -263,12 +263,10 @@ OperationalTransformation trafo = engine.parse(
 ### 5.2 From URI
 
 ```java
-import org.eclipse.emf.common.util.URI;
-
-OperationalTransformation trafo = engine.parse(
-    URI.createFileURI("/path/to/MyTrafo.qvto")
-);
+OperationalTransformation trafo = engine.parse(URI.create("file:/path/to/MyTrafo.qvto"));
 ```
+
+The source is read through the `URIConverter` of the configured resource set — or of a default one, when none is configured — so `file:`, `http:` and `archive:` URIs work out of the box, and `platform:`/`bundleresource:` as soon as you hand over a resource set that knows them (§3.3).
 
 ### 5.3 Reuse Parsed ASTs
 
@@ -810,6 +808,20 @@ main() {
 ```
 
 ---
+
+### Resolving units through a ResourceSet
+
+`ResourceSetUnitResolver` resolves imported units through a resource set's `URIConverter`, so imports reach whatever that resource set reaches — files, bundle resources, archives, or anything a custom `URIHandler` serves:
+
+```java
+QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
+    .addUnitResolver(new ResourceSetUnitResolver(
+            resourceSet, URI.createURI("platform:/plugin/com.acme.transforms/")))
+    .unitResolverEnabled(true)
+    .build();
+```
+
+An import of `my.company.Helpers` is looked for at `<base>/my/company/Helpers.qvto`. The resolver answers with empty when it cannot find a unit, so further resolvers still get their turn, and the opt-in plus the module allow-list (§13) apply unchanged.
 
 ## 13. Security Hardening
 

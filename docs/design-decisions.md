@@ -945,7 +945,14 @@ Deshalb nimmt jede Engine zusätzlich ein `ResourceSet` entgegen und verwendet d
 
 Damit bleibt es bei genau einem Fallback-Punkt je Engine; er hat nur eine Stufe mehr davor. Dokumentiert wird künftig die ResourceSet-Form, `packageRegistry(…)` bleibt die tiefere Ebene.
 
-Vom ResourceSet wird vorerst **ausschließlich** die Package-Registry benutzt — es wird nichts darüber geladen. Das steht so im Javadoc, damit niemand eine URI-Auflösung erwartet, die es noch nicht gibt; `parse(URI)` über den `URIConverter` ist ein eigener, folgender Schritt.
+Vom ResourceSet werden zwei Dinge benutzt:
+
+- die **Package-Registry** für die Typauflösung (Reihenfolge oben) und
+- der **`URIConverter`** für `parse(URI)`. Ist kein ResourceSet konfiguriert, legt die Engine ein `ResourceSetImpl` an, damit jede URI denselben Weg nimmt statt zwei Verhaltensweisen derselben Methode zu haben. Damit lösen `file:`, `http:` und `archive:` von sich aus auf, `platform:`/`bundleresource:` sobald ein entsprechend konfiguriertes ResourceSet übergeben wird.
+
+Die Package-Registry des **intern angelegten** Default-ResourceSets fließt bewusst **nicht** in die Typauflösung ein — sonst hätte die Engine wieder eine eigene Meinung dazu, welches Package eine nsURI bezeichnet. Sie dient allein dem Laden.
+
+Mehrfach-Datei-Auflösung geht denselben Weg, aber über den vorhandenen Erweiterungspunkt: `ResourceSetUnitResolver` implementiert `QvtoUnitResolver` und lädt Units über den `URIConverter`. Die Engine bleibt unverändert, und das Opt-in aus D29 (`unitResolverEnabled`, Allow-List) gilt unangetastet weiter.
 
 Welche Stelle das ist, folgt daraus, wer den Parser besitzt:
 
