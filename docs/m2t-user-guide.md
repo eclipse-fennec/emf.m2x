@@ -1147,6 +1147,57 @@ declares the delegate (see installDelegates())
 
 For generator concerns — output paths, cross-references, diagrams — an `EOperation` is the wrong home anyway. Those belong to the generator, not to the metamodel, and are better registered as OCL custom operations (see [OCL User Guide §11](ocl-user-guide.md#11-custom-operations)): the receiver is the real `EObject`, the implementation is an ordinary Java lambda, and the model stays free of documentation concerns.
 
+### 13.1 Java from a template
+
+A generator usually needs things a template language cannot express: an output path derived from the model, a link relative to the document that carries it, a diagram written to disk. There is no M2T-specific extension point for that — a Java method becomes callable by being registered as an OCL operation, and M2T picks it up:
+
+```java
+OclConfiguration ocl = OclConfiguration.builder(new OclParserSupport())
+        .addOperationProvider(new DocOperations(outputDirectory))
+        .build();
+
+M2tEngine engine = M2tEngines.create(M2tConfiguration.builder(ocl)
+        .packageRegistry(registry)
+        .generationStrategy(new FileSystemGenerationStrategy(outputDirectory))
+        .build());
+```
+
+```mtl
+[file (b.docPath(), false)]
+# [b.title/]
+
+- Slug: [b.title.kebab()/]
+- Author: [b.author.mdLinkFrom(b)/]
+[/file]
+```
+
+M2T switches `customOperationsEnabled` on itself, so unlike direct OCL use there is no second opt-in — see [OCL User Guide §11](ocl-user-guide.md#11-custom-operations) for how to write a provider, and register as many as you need.
+
+**What the receiver is** decides where an operation can be called, and that is the `ownerType`:
+
+| `ownerType` | callable on |
+|---|---|
+| `ClassifierType` around an `EClass` | instances of that class and its subclasses — `[b.docPath()/]` |
+| `PrimitiveType("String")` | attribute values — `[b.title.kebab()/]` |
+| `PrimitiveType("Integer")` / `("Real")` / `("Boolean")` | the matching Java type; an Integer widens to Real |
+| `AnyType` or `PrimitiveType("OclAny")` | anything — the catch-all |
+| `ClassifierType` around `EcorePackage.Literals.EOBJECT` | every model element |
+
+One method that makes sense for two receiver types is registered twice, once per type. The implementation is an ordinary lambda, so anything Java can reach is reachable — a static utility, a file written to disk, an SVG rendered by hand.
+
+**Four things that will bite:**
+
+| | |
+|---|---|
+| **A literal `[` cannot be written** | The lexer opens code mode on `[` with no escape, so neither `[text](url)` nor `![alt](url)` can be typed in template text. Let a Java operation return the finished link or image. A lone bracket: `['['/]`. |
+| **Types must resolve** | Without `packageRegistry(…)`, a type name in the template degrades and `oclIsKindOf` stops discriminating — see [§3.5](#35-which-metamodels-the-engine-sees). |
+| **A `null` receiver matches anything** | `OclVoid` conforms to every type, so the first operation of that name answers. Guard inside the lambda. |
+| **An exception becomes a diagnostic** | The evaluator catches `RuntimeException`, reports it and yields `null`. An empty document usually means an operation threw — check `result.isSuccess()` and `result.diagnostics()`. |
+
+Operations of the same name are told apart by how many arguments the call passes, and then by receiver type. Among equally applicable candidates the first registered one answers, so registration order is what decides — not which provider it came from.
+
+**`allInstances()` is not available in a template.** M2T builds the evaluation context without a model extent, so navigate from the root element the generation was given.
+
 ---
 
 ## 14. Engine Lifetime and Module Retention

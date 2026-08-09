@@ -98,6 +98,26 @@ class OclSeveralProvidersTest {
 				OclEvaluationOptions.strict().withCustomOperationsEnabled(true)).size());
 	}
 
+	@Test
+	@DisplayName("same name, different number of arguments — each is reachable")
+	void arityDistinguishesOperations() throws OclParseException {
+		// The dispatch matched on name and receiver type only, so two operations sharing a
+		// name hid each other however many arguments they took. Registering a no-argument
+		// and a one-argument version of the same name is an ordinary thing to want.
+		AnyType anyType = OclFactory.eINSTANCE.createAnyType();
+		anyType.setName("OclAny");
+		PrimitiveType intType = OclFactory.eINSTANCE.createPrimitiveType();
+		intType.setName("Integer");
+
+		OclEngine engine = engineWith(
+				() -> List.of(OclOperation.of("size", anyType, intType, (self, args) -> 1)),
+				() -> List.of(new OclOperation("size", anyType, List.of(anyType), intType,
+						(self, args) -> 2)));
+
+		assertEquals(1, evaluate(engine, "self.size()"));
+		assertEquals(2, evaluate(engine, "self.size(7)"));
+	}
+
 	// --- helpers ---
 
 	private static OclOperationProvider provider(String operationName, int result) {
