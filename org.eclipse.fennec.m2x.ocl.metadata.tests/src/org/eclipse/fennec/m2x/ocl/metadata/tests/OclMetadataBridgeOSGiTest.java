@@ -42,6 +42,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
+import org.osgi.service.cm.Configuration;
+import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.annotation.Property;
@@ -94,17 +96,21 @@ class OclMetadataBridgeOSGiTest {
 
 	private static final String ASPECT_TYPE_ID = "ocl.compiled";
 
+	private static final String LATE_ASPECT_TYPE_ID = "ocl.compiled.late";
+
 	private static final String NS_URI = "http://example.org/m2x/bridge-osgi/1.0";
 
 	private static final String INVARIANT = "self.pages > 0";
 
 	private final List<ServiceRegistration<?>> registrations = new ArrayList<>();
 
+	private final List<Configuration> lateConfigurations = new ArrayList<>();
+
 	@InjectBundleContext
 	BundleContext context;
 
 	@AfterEach
-	void unregisterModels() {
+	void unregisterModels() throws Exception {
 		registrations.forEach(registration -> {
 			try {
 				registration.unregister();
@@ -113,6 +119,10 @@ class OclMetadataBridgeOSGiTest {
 			}
 		});
 		registrations.clear();
+		for (Configuration configuration : lateConfigurations) {
+			configuration.delete();
+		}
+		lateConfigurations.clear();
 	}
 
 	@Test
@@ -160,6 +170,31 @@ class OclMetadataBridgeOSGiTest {
 		assertEquals(firstFingerprint, versionOf(first),
 				"the aspect sits on the version its expression was compiled against");
 		assertEquals(secondFingerprint, versionOf(second));
+	}
+
+	@Test
+	@DisplayName("a bridge configured after the fact gets the content that is already there")
+	void theLateBridgeReplayFindsExistingContent(
+			@InjectService(timeout = 5000) MetadataService metadata,
+			@InjectService(timeout = 5000) ConfigurationAdmin configurationAdmin) throws Exception {
+		EPackage ePackage = bookPackage(false);
+		register(ePackage);
+		await(() -> metadata.getClassAspect(bookOf(ePackage), ASPECT_TYPE_ID).isPresent(),
+				"the configured bridge answers first, so there is content to be found");
+
+		// a second bridge over the same registry, with its own type id — the shape use case 6
+		// of the registry guide describes: late wiring must be indistinguishable from early
+		Configuration late = configurationAdmin.createFactoryConfiguration(
+				"EObjectRegistryMetadataBridge", "?");
+		lateConfigurations.add(late);
+		Dictionary<String, Object> properties = new Hashtable<>();
+		properties.put("emf.eobject.registry.name", "ocl-compiled");
+		properties.put("aspect.type.id", LATE_ASPECT_TYPE_ID);
+		properties.put("anchorResolver.target", "(anchor.resolver.name=ocl)");
+		late.update(properties);
+
+		await(() -> metadata.getClassAspect(bookOf(ePackage), LATE_ASPECT_TYPE_ID).isPresent(),
+				"the listener replay hands the late bridge what the registry already holds");
 	}
 
 	@Test
