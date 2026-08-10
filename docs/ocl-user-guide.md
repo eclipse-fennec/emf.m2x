@@ -1067,8 +1067,8 @@ because it was not.
 This wires up the other arrangement: **a model's OCL is compiled when the model registers, and
 filed under that model version.** Four configurations, no code.
 
-Everything below is what `OclMetadataCacheOSGiTest` runs, so the tutorial and the test cannot
-drift apart.
+Everything below is what `OclMetadataCacheOSGiTest` and `OclMetadataBridgeOSGiTest` run, so the
+tutorial and the tests cannot drift apart.
 
 ### What the pieces do
 
@@ -1076,8 +1076,9 @@ drift apart.
 |---|---|
 | `EObjectRegistry` | holds the compiled expressions, each anchored with `emf.nsURI` and `emf.fingerprint` |
 | `OclMetadataExpressionCache` | the `OclExpressionCache` service over that registry, with an LRU for what has no model version to anchor to |
-| `OclConstraintPrecompiler` | a `MetadataHandler`: when a package registers, compiles the OCL it declares |
-| `EObjectRegistryMetadataBridge` | optional — puts registry content onto the metadata tree of every live model version |
+| `OclConstraintPrecompiler` | binds `EPackage` services: when a model arrives, compiles the OCL it declares; when it goes, drops it |
+| `EObjectRegistryMetadataBridge` | optional — puts registry content onto the metadata tree of the model version it names |
+| `OclExpressionAnchorResolver` | tells that bridge which class a compiled expression belongs to: its context type |
 
 ### The configuration
 
@@ -1096,7 +1097,14 @@ drift apart.
   },
 
   "OclConstraintPrecompiler": {
-    "cache.target": "(cache.name=metadata)"
+    "cache.target": "(cache.name=metadata)",
+    "versioned.target": "(cache.name=metadata)"
+  },
+
+  "EObjectRegistryMetadataBridge~ocl": {
+    "emf.eobject.registry.name": "ocl-compiled",
+    "aspect.type.id": "ocl.compiled",
+    "anchorResolver.target": "(anchor.resolver.name=ocl)"
   },
 
   "DefaultOclEngine": {
@@ -1130,22 +1138,44 @@ public class EmptyEObjectProvider implements EObjectProvider {
 If the registry should also carry **authored** expression libraries from files, use
 `FileEObjectProvider` instead and the compiled ones join them.
 
+The bridge is what makes compiled OCL findable from a class: `getClassAspect(book,
+"ocl.compiled")`. It needs the anchor resolver in its target, because by default a bridge anchors
+an entry at the `eClass()` of its content — for a compiled expression that is a class of the OCL
+metamodel, where nobody looks. The resolver anchors it at the **context type** instead.
+
+### The trigger is the model
+
+The precompiler reacts to the arrival of an `EPackage`, not to a metadata handler callback. That
+is not a detail: a version's metadata tree is published only *after* every handler has run, and
+handlers run in registration order — so content derived inside a handler and pushed from there
+lands on the tree being built only if the bridge happened to be wired first. Reacting to the
+model itself has no such dependency.
+
 ### What you get
 
-- A model's invariants, derivations and operation bodies are compiled once, when it registers.
-- Each is filed under the fingerprint of the version it was compiled against, so two versions
-  of one nsURI never answer for each other — the failure that is otherwise silent, since
+- A model's invariants, derivations and operation bodies are compiled once, when it arrives.
+- Each is keyed by the derived fingerprint of the version it was compiled against, so two
+  versions of one nsURI never answer for each other — the failure that is otherwise silent, since
   feature access falls back to resolving by name while a type reference does not.
+- Each carries the **plain** model fingerprint as `emf.fingerprint`, which is what the bridge
+  compares against a tree before placing anything on it. So an expression compiled against v1
+  appears on v1's tree and on no other, even while v2 of the same nsURI is live.
 - A version that goes takes its compiled OCL with it.
-- With the bridge configured, `getClassAspect(eClass, …)` finds registry content on the tree of
-  every live version, including a model that registers later.
+- A model that registers *later* than its compiled OCL still gets it, through the handler replay.
 
 ### Limits worth knowing
 
 - **Changing a model after registration is out of contract.** A fingerprint describes the
   package as it was; nothing here re-checks a model that changed underneath.
 - **The registry is the read face, not the aspect.** A class carries at most one aspect per
-  type id, and an OCL context type has as many expressions as someone writes.
+  type id, and an OCL context type has as many expressions as someone writes — so with several
+  expressions on one class, the aspect shows the last one placed. Ask the registry for all of
+  them.
+- **The bridge needs the entry's fingerprint to be honoured**, which requires
+  `org.eclipse.fennec.emf.osgi.eobject.registry.metadata` 1.1.0 or newer
+  ([emf.osgi#81](https://github.com/eclipse-fennec/emf.osgi/issues/81)). Against an older
+  version, a compiled expression is copied onto every live version's tree, where its references
+  still point into the package it was built from.
 - A constraint that does not parse is logged and skipped. Refusing the model would turn a
   validation error into a model that cannot be loaded at all; the delegate still reports it
   when someone asks.

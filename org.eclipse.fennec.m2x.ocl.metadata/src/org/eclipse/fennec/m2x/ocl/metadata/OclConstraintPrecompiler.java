@@ -27,8 +27,6 @@ import org.eclipse.emf.ecore.EModelElement;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
-import org.eclipse.fennec.emf.osgi.metadata.MetadataHandler;
-import org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata;
 import org.eclipse.fennec.m2x.ocl.api.OclDelegates;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
@@ -48,6 +46,14 @@ import org.eclipse.fennec.m2x.ocl.api.OclParseException;
  * delegates find compiled expressions instead of strings, and a version that goes takes its
  * compiled OCL with it.
  *
+ * <p><b>Driven by the model, not by the metadata handler.</b> The trigger is the arrival of an
+ * {@code EPackage} — in OSGi its service, in plain Java a call — and deliberately not
+ * {@code MetadataHandler.onPackageRegistered}. A version's metadata tree is published only
+ * after every handler has run, and handlers run in registration order, so content pushed from
+ * inside a handler reaches that tree or misses it depending on which handler was wired first.
+ * Reacting to the model itself has no such dependency: whatever is filed is placed as soon as
+ * a tree exists, before or after.
+ *
  * <p>A constraint that does not parse is logged and skipped. A model with one broken
  * invariant still registers — refusing it here would turn a validation error into a model
  * that cannot be loaded at all, which is not this handler's decision to make. The delegate
@@ -55,7 +61,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclParseException;
  *
  * @since 1.0
  */
-public class OclConstraintPrecompiler implements MetadataHandler {
+public class OclConstraintPrecompiler {
 
 	private static final Logger LOG = Logger.getLogger(OclConstraintPrecompiler.class.getName());
 
@@ -72,9 +78,13 @@ public class OclConstraintPrecompiler implements MetadataHandler {
 		this.cache = Objects.requireNonNull(cache, "cache must not be null");
 	}
 
-	@Override
-	public void onPackageRegistered(PackageMetadata packageMetadata) {
-		EPackage ePackage = packageMetadata != null ? packageMetadata.getEPackage() : null;
+	/**
+	 * Compiles everything the given model version declares.
+	 *
+	 * @param ePackage the model version to compile against — its own instance, because that is
+	 *     what the compiled expressions will hold; {@code null} is ignored
+	 */
+	public void compile(EPackage ePackage) {
 		if (ePackage == null) {
 			return;
 		}

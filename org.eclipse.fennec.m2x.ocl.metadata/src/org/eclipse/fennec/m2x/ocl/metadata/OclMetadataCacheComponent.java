@@ -14,9 +14,13 @@
  */
 package org.eclipse.fennec.m2x.ocl.metadata;
 
+import java.util.Optional;
+
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryWriter;
 import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
-import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
@@ -54,11 +58,12 @@ import org.osgi.service.metatype.annotations.Designate;
  * @since 1.0
  */
 @Designate(ocd = OclMetadataCacheConfiguration.class)
-@Component(name = "OclMetadataExpressionCache", service = OclExpressionCache.class,
+@Component(name = "OclMetadataExpressionCache",
+		service = { OclExpressionCache.class, OclVersionedExpressions.class },
 		property = "cache.name=metadata")
-public class OclMetadataCacheComponent implements OclExpressionCache {
+public class OclMetadataCacheComponent implements OclExpressionCache, OclVersionedExpressions {
 
-	private final OclExpressionCache cache;
+	private final RegistryExpressionCache cache;
 
 	@Activate
 	public OclMetadataCacheComponent(OclMetadataCacheConfiguration config,
@@ -101,5 +106,15 @@ public class OclMetadataCacheComponent implements OclExpressionCache {
 	@Override
 	public long missCount() {
 		return cache.missCount();
+	}
+
+	@Override
+	public Optional<EClass> anchorOf(String registryKey) {
+		return cache.anchorOf(registryKey);
+	}
+
+	@Override
+	public int release(EPackage ePackage) {
+		return cache.release(ePackage);
 	}
 }
