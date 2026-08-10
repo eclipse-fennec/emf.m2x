@@ -52,6 +52,7 @@
 | D42 | `EPackage.Registry` ist Eingabewert der Engine, genau ein Fallback-Punkt | Engine-Interna lesen nie `EPackage.Registry.INSTANCE`. Die Konfiguration löst einmalig `registry != null ? registry : INSTANCE` auf, alles darunter bekommt die Registry als Parameter. Modellversions-Identität bleibt Sache des Aufrufers. Siehe DR-D42. |
 | D43 | Eine DS-Komponente je Engine, OCL-Engine als mandatorische Referenz | `DefaultM2tEngine`/`DefaultQvtoEngine`/`DefaultQvtdEngine`, `PROTOTYPE`, `configurationPolicy=OPTIONAL`, Konstruktor-Injection; drei Türen für den Aufrufer. Siehe DR-D43. |
 | D44 | Kompilierte OCL: abgeleiteter Fingerprint als Schlüssel, Modell-Fingerprint als Version | Zwei Fingerprints mit zwei Aufgaben; Auslöser ist der `EPackage`-Service, nicht `MetadataHandler.onPackageRegistered`; `OclVersionedExpressions` als versions-bewusste Fläche des Caches. Siehe DR-D44. |
+| D45 | M2T-Extent für `allInstances()`: Eclipse-Parität plus Input-Fallback | Resource der Wurzel von `self`, sonst deren Containment-Baum; ist `self` kein `EObject`, treten die Input-Elemente an die Stelle. Pro Wurzel und Klasse einmal erhoben. Siehe DR-D45. |
 
 ---
 
@@ -1036,3 +1037,17 @@ Tür 1 liegt bewusst auf der Factory, nicht auf der Configuration: die `*.api`-B
 **`OclVersionedExpressions` als eigene Fläche:** Zwei Fragen kann ein `OclExpressionCache` nicht beantworten — zu welcher Klasse eine Entry gehört (`anchorOf`) und was zu einer gehenden Version gehört (`release`). Beide stehen in einem eigenen Interface, damit keine davon eine Abhängigkeit mitzieht: Der Anker-Resolver ist das einzige, was Bridge-Typen erwähnt (Import optional, damit ein Deployment ohne Bridge und ein Plain-Java-Nutzer das Bundle nicht braucht), und wer eine gehende Version bemerkt, muss nicht wissen, welche Cache-Implementierung dahinter steht.
 
 **Warum der Anker aus dem Cache kommt und nicht aus einem Lookup:** Der Kontexttyp steht nicht im kompilierten Ausdruck (`OclExpression.getType()` ist der **Ergebnis**typ), und ein Lookup über die lebenden Modelle scheitert genau im entscheidenden Moment — während der Handler-Wiedergabe einer Version, deren Baum noch nicht publiziert ist. Der Cache hat die Entry selbst gefilt und weiß, wofür.
+
+---
+
+### DR-D45: M2T-Extent für `allInstances()` — Eclipse-Parität plus Input-Fallback
+
+**Entscheidung:** `M2tEvaluator` gibt dem `OclContext` einen Extent. Sein Umfang ist der von Eclipse OCL und damit der von Acceleo: die **Resource der Wurzel von `self`**, oder — wenn diese Wurzel in keiner Resource liegt — ihr eigener Containment-Baum. Subtypen zählen mit. Zusätzlich gilt: ist `self` **kein** `EObject`, treten die Input-Elemente des Generierungslaufs an die Stelle.
+
+**Referenz:** Acceleo 3.7 übergibt `ocl.getExtentMap()` (`AcceleoEvaluationTask:464`), dahinter `LazyExtentMap(EObject context)` von Eclipse OCL: `EcoreUtil.getRootContainer(context)`, dann `context.eResource().getContents()` oder — ohne Resource — der Kontext selbst; `isInstance` entscheidet, also inklusive Subtypen; faul pro Klasse. Die OMG-Spec legt den Umfang von `allInstances()` nicht fest, also ist Eclipse hier die Referenz.
+
+**Warum der Fallback über die Referenz hinausgeht:** Eclipse OCL liefert einen leeren Extent, wenn `self` kein `EObject` ist. In einem Template ist das kein Randfall — ein Template mit `String`-Parameter ist alltäglich, und `allInstances()` würde dort **still** 0 antworten. Ein leeres Ergebnis ist die schlechteste der drei möglichen Antworten (richtig, Fehler, still falsch). Die Input-Elemente sind dasselbe Modell, nur vom Aufrufer benannt statt per Navigation gefunden.
+
+**Warum nicht das ganze ResourceSet:** Mächtiger, aber abhängig von der Ladereihenfolge — und ein Template sähe Modelle, die nicht sein Input sind. Ein Generator generiert aus einem Modell, nicht aus allem, was geladen ist.
+
+**Zwischenspeichern gehört dazu:** Ein Template stellt dieselbe Frage in jedem Schleifendurchlauf. Ohne Caching würde ein einzelnes `[for]` das Modell pro Durchlauf neu durchlaufen — genau die Klasse von Kosten, die #87 (`OclSet` quadratisch) sichtbar gemacht hat. Erhoben wird deshalb pro Wurzel und Klasse einmal; die Obergrenze `maxCollectionSize` schützt weiterhin vor Explosion.

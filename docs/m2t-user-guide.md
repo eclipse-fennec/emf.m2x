@@ -1196,7 +1196,26 @@ One method that makes sense for two receiver types is registered twice, once per
 
 Operations of the same name are told apart by how many arguments the call passes, and then by receiver type. Among equally applicable candidates the first registered one answers, so registration order is what decides — not which provider it came from.
 
-**`allInstances()` is not available in a template.** M2T builds the evaluation context without a model extent, so navigate from the root element the generation was given.
+### 13.2 `allInstances()` and what it sees
+
+`allInstances()` works in a template. What it answers with is the model the generation runs on:
+
+| Situation | The extent |
+|---|---|
+| `self` is a model element in a resource | that resource — every root in it and everything they contain |
+| `self` is a model element outside any resource | the containment tree of its root container |
+| `self` is not a model element (a template called with a `String`, for instance) | the input elements the generation was started with |
+| no input elements and no model context | none — `allInstances()` reports a missing extent instead of answering emptily |
+
+The first two rows are what Acceleo does, because both sit on Eclipse OCL's extent map. The third goes beyond it deliberately: Eclipse OCL hands out an empty extent there, so `allInstances()` would quietly answer `0` inside a template with a string parameter — the kind of wrong answer nobody notices. Subtypes count in every row, so `Book.allInstances()` includes the instances of `Novel`.
+
+```
+[template public toc(s : Shelf)]
+[Book.allInstances()->size()/] books in this catalogue
+[/template]
+```
+
+Two things worth knowing: a model in *another* resource of the same `ResourceSet` is not in the extent — a generator generates from a model, not from everything that happens to be loaded — and the answer per class is collected once per model root and kept for the run, so asking inside a `[for]` loop costs one pass, not one per iteration. `maxCollectionSize` still caps the result.
 
 ---
 

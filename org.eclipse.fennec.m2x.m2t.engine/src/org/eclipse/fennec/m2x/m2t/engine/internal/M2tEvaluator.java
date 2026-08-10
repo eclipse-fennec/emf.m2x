@@ -36,6 +36,7 @@ import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
@@ -98,6 +99,18 @@ public class M2tEvaluator {
 
 	/** Maps overridden template → list of overriding templates. */
 	private final Map<Template, List<Template>> overrideIndex = new IdentityHashMap<>();
+
+	/**
+	 * One extent per model root, so {@code allInstances()} in a loop does not rescan the model
+	 * once per pass. Keyed by identity: a root is the same root only if it is the same object.
+	 */
+	private final Map<EObject, M2tModelExtent> extents = new IdentityHashMap<>();
+
+	/** The elements the generation was started with — the extent when {@code self} is not one. */
+	private List<EObject> inputElements = List.of();
+
+	/** The extent around those input elements, built once it is asked for. */
+	private M2tModelExtent inputExtent;
 
 	/** Maps standalone template invocations to their indentation string (§8.4). */
 	private final Map<TemplateInvocation, String> indentationMap;
@@ -182,6 +195,12 @@ public class M2tEvaluator {
 	 */
 	public String execute(Template template, List<? extends EObject> args) {
 		Objects.requireNonNull(template, "template must not be null");
+
+		if (templateDepth == 0) {
+			// The outermost call is the one the caller started the generation with, so its
+			// arguments are the input elements — no second channel needed to learn them.
+			inputElements = List.copyOf(args);
+		}
 
 		if (templateDepth >= maxTemplateDepth) {
 			addError("Maximum template depth exceeded (" + maxTemplateDepth
@@ -677,13 +696,14 @@ public class M2tEvaluator {
 		Object self = env.lookup("self");
 		OclContext oclContext;
 		if (self instanceof EObject eo) {
-			oclContext = OclContext.of(eo, variables);
+			oclContext = new OclContext(eo, extentAround(eo), variables);
 		} else {
-			// No EObject self — use variables-only context
+			// No EObject self — use variables-only context, and the input model as the extent,
+			// because a string context names no model to navigate from
 			if (self != null) {
 				variables.put("self", self);
 			}
-			oclContext = OclContext.of(variables);
+			oclContext = new OclContext(null, inputExtent(), variables);
 		}
 
 		try {
@@ -692,6 +712,30 @@ public class M2tEvaluator {
 			addError("OCL evaluation error [" + e.getClass().getSimpleName() + "]: " + e.getMessage());
 			return null;
 		}
+	}
+
+	/**
+	 * The extent {@code allInstances()} resolves in for the given context object, built once
+	 * per model root and reused — see {@link M2tModelExtent} for what the scope is and why.
+	 */
+	private M2tModelExtent extentAround(EObject self) {
+		return extents.computeIfAbsent(EcoreUtil.getRootContainer(self),
+				root -> M2tModelExtent.aroundSelf(root));
+	}
+
+	/**
+	 * The extent around the generation's input elements, for a context that is not an
+	 * {@code EObject}. {@code null} when there are no input elements, which leaves
+	 * {@code allInstances()} reporting a missing extent rather than answering emptily.
+	 */
+	private M2tModelExtent inputExtent() {
+		if (inputElements.isEmpty()) {
+			return null;
+		}
+		if (inputExtent == null) {
+			inputExtent = M2tModelExtent.aroundAll(inputElements);
+		}
+		return inputExtent;
 	}
 
 	/**
