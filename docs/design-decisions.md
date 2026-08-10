@@ -50,6 +50,8 @@
 | D40 | QVTBase als Shared-Bundle `org.eclipse.fennec.m2x.qvt.model` | `qvtbase.ecore` extrahiert; typsichere EReferences zwischen `qvto.model` und `qvtd.model`. Siehe DR-D40. |
 | D41 | OCL IDE-Integration als isoliertes, platform-gekoppeltes Bundle | `org.eclipse.fennec.m2x.ocl.ide` registriert die EMF-Delegates via `plugin.xml` für den generischen EMF-Editor. Einzige Ausnahme zur "No Eclipse Platform"-Regel, strikt isoliert. Siehe DR-D41. |
 | D42 | `EPackage.Registry` ist Eingabewert der Engine, genau ein Fallback-Punkt | Engine-Interna lesen nie `EPackage.Registry.INSTANCE`. Die Konfiguration löst einmalig `registry != null ? registry : INSTANCE` auf, alles darunter bekommt die Registry als Parameter. Modellversions-Identität bleibt Sache des Aufrufers. Siehe DR-D42. |
+| D43 | Eine DS-Komponente je Engine, OCL-Engine als mandatorische Referenz | `DefaultM2tEngine`/`DefaultQvtoEngine`/`DefaultQvtdEngine`, `PROTOTYPE`, `configurationPolicy=OPTIONAL`, Konstruktor-Injection; drei Türen für den Aufrufer. Siehe DR-D43. |
+| D44 | Kompilierte OCL: abgeleiteter Fingerprint als Schlüssel, Modell-Fingerprint als Version | Zwei Fingerprints mit zwei Aufgaben; Auslöser ist der `EPackage`-Service, nicht `MetadataHandler.onPackageRegistered`; `OclVersionedExpressions` als versions-bewusste Fläche des Caches. Siehe DR-D44. |
 
 ---
 
@@ -1015,3 +1017,22 @@ M2tConfiguration.builder(oclConfiguration).build();           // 3
 Tür 1 liegt bewusst auf der Factory, nicht auf der Configuration: die `*.api`-Bundles sehen `ocl.api`, aber nicht `ocl.parser`, und ein Parser gehört auch nicht in die API-Schicht. Die Configuration trägt in diesem Fall keine OCL-Seite; die Factory setzt sie ein.
 
 **Scope:** M2T, QVT-O, QVT-R. OCL hat diese Form bereits (`OclEngineComponent`).
+
+---
+
+### DR-D44: Kompilierte OCL — zwei Fingerprints, und der Auslöser ist das Modell
+
+**Entscheidung:** Der registry-gestützte Ausdrucks-Cache trägt **zwei** Fingerprints mit klar getrennten Aufgaben:
+
+| Wert | Berechnung | Aufgabe |
+|---|---|---|
+| abgeleiteter Fingerprint | `fingerprint(ePackage, "ocl")` | **Schlüssel** der Registry-Entry — „darf dieses kompilierte Artefakt wiederverwendet werden?" |
+| Modell-Fingerprint | `fingerprint(ePackage)` | **Property** `emf.fingerprint` — „zu welcher Modellversion gehört das?" |
+
+**Warum das nicht ein Wert sein darf:** `MetadataService` berechnet die Identität seiner Bäume mit dem schlichten `fingerprint(ePackage)`. Die Bridge vergleicht die `emf.fingerprint`-Property einer Entry gegen den `modelFingerprint` eines Baums, bevor sie etwas darauf platziert (eclipse-fennec/emf.osgi#81). Stand der abgeleitete Wert in der Property, benannte jede Entry eine Version, die kein Baum hat — die Entry bleibt für immer „pending", und niemand sieht einen Fehler. Umgekehrt wäre der Modell-Fingerprint als Schlüssel zu grob: er ändert sich nicht, wenn die OCL-Engine oder ihre Optionen sich ändern, das kompilierte Ergebnis aber schon.
+
+**Warum der `EPackage`-Service der Auslöser ist und nicht `MetadataHandler.onPackageRegistered`:** Ein Versionsbaum wird erst publiziert, **nachdem** alle Handler gelaufen sind, und Handler laufen in Registrierungsreihenfolge. Wer aus einem Handler heraus ableitet und in die Registry schreibt, trifft den entstehenden Baum also nur, wenn die Bridge vor ihm verdrahtet wurde — Korrektheit nach Zufall der Reihenfolge. Auf das Modell selbst zu reagieren hat diese Abhängigkeit nicht: Was gefilt ist, wird platziert, sobald ein Baum existiert, davor oder danach. Der Registry-Guide von `emf.osgi` schreibt genau diese Form vor.
+
+**`OclVersionedExpressions` als eigene Fläche:** Zwei Fragen kann ein `OclExpressionCache` nicht beantworten — zu welcher Klasse eine Entry gehört (`anchorOf`) und was zu einer gehenden Version gehört (`release`). Beide stehen in einem eigenen Interface, damit keine davon eine Abhängigkeit mitzieht: Der Anker-Resolver ist das einzige, was Bridge-Typen erwähnt (Import optional, damit ein Deployment ohne Bridge und ein Plain-Java-Nutzer das Bundle nicht braucht), und wer eine gehende Version bemerkt, muss nicht wissen, welche Cache-Implementierung dahinter steht.
+
+**Warum der Anker aus dem Cache kommt und nicht aus einem Lookup:** Der Kontexttyp steht nicht im kompilierten Ausdruck (`OclExpression.getType()` ist der **Ergebnis**typ), und ein Lookup über die lebenden Modelle scheitert genau im entscheidenden Moment — während der Handler-Wiedergabe einer Version, deren Baum noch nicht publiziert ist. Der Cache hat die Entry selbst gefilt und weiß, wofür.

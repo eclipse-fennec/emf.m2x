@@ -14,17 +14,23 @@
  */
 package org.eclipse.fennec.m2x.ocl.metadata;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
+import org.eclipse.fennec.emf.osgi.constants.EMFNamespaces;
 import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistry;
+import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry;
 import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryWriter;
+import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 
@@ -45,9 +51,22 @@ import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
  * registry as its query face. That is the boundary the registry guide draws, and this cache
  * stays on the right side of it.
  *
- * <p>The key carries the fingerprint, so two versions of one nsURI never answer for each
- * other. Where a context type has no package to fingerprint — a classifier of Ecore itself,
- * or a type built at runtime — there is no version to anchor to and the delegate takes it.
+ * <p><b>Two fingerprints, two jobs.</b> The key carries the <em>derived</em> fingerprint —
+ * {@code fingerprint(ePackage, "ocl")}, the answer to "may this compiled artifact be reused?"
+ * — so two versions of one nsURI never answer for each other, and a different OCL engine
+ * version would not adopt this one's output. The {@code emf.fingerprint} property carries the
+ * <em>plain</em> model fingerprint, because that is the join key the rest of the runtime uses:
+ * the metadata service computes it for every version it registers, and the bridge compares it
+ * against a tree's version before placing anything there. Mixing the two would leave every
+ * entry naming a version that no tree has. Where a context type has no package to fingerprint
+ * — a classifier of Ecore itself, or a type built at runtime — there is no version to anchor
+ * to and the delegate takes it.
+ *
+ * <p><b>It also answers for its own entries.</b> {@link OclVersionedExpressions} makes the
+ * context type of an entry askable, which is what an anchor resolver needs and what nothing
+ * else can supply: the context type is not in the compiled expression, and asking a registry
+ * of models fails exactly when it matters, while a version's tree is being built and is not
+ * published yet.
  *
  * <p><b>Model mutation after registration is out of contract.</b> A fingerprint describes the
  * package as it was; changing it afterwards leaves entries that no longer describe it, and
@@ -55,13 +74,16 @@ import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
  *
  * @since 1.0
  */
-public class RegistryExpressionCache implements OclExpressionCache {
+public class RegistryExpressionCache implements OclExpressionCache, OclVersionedExpressions {
 
 	/** Entry property naming the model an entry belongs to. */
-	public static final String PROP_NS_URI = "emf.nsURI";
+	public static final String PROP_NS_URI = EMFNamespaces.EMF_MODEL_NSURI;
 
 	/** Entry property naming the model <em>version</em> an entry belongs to. */
-	public static final String PROP_FINGERPRINT = "emf.fingerprint";
+	public static final String PROP_FINGERPRINT = EMFNamespaces.EMF_MODEL_FINGERPRINT;
+
+	/** Entry property naming the context type an entry's expression was compiled against. */
+	public static final String PROP_CONTEXT_TYPE = "ocl.contextType";
 
 	/** What this cache derives fingerprints for, so other artifacts of a model differ. */
 	private static final String PURPOSE = "ocl";
@@ -75,6 +97,12 @@ public class RegistryExpressionCache implements OclExpressionCache {
 	private final OclExpressionCache delegate;
 	private final AtomicLong hits = new AtomicLong();
 	private final AtomicLong misses = new AtomicLong();
+
+	/**
+	 * The context type per entry key — what this cache knows and no lookup could tell it in
+	 * time, see {@link #anchorOf(String)}.
+	 */
+	private final Map<String, EClass> anchors = new ConcurrentHashMap<>();
 
 	/**
 	 * @param writer             the registry to file compiled expressions in, must not be
@@ -95,11 +123,11 @@ public class RegistryExpressionCache implements OclExpressionCache {
 
 	@Override
 	public OclExpression get(String expression, EClassifier contextType) {
-		String fingerprint = fingerprintOf(contextType);
-		if (fingerprint == null) {
+		String derived = derivedFingerprintOf(contextType);
+		if (derived == null) {
 			return delegate.get(expression, contextType);
 		}
-		Optional<EObject> found = registry.get(key(fingerprint, expression, contextType));
+		Optional<EObject> found = registry.get(key(derived, expression, contextType));
 		if (found.isPresent() && found.get() instanceof OclExpression parsed) {
 			hits.incrementAndGet();
 			return parsed;
@@ -110,32 +138,62 @@ public class RegistryExpressionCache implements OclExpressionCache {
 
 	@Override
 	public void put(String expression, EClassifier contextType, OclExpression parsed) {
-		String fingerprint = fingerprintOf(contextType);
-		if (fingerprint == null) {
+		String derived = derivedFingerprintOf(contextType);
+		if (derived == null) {
 			delegate.put(expression, contextType, parsed);
 			return;
 		}
-		writer.put(SOURCE, key(fingerprint, expression, contextType), parsed,
-				Map.of(PROP_NS_URI, contextType.getEPackage().getNsURI(),
-						PROP_FINGERPRINT, fingerprint));
+		String key = key(derived, expression, contextType);
+		if (contextType instanceof EClass eClass) {
+			// before the write, because filing the entry is what notifies a listener, and a
+			// bridge asking for the anchor must not be told "unknown" for what it just saw
+			anchors.put(key, eClass);
+		}
+		writer.put(SOURCE, key, parsed, propertiesOf(contextType));
 	}
 
 	@Override
 	public void invalidate(String expression, EClassifier contextType) {
-		String fingerprint = fingerprintOf(contextType);
-		if (fingerprint == null) {
+		String derived = derivedFingerprintOf(contextType);
+		if (derived == null) {
 			delegate.invalidate(expression, contextType);
 			return;
 		}
-		writer.remove(SOURCE, key(fingerprint, expression, contextType));
+		String key = key(derived, expression, contextType);
+		anchors.remove(key);
+		writer.remove(SOURCE, key);
 	}
 
 	@Override
 	public void invalidateAll() {
 		// Only what this cache wrote: a registry is shared, and other sources' entries are
 		// none of its business — which is what scoping by source is for.
-		writer.sync(SOURCE, java.util.List.of());
+		anchors.clear();
+		writer.sync(SOURCE, List.of());
 		delegate.invalidateAll();
+	}
+
+	@Override
+	public Optional<EClass> anchorOf(String registryKey) {
+		return registryKey == null ? Optional.empty() : Optional.ofNullable(anchors.get(registryKey));
+	}
+
+	@Override
+	public int release(EPackage ePackage) {
+		String modelFingerprint = ePackage == null ? null : fingerprintService.fingerprint(ePackage);
+		if (modelFingerprint == null) {
+			return 0;
+		}
+		List<String> keys = registry.entries().stream()
+				.filter(entry -> SOURCE.equals(entry.source()))
+				.filter(entry -> modelFingerprint.equals(entry.properties().get(PROP_FINGERPRINT)))
+				.map(EObjectRegistryEntry::key)
+				.toList();
+		for (String key : keys) {
+			anchors.remove(key);
+			writer.remove(SOURCE, key);
+		}
+		return keys.size();
 	}
 
 	@Override
@@ -155,12 +213,40 @@ public class RegistryExpressionCache implements OclExpressionCache {
 	}
 
 	/**
-	 * The fingerprint of the model the context type belongs to, or {@code null} when there is
-	 * no package and therefore no version to anchor to.
+	 * The properties an entry carries: which model, which version of it, and which class
+	 * inside it. The version is the <em>plain</em> model fingerprint, deliberately — it is the
+	 * join key everything else in the runtime is keyed by, and the metadata bridge compares it
+	 * against the version of a tree before placing anything on it.
 	 */
-	private String fingerprintOf(EClassifier contextType) {
+	private Map<String, Object> propertiesOf(EClassifier contextType) {
+		Map<String, Object> properties = new LinkedHashMap<>();
+		properties.put(PROP_NS_URI, contextType.getEPackage().getNsURI());
+		properties.put(PROP_FINGERPRINT, modelFingerprintOf(contextType));
+		if (contextType.getName() != null) {
+			properties.put(PROP_CONTEXT_TYPE, contextType.getName());
+		}
+		return properties;
+	}
+
+	/**
+	 * The <em>derived</em> fingerprint the entries are keyed by: "can this compiled artifact
+	 * be reused?", which is a different question from "which model version is this?" and must
+	 * not share its answer. {@code null} when the context type has no package, and therefore
+	 * no version to anchor to.
+	 */
+	private String derivedFingerprintOf(EClassifier contextType) {
 		EPackage ePackage = contextType != null ? contextType.getEPackage() : null;
 		return ePackage == null ? null : fingerprintService.fingerprint(ePackage, PURPOSE);
+	}
+
+	/**
+	 * The <em>plain</em> model fingerprint — the identity of the model version itself, which
+	 * is what the metadata service computes for its trees and what an entry names as the
+	 * version it belongs to.
+	 */
+	private String modelFingerprintOf(EClassifier contextType) {
+		EPackage ePackage = contextType != null ? contextType.getEPackage() : null;
+		return ePackage == null ? null : fingerprintService.fingerprint(ePackage);
 	}
 
 	/**

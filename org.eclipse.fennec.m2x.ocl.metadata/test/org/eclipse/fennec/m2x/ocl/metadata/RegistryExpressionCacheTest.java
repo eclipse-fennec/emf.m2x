@@ -31,6 +31,7 @@ import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry;
 import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryWriter;
 import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistries;
 import org.eclipse.fennec.emf.osgi.fingerprint.util.FingerprintHelper;
+import org.eclipse.fennec.emf.osgi.metadata.MetadataServices;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
@@ -72,9 +73,77 @@ class RegistryExpressionCacheTest {
 		EObjectRegistryEntry entry = writer.getRegistry().entries().iterator().next();
 
 		assertEquals(NS_URI, entry.properties().get(RegistryExpressionCache.PROP_NS_URI));
-		assertEquals(FingerprintHelper.getDefaultFingerprintService().fingerprint(ePackage, "ocl"),
+		assertEquals(FingerprintHelper.getDefaultFingerprintService().fingerprint(ePackage),
 				entry.properties().get(RegistryExpressionCache.PROP_FINGERPRINT),
-				"the fingerprint is what says which version this belongs to");
+				"the plain model fingerprint, because that is the version everything else is keyed by");
+		assertEquals("Book", entry.properties().get(RegistryExpressionCache.PROP_CONTEXT_TYPE));
+	}
+
+	@Test
+	@DisplayName("the version an entry names is the one the metadata service computes")
+	void theNamedVersionIsTheOneMetadataUses() throws Exception {
+		EPackage ePackage = bookPackage(false);
+		engine(ePackage, cache()).parse(EXPRESSION, bookOf(ePackage));
+
+		EObjectRegistryEntry entry = writer.getRegistry().entries().iterator().next();
+		String named = (String) entry.properties().get(RegistryExpressionCache.PROP_FINGERPRINT);
+
+		// What the bridge compares against: the fingerprint a metadata tree carries. Naming the
+		// derived one instead would leave every entry pointing at a version no tree ever has.
+		assertEquals(MetadataServices.createWhiteboard().registerPackage(ePackage).orElseThrow()
+				.getModelFingerprint(), named);
+		assertNotEquals(FingerprintHelper.getDefaultFingerprintService().fingerprint(ePackage, "ocl"),
+				named, "the derived fingerprint is the cache key, not the model version");
+	}
+
+	@Test
+	@DisplayName("an entry knows which class it was compiled for")
+	void theCacheAnswersForItsOwnAnchors() throws Exception {
+		EPackage ePackage = bookPackage(false);
+		RegistryExpressionCache cache = cache();
+		engine(ePackage, cache).parse(EXPRESSION, bookOf(ePackage));
+
+		EObjectRegistryEntry entry = writer.getRegistry().entries().iterator().next();
+
+		assertSame(bookOf(ePackage), cache.anchorOf(entry.key()).orElseThrow(),
+				"the context type it was compiled against, not the class of the expression");
+		assertTrue(cache.anchorOf("something this cache never filed").isEmpty());
+		assertTrue(cache.anchorOf(null).isEmpty());
+	}
+
+	@Test
+	@DisplayName("two versions anchor at their own class, not at each other's")
+	void anchorsAreVersionSpecific() throws Exception {
+		EPackage v1 = bookPackage(false);
+		EPackage v2 = bookPackage(true);
+		RegistryExpressionCache cache = cache();
+		engine(v1, cache).parse(EXPRESSION, bookOf(v1));
+		engine(v2, cache).parse(EXPRESSION, bookOf(v2));
+
+		for (EObjectRegistryEntry entry : writer.getRegistry().entries()) {
+			EClass anchor = cache.anchorOf(entry.key()).orElseThrow();
+			String named = (String) entry.properties().get(RegistryExpressionCache.PROP_FINGERPRINT);
+			assertEquals(FingerprintHelper.getDefaultFingerprintService()
+					.fingerprint(anchor.getEPackage()), named,
+					"the anchor belongs to the very version the entry names");
+		}
+	}
+
+	@Test
+	@DisplayName("a version that goes takes its compiled OCL with it, and only its own")
+	void releasingAVersionLeavesTheOtherAlone() throws Exception {
+		EPackage v1 = bookPackage(false);
+		EPackage v2 = bookPackage(true);
+		RegistryExpressionCache cache = cache();
+		engine(v1, cache).parse(EXPRESSION, bookOf(v1));
+		engine(v2, cache).parse(EXPRESSION, bookOf(v2));
+
+		assertEquals(1, cache.release(v1), "one entry belonged to that version");
+
+		assertNull(cache.get(EXPRESSION, bookOf(v1)));
+		assertNotNull(cache.get(EXPRESSION, bookOf(v2)), "the live version keeps everything of its own");
+		assertEquals(1, writer.getRegistry().entries().size());
+		assertEquals(0, cache.release(null), "nothing named, nothing dropped");
 	}
 
 	@Test
@@ -145,7 +214,7 @@ class RegistryExpressionCacheTest {
 		RegistryExpressionCache cache = cache();
 
 		new OclConstraintPrecompiler(new OclParserSupport(registryOf(ePackage)), cache)
-				.onPackageRegistered(packageMetadataOf(ePackage));
+				.compile(ePackage);
 
 		assertNotNull(cache.get("self.pages > 0", book),
 				"the invariant the model declares is compiled before anyone asks for it");
@@ -161,7 +230,7 @@ class RegistryExpressionCacheTest {
 		RegistryExpressionCache cache = cache();
 
 		new OclConstraintPrecompiler(new OclParserSupport(registryOf(ePackage)), cache)
-				.onPackageRegistered(packageMetadataOf(ePackage));
+				.compile(ePackage);
 
 		assertNotNull(cache.get("self.pages > 0", book),
 				"refusing the model over one bad invariant is not this handler's decision");
@@ -197,14 +266,6 @@ class RegistryExpressionCacheTest {
 		EPackage.Registry registry = new EPackageRegistryImpl();
 		registry.put(NS_URI, ePackage);
 		return registry;
-	}
-
-	private static org.eclipse.fennec.emf.osgi.model.metadata.PackageMetadata packageMetadataOf(
-			EPackage ePackage) {
-		var metadata = org.eclipse.fennec.emf.osgi.model.metadata.MetadataFactory.eINSTANCE
-				.createPackageMetadata();
-		metadata.setEPackage(ePackage);
-		return metadata;
 	}
 
 	private RegistryExpressionCache cache() {

@@ -7,15 +7,25 @@ Bundle-Description: Keeps compiled OCL in a named EObject registry, anchored to 
 
 src=${^src}
 
+# The bridge package is needed by the anchor resolver alone. Optional at runtime, so a
+# deployment that files compiled OCL without ever putting it on a metadata tree does not
+# have to carry the bridge bundle — and a plain-Java user does not need it on the classpath.
+Import-Package: \
+	org.eclipse.fennec.emf.osgi.eobject.registry.metadata;resolution:=optional,\
+	*
+
 -buildpath: \
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
 	org.eclipse.fennec.emf.osgi.eobject.registry;version=latest,\
-	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
+	org.eclipse.fennec.emf.osgi.eobject.registry.metadata;version=latest,\
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot
 
+# The metadata service is a test-only dependency: the tests check that the version an entry
+# names is the one a metadata tree carries, which needs a whiteboard to compare against.
 -testpath: \
+	org.eclipse.fennec.emf.osgi.metadata;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\

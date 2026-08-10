@@ -517,6 +517,45 @@ Cache is nullable in `OclConfiguration` — engine works without caching.
 **Delegate-local caches:** The delegate factories maintain their own volatile/synchronized
 lazy parse caches per delegate instance, orthogonal to the shared expression cache.
 
+#### 7.1.1 Model-anchored variants of layer 1
+
+An LRU knows how many entries it may keep, not what a model version is: an expression compiled
+against a retired model survives because it was used recently, one belonging to a live model is
+dropped because it was not. Two implementations in their own bundles replace the key with model
+identity — both optional, neither displaces the default by existing:
+
+| Bundle | Implementation | Key | Holds entries in |
+|---|---|---|---|
+| `…ocl.fingerprint` | `FingerprintExpressionCache` | derived fingerprint of the package | its own map |
+| `…ocl.metadata` | `RegistryExpressionCache` | derived fingerprint of the package | a named `EObjectRegistry` |
+
+**Two fingerprints, two jobs** (D44). `RegistryExpressionCache` keys entries by the *derived*
+fingerprint — `fingerprint(ePackage, "ocl")`, the answer to "may this compiled artifact be
+reused?" — and files the *plain* model fingerprint as the entry property `emf.fingerprint`,
+because that is the identity the rest of the runtime is keyed by: `MetadataService` computes it
+for every version it registers, and `RegistryMetadataBridge` compares it against a tree's version
+before placing anything there. Mixing the two leaves every entry naming a version no tree has.
+
+**What has no version to anchor to** — a classifier of Ecore itself, a type built at runtime —
+goes to an LRU delegate. That is the right structure for something with no lifetime of its own.
+
+**The registry is the read face, not the aspect.** A class carries at most one aspect per type
+id while an OCL context type has as many expressions as someone writes, so the aspect is the
+model-anchored entry point and the registry answers the actual queries.
+
+**Anchoring for the bridge.** `OclVersionedExpressions` (in `…ocl.metadata`) exposes the two
+questions a plain cache cannot answer: `anchorOf(key)` — the context type an entry was compiled
+against, which is not in the expression and cannot be looked up while a version's tree is still
+being built — and `release(ePackage)`, which drops what a departing version leaves behind.
+`OclExpressionAnchorResolver` adapts the first to the bridge's `AspectAnchorResolver`; it is the
+only class mentioning bridge types, and that import is optional so neither a plain-Java user nor
+a deployment without the bridge has to carry the bundle.
+
+**Compiling on arrival.** `OclConstraintPrecompiler` compiles what a model declares — invariants,
+derivations, operation bodies — when the model arrives, triggered by the `EPackage` service and
+deliberately *not* by `MetadataHandler.onPackageRegistered`: a version's tree is published only
+after all handlers ran, so pushing from inside one makes placement depend on wiring order (D44).
+
 ### 7.2 Layer 2: Feature Resolution Cache (1-Entry)
 
 **Problem:** `resolveFeature()` on every property access costs ~5–10 ns via `getFeatureID()`.
