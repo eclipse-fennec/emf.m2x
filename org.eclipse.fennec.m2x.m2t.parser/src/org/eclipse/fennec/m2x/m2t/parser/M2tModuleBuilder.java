@@ -623,6 +623,6 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	 */
 	M2tParseResult getParseResult() {
 		return new M2tParseResult(module, pendingExtends, pendingImports,
-				pendingOverrides, pendingInvocations);
+				pendingOverrides, pendingInvocations, Map.of(), exprBuilder.getPositions());
 	}
 }

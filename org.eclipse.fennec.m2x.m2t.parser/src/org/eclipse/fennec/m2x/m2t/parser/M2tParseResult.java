@@ -17,6 +17,8 @@ package org.eclipse.fennec.m2x.m2t.parser;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
@@ -45,7 +47,8 @@ public record M2tParseResult(
 		List<String> importNames,
 		Map<Template, List<String>> overrideNames,
 		Map<TemplateInvocation, String> invocationNames,
-		Map<TemplateInvocation, String> indentationMap
+		Map<TemplateInvocation, String> indentationMap,
+		Map<EObject, SourcePosition> positions
 ) {
 
 	/**
@@ -58,6 +61,9 @@ public record M2tParseResult(
 		overrideNames = Map.copyOf(overrideNames);
 		invocationNames = Map.copyOf(invocationNames);
 		indentationMap = Map.copyOf(indentationMap);
+		// Not copied into a Map.of: the keys are identities of AST nodes, and the evaluator looks
+		// them up by identity when it places a runtime diagnostic (#116).
+		positions = positions == null ? Map.of() : Map.copyOf(positions);
 	}
 
 	/**
@@ -66,6 +72,17 @@ public record M2tParseResult(
 	public M2tParseResult(Module module, List<String> extendsNames,
 			List<String> importNames, Map<Template, List<String>> overrideNames,
 			Map<TemplateInvocation, String> invocationNames) {
-		this(module, extendsNames, importNames, overrideNames, invocationNames, Map.of());
+		this(module, extendsNames, importNames, overrideNames, invocationNames, Map.of(), Map.of());
+	}
+
+	/**
+	 * Convenience constructor without node positions.
+	 */
+	public M2tParseResult(Module module, List<String> extendsNames,
+			List<String> importNames, Map<Template, List<String>> overrideNames,
+			Map<TemplateInvocation, String> invocationNames,
+			Map<TemplateInvocation, String> indentationMap) {
+		this(module, extendsNames, importNames, overrideNames, invocationNames, indentationMap,
+				Map.of());
 	}
 }

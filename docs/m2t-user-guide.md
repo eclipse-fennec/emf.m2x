@@ -1196,8 +1196,16 @@ One method that makes sense for two receiver types is registered twice, once per
 |---|---|
 | **A literal `[` cannot be written** | The lexer opens code mode on `[` with no escape, so neither `[text](url)` nor `![alt](url)` can be typed in template text. Let a Java operation return the finished link or image. A lone bracket: `['['/]`. |
 | **Types must resolve** | Without `packageRegistry(…)`, a type name in the template degrades and `oclIsKindOf` stops discriminating — see [§3.5](#35-which-metamodels-the-engine-sees). |
-| **An unset reference is your operation's problem** | M2T evaluates leniently, so a call on `null` reaches your lambda with a `null` receiver instead of failing — guard there, as `mdLinkFrom` does. Navigating *from* an unset reference (`b.author.name`) answers `null`, which renders as nothing and is reported as a warning naming the expression. Neither writes `OclInvalid` into the document. |
+| **An unset reference is your operation's problem** | M2T evaluates leniently, so a call on `null` reaches your lambda with a `null` receiver instead of failing — guard there, as `mdLinkFrom` does. Navigating *from* an unset reference (`b.author.name`) answers `null`, which renders as nothing and is reported as a warning. Neither writes `OclInvalid` into the document. |
 | **An exception becomes a diagnostic** | The evaluator catches `RuntimeException`, reports it and yields `null`. An empty document usually means an operation threw — check `result.isSuccess()` and `result.diagnostics()`. |
+
+**What a generation diagnostic looks like.** A problem found while generating names the place it happened, so a log is enough to find it:
+
+```
+7:11 [template main → books/anonymous-work.md] Null source for property 'name' — evaluated as null (lenient)
+```
+
+Line and column are those of the expression in the template; the template and the document it was writing come next. The position also travels as `SourcePosition` in the diagnostic's data, for a consumer that would rather not read the text. Two cases have no position and say so by leaving it out: an expression the engine took from its cache — it belongs to a parse this run did not do — and an OCL expression that came from an `EAnnotation`, which has no template at all.
 
 Operations of the same name are told apart by how many arguments the call passes, and then by receiver type. Among equally applicable candidates the first registered one answers, so registration order is what decides — not which provider it came from.
 

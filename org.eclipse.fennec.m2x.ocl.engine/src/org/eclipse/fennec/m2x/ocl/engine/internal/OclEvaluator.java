@@ -112,6 +112,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private final PropertyAccessorCache accessorCache;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
 	private OclEvalEnvironment env;
+
+	/**
+	 * The expression node being evaluated, travelling with every diagnostic this evaluator
+	 * reports. A message alone cannot be placed by anything downstream: M2T knows where each of
+	 * its nodes came from, but only if it learns which node the problem was about (#116).
+	 */
+	private OclExpression currentNode;
+
 	private PreStateSnapshot preStateSnapshot = PreStateSnapshot.EMPTY;
 	private Map<DefRegistry.DefKey, DefRegistry.DefEntry> defProperties = Map.of();
 	private int depth;
@@ -202,10 +210,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 			--depth;
 			return addError("Evaluation timeout exceeded");
 		}
+		OclExpression enclosing = currentNode;
+		currentNode = expression;
 		try {
 			Object result = doSwitch(expression);
 			return result == OCL_NULL ? null : result;
 		} finally {
+			currentNode = enclosing;
 			--depth;
 		}
 	}
@@ -1338,7 +1349,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	private Object addError(String message) {
-		diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0, message, null));
+		diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0, message, nodeData()));
 		return OclInvalid.INSTANCE;
 	}
 
@@ -1347,7 +1358,17 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * unusable. {@code isSuccess()} stays true, because it looks at ERROR and above.
 	 */
 	private void addWarning(String message) {
-		diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0, message, null));
+		diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0, message, nodeData()));
+	}
+
+	/**
+	 * The node a diagnostic is about, as the data of that diagnostic.
+	 *
+	 * <p>Whoever parsed the expression knows where the node stands; the evaluator only knows which
+	 * node it is. Passing it on is what lets the two be joined — see {@link #currentNode}.
+	 */
+	private Object[] nodeData() {
+		return currentNode == null ? null : new Object[] { currentNode };
 	}
 
 	/**

@@ -43,6 +43,7 @@ import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -199,6 +200,29 @@ class M2tDocGenerationExampleTest {
 				.anyMatch(d -> d.getSeverity() == Diagnostic.WARNING
 						&& d.getMessage().contains("lenient")),
 				() -> "expected a warning naming the null navigation: " + result.diagnostics());
+	}
+
+	@Test
+	@DisplayName("a runtime diagnostic names the line the expression stands on")
+	void diagnosticsNameTheirLine() throws Exception {
+		// The template's author needs the line, not only the template: a generator writes one
+		// document per element, and the same expression shape appears several times (#116). The
+		// OCL engine names the node it stumbled over, the parser recorded where that node stood,
+		// and the two meet here.
+		EObject book = EcoreUtil.create(bookClass);
+		book.eSet(bookTitle, "Anonymous Work");
+
+		M2tResult result = generate(book, "- Author: [b.author.name/]");
+
+		// The author line is line 7 of the template text above, and column 11 is where b.author
+		// begins on it — "- Author: [" is eleven characters.
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().startsWith("7:11 ")),
+				() -> "expected 7:11 in the message: " + result.diagnostics());
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> d.getData() != null && d.getData().stream()
+						.anyMatch(SourcePosition.class::isInstance)),
+				"and the position travels as data, for a consumer that is not reading text");
 	}
 
 	@Test
