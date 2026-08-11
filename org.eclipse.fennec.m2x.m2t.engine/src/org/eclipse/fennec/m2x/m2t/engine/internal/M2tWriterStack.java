@@ -221,6 +221,24 @@ public class M2tWriterStack {
 		return stack.size();
 	}
 
+	/**
+	 * The document currently being written, or {@code null} when output is not going into a
+	 * {@code [file]} block.
+	 *
+	 * <p>For diagnostics: a warning that names the template and the document it was producing is
+	 * something an author can act on, while the same warning on its own is not.
+	 *
+	 * @return the file path of the innermost file writer, or {@code null}
+	 */
+	public String currentTargetName() {
+		for (WriterEntry entry : stack) {
+			if (entry.filePath() != null) {
+				return entry.filePath();
+			}
+		}
+		return null;
+	}
+
 	private record WriterEntry(String filePath, StringBuilder buffer) {
 	}
 }

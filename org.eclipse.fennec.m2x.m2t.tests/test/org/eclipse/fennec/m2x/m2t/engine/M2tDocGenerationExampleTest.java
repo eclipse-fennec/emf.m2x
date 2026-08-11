@@ -202,6 +202,23 @@ class M2tDocGenerationExampleTest {
 	}
 
 	@Test
+	@DisplayName("a diagnostic says which template and which document it came from")
+	void diagnosticsNameTheirOrigin() throws Exception {
+		// A warning that only says "some property was null" is not actionable in a generator
+		// that writes a document per element. The M2T metamodel carries no positions, so the
+		// template and the open [file] block are what can be named — and they are enough to
+		// find the line by hand. Real line numbers need #110 and #116.
+		EObject book = EcoreUtil.create(bookClass);
+		book.eSet(bookTitle, "Anonymous Work");
+
+		M2tResult result = generate(book, "- Author: [b.author.name/]");
+
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains("[template main → books/anonymous-work.md]")),
+				() -> "diagnostics should name template and target: " + result.diagnostics());
+	}
+
+	@Test
 	@DisplayName("the way around it is a receiver that cannot be null")
 	void anOperationOnTheOwnerHandlesTheMissingValue() throws Exception {
 		// Put the operation on the element that is always there — the Book — and let it read the
