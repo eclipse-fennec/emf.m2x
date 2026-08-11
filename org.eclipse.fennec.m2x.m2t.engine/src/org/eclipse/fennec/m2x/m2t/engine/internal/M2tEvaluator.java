@@ -114,6 +114,13 @@ public class M2tEvaluator {
 	/** The extent around those input elements, built once it is asked for. */
 	private M2tModelExtent inputExtent;
 
+	/**
+	 * The template being executed, for diagnostics. Without it a warning names the expression
+	 * but not the place it stands in, which in a generator of any size is the part an author
+	 * needs — one message per template beats one message per run.
+	 */
+	private Template executing;
+
 	/** Maps standalone template invocations to their indentation string (§8.4). */
 	private final Map<TemplateInvocation, String> indentationMap;
 
@@ -215,6 +222,8 @@ public class M2tEvaluator {
 			return "";
 		}
 		templateDepth++;
+		Template enclosing = executing;
+		executing = template;
 		env.pushScope();
 		try {
 			// Bind template parameters
@@ -261,6 +270,7 @@ public class M2tEvaluator {
 		} finally {
 			env.popScope();
 			templateDepth--;
+			executing = enclosing;
 		}
 	}
 
@@ -1016,7 +1026,25 @@ public class M2tEvaluator {
 			}
 			return;
 		}
-		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, 0, message, null));
+		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, 0, located(message), null));
+	}
+
+	/**
+	 * Names the place a diagnostic comes from: the template being executed and, when a
+	 * {@code [file]} block is open, the document being written.
+	 *
+	 * <p>The M2T metamodel carries no positions, so this is what is available — and it is what
+	 * turns "some expression came up empty" into something an author can act on. Line and column
+	 * need positions in the AST and in the OCL diagnostics (#110, #116).
+	 */
+	private String located(String message) {
+		if (executing == null) {
+			return message;
+		}
+		String target = writers.currentTargetName();
+		return target == null
+				? "[template " + executing.getName() + "] " + message
+				: "[template " + executing.getName() + " → " + target + "] " + message;
 	}
 
 	/**
