@@ -144,6 +144,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 			QvtrEvaluator evaluator = new QvtrEvaluator(
 					oclEngine, env, transformation, extentManager, context,
 					config, config.blackboxRegistry(), List.copyOf(implementationProviders));
+			evaluator.setPositionLookup(parserSupport::positionOf);
 
 			List<Diagnostic> diagnostics = evaluator.execute();
 			return new QvtdExecutionResult(diagnostics, !context.checkOnly());

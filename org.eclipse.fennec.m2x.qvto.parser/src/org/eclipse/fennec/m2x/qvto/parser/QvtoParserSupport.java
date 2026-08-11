@@ -23,6 +23,10 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.emf.ecore.EObject;
+import java.util.Map;
+import java.util.IdentityHashMap;
 
 /**
  * Entry point for QVT-O parsing. Parses QVT-O transformation source text into
@@ -40,6 +44,16 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
  * @since 1.0
  */
 public class QvtoParserSupport {
+
+	/**
+	 * Where every expression node this support parsed stood, across all units.
+	 *
+	 * <p>One map rather than one per transformation: node identities are unique, so a merged map
+	 * is unambiguous — and it is what an evaluation needs, because a transformation that imports
+	 * others evaluates their nodes too. Each entry names the unit it came from (#116).
+	 */
+	private final Map<EObject, SourcePosition> nodePositions =
+			java.util.Collections.synchronizedMap(new IdentityHashMap<>());
 
 	/**
 	 * EAnnotation source used to mark stub modules that need link-time resolution.
@@ -79,12 +93,46 @@ public class QvtoParserSupport {
 		OperationalTransformation result = builder.visitCompilationUnitEntry(tree);
 		checkResolutionErrors(builder.getDiagnostics());
 
+		// Kept with the transformation rather than returned: the parse signature is API, and the
+		// positions are only interesting to whoever evaluates this transformation later (#116).
+		// The unit is stamped here because with imports a bare line names the wrong file.
+		builder.getNodePositions().forEach((node, position) ->
+				nodePositions.put(node, position.inUnit(unitName)));
+
 		// Ensure the transformation has a name
 		if (result.getName() == null || "_unnamed".equals(result.getName())) {
 			result.setName(unitName);
 		}
 
 		return result;
+	}
+
+	/**
+	 * Where a node stood, for a diagnostic that knows the node and not the place.
+	 *
+	 * <p>Walks up the containment chain: ANTLR dispatches to the generated visit method for each
+	 * rule, so only the node a visit was entered for is recorded, while a diagnostic is usually
+	 * about an inner one. The enclosing expression's position is the honest answer for it — the
+	 * expression rather than the exact token.
+	 *
+	 * @param node the expression node, may be {@code null}
+	 * @return the position, or {@code null} when this support parsed no node in that chain
+	 */
+	public SourcePosition positionOf(EObject node) {
+		for (EObject current = node; current != null; current = current.eContainer()) {
+			SourcePosition position = nodePositions.get(current);
+			if (position != null) {
+				return position;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Forgets the recorded positions, for a caller that drops what it parsed.
+	 */
+	public void clearNodePositions() {
+		nodePositions.clear();
 	}
 
 	private QvtOParser createParser(String input) {

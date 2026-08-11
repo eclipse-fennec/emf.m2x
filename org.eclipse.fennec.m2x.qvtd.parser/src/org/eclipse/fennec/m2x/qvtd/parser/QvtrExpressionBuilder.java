@@ -44,6 +44,12 @@ import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
 import org.eclipse.fennec.m2x.ocl.parser.OclEnvironment;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.emf.ecore.EObject;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.ParserRuleContext;
+import java.util.Map;
+import java.util.IdentityHashMap;
 
 /**
  * Visitor for building OCL expression AST nodes from QVT-R parser contexts.
@@ -60,6 +66,12 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 	private static final OclFactory FACTORY = OclFactory.eINSTANCE;
 
 	final AbstractExpressionBuilder support;
+
+	/**
+	 * Node to position, by identity — for diagnostics reported at runtime, which know the node but
+	 * not where it stood (#116).
+	 */
+	private final Map<EObject, SourcePosition> nodePositions = new IdentityHashMap<>();
 
 	QvtrExpressionBuilder(EClassifier contextType, EPackage.Registry packageRegistry) {
 		this.support = new AbstractExpressionBuilder(contextType, packageRegistry);
@@ -90,6 +102,33 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 
 	// ==================== Literals ====================
 
+
+	/**
+	 * Keeps the diagnostic position with the descent and records where each built node stood — the
+	 * one place where the parse tree and the node made from it are both in hand (#110, #116).
+	 */
+	@Override
+	public Object visit(ParseTree tree) {
+		if (!(tree instanceof ParserRuleContext context) || context.getStart() == null) {
+			return super.visit(tree);
+		}
+		support.positionAt(context);
+		Object built = super.visit(tree);
+		if (built instanceof EObject node) {
+			nodePositions.putIfAbsent(node, new SourcePosition(context.getStart().getLine(),
+					context.getStart().getCharPositionInLine()));
+		}
+		return built;
+	}
+
+	/**
+	 * Where each node this builder produced stood.
+	 *
+	 * @return the positions, by node identity
+	 */
+	Map<EObject, SourcePosition> getNodePositions() {
+		return nodePositions;
+	}
 	@Override
 	public IntegerLiteralExp visitIntegerLiteral(QvtRParser.IntegerLiteralContext ctx) {
 		return support.buildIntegerLiteral(ctx.INTEGER_LITERAL().getText());

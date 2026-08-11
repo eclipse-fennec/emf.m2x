@@ -53,6 +53,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 /**
  * Plain Java implementation of the {@link QvtoEngine} facade.
@@ -136,6 +137,18 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		Objects.requireNonNull(source, "source must not be null");
 		Objects.requireNonNull(unitName, "unitName must not be null");
 		return parserSupport.parse(source, unitName, packageRegistry);
+	}
+
+	/**
+	 * Where an expression node stood in the unit it was parsed from, for a runtime diagnostic that
+	 * knows the node and not the place (#116). Covers imported units too — they are parsed through
+	 * the same support.
+	 *
+	 * @param node the node, may be {@code null}
+	 * @return the position, or {@code null} when it is not known
+	 */
+	SourcePosition positionOf(EObject node) {
+		return parserSupport.positionOf(node);
 	}
 
 	// --- Execution ---

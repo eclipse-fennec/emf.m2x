@@ -47,6 +47,11 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import java.util.function.Function;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 
 /**
  * Core evaluator for QVT-R transformations (§7.10).
@@ -83,6 +88,12 @@ public class QvtrEvaluator {
 	private final QvtrPatternMatcher patternMatcher;
 	private final QvtrTraceManager traceManager;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
+
+	/**
+	 * Where an expression node stood, so a runtime diagnostic can name the place and the unit —
+	 * including an imported one (#116). Set by the engine, which holds the parser.
+	 */
+	private Function<EObject, SourcePosition> positionLookup = node -> null;
 
 	private final QvtrEnforcer enforcer;
 	private final QvtrBlackboxBridge blackboxBridge;
@@ -532,12 +543,61 @@ public class QvtrEvaluator {
 		}
 		OclContext ctx = new OclContext(null, null, bindings);
 		try {
-			return oclEngine.evaluate(expression, ctx);
+			// With diagnostics: what an expression reports is what tells an author why a relation
+			// did not match, and the node it came from is what places it (#116). Before this they
+			// were dropped, exactly as M2T dropped them until #114.
+			// LENIENT for the same reason QVT-O uses it: a relation's queries and blackboxes have
+			// no self, and a call on a null source has to proceed to the providers rather than
+			// fail (#112). Forwarding diagnostics made this visible — with the default options a
+			// blackbox query reported "Null source for operation" and the transformation counted
+			// as failed while producing the right result.
+			OclResult result = oclEngine.evaluateWithDiagnostics(expression, ctx,
+					OclEvaluationOptions.lenient());
+			// Warnings only, for now. QVT-R does not hand OCL its own queries and blackboxes as
+			// operation providers the way QVT-O does, so OCL reports "Unknown operation" for a
+			// query it cannot see and QVT-R resolves it afterwards itself. Adopting those errors
+			// would mark a working transformation as failed; adopting the warnings — the lenient
+			// null navigation an author wants to know about — costs nothing. See #118.
+			result.diagnostics().stream()
+					.filter(d -> d.getSeverity() < Diagnostic.ERROR)
+					.forEach(this::addOclDiagnostic);
+			return result.value();
 		} catch (Exception e) {
 			diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
 					"OCL evaluation error: " + e.getMessage(), null));
 			return null;
 		}
+	}
+
+	/**
+	 * Sets how a node is turned into the place it stood, so a runtime diagnostic can name it.
+	 *
+	 * @param positionLookup the lookup, {@code null} restores "no position known"
+	 */
+	public void setPositionLookup(Function<EObject, SourcePosition> positionLookup) {
+		this.positionLookup = positionLookup == null ? node -> null : positionLookup;
+	}
+
+	/**
+	 * Takes over a diagnostic an OCL expression reported, keeping its severity and naming the place
+	 * the expression stands when the node is one this engine parsed.
+	 */
+	private void addOclDiagnostic(Diagnostic diagnostic) {
+		SourcePosition position = null;
+		if (diagnostic.getData() != null) {
+			for (Object entry : diagnostic.getData()) {
+				if (entry instanceof EObject node) {
+					position = positionLookup.apply(node);
+					if (position != null) {
+						break;
+					}
+				}
+			}
+		}
+		diagnostics.add(new BasicDiagnostic(diagnostic.getSeverity(), SOURCE_ID, 0,
+				position == null ? diagnostic.getMessage()
+						: position + " " + diagnostic.getMessage(),
+				position == null ? null : new Object[] { position }));
 	}
 
 	// ── Utilities ────────────────────────────────────────────────────

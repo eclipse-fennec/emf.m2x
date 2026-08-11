@@ -93,6 +93,7 @@ import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.Cont
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.FatalAssertionException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.RaiseException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.ReturnException;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 /**
  * Imperative AST interpreter for QVT-O transformations.
@@ -587,7 +588,9 @@ public class QvtoEvaluator {
 		OclEvaluationOptions oclOpts = OclEvaluationOptions.lenient()
 				.withAdditionalProviders(additionalProviders);
 		OclResult oclResult = oclEngine.evaluateWithDiagnostics(expr, oclCtx, oclOpts);
-		diagnostics.addAll(oclResult.diagnostics());
+		// Placed, not just copied: the OCL engine names the node it stumbled over, and the parser
+		// recorded where that node stood — including in an imported unit (#116).
+		oclResult.diagnostics().forEach(this::addOclDiagnostic);
 		return oclResult.value();
 	}
 
@@ -1074,6 +1077,28 @@ public class QvtoEvaluator {
 			env.popScope();
 			--stackDepth;
 		}
+	}
+
+	/**
+	 * Takes over a diagnostic an OCL expression reported, keeping its severity and adding the place
+	 * the expression stands — {@code unit:line:column} when the node is one this engine parsed.
+	 */
+	private void addOclDiagnostic(Diagnostic diagnostic) {
+		SourcePosition position = null;
+		if (diagnostic.getData() != null) {
+			for (Object entry : diagnostic.getData()) {
+				if (entry instanceof EObject node) {
+					position = engine == null ? null : engine.positionOf(node);
+					if (position != null) {
+						break;
+					}
+				}
+			}
+		}
+		String message = position == null
+				? diagnostic.getMessage()
+				: position + " " + diagnostic.getMessage();
+		addDiagnostic(diagnostic.getSeverity(), message);
 	}
 
 	private void addError(String message) {

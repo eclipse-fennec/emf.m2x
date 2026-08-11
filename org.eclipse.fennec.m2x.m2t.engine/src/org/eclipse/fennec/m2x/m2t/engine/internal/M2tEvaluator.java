@@ -767,8 +767,13 @@ public class M2tEvaluator {
 			return null;
 		}
 		for (Object entry : data) {
-			if (entry instanceof EObject node) {
-				SourcePosition position = positions.get(node);
+			if (!(entry instanceof EObject node)) {
+				continue;
+			}
+			// Up the containment chain: only the node a visit was entered for is recorded, while a
+			// diagnostic is usually about an inner one — the enclosing expression is its place.
+			for (EObject current = node; current != null; current = current.eContainer()) {
+				SourcePosition position = positions.get(current);
 				if (position != null) {
 					return position;
 				}

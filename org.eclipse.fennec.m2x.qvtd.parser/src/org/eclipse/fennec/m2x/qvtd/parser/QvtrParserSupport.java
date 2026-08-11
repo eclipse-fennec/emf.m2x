@@ -26,6 +26,10 @@ import org.eclipse.fennec.m2x.model.qvtbase.Rule;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.emf.ecore.EObject;
+import java.util.Map;
+import java.util.IdentityHashMap;
 
 /**
  * Entry point for QVT-R parsing. Parses QVT-Relations transformation source text into
@@ -42,6 +46,26 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
  * @since 1.0
  */
 public class QvtrParserSupport {
+
+	/** Where every expression node this support parsed stood — see {@link #positionOf}. */
+	private final Map<EObject, SourcePosition> nodePositions =
+			java.util.Collections.synchronizedMap(new IdentityHashMap<>());
+
+	/**
+	 * Where a node stood, for a diagnostic that knows the node and not the place.
+	 *
+	 * @param node the expression node, may be {@code null}
+	 * @return the position, or {@code null} when this support did not parse that node
+	 */
+	public SourcePosition positionOf(EObject node) {
+		for (EObject current = node; current != null; current = current.eContainer()) {
+			SourcePosition position = nodePositions.get(current);
+			if (position != null) {
+				return position;
+			}
+		}
+		return null;
+	}
 
 	/**
 	 * Annotation on a parsed transformation carrying the unit names its {@code import}
@@ -82,6 +106,10 @@ public class QvtrParserSupport {
 		QvtrUnitBuilder builder = new QvtrUnitBuilder(registry);
 		RelationalTransformation result = builder.visitCompilationUnitEntry(tree);
 		checkResolutionErrors(builder.getDiagnostics());
+		// One merged map: node identities are unique, and a transformation that imports others
+		// evaluates their nodes too. Each entry names the unit it came from (#116).
+		builder.getNodePositions().forEach((node, position) ->
+				nodePositions.put(node, position.inUnit(unitName)));
 
 		// Ensure the transformation has a name
 		if (result.getName() == null || "_unnamed".equals(result.getName())) {
