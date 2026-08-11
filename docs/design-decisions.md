@@ -191,6 +191,21 @@ Strict/lenient evaluation modes. STRICT for validation (spec-compliant null→Oc
 LENIENT for M2T (null→null/empty). Safe navigation (v2.5) provides explicit null-safety;
 LENIENT provides implicit null-safety.
 
+**Nachtrag (2026-08-11, #112/#114): erst jetzt wirklich umgesetzt.** LENIENT war bis dahin
+wirkungslos — der Zweig gab Java `null` zurück, was der Aufrufer nicht von „weitermachen"
+unterscheiden konnte —, und M2T wählte es überhaupt nicht, lief also strikt und schrieb das Wort
+`OclInvalid` in generierte Dokumente. Beides behoben, mit drei Präzisierungen, die die
+Entscheidung offen gelassen hatte:
+
+1. **Leniency gilt für Navigation, nicht für Aufrufe.** `self.a.b` mit `a` unbesetzt ergibt `null`;
+   `null.size()` und `null + 1` bleiben invalid. Ein Aufruf auf `null` läuft weiter, damit
+   Standardbibliothek und Provider noch dispatchen können — QVT-O löst seine Modul-Level-Helfer
+   ohne `self` genau darüber auf (86 Tests zeigen die Grenze).
+2. **Lenient ist nicht still.** Jede lenient aufgelöste Navigation erzeugt eine `WARNING`; die
+   Auswertung bleibt erfolgreich. Ohne das würde Leniency den Fehler nur leiser machen.
+3. **M2T leitet OCL-Diagnosen weiter** (vorher verworfen), sonst käme die Warnung nie beim
+   Template-Autor an — und ein `isSuccess() == true` über einem kaputten Dokument bliebe bestehen.
+
 Full rationale: [OCL Architecture §13.2](ocl-architecture.md#132-dr-d14-configurable-evaluation-strict--lenient)
 
 ---

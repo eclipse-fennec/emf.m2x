@@ -130,6 +130,24 @@ public record OclEvaluationOptions(
 	}
 
 	/**
+	 * Returns a copy with the given null handling.
+	 *
+	 * <p>The factories {@link #strict()} and {@link #lenient()} bundle a null handling with an
+	 * error recovery; this changes the one without the other, which is what a caller wants who
+	 * has options in hand and needs navigation to answer {@code null} — a generator, for
+	 * instance, where {@code OclInvalid} in a document is worse than an empty spot.
+	 *
+	 * @param nullHandling how a {@code null} source is treated, must not be {@code null}
+	 * @return new options with the given null handling
+	 */
+	public OclEvaluationOptions withNullHandling(NullHandling nullHandling) {
+		Objects.requireNonNull(nullHandling, "nullHandling must not be null");
+		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
+				maxCollectionSize, maxClosureIterations, maxRegexLength,
+				customOperationsEnabled, additionalProviders, useEMFTypes);
+	}
+
+	/**
 	 * Returns a copy with the given maximum recursion depth.
 	 *
 	 * @param maxDepth maximum recursion depth (must be positive)

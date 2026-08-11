@@ -15,12 +15,14 @@
 package org.eclipse.fennec.m2x.m2t.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
@@ -69,12 +71,12 @@ import org.junit.jupiter.api.io.TempDir;
  * </ul>
  *
  * <p>Two of the guide's warnings are pinned as behaviour rather than prose. A literal {@code [}
- * cannot be typed in a template, so the Markdown link is built in Java. And an operation called
- * on an <em>unset</em> reference never runs at all — calling anything on {@code null} yields
- * invalid in OCL (§7.5.10), so the word {@code OclInvalid} lands in the document while the build
- * stays green. Guarding inside the lambda cannot help, because the lambda is not entered; the
- * receiver has to be an element that exists, which is what {@code authorLink} on {@code Book}
- * shows. Writing this test is what turned that up — the guide claimed the opposite.
+ * cannot be typed in a template, so the Markdown link is built in Java. And an <em>unset</em>
+ * reference is covered from both sides, because M2T evaluates leniently (D14, #114): navigating
+ * from it leaves an empty spot and reports a warning naming the expression, while <em>calling</em>
+ * on it proceeds, so a provider dispatches with a null receiver and the guard inside the lambda
+ * decides. Neither writes the word {@code OclInvalid} into the document, which is what both did
+ * before.
  */
 class M2tDocGenerationExampleTest {
 
@@ -161,11 +163,11 @@ class M2tDocGenerationExampleTest {
 	}
 
 	@Test
-	@DisplayName("an operation on an unset reference never runs — OclInvalid lands in the document")
-	void anUnsetReferenceNeverReachesTheOperation() throws Exception {
-		// Calling an operation on null yields invalid in OCL (§7.5.10), so the lambda is not
-		// entered at all and a guard inside it cannot help. What reaches the document is the
-		// word OclInvalid: broken output, green build, no diagnostic.
+	@DisplayName("an operation on an unset reference is reached, so its guard can answer")
+	void anUnsetReferenceStillReachesTheOperation() throws Exception {
+		// M2T evaluates leniently (D14, #114): a call on a null source proceeds, so the
+		// registered provider dispatches with a null receiver and the guard inside the lambda
+		// is what decides. Before that, the word OclInvalid landed in the document instead.
 		EObject book = EcoreUtil.create(bookClass);
 		book.eSet(bookTitle, "Anonymous Work");
 
@@ -173,8 +175,30 @@ class M2tDocGenerationExampleTest {
 
 		assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
 		String document = Files.readString(outputDirectory.resolve("books/anonymous-work.md"));
-		assertTrue(document.contains("- Author: OclInvalid"),
-				() -> "the receiver is null, so mdLinkFrom is never called. Document:\n" + document);
+		assertTrue(document.contains("- Author: —"),
+				() -> "mdLinkFrom handles the null receiver itself. Document:\n" + document);
+		assertFalse(document.contains("OclInvalid"), "and nothing leaks into the text");
+	}
+
+	@Test
+	@DisplayName("navigating from an unset reference leaves the spot empty and says so")
+	void navigatingFromAnUnsetReferenceWarns() throws Exception {
+		// The other half of leniency: navigation answers null, so the document gets an empty
+		// spot rather than OclInvalid — and the run reports which expression came up empty, so
+		// an author is not left to notice a missing name by reading the output.
+		EObject book = EcoreUtil.create(bookClass);
+		book.eSet(bookTitle, "Anonymous Work");
+
+		M2tResult result = generate(book, "- Author: [b.author.name/]");
+
+		String document = Files.readString(outputDirectory.resolve("books/anonymous-work.md"));
+		assertTrue(document.contains("- Author:") && !document.contains("OclInvalid"),
+				() -> "document was:\n" + document);
+		assertTrue(result.isSuccess(), "an empty spot is not a failed generation");
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> d.getSeverity() == Diagnostic.WARNING
+						&& d.getMessage().contains("lenient")),
+				() -> "expected a warning naming the null navigation: " + result.diagnostics());
 	}
 
 	@Test

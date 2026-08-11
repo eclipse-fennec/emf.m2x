@@ -1177,11 +1177,21 @@ public class OclEvaluator extends OclSwitch<Object> {
 			if (options.nullHandling() == NullHandling.STRICT) {
 				return addError("Null source for " + context);
 			}
-			// LENIENT: navigation yields null — as the sentinel, not as Java null, because a
+			if (!navigation) {
+				return null;
+			}
+			// LENIENT navigation yields null — as the sentinel, not as Java null, because a
 			// caller cannot tell Java null from "proceed with evaluation", which is what this
 			// method returns in the ordinary case. eval() unwraps the sentinel one level up,
 			// so the expression answers null and a longer chain keeps propagating it.
-			return navigation ? OCL_NULL : null;
+			//
+			// And it says so. Leniency exists to keep a result usable, not to hide that
+			// something was missing: a generator writing an empty spot where a name was
+			// expected should be able to tell its author which expression came up empty. A
+			// warning rather than an error, because an unset value rendering as nothing is
+			// ordinary in that setting — the run stays successful.
+			addWarning("Null source for " + context + " — evaluated as null (lenient)");
+			return OCL_NULL;
 		}
 		// Source is valid — return null to indicate "proceed with evaluation"
 		return null;
@@ -1330,6 +1340,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private Object addError(String message) {
 		diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0, message, null));
 		return OclInvalid.INSTANCE;
+	}
+
+	/**
+	 * Records a warning: something an author should know about that does not make the result
+	 * unusable. {@code isSuccess()} stays true, because it looks at ERROR and above.
+	 */
+	private void addWarning(String message) {
+		diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0, message, null));
 	}
 
 	/**
