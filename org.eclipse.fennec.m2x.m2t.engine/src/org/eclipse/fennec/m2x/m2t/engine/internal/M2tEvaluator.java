@@ -61,6 +61,8 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
+import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 
@@ -143,8 +145,13 @@ public class M2tEvaluator {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		// MOFM2T §8.3 string operations ride along with every evaluation: the engine
 		// belongs to the caller, so M2T adds what it needs instead of building its own.
+		// LENIENT null handling is what a generator wants and what D14 asked for: navigating
+		// from an unset value leaves an empty spot in the document instead of writing the word
+		// OclInvalid into it. The engine reports each occurrence as a warning, forwarded in
+		// evaluateOcl, so the author still learns which expression came up empty (#114).
 		this.oclOptions = oclEngine.getDefaultOptions()
 				.withCustomOperationsEnabled(true)
+				.withNullHandling(NullHandling.LENIENT)
 				.withAdditionalProviders(withStandardLibrary(oclEngine.getDefaultOptions()));
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.writers = Objects.requireNonNull(writers, "writers must not be null");
@@ -707,11 +714,27 @@ public class M2tEvaluator {
 		}
 
 		try {
-			return oclEngine.evaluate(expression, oclContext, oclOptions);
+			// With diagnostics, not without: what an expression reports is what tells a template
+			// author why a spot in the document came out empty. Dropping them left the generation
+			// reporting success while the document said otherwise (#114).
+			OclResult result = oclEngine.evaluateWithDiagnostics(expression, oclContext, oclOptions);
+			result.diagnostics().forEach(this::addOclDiagnostic);
+			return result.value();
 		} catch (RuntimeException e) {
 			addError("OCL evaluation error [" + e.getClass().getSimpleName() + "]: " + e.getMessage());
 			return null;
 		}
+	}
+
+	/**
+	 * Takes over a diagnostic an OCL expression reported, keeping its severity.
+	 *
+	 * <p>The severity is the engine's to decide, not M2T's: an unset value that leniently
+	 * evaluates to nothing is a warning and leaves the generation successful, while an
+	 * expression that cannot be evaluated at all is an error and should stop counting as one.
+	 */
+	private void addOclDiagnostic(Diagnostic diagnostic) {
+		addDiagnostic(diagnostic.getSeverity(), diagnostic.getMessage());
 	}
 
 	/**

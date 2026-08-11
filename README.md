@@ -52,7 +52,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.m2t.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.m2t.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.m2t.engine` | Template evaluator | Done |
-| `org.eclipse.fennec.m2x.m2t.tests` | 323 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.m2t.tests` | 324 tests, 0 failures | Done |
 
 ## Build
 
@@ -77,7 +77,7 @@ The repository root is a Gradle + BND workspace:
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
 
-The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **5,981 tests and 47 OSGi tests, 0 failures, as of 2026-08-11**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
+The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **5,982 tests and 47 OSGi tests, 0 failures, as of 2026-08-11**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
 ## Branches & releases
 

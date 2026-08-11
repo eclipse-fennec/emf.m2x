@@ -195,6 +195,13 @@ Making a call on `null` an error breaks 86 QVT-O tests, which is how the boundar
 Until #112 the navigation half did nothing at all: the `LENIENT` branch returned Java `null`,
 which its caller could not tell from "proceed with evaluation".
 
+**Lenient navigation is not silent.** Each occurrence is recorded as a `WARNING` — leniency keeps
+a result usable, it does not hide that something was missing. A warning rather than an error,
+because an unset value rendering as nothing is ordinary where leniency is chosen, so the
+evaluation stays successful. M2T selects `LENIENT` (D14, #114) and forwards these diagnostics into
+its own result, which is what lets a template author see which expression came up empty instead of
+finding a gap in the generated document.
+
 ### 4.6 Extension Interfaces
 
 ```java
