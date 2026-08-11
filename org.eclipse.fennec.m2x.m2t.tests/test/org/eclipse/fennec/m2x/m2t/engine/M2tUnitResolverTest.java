@@ -124,6 +124,54 @@ class M2tUnitResolverTest {
 		assertEquals(3, asked.get(), "the fourth resolver is past the limit");
 	}
 
+	@Test
+	@DisplayName("a problem in the imported module names that module, not the importing one")
+	void aProblemInTheImportedModuleNamesIt() throws Exception {
+		// The question this answers: with several units in one generation, whose line 3 is it?
+		// Before #116 the message said neither the unit nor the template that was running — it
+		// named the outermost template and a bare line, which reads as the main file's line 3.
+		M2tEngine engine = engine(builder -> builder
+				.addUnitResolver(name -> "broken".equals(name)
+						? Optional.of(new M2tUnit.SourceUnit(name,
+								URI.createURI("mem:/broken.mtl"), BROKEN_LIBRARY))
+						: Optional.empty())
+				.unitResolverEnabled(true));
+
+		Module module = engine.parse(IMPORTING, "main");
+		assertTrue(engine.link(module).isEmpty(), "the extends has to resolve");
+		EClass input = EcoreFactory.eINSTANCE.createEClass();
+		input.setName("Book");
+
+		M2tResult result = engine.execute(module, M2tContext.of(input));
+
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().startsWith("broken:3:")),
+				() -> "the position has to name the imported unit: " + messages(result));
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains("[template greet")),
+				() -> "and the template that was running, not the one that started: "
+						+ messages(result));
+	}
+
+	private static List<String> messages(M2tResult result) {
+		return result.diagnostics().stream().map(d -> d.getMessage()).toList();
+	}
+
+	/** Line 3 navigates from something unset — a runtime problem inside the imported unit. */
+	private static final String BROKEN_LIBRARY = """
+			[module broken(_'http://www.eclipse.org/emf/2002/Ecore')/]
+			[template public greet(c : EClass)]
+			name=[c.ePackage.name/]
+			[/template]
+			""";
+
+	private static final String IMPORTING = """
+			[module main(_'http://www.eclipse.org/emf/2002/Ecore') extends broken/]
+			[template public main(c : EClass)]
+			[file ('out.txt', false)][greet(c)/][/file]
+			[/template]
+			""";
+
 	// --- helpers ---
 
 	private static M2tUnitResolver library() {
