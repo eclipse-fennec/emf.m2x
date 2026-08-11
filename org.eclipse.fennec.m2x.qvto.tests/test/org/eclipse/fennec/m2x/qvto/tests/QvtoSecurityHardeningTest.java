@@ -17,12 +17,16 @@ package org.eclipse.fennec.m2x.qvto.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.util.List;
+
 import java.util.Set;
 
+import org.eclipse.emf.common.util.BasicDiagnostic;
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
@@ -42,6 +46,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -243,6 +248,61 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 		assertEquals(100, modified.maxDiagnostics());
 		assertEquals(200, modified.maxTraceRecords());
 		assertEquals(Duration.ofSeconds(10), modified.timeout());
+	}
+
+	@Test
+	@DisplayName("withOclOptions carries the OCL side and leaves the QVT-O limits alone")
+	void options_withOclOptions_replacesOnlyTheOclSide() {
+		// The security-hardening section of the user guide reaches for this to tighten the OCL
+		// half of an execution — until #111 nothing exercised it, so a wither that dropped the
+		// QVT-O limits on the way would have gone unnoticed.
+		// The defaults already carry strict OCL options, so leniency is what makes the exchange
+		// observable at all.
+		QvtoEvaluationOptions base = QvtoEvaluationOptions.defaults().withMaxStackDepth(42);
+
+		QvtoEvaluationOptions modified = base.withOclOptions(OclEvaluationOptions.lenient());
+
+		assertEquals(OclEvaluationOptions.NullHandling.LENIENT,
+				modified.oclOptions().nullHandling());
+		assertEquals(42, modified.maxStackDepth(), "the QVT-O limits survive the exchange");
+		assertEquals(OclEvaluationOptions.NullHandling.STRICT,
+				base.oclOptions().nullHandling(), "and the original is untouched");
+	}
+
+	@Test
+	@DisplayName("a read-only extent refuses to be written, which is what in-parameters rely on")
+	void extent_readOnly_refusesMutation() {
+		// §8.1.3.2: an 'in' extent is immutable at runtime. The quick start of the user guide
+		// tells every reader to set this flag; nothing checked that it still bites.
+		BasicQvtoModelExtent extent = new BasicQvtoModelExtent(
+				EcorePackage.eINSTANCE.getEFactoryInstance().create(EcorePackage.Literals.EPACKAGE));
+		assertFalse(extent.isReadOnly(), "an extent starts writable");
+
+		extent.setReadOnly(true);
+
+		assertTrue(extent.isReadOnly());
+		assertThrows(UnsupportedOperationException.class, () -> extent.add(
+				EcorePackage.eINSTANCE.getEFactoryInstance().create(EcorePackage.Literals.ECLASS)),
+				"writing an in-parameter has to fail, not be dropped quietly");
+	}
+
+	@Test
+	@DisplayName("hasFatalError stays distinguishable from an ordinary error")
+	void result_hasFatalError_onlyAtCancelSeverity() {
+		// isSuccess() is already false at ERROR, so hasFatalError() only earns its place if it
+		// answers differently there — which is exactly what no test asked before #111.
+		QvtoExecutionResult plainError = resultWith(Diagnostic.ERROR);
+		QvtoExecutionResult fatal = resultWith(Diagnostic.CANCEL);
+
+		assertFalse(plainError.isSuccess());
+		assertFalse(plainError.hasFatalError(), "an ordinary error is not fatal");
+		assertTrue(fatal.hasFatalError());
+		assertFalse(fatal.isSuccess(), "and a fatal error is not a success either");
+	}
+
+	private static QvtoExecutionResult resultWith(int severity) {
+		Diagnostic diagnostic = new BasicDiagnostic(severity, "test", 0, "boom", null);
+		return new QvtoExecutionResult(List.of(diagnostic), null);
 	}
 
 	// ── D29: Extension Security Controls ─────────────────────────────
