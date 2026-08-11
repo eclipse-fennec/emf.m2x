@@ -17,6 +17,8 @@ package org.eclipse.fennec.m2x.ocl.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -45,7 +47,9 @@ import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
+import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.engine.internal.OclEngineImpl;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclEvalEnvironment;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclEvaluator;
 import org.eclipse.fennec.m2x.ocl.engine.internal.PreStateSnapshot;
@@ -54,6 +58,7 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
@@ -777,6 +782,44 @@ class OclPreStateTest {
 		call.setName("oclIsNew");
 		call.setOwnedSource(source);
 		return call;
+	}
+
+	@Nested
+	@DisplayName("Delegate options")
+	class DelegateOptionsTests {
+
+		@Test
+		@DisplayName("delegate evaluation runs with the options set for it, not with the defaults")
+		void delegateOptionsGovernPostconditionEvaluation() throws OclParseException {
+			// setDelegateOptions exists so EMF-delegate evaluation can differ from direct
+			// evaluation, and evaluatePostcondition is the one path that reads them. Until #111
+			// nothing tested that, so the setter could have had no effect at all.
+			//
+			// The observable knob here is maxDepth rather than null handling: LENIENT null
+			// handling does not currently reach property navigation (#112), and a test must not
+			// quietly encode a defect as the expected outcome.
+			OclEngineImpl impl = (OclEngineImpl) engine;
+			OclExpression nested = engine.parse("self.employer.name", personClass);
+			EObject employed = createPersonInCompany("Alice", 1000, createCompany("ACME"));
+			OclEvaluationOptions before = engine.getDelegateOptions();
+			try {
+				assertEquals("ACME", impl.evaluatePostcondition(nested,
+						OclContext.of(employed), PreStateSnapshot.EMPTY),
+						"with the default options the navigation answers");
+
+				engine.setDelegateOptions(OclEvaluationOptions.strict().withMaxDepth(1));
+
+				assertEquals(1, engine.getDelegateOptions().maxDepth(), "the setter round-trips");
+				assertSame(OclInvalid.INSTANCE, impl.evaluatePostcondition(nested,
+						OclContext.of(employed), PreStateSnapshot.EMPTY),
+						"the delegate limit is what the delegate path evaluates under");
+				assertEquals(1000, engine.getDefaultOptions().maxDepth(),
+						"and direct evaluation keeps the engine's own options");
+			} finally {
+				// the engine is shared across this suite
+				engine.setDelegateOptions(before);
+			}
+		}
 	}
 
 	// ---------------------------------------------------------------
