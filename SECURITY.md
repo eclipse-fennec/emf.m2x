@@ -31,6 +31,10 @@ This information will help us triage your report more quickly.
 
 ## Supported Versions
 
-Only the most recent release of Eclipse Fennec EMF M2X receives security updates:
+Eclipse Fennec EMF M2X has **not had a release yet**. Until it does, there is no supported
+version in the usual sense: fixes land on the `snapshot` branch, and the published snapshot
+artifacts (currently the `0.1.x` stream) carry them.
 
-* Latest release (currently the 1.0.x stream)
+Reports are welcome all the same — a vulnerability found before the first release is the
+cheapest one to fix. This section will name the supported release streams once the first
+release exists.
