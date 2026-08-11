@@ -142,6 +142,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 
 	@Override
 	public OclExpression visitPathNameExp(QvtRParser.PathNameExpContext ctx) {
+		support.positionAt(ctx);   // so an unresolved name is reported where it stands (#110)
 		return support.buildPathNameExp(pathNameSegments(ctx.pathName()));
 	}
 
@@ -524,6 +525,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 			return resolveTupleType(ctx.tupleType());
 		}
 		if (ctx.pathName() != null) {
+			support.positionAt(ctx);   // so an unresolved name is reported where it stands (#110)
 			return support.buildTypeFromPath(pathNameSegments(ctx.pathName()));
 		}
 		return null;

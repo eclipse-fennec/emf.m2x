@@ -17,6 +17,8 @@ package org.eclipse.fennec.m2x.m2t.parser;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
@@ -90,6 +92,19 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 	// ==================== Literals ====================
 
+
+	/**
+	 * Keeps the diagnostic position with the descent, so a problem the shared expression builder
+	 * finds is reported at a place rather than at line 0 (#110). One override covers the visitor,
+	 * because every step into the tree goes through here.
+	 */
+	@Override
+	public Object visit(ParseTree tree) {
+		if (tree instanceof ParserRuleContext context) {
+			support.positionAt(context);
+		}
+		return super.visit(tree);
+	}
 	@Override
 	public IntegerLiteralExp visitIntegerLiteral(M2tParser.IntegerLiteralContext ctx) {
 		return support.buildIntegerLiteral(ctx.INTEGER_LITERAL().getText());
@@ -515,6 +530,9 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 	// ==================== Type Resolution ====================
 
 	OclType resolveTypeExpression(M2tParser.TypeExpressionContext ctx) {
+		// The module builder resolves parameter and query types through here, without visiting
+		// the node itself — so this is where the position has to be set (#110).
+		support.positionAt(ctx);
 		if (ctx.primitiveType() != null) {
 			return support.createPrimitiveType(ctx.primitiveType().getText());
 		}

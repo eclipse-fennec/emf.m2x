@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EEnum;
@@ -121,6 +123,23 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	// ==================== Entry Point ====================
 
+
+	/**
+	 * Keeps the diagnostic position with the descent, for itself and for the expression builder
+	 * it delegates to: a declaration's type is resolved from here, so the expression builder
+	 * would otherwise report it without a position (#110).
+	 */
+	@Override
+	public Object visit(ParseTree tree) {
+		if (tree instanceof ParserRuleContext context && context.getStart() != null) {
+			int line = context.getStart().getLine();
+			int column = context.getStart().getCharPositionInLine();
+			if (expressionBuilder != null) {
+				expressionBuilder.positionAt(line, column);
+			}
+		}
+		return super.visit(tree);
+	}
 	@Override
 	public OperationalTransformation visitCompilationUnitEntry(
 			QvtOParser.CompilationUnitEntryContext ctx) {
@@ -388,7 +407,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				// §8.2.1.6: ModelType.metamodel is [1..*] — a model type without a
 				// metamodel is not a well-formed AST, so this cannot pass silently (#66)
 				diagnostics.add(new QvtoParseDiagnostic(
-						"Failed to resolve metamodel (" + refCtx.getText() + ")", 0, 0));
+						"Failed to resolve metamodel (" + refCtx.getText() + ")",
+						refCtx.getStart().getLine(), refCtx.getStart().getCharPositionInLine()));
 			}
 		}
 

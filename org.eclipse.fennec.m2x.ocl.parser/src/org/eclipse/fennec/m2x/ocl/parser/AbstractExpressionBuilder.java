@@ -14,13 +14,13 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.eclipse.emf.common.notify.impl.AdapterImpl;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -30,10 +30,10 @@ import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
@@ -64,6 +64,7 @@ import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 
 /**
  * Shared OCL expression building logic for use by both OCL and M2T parsers.
@@ -95,7 +96,12 @@ public class AbstractExpressionBuilder {
 	/** Aliases a Complete OCL document introduced with {@code import alias : path}. */
 	private Map<String, String> packageAliases = Map.of();
 	private OclEnvironment environment;
-	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
+
+	/**
+	 * Held, not inherited: this class is a helper beside the visitors, and each of those already
+	 * extends the ANTLR visitor generated for its grammar. See {@link ParseDiagnostics}.
+	 */
+	private final ParseDiagnostics diagnostics = new ParseDiagnostics();
 
 	/**
 	 * Creates a new expression builder for the given context type.
@@ -125,7 +131,23 @@ public class AbstractExpressionBuilder {
 	 * @return the collected diagnostics, never {@code null}
 	 */
 	public List<Resource.Diagnostic> getDiagnostics() {
-		return diagnostics;
+		return diagnostics.getDiagnostics();
+	}
+
+	/**
+	 * Tells this builder where the visitor currently is, so that a problem it finds is reported
+	 * at a place rather than at line 0.
+	 *
+	 * <p>Needed because this class is handed segments and types, not parse trees — see
+	 * {@link ParseDiagnostics} for what the cursor can and cannot say.
+	 *
+	 * @param context the node being entered, {@code null} leaves the position untouched
+	 */
+	public void positionAt(ParserRuleContext context) {
+		if (context != null && context.getStart() != null) {
+			diagnostics.positionAt(context.getStart().getLine(),
+					context.getStart().getCharPositionInLine());
+		}
 	}
 
 	/**
@@ -134,7 +156,7 @@ public class AbstractExpressionBuilder {
 	 * @param message the message, phrased for a template or expression author
 	 */
 	public void addError(String message) {
-		diagnostics.add(new OclParseDiagnostic(message, 0, 0));
+		diagnostics.addError(message);
 	}
 
 	// ==================== State Accessors ====================

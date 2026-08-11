@@ -898,7 +898,7 @@ try {
 }
 ```
 
-**Positions are only real for syntax errors.** What the parser rejects carries the line and column ANTLR reported; everything the builder rejects afterwards — unresolved names, unknown types, unknown metamodels — reports **line 0, column 0**, because those diagnostics are created without a parse context. Read `0:0` as "no position known" rather than "first character" ([#110](https://github.com/eclipse-fennec/emf.m2x/issues/110)).
+**Positions are real for both kinds now** (#110). A syntax error carries what ANTLR reported; an unresolved name, unknown type or unknown metamodel carries the place it stands. `0:0` still means "position unknown", which is what a diagnostic reported without any parse context gets.
 
 Parse errors include:
 - **Syntax errors** — malformed QVT-R source (line/column from ANTLR4)

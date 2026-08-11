@@ -27,7 +27,10 @@ import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -115,11 +118,43 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private final Map<String, Module> importedModuleStubs;
 	private final Map<String, EClassifier> localTypes;
 	private final List<Resource.Diagnostic> diagnostics;
+
+	/**
+	 * Where the visitor currently is, for problems found while building rather than while reading
+	 * tokens. The shared collaborator from {@code ocl.api} — it takes line and column as numbers,
+	 * so this bundle needs no dependency on the OCL parser to use it (#110).
+	 */
+	private final ParseDiagnostics positions = new ParseDiagnostics();
 	private QvtoEnvironment environment;
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
 		this(environment, packageRegistry, Map.of(), new java.util.HashMap<>(),
 				new java.util.ArrayList<>());
+	}
+
+	/**
+	 * Keeps the diagnostic position with the descent — see {@link ParseDiagnostics}. One override
+	 * covers the visitor, because every step into the tree goes through here.
+	 */
+	/**
+	 * Tells this builder where the caller currently is. The unit builder visits declarations
+	 * itself and resolves their types through here, so without this the cursor would stand still
+	 * at whatever expression was last visited — or at nothing at all.
+	 *
+	 * @param line   1-based line
+	 * @param column 0-based column
+	 */
+	void positionAt(int line, int column) {
+		positions.positionAt(line, column);
+	}
+
+	@Override
+	public Object visit(ParseTree tree) {
+		if (tree instanceof ParserRuleContext context && context.getStart() != null) {
+			positions.positionAt(context.getStart().getLine(),
+					context.getStart().getCharPositionInLine());
+		}
+		return super.visit(tree);
 	}
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
@@ -1500,6 +1535,11 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	// ==================== Type Resolution ====================
 
 	OclType resolveTypeExpression(QvtOParser.TypeExpressionContext ctx) {
+		// Every "Unknown type" comes through here, from eight call sites that each hold the
+		// context — the choke point where the position is worth setting (#110).
+		if (ctx != null && ctx.getStart() != null) {
+			positions.positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+		}
 		if (ctx.primitiveType() != null) {
 			return createPrimitiveType(ctx.primitiveType().getText());
 		}
@@ -1649,7 +1689,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * been visited — see {@link #getDiagnostics()} (#66).
 	 */
 	private EClassifier unresolvedName(String name) {
-		diagnostics.add(new QvtoParseDiagnostic("Unknown type (" + name + ")", 0, 0));
+		diagnostics.add(positions.at("Unknown type (" + name + ")"));
 		EClass placeholder = EcoreFactory.eINSTANCE.createEClass();
 		placeholder.setName(name);
 		return placeholder;

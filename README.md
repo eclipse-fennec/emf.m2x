@@ -19,7 +19,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.ocl.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.ocl.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.ocl.engine` | Switch-based evaluator | Done |
-| `org.eclipse.fennec.m2x.ocl.tests` | 4,282 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.ocl.tests` | 4,287 tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.ocl.benchmark` | Performance benchmarks | Done |
 
 ### QVT-O — QVT Operational
@@ -30,7 +30,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.qvto.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvto.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvto.engine` | Evaluator (mappings, resolve, trace, blackbox) | Done |
-| `org.eclipse.fennec.m2x.qvto.tests` | 1,112 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvto.tests` | 1,114 tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.qvto.benchmark` | Performance benchmarks | Done |
 
 ### QVT-R — QVT Relations
@@ -77,7 +77,7 @@ The repository root is a Gradle + BND workspace:
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
 
-The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **5,983 tests and 47 OSGi tests, 0 failures, as of 2026-08-11**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
+The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **5,990 tests and 47 OSGi tests, 0 failures, as of 2026-08-11**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
 ## Branches & releases
 

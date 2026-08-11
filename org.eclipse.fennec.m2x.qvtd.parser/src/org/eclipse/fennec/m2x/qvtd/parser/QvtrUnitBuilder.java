@@ -28,7 +28,10 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -89,6 +92,13 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private QvtrExpressionBuilder expressionBuilder;
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 
+	/**
+	 * Where the visitor currently is, so a problem found while building the AST is reported at a
+	 * place rather than at line 0 (#110). The shared helper, because this bundle already depends
+	 * on {@code ocl.parser} for the expression builder.
+	 */
+	private final ParseDiagnostics positions = new ParseDiagnostics();
+
 	/** Current transformation being built. */
 	private RelationalTransformation currentTransformation;
 	/** Map of typed model name → TypedModel object for domain resolution. */
@@ -106,6 +116,19 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	// ==================== Entry Point ====================
 
+
+	/**
+	 * Keeps the diagnostic position with the descent — one override covers the visitor, because
+	 * every step into the tree goes through here.
+	 */
+	@Override
+	public Object visit(ParseTree tree) {
+		if (tree instanceof ParserRuleContext context && context.getStart() != null) {
+			positions.positionAt(context.getStart().getLine(),
+					context.getStart().getCharPositionInLine());
+		}
+		return super.visit(tree);
+	}
 	@Override
 	public RelationalTransformation visitCompilationUnitEntry(
 			QvtRParser.CompilationUnitEntryContext ctx) {
@@ -346,6 +369,13 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			List<String> segments = QvtrExpressionBuilder.pathNameSegments(mmCtx.pathName());
 			String metamodelName = String.join("::", segments);
 
+			// The name being resolved is right here, so the diagnostic can say so. ANTLR calls
+			// the generated visit method directly rather than through visit(ParseTree), which is
+			// why the descent hook alone does not reach this (#110).
+			if (mmCtx.getStart() != null) {
+				positions.positionAt(mmCtx.getStart().getLine(),
+						mmCtx.getStart().getCharPositionInLine());
+			}
 			EPackage pkg = resolvePackage(metamodelName);
 			if (pkg != null) {
 				tm.getUsedPackage().add(pkg);
@@ -912,8 +942,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			}
 		}
 		if (caseInsensitiveMatch == null) {
-			diagnostics.add(new QvtdParseDiagnostic(
-					"Unknown metamodel (" + name + ")", 0, 0));
+			diagnostics.add(positions.at("Unknown metamodel (" + name + ")"));
 		}
 		return caseInsensitiveMatch;
 	}
