@@ -64,6 +64,8 @@ import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.QvttemplateFactory;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.emf.ecore.EObject;
 
 /**
  * Visitor that transforms ANTLR4 parse tree nodes into QVT-R EMF AST nodes.
@@ -913,6 +915,15 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * Returns the diagnostics collected while building — unresolved typed model
 	 * packages and unresolved type names (#66).
 	 */
+	/**
+	 * Where each expression node stood, for runtime diagnostics (#116).
+	 *
+	 * @return the positions, by node identity
+	 */
+	Map<EObject, SourcePosition> getNodePositions() {
+		return expressionBuilder == null ? Map.of() : expressionBuilder.getNodePositions();
+	}
+
 	List<Resource.Diagnostic> getDiagnostics() {
 		List<Resource.Diagnostic> all = new ArrayList<>(diagnostics);
 		if (expressionBuilder != null) {

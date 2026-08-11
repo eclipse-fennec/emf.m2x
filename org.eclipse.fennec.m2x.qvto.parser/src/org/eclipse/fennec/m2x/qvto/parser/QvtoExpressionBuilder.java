@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -31,6 +32,7 @@ import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -93,6 +95,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveInExp;
+import org.eclipse.emf.ecore.EObject;
 
 /**
  * Visitor that transforms ANTLR4 parse tree nodes into EMF OCL + Imperative OCL AST nodes.
@@ -125,6 +128,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * so this bundle needs no dependency on the OCL parser to use it (#110).
 	 */
 	private final ParseDiagnostics positions = new ParseDiagnostics();
+
+	/**
+	 * Node to position, by identity — for diagnostics reported at runtime, which know the node but
+	 * not where it stood (#116). Beside the AST, never in it: a compiled expression is shared by
+	 * every occurrence of its text.
+	 */
+	private final Map<EObject, SourcePosition> nodePositions = new IdentityHashMap<>();
 	private QvtoEnvironment environment;
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
@@ -150,11 +160,28 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public Object visit(ParseTree tree) {
-		if (tree instanceof ParserRuleContext context && context.getStart() != null) {
-			positions.positionAt(context.getStart().getLine(),
-					context.getStart().getCharPositionInLine());
+		if (!(tree instanceof ParserRuleContext context) || context.getStart() == null) {
+			return super.visit(tree);
 		}
-		return super.visit(tree);
+		int line = context.getStart().getLine();
+		int column = context.getStart().getCharPositionInLine();
+		positions.positionAt(line, column);
+		Object built = super.visit(tree);
+		// The same step that keeps the parse-time cursor also learns which node came out of this
+		// piece of text — the one place where both are in hand (#116).
+		if (built instanceof EObject node) {
+			nodePositions.putIfAbsent(node, new SourcePosition(line, column));
+		}
+		return built;
+	}
+
+	/**
+	 * Where each node this builder produced stood in the source.
+	 *
+	 * @return the positions, by node identity
+	 */
+	Map<EObject, SourcePosition> getNodePositions() {
+		return nodePositions;
 	}
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
@@ -1511,12 +1538,19 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * variable declaration with init rather than producing an AssignExp.
 	 */
 	OclExpression buildStatement(QvtOParser.StatementContext ctx) {
+		OclExpression built = null;
 		if (ctx instanceof QvtOParser.VarDeclStatementContext varDeclCtx) {
-			return visitVarDeclExp(varDeclCtx.varDeclExp());
+			built = visitVarDeclExp(varDeclCtx.varDeclExp());
 		} else if (ctx instanceof QvtOParser.ExpressionStatementContext exprCtx) {
-			return (OclExpression) visit(exprCtx.expression());
+			built = (OclExpression) visit(exprCtx.expression());
 		}
-		return null;
+		// A statement is reached by a direct call from the unit builder rather than through
+		// visit(ParseTree), so this is where its position has to be recorded (#116).
+		if (built != null && ctx.getStart() != null) {
+			nodePositions.putIfAbsent(built, new SourcePosition(ctx.getStart().getLine(),
+					ctx.getStart().getCharPositionInLine()));
+		}
+		return built;
 	}
 
 	private AssignExp buildAssignment(OclExpression left, OclExpression right, String op,
