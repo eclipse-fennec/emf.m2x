@@ -63,6 +63,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 
@@ -124,6 +125,12 @@ public class M2tEvaluator {
 	/** Maps standalone template invocations to their indentation string (§8.4). */
 	private final Map<TemplateInvocation, String> indentationMap;
 
+	/**
+	 * Where each expression node stood in its template. The OCL engine says which node a
+	 * diagnostic is about; this says where that node is (#116).
+	 */
+	private final Map<EObject, SourcePosition> positions;
+
 	/** Stack for [super/] calls: each entry holds the overridden template + argument values. */
 	private final Deque<SuperContext> superStack = new ArrayDeque<>();
 
@@ -146,7 +153,8 @@ public class M2tEvaluator {
 	 */
 	public M2tEvaluator(OclEngine oclEngine, M2tEvalEnvironment env,
 			M2tWriterStack writers, Module module, Collection<Module> allLinkedModules,
-			Map<TemplateInvocation, String> indentationMap, int maxDiagnostics,
+			Map<TemplateInvocation, String> indentationMap,
+			Map<EObject, SourcePosition> positions, int maxDiagnostics,
 			int maxTemplateDepth, int maxForIterations, int maxCrossProductSize,
 			boolean protectedAreaEnabled) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
@@ -163,6 +171,7 @@ public class M2tEvaluator {
 		this.env = Objects.requireNonNull(env, "env must not be null");
 		this.writers = Objects.requireNonNull(writers, "writers must not be null");
 		this.indentationMap = Objects.requireNonNull(indentationMap, "indentationMap must not be null");
+		this.positions = positions == null ? Map.of() : positions;
 		this.maxDiagnostics = maxDiagnostics;
 		this.maxTemplateDepth = maxTemplateDepth;
 		this.maxForIterations = maxForIterations;
@@ -177,7 +186,8 @@ public class M2tEvaluator {
 	 */
 	public M2tEvaluator(OclEngine oclEngine, M2tEvalEnvironment env,
 			M2tWriterStack writers, Module module, Collection<Module> allLinkedModules) {
-		this(oclEngine, env, writers, module, allLinkedModules, Map.of(), 10_000, 1_000, 1_000_000, 1_000_000, true);
+		this(oclEngine, env, writers, module, allLinkedModules, Map.of(), Map.of(),
+				10_000, 1_000, 1_000_000, 1_000_000, true);
 	}
 
 	/**
@@ -744,7 +754,27 @@ public class M2tEvaluator {
 	 * expression that cannot be evaluated at all is an error and should stop counting as one.
 	 */
 	private void addOclDiagnostic(Diagnostic diagnostic) {
-		addDiagnostic(diagnostic.getSeverity(), diagnostic.getMessage());
+		addDiagnostic(diagnostic.getSeverity(), diagnostic.getMessage(), positionOf(diagnostic));
+	}
+
+	/**
+	 * The place the diagnostic's node stood in the template, or {@code null} when the engine named
+	 * no node or the node came from somewhere this module did not parse.
+	 */
+	private SourcePosition positionOf(Diagnostic diagnostic) {
+		List<?> data = diagnostic.getData();
+		if (data == null) {
+			return null;
+		}
+		for (Object entry : data) {
+			if (entry instanceof EObject node) {
+				SourcePosition position = positions.get(node);
+				if (position != null) {
+					return position;
+				}
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -1018,6 +1048,10 @@ public class M2tEvaluator {
 	 * Adds a diagnostic entry, respecting {@code maxDiagnostics} limit.
 	 */
 	private void addDiagnostic(int severity, String message) {
+		addDiagnostic(severity, message, null);
+	}
+
+	private void addDiagnostic(int severity, String message, SourcePosition position) {
 		if (diagnostics.size() >= maxDiagnostics) {
 			if (diagnostics.size() == maxDiagnostics) {
 				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
@@ -1026,7 +1060,8 @@ public class M2tEvaluator {
 			}
 			return;
 		}
-		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, 0, located(message), null));
+		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, 0, located(message, position),
+				position == null ? null : new Object[] { position }));
 	}
 
 	/**
@@ -1037,14 +1072,23 @@ public class M2tEvaluator {
 	 * turns "some expression came up empty" into something an author can act on. Line and column
 	 * need positions in the AST and in the OCL diagnostics (#110, #116).
 	 */
-	private String located(String message) {
-		if (executing == null) {
-			return message;
+	private String located(String message, SourcePosition position) {
+		StringBuilder where = new StringBuilder();
+		if (position != null) {
+			where.append(position);
 		}
-		String target = writers.currentTargetName();
-		return target == null
-				? "[template " + executing.getName() + "] " + message
-				: "[template " + executing.getName() + " → " + target + "] " + message;
+		if (executing != null) {
+			if (where.length() > 0) {
+				where.append(' ');
+			}
+			where.append("[template ").append(executing.getName());
+			String target = writers.currentTargetName();
+			if (target != null) {
+				where.append(" → ").append(target);
+			}
+			where.append(']');
+		}
+		return where.length() == 0 ? message : where + " " + message;
 	}
 
 	/**

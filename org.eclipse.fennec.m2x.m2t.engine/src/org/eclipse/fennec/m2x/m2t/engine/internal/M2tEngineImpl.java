@@ -48,6 +48,7 @@ import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParserSupport;
 import org.eclipse.fennec.m2x.m2t.parser.M2tWhitespaceNormalizer;
 import org.eclipse.fennec.m2x.model.m2t.Module;
@@ -109,6 +110,13 @@ public class M2tEngineImpl implements M2tEngine {
 			Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
 	/** Indentation map for standalone template invocations (§8.4). */
+	/**
+	 * Where each expression node stood in its template, for runtime diagnostics (#116). Filled at
+	 * parse time and dropped with the module, like the indentation map beside it.
+	 */
+	private final Map<EObject, SourcePosition> globalPositions =
+			java.util.Collections.synchronizedMap(new java.util.IdentityHashMap<>());
+
 	private final Map<TemplateInvocation, String> globalIndentationMap =
 			Collections.synchronizedMap(new WeakHashMap<>());
 
@@ -150,6 +158,7 @@ public class M2tEngineImpl implements M2tEngine {
 		M2tParseResult result = parserSupport.buildModuleWithPending(source, unitName,
 				EcorePackage.eINSTANCE.getEObject(), config.packageRegistry());
 		parseResultCache.put(result.module(), result);
+		globalPositions.putAll(result.positions());
 		return result.module();
 	}
 
@@ -307,7 +316,8 @@ public class M2tEngineImpl implements M2tEngine {
 		M2tEvalEnvironment env = M2tEvalEnvironment.root(context);
 		M2tWriterStack writers = new M2tWriterStack(config.maxOutputSize());
 		M2tEvaluator evaluator = new M2tEvaluator(oclEngine, env, writers, module,
-				getAllLinkedModules(module), globalIndentationMap, config.maxDiagnostics(),
+				getAllLinkedModules(module), globalIndentationMap, globalPositions,
+				config.maxDiagnostics(),
 				config.maxTemplateDepth(), config.maxForIterations(), config.maxCrossProductSize(),
 				config.protectedAreaEnabled());
 
@@ -433,6 +443,7 @@ public class M2tEngineImpl implements M2tEngine {
 		linkedModules.clear();
 		normalizedModules.clear();
 		globalIndentationMap.clear();
+		globalPositions.clear();
 	}
 
 	/**
