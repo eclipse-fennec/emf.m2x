@@ -14,14 +14,13 @@
  */
 package org.eclipse.fennec.m2x.qvtd.parser;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.RecognitionException;
 import org.antlr.v4.runtime.Recognizer;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 
 /**
  * ANTLR4 error listener that collects all parse errors as {@link Resource.Diagnostic} instances.
@@ -31,12 +30,17 @@ import org.eclipse.emf.ecore.resource.Resource;
  */
 class QvtrErrorListener extends BaseErrorListener {
 
-	private final List<Resource.Diagnostic> errors = new ArrayList<>();
+	/**
+	 * The shared collector: the list and the diagnostic format are the same for every language,
+	 * and only this class has to stay here — it extends ANTLR's {@code BaseErrorListener}, which
+	 * the API bundle cannot see.
+	 */
+	private final ParseDiagnostics errors = new ParseDiagnostics();
 
 	@Override
 	public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol,
 			int line, int charPositionInLine, String msg, RecognitionException e) {
-		errors.add(new QvtdParseDiagnostic(msg, line, charPositionInLine));
+		errors.addError(msg, line, charPositionInLine);
 	}
 
 	/**
@@ -45,7 +49,7 @@ class QvtrErrorListener extends BaseErrorListener {
 	 * @return unmodifiable list of parse errors
 	 */
 	List<Resource.Diagnostic> getErrors() {
-		return Collections.unmodifiableList(errors);
+		return errors.getDiagnostics();
 	}
 
 	/**
@@ -54,6 +58,6 @@ class QvtrErrorListener extends BaseErrorListener {
 	 * @return {@code true} if errors were collected
 	 */
 	boolean hasErrors() {
-		return !errors.isEmpty();
+		return errors.hasErrors();
 	}
 }
