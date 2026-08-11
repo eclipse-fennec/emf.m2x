@@ -339,7 +339,7 @@ This is the **single** place where the static-registry fallback is applied; noth
 
 Resolution order for a simple name is: the context type's own package first, then the registry. A qualified name that resolves in neither is recorded as a diagnostic by `AbstractExpressionBuilder` and turned into an `OclParseException` by `OclParserSupport` once the whole unit has been visited — every unresolved name at once, the same contract syntax errors have. The message follows what the name turned out to be, as in Eclipse OCL: *Unknown enumeration literal* when the path names an enumeration, *Unknown type* otherwise.
 
-An unqualified name that matches no property and no classifier stays an external variable reference (`resolveImplicitProperty`), which `OclContext` binds at evaluation time.
+An unqualified name that matches no property and no classifier stays an external variable reference (`resolveImplicitProperty`), which `OclContext` binds at evaluation time — **except in a type position**, where `resolveOperation` rejects it (`rejectUnknownTypeArgument`). The argument of `oclIsKindOf`, `oclIsTypeOf` and `oclAsType` is a type by definition (§13.2: a `TypeExp` refers to an *existing* type), so a name that names no type has no second reading; `: Type` annotations were already rejected, since they resolve through `resolveClassifier`. Eclipse OCL rejects an unresolvable name in every position (`AbstractOCLAnalyzer.simpleUndefinedName`); this narrows only where no other reading exists, so that context variables keep working. A name that *is* bound stays accepted — whether a bound value may serve as a type belongs to evaluation (#70).
 
 ---
 

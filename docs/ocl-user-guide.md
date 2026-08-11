@@ -314,7 +314,22 @@ parser.parse("Status::UNKNOWN", personClass);
 // OclParseException: Unknown enumeration literal (Status::UNKNOWN)
 ```
 
-An **unqualified** name is not rejected. A bare name that matches no property and no classifier becomes an external variable reference, which `OclContext` can bind at evaluation time — rejecting it would break context variables.
+An **unqualified** name is not rejected in a *value* position. A bare name that matches no property and no classifier becomes an external variable reference, which `OclContext` can bind at evaluation time — rejecting it would break context variables.
+
+In a **type** position it is rejected, because there is no second reading available there. The argument of `oclIsKindOf`, `oclIsTypeOf` and `oclAsType` is a type by definition (OCL v2.4 §13.2: a `TypeExp` refers to an *existing* type), as is every `: Type` annotation:
+
+```java
+parser.parse("self.oclIsKindOf(NoSuchType)", bookClass);
+// OclParseException: Unknown type (NoSuchType)
+```
+
+Before this was reported at parse time, such a name became an external variable: the evaluator then said `Unresolved variable: NoSuchType` — the wrong noun, only visible to a caller who asked for diagnostics — and `evaluate` answered `false`, which for `oclIsKindOf` is an answer nobody questions.
+
+A name that *is* bound stays accepted in a type position: whether a bound value may serve as a type is a question about the value, and belongs to evaluation.
+
+```java
+parser.parse("Sequence{1}->exists(x | self.oclIsKindOf(x))", bookClass);   // parses
+```
 
 ---
 

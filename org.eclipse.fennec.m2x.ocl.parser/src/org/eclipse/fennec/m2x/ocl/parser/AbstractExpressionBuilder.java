@@ -707,8 +707,18 @@ public class AbstractExpressionBuilder {
 		exp.setReferredProperty(synth);
 	}
 
+	/**
+	 * The operations whose argument is a type rather than a value: OCL v2.4 §13.2 —
+	 * "A TypeExp is an expression used to refer to an existing type within an expression. It
+	 * is used in particular to pass the reference of the type when invoking the operations
+	 * oclIsKindOf, oclIsTypeOf, and oclAsType."
+	 */
+	private static final Set<String> TYPE_ARGUMENT_OPERATIONS =
+			Set.of("oclIsKindOf", "oclIsTypeOf", "oclAsType");
+
 	public void resolveOperation(OperationCallExp exp, String opName) {
 		exp.setName(opName);
+		rejectUnknownTypeArgument(exp, opName);
 		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());
 		if (sourceType instanceof EClass eClass) {
 			int argCount = exp.getOwnedArguments().size();
@@ -727,6 +737,40 @@ public class AbstractExpressionBuilder {
 			if (bestMatch != null) {
 				exp.setReferredOperation(bestMatch);
 			}
+		}
+	}
+
+	/**
+	 * Reports a name that stands in a type position and denotes no type.
+	 *
+	 * <p>An unqualified name that resolves to nothing becomes an external variable, because
+	 * {@link org.eclipse.fennec.m2x.ocl.api.OclContext} can bind variables at evaluation time
+	 * and a name unknown at parse time is therefore not necessarily wrong. In the argument of
+	 * {@code oclIsKindOf}, {@code oclIsTypeOf} or {@code oclAsType} it <em>is</em> wrong: the
+	 * spec has a type there and nothing else, so a name that names no type has no reading left.
+	 *
+	 * <p>Without this, the mistake survived until evaluation and then reported "Unresolved
+	 * variable" — the wrong noun, at the wrong time, and only for a caller who asked for
+	 * diagnostics. {@code evaluate} returned {@code false}, which for {@code oclIsKindOf} is
+	 * an answer nobody questions. Eclipse OCL rejects an unresolvable name in every position
+	 * ({@code AbstractOCLAnalyzer.simpleUndefinedName}); this narrows only the position where
+	 * no other reading exists.
+	 *
+	 * <p>A name that <em>is</em> bound — a let variable, an iterator variable, a parameter —
+	 * stays accepted here. Whether a bound value may serve as a type is a question about the
+	 * value, and answering it belongs to evaluation, not to name resolution.
+	 */
+	private void rejectUnknownTypeArgument(OperationCallExp exp, String opName) {
+		if (!TYPE_ARGUMENT_OPERATIONS.contains(opName) || exp.getOwnedArguments().size() != 1) {
+			return;
+		}
+		if (!(exp.getOwnedArguments().get(0) instanceof VariableExp varExp)) {
+			return;
+		}
+		Variable referred = varExp.getReferredVariable();
+		String name = referred == null ? null : referred.getName();
+		if (name != null && environment.lookup(name).isEmpty()) {
+			addError("Unknown type (" + name + ")");
 		}
 	}
 
