@@ -19,7 +19,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.ocl.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.ocl.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.ocl.engine` | Switch-based evaluator | Done |
-| `org.eclipse.fennec.m2x.ocl.tests` | 4,243 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.ocl.tests` | 4,278 tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.ocl.benchmark` | Performance benchmarks | Done |
 
 ### QVT-O — QVT Operational
@@ -30,7 +30,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.qvto.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvto.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvto.engine` | Evaluator (mappings, resolve, trace, blackbox) | Done |
-| `org.eclipse.fennec.m2x.qvto.tests` | 1,084 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvto.tests` | 1,109 tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.qvto.benchmark` | Performance benchmarks | Done |
 
 ### QVT-R — QVT Relations
@@ -42,7 +42,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvtd.engine` | Relation evaluator, enforcer, traces | Done |
-| `org.eclipse.fennec.m2x.qvtd.tests` | 163 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvtd.tests` | 178 tests (2 disabled), 0 failures | Done |
 
 ### M2T — MOF Model to Text
 
@@ -52,7 +52,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.m2t.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.m2t.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.m2t.engine` | Template evaluator | Done |
-| `org.eclipse.fennec.m2x.m2t.tests` | 283 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.m2t.tests` | 323 tests, 0 failures | Done |
 
 ## Build
 
@@ -67,12 +67,17 @@ The repository root is a Gradle + BND workspace:
 ./gradlew org.eclipse.fennec.m2x.qvto.tests:test
 ./gradlew org.eclipse.fennec.m2x.m2t.tests:test
 
+# OSGi integration tests (Felix, per component)
+./gradlew testOSGi
+
 # Run benchmarks
 ./gradlew org.eclipse.fennec.m2x.ocl.benchmark:perfTest
 ./gradlew org.eclipse.fennec.m2x.qvto.benchmark:perfTest
 ```
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
+
+The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **5,974 tests and 47 OSGi tests, 0 failures, as of 2026-08-11**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
 ## Branches & releases
 
@@ -109,7 +114,7 @@ All bundles are published under the group id `org.eclipse.fennec.m2x`, with the 
 - [OCL Architecture](docs/ocl-architecture.md) — OCL implementation reference (metamodel, parser, engine, caching, delegates)
 - [QVT-O Architecture](docs/qvto-architecture.md) — QVT-O implementation reference (metamodel, parser, engine, trace, resolve)
 - [QVT-R Architecture](docs/qvtd-architecture.md) — QVT-R implementation reference (metamodel, parser, engine, traces)
-- [Design Decisions](docs/design-decisions.md) — Decision records D1–D42 with rationale
+- [Design Decisions](docs/design-decisions.md) — Decision records D1–D45 with rationale
 - [OCL Spec Compliance](docs/ocl-spec-compliance.md) — Gap analysis against OCL v2.4 spec
 - [QVT-O Test Plan](docs/qvto-test-plan.md) — Spec-conformance test plan (Phase 0–10)
 - [M2T Implementation Plan](docs/m2t-implementation-plan.md) — MOFM2T implementation plan (P3-0 through P3-6)

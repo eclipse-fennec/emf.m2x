@@ -1153,6 +1153,7 @@ A generator usually needs things a template language cannot express: an output p
 
 ```java
 OclConfiguration ocl = OclConfiguration.builder(new OclParserSupport())
+        .customOperationsEnabled(true)        // required — see below
         .addOperationProvider(new DocOperations(outputDirectory))
         .build();
 
@@ -1171,7 +1172,9 @@ M2tEngine engine = M2tEngines.create(M2tConfiguration.builder(ocl)
 [/file]
 ```
 
-M2T switches `customOperationsEnabled` on itself, so unlike direct OCL use there is no second opt-in — see [OCL User Guide §11](ocl-user-guide.md#11-custom-operations) for how to write a provider, and register as many as you need.
+**`customOperationsEnabled(true)` on the OCL configuration is not optional.** M2T sets the flag on the *evaluation options* it uses, but a provider registered on the configuration is active only when the flag is set in **both** places (D29 — custom operations are off by default, deliberately). Leave it out and the calls resolve to nothing: `[file (b.docPath(), false)]` writes a file literally named `OclInvalid`, the run reports success, and no diagnostic says why. See [OCL User Guide §11](ocl-user-guide.md#11-custom-operations) for how to write a provider, and register as many as you need.
+
+The whole configuration above runs as `M2tDocGenerationExampleTest` in `org.eclipse.fennec.m2x.m2t.tests` — the model, the three operations, the template, and the files it writes. It is the executable version of this section, so the two cannot drift apart.
 
 **What the receiver is** decides where an operation can be called, and that is the `ownerType`:
 
@@ -1191,7 +1194,7 @@ One method that makes sense for two receiver types is registered twice, once per
 |---|---|
 | **A literal `[` cannot be written** | The lexer opens code mode on `[` with no escape, so neither `[text](url)` nor `![alt](url)` can be typed in template text. Let a Java operation return the finished link or image. A lone bracket: `['['/]`. |
 | **Types must resolve** | Without `packageRegistry(…)`, a type name in the template degrades and `oclIsKindOf` stops discriminating — see [§3.5](#35-which-metamodels-the-engine-sees). |
-| **A `null` receiver matches anything** | `OclVoid` conforms to every type, so the first operation of that name answers. Guard inside the lambda. |
+| **An operation on an unset reference never runs** | Calling anything on `null` yields *invalid* in OCL (§7.5.10), so the lambda is not entered and guarding inside it cannot help — the word `OclInvalid` lands in the document and the build stays green. Put the operation on the element that owns the reference (`b.authorLink()` instead of `b.author.mdLinkFrom(b)`) and read the reference in Java, or guard in the template with `[if (not b.author.oclIsUndefined())]`. |
 | **An exception becomes a diagnostic** | The evaluator catches `RuntimeException`, reports it and yields `null`. An empty document usually means an operation threw — check `result.isSuccess()` and `result.diagnostics()`. |
 
 Operations of the same name are told apart by how many arguments the call passes, and then by receiver type. Among equally applicable candidates the first registered one answers, so registration order is what decides — not which provider it came from.
