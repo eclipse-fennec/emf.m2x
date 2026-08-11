@@ -39,6 +39,8 @@ import org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart;
 import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 
@@ -70,6 +72,23 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 	OclAstBuilder(EClassifier contextType, EPackage.Registry packageRegistry) {
 		this.support = new AbstractExpressionBuilder(contextType, packageRegistry);
+	}
+
+	/**
+	 * Keeps the diagnostic position with the descent.
+	 *
+	 * <p>Every step into the tree goes through here, so one override is enough for the whole
+	 * visitor: the helper that resolves names is handed segments rather than parse trees and
+	 * would otherwise have nothing to report a position from. What it reports is the node last
+	 * entered — the enclosing expression rather than the exact token when a problem is found
+	 * after the children were visited, which is a line an editor can mark rather than none.
+	 */
+	@Override
+	public Object visit(ParseTree tree) {
+		if (tree instanceof ParserRuleContext context) {
+			support.positionAt(context);
+		}
+		return super.visit(tree);
 	}
 
 	/**
@@ -531,6 +550,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	// ==================== Type Resolution (parser-context-specific) ====================
 
 	OclType resolveTypeExpression(OclParser.TypeExpressionContext ctx) {
+		support.positionAt(ctx);   // reached by a direct call, not through visit()
 		if (ctx.primitiveType() != null) {
 			return support.createPrimitiveType(ctx.primitiveType().getText());
 		}

@@ -634,7 +634,7 @@ try {
 }
 ```
 
-**Positions are only real for syntax errors.** What the parser rejects — `+++` above — carries the line and column ANTLR reported. Everything the builder rejects afterwards, which is every unresolved name and unknown type, reports **line 0, column 0**: those diagnostics are created without a parse context. Print the message, and treat `0:0` as "no position known" rather than "first character". Real positions for semantic diagnostics are tracked as part of the language-server work ([#110](https://github.com/eclipse-fennec/emf.m2x/issues/110)).
+**Positions are real for both kinds now** (#110). A syntax error carries what ANTLR reported; an unresolved name or unknown type carries the place the offending name starts — several problems on one line are told apart by their column. `0:0` still means "position unknown" and is what you get for a diagnostic reported without a parse context at all, which is rare.
 
 ### 8.2 OclInvalid vs. null
 
