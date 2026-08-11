@@ -1080,7 +1080,7 @@ All OCL String and Collection operations are also available:
 
 ### 12.1 Parse Errors
 
-`M2tParseException` is a checked exception with line/column information:
+`M2tParseException` is a checked exception carrying one diagnostic per problem:
 
 ```java
 try {
@@ -1093,6 +1093,8 @@ try {
     }
 }
 ```
+
+**Positions are only real for syntax errors.** What the parser rejects carries the line and column ANTLR reported; everything the builder rejects afterwards — unresolved names, unknown types, unknown metamodels — reports **line 0, column 0**, because those diagnostics are created without a parse context. Read `0:0` as "no position known" rather than "first character" ([#110](https://github.com/eclipse-fennec/emf.m2x/issues/110)).
 
 ### 12.2 Execution Diagnostics
 
