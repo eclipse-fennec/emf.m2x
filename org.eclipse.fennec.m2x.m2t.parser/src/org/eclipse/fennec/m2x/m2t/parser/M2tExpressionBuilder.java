@@ -15,11 +15,14 @@
 package org.eclipse.fennec.m2x.m2t.parser;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
@@ -44,6 +47,7 @@ import org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart;
 import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
 import org.eclipse.fennec.m2x.ocl.parser.OclEnvironment;
 
@@ -62,6 +66,13 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 	private static final OclFactory FACTORY = OclFactory.eINSTANCE;
 
 	final AbstractExpressionBuilder support;
+
+	/**
+	 * Node to position, by identity. A template's nodes belong to one module — M2T builds them
+	 * itself and never consults the expression cache — so this map is complete for that module
+	 * and outlives nothing else (#116).
+	 */
+	private final Map<EObject, SourcePosition> positions = new IdentityHashMap<>();
 
 	M2tExpressionBuilder(EClassifier contextType, EPackage.Registry packageRegistry) {
 		this.support = new AbstractExpressionBuilder(contextType, packageRegistry);
@@ -100,10 +111,27 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 	 */
 	@Override
 	public Object visit(ParseTree tree) {
-		if (tree instanceof ParserRuleContext context) {
-			support.positionAt(context);
+		if (!(tree instanceof ParserRuleContext context)) {
+			return super.visit(tree);
 		}
-		return super.visit(tree);
+		support.positionAt(context);
+		Object built = super.visit(tree);
+		// The same step that keeps the parse-time cursor also learns which node came out of this
+		// piece of text — which is the only place the two are together (#116).
+		if (built instanceof EObject node && context.getStart() != null) {
+			positions.putIfAbsent(node, new SourcePosition(context.getStart().getLine(),
+					context.getStart().getCharPositionInLine()));
+		}
+		return built;
+	}
+
+	/**
+	 * Where each node this builder produced stood in the template.
+	 *
+	 * @return the positions, by node identity
+	 */
+	Map<EObject, SourcePosition> getPositions() {
+		return positions;
 	}
 	@Override
 	public IntegerLiteralExp visitIntegerLiteral(M2tParser.IntegerLiteralContext ctx) {
