@@ -616,7 +616,7 @@ From benchmarks with cache enabled:
 
 ### 8.1 Parse Errors
 
-`OclParseException` is a checked exception with line/column information:
+`OclParseException` is a checked exception carrying one diagnostic per problem:
 
 ```java
 try {
@@ -629,6 +629,8 @@ try {
     }
 }
 ```
+
+**Positions are only real for syntax errors.** What the parser rejects — `+++` above — carries the line and column ANTLR reported. Everything the builder rejects afterwards, which is every unresolved name and unknown type, reports **line 0, column 0**: those diagnostics are created without a parse context. Print the message, and treat `0:0` as "no position known" rather than "first character". Real positions for semantic diagnostics are tracked as part of the language-server work ([#110](https://github.com/eclipse-fennec/emf.m2x/issues/110)).
 
 ### 8.2 OclInvalid vs. null
 
