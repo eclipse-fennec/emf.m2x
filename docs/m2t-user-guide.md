@@ -1242,7 +1242,7 @@ After `release`, the engine no longer knows the module. Linking it again reports
 
 `M2tGenerationStrategy` is the SPI for controlling where generated text goes. When no strategy is configured, the engine collects all output in memory (`M2tResult.generatedFiles()`).
 
-### 13.1 Interface
+### 15.1 Interface
 
 ```java
 public interface M2tGenerationStrategy {
@@ -1258,7 +1258,7 @@ public interface M2tGenerationStrategy {
 }
 ```
 
-### 13.2 Writing to the File System
+### 15.2 Writing to the File System
 
 `FileSystemGenerationStrategy` ships with the engine — there is no need to write one:
 
@@ -1280,7 +1280,7 @@ Every `[file (...)]` block of the run is written below that directory after gene
 
 Files are handed to the strategy **after** protected area merging, not streamed during evaluation: the merger needs the complete generated *and* the complete existing content before it can decide anything.
 
-### 13.3 In-Memory Mode (Default)
+### 15.3 In-Memory Mode (Default)
 
 When no strategy is configured, the engine uses an internal `StringWriter` for each file block. All generated content is available in the result:
 
@@ -1293,7 +1293,7 @@ for (Map.Entry<String, String> entry : files.entrySet()) {
 }
 ```
 
-### 13.4 Registration
+### 15.4 Registration
 
 Pass the strategy via `M2tConfiguration`:
 
@@ -1309,7 +1309,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 
 MOFM2T §8.4 defines precise whitespace normalization rules. The engine supports three modes via `WhitespaceMode`:
 
-### 14.1 Modes
+### 16.1 Modes
 
 | Mode | Description |
 |------|-------------|
@@ -1317,7 +1317,7 @@ MOFM2T §8.4 defines precise whitespace normalization rules. The engine supports
 | `SPEC` | MOFM2T §8.4 strict mode with all spec rules including BOL `^` indicator |
 | `ACCELEO` | Acceleo 3.7 compatible mode (default). Like SPEC but without BOL `^` support |
 
-### 14.2 §8.4 Rules (SPEC and ACCELEO modes)
+### 16.2 §8.4 Rules (SPEC and ACCELEO modes)
 
 The whitespace normalizer applies these rules:
 
@@ -1327,7 +1327,7 @@ The whitespace normalizer applies these rules:
 4. **BOL indicator** (**SPEC mode only**) — The `^` character at the beginning of a line resets indentation to column 0. In ACCELEO mode, `^` is passed through as literal text (Acceleo 3.7 does not implement this feature)
 5. **Indent propagation** — When a template invocation is indented, that indent is propagated to all subsequent lines of the invoked template's output
 
-### 14.2.1 SPEC vs ACCELEO Differences
+### 16.2.1 SPEC vs ACCELEO Differences
 
 | Feature | SPEC | ACCELEO |
 |---------|------|---------|
@@ -1337,7 +1337,7 @@ The whitespace normalizer applies these rules:
 | BOL indicator `^` | Yes — strips leading whitespace | No — literal passthrough |
 | Indent propagation | Yes | Yes |
 
-### 14.3 Configuration
+### 16.3 Configuration
 
 ```java
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
@@ -1347,7 +1347,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
     .build();
 ```
 
-### 14.4 Example: Standalone Block Stripping
+### 16.4 Example: Standalone Block Stripping
 
 Given this template:
 

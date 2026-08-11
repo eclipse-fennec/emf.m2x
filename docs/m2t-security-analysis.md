@@ -207,6 +207,26 @@ Unlike OCL (pure query) and QVT-O (model transformation), MOFM2T **generates tex
 
 ---
 
+### T-10: Model Extent Reach of `allInstances()`
+
+| | |
+|---|---|
+| **Severity** | LOW |
+| **Vector** | A template reaches model elements it was not handed, via `allInstances()` |
+| **Impact** | A template reads the whole resource its input belongs to, not only what it can navigate to |
+| **Prerequisite** | Attacker-supplied template, and a resource holding more than the intended input |
+| **File** | `M2tModelExtent.java`, `M2tEvaluator.java:evaluateOcl` |
+
+**Analysis:** `allInstances()` needs a universe, and giving it one widens what a template can read: previously it could only reach what was reachable by navigation from the elements handed to it, now it also sees the other roots of the same resource. This is deliberate and matches Acceleo — a generator is expected to see the model it generates from — but it is worth stating, because "I only passed one element" no longer implies "the template only saw that element's tree".
+
+Two boundaries hold the reach in place. The extent stops at the **resource**: another resource of the same `ResourceSet` is not included, so unrelated models loaded alongside stay out of reach. And where the context object is not a model element, the extent is the **input elements** of that generation, which the caller named explicitly. Neither path consults a global registry, so nothing a template does can widen the extent beyond what the caller supplied.
+
+`maxCollectionSize` (default: 1,000,000, D45) caps the result, so the extent cannot be turned into an availability problem, and collecting per class happens once per model root rather than per loop iteration.
+
+**Mitigation:** Accepted by design. A deployment that must not let a template see the neighbours of its input passes that input in a resource of its own — which is the same measure that keeps generation output reproducible.
+
+---
+
 ## 3. Existing Mitigations
 
 ### 3.1 Inherited from OCL (14 Vectors)
@@ -343,6 +363,16 @@ Additionally, D31 hash-based smart merge limits damage when enabled: if marker c
 
 ---
 
+#### M-T10: Model Extent Reach
+
+**Problem:** T-10 — `allInstances()` lets a template read the resource of its input, not only what it can navigate to.
+
+**Status:** **Accepted by design** (D45). Bounded by the resource, so another resource of the same `ResourceSet` stays out of reach, and by the caller-named input elements where the context is not a model element; capped by `maxCollectionSize`. A deployment that must not let a template see the neighbours of its input passes that input in a resource of its own.
+
+**Tests:** `M2tAllInstancesTest.anotherResourceIsNotInTheExtent`, `M2tModelExtentTest.withoutAResourceTheTreeIsTheScope`
+
+---
+
 ## 5. BSI TR-03185 Mapping
 
 Mapping of identified risks and mitigations to the requirement areas of [BSI TR-03185](https://www.bsi.bund.de/DE/Themen/Unternehmen-und-Organisationen/Standards-und-Zertifizierung/Technische-Richtlinien/TR-nach-Thema-sortiert/tr03185/tr-03185.html) (Secure Software Lifecycle):
@@ -351,7 +381,7 @@ Mapping of identified risks and mitigations to the requirement areas of [BSI TR-
 
 | TR Requirement | Implementation | Status |
 |----------------|----------------|--------|
-| Threat modeling | Trust boundary diagram (§1.2), actor analysis (§1.3), 9 vectors | Present |
+| Threat modeling | Trust boundary diagram (§1.2), actor analysis (§1.3), 10 vectors | Present |
 | Attack surface minimization | No reflection, no network access, in-memory output default | By design |
 | Defense in depth | OCL limits (inherited) + M2T limits (template depth, loop, cross-product) + diagnostics limit | Implemented |
 | Secure defaults | Conservative limits: depth 1000, iterations 1M, diagnostics 10K | Implemented |
@@ -542,6 +572,7 @@ When protected areas are enabled (default):
 | CWE-400 (Resource Exhaustion) | T-2 For-Block Iteration, T-3 Cross-Product, T-7 Output Size, T-9 Diagnostics |
 | CWE-22 (Path Traversal) | T-4 File Path, T-5 URI Path |
 | CWE-74 (Injection) | T-6 Protected Area Marker |
+| CWE-668 (Exposure of Resource to Wrong Sphere) | T-10 Model Extent Reach |
 
 ### Internal Documents
 
