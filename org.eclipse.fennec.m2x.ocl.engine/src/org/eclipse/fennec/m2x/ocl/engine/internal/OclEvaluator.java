@@ -340,7 +340,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 
 		// Null/Invalid handling
-		Object nullCheck = checkNullInvalid(source, "property '" + sf.getName() + "'");
+		Object nullCheck = checkNullInvalid(source, "property '" + sf.getName() + "'", true);
 		if (nullCheck != null) {
 			return nullCheck;
 		}
@@ -1156,6 +1156,20 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * @return the error value to return, or {@code null} if evaluation should proceed
 	 */
 	private Object checkNullInvalid(Object source, String context) {
+		return checkNullInvalid(source, context, false);
+	}
+
+	/**
+	 * @param navigation whether the {@code null} source is being navigated rather than called.
+	 *     Under {@link NullHandling#LENIENT} the two differ: navigation answers {@code null},
+	 *     which is what the option promises ("null property access produces null"), while a
+	 *     <em>call</em> proceeds so that the standard library and the registered operation
+	 *     providers still get to dispatch. That is not a nicety — QVT-O evaluates every
+	 *     expression leniently and resolves its module-level helpers, which have no
+	 *     {@code self}, through exactly that path. A call the providers cannot handle still
+	 *     ends as invalid, one step later.
+	 */
+	private Object checkNullInvalid(Object source, String context, boolean navigation) {
 		if (source == OclInvalid.INSTANCE) {
 			return OclInvalid.INSTANCE;
 		}
@@ -1163,8 +1177,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 			if (options.nullHandling() == NullHandling.STRICT) {
 				return addError("Null source for " + context);
 			}
-			// LENIENT: propagate null
-			return null;
+			// LENIENT: navigation yields null — as the sentinel, not as Java null, because a
+			// caller cannot tell Java null from "proceed with evaluation", which is what this
+			// method returns in the ordinary case. eval() unwraps the sentinel one level up,
+			// so the expression answers null and a longer chain keeps propagating it.
+			return navigation ? OCL_NULL : null;
 		}
 		// Source is valid — return null to indicate "proceed with evaluation"
 		return null;

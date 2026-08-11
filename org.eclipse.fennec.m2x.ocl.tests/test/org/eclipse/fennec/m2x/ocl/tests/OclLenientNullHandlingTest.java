@@ -70,16 +70,45 @@ class OclLenientNullHandlingTest extends AbstractOclTest {
 	}
 
 	@Test
-	void lenient_nullPropertyAccess_returnsInvalidWithDiagnostic() throws OclParseException {
-		// In LENIENT mode, null source passes through checkNullInvalid but still errors
-		// because null is not an EObject — the error just has a different path
+	void lenient_nullOperationCall_staysInvalid() throws OclParseException {
+		// LENIENT is about navigation, not about calls: a call on null proceeds so that the
+		// standard library and the registered providers still get to dispatch — QVT-O resolves
+		// its module-level helpers, which have no self, through exactly that path. Nothing can
+		// dispatch size() on null, so it ends as invalid one step later (#112).
 		OclResult result = evalResult(
 				"let x : String = null in x.size()", self, LENIENT);
-		// LENIENT mode: null passes through checkNullInvalid, then stdlib handles null.size()
-		// size() on null string → stdlib dispatches on null source
-		// Since null is not a String, dispatchString returns NOT_FOUND
-		// Then we fall through to "Unknown operation" → OclInvalid
 		assertSame(OclInvalid.INSTANCE, result.value());
+	}
+
+	// --- Navigation on a null source: what LENIENT is for ---
+
+	@Test
+	void lenient_nullNavigation_answersNull() throws OclParseException {
+		// The documented contract: "null property access produces null". Until #112 the flag
+		// changed nothing here — the LENIENT branch returned Java null, which its caller could
+		// not tell from "proceed with evaluation", so navigation fell through and ended invalid.
+		OclResult result = evalResult("self.employer.name", self, LENIENT);
+
+		assertTrue(result.isNull(), () -> "expected null, got " + result.value());
+		assertTrue(result.isSuccess(), () -> "and no diagnostic: " + result.diagnostics());
+	}
+
+	@Test
+	void strict_nullNavigation_isInvalid() throws OclParseException {
+		OclResult result = evalResult("self.employer.name", self, STRICT);
+
+		assertSame(OclInvalid.INSTANCE, result.value());
+		assertFalse(result.isSuccess(), "strict reports the null source");
+	}
+
+	@Test
+	void lenient_nullNavigation_propagatesThroughAVariable() throws OclParseException {
+		// The class has always claimed to verify that null "propagates through navigation
+		// chains". The null does not have to come from the navigation itself: bound to a
+		// variable and navigated from there, it stays null rather than turning into invalid.
+		OclResult result = evalResult("let c : Company = self.employer in c.name", self, LENIENT);
+
+		assertTrue(result.isNull(), () -> "expected null, got " + result.value());
 	}
 
 	// --- Null-safe operations work in both modes ---
@@ -120,8 +149,8 @@ class OclLenientNullHandlingTest extends AbstractOclTest {
 
 	@Test
 	void lenient_nullInArithmetic_returnsInvalid() throws OclParseException {
-		// Even in LENIENT mode, null + 1 should produce OclInvalid
-		// because the stdlib can't add null to an integer
+		// Even in LENIENT mode, null + 1 is invalid: '+' is a call, and leniency covers
+		// navigation only — there is no reading of null + 1 that answers with a number.
 		OclResult result = evalResult(
 				"let x : Integer = null in x + 1", self, LENIENT);
 		assertSame(OclInvalid.INSTANCE, result.value());
