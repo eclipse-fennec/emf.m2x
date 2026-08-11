@@ -180,7 +180,20 @@ public record OclEvaluationOptions(
 | Mode | Behavior | Use case |
 |------|----------|----------|
 | `STRICT` + `FAIL_FAST` | Null → OclInvalid, first error stops | Validation, constraints |
-| `LENIENT` + `COLLECT_ERRORS` | Null → null/empty, errors collected | M2T, interactive console |
+| `LENIENT` + `COLLECT_ERRORS` | Null *navigation* → null, errors collected | M2T, interactive console |
+
+**What `LENIENT` covers, and what it does not** (#112). Navigating from a `null` source answers
+`null`, and a chain keeps propagating it: `self.employer.name` with `employer` unset is `null`
+rather than `OclInvalid`. **Calling** on a `null` source is a different matter — the call proceeds
+so that the standard library and the registered operation providers still get to dispatch, and
+what none of them can handle ends as `OclInvalid` one step later. `null + 1` has no lenient
+reading, and `null.size()` none either.
+
+That second half is not a leftover: QVT-O evaluates every expression leniently and resolves its
+module-level helpers — which have no `self` — through exactly that path (`QvtoEvaluator:587`).
+Making a call on `null` an error breaks 86 QVT-O tests, which is how the boundary was located.
+Until #112 the navigation half did nothing at all: the `LENIENT` branch returned Java `null`,
+which its caller could not tell from "proceed with evaluation".
 
 ### 4.6 Extension Interfaces
 

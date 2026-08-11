@@ -269,6 +269,10 @@ OclEngine engine = OclEngines.create(config);
 // evaluate() without options uses the engine-wide defaults
 Object result = engine.evaluate("self.name", OclContext.of(obj));
 
+// LENIENT covers navigation, not calls:
+engine.evaluate("self.employer.name", OclContext.of(obj));   // employer unset → null
+engine.evaluate("self.employer.name.size()", OclContext.of(obj));   // → OclInvalid
+
 // evaluate() with explicit options overrides the defaults
 Object sandboxed = engine.evaluate(expr, ctx,
     OclEvaluationOptions.strict().withMaxDepth(50));
