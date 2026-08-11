@@ -17,9 +17,12 @@ package org.eclipse.fennec.m2x.m2t.parser;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.IdentityHashMap;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.m2t.Block;
@@ -622,7 +625,12 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	 * Must be called after {@link #visitModule(M2tParser.ModuleContext)}.
 	 */
 	M2tParseResult getParseResult() {
+		// The positions carry the unit they came from: with imports, several units contribute
+		// nodes to one generation, and a bare line points confidently at the wrong file (#116).
+		Map<EObject, SourcePosition> positions = new IdentityHashMap<>();
+		exprBuilder.getPositions().forEach((node, position) ->
+				positions.put(node, position.inUnit(unitName)));
 		return new M2tParseResult(module, pendingExtends, pendingImports,
-				pendingOverrides, pendingInvocations, Map.of(), exprBuilder.getPositions());
+				pendingOverrides, pendingInvocations, Map.of(), positions);
 	}
 }

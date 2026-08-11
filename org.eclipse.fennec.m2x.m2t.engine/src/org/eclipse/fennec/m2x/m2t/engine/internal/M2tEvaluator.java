@@ -936,6 +936,8 @@ public class M2tEvaluator {
 			return;
 		}
 		templateDepth++;
+		Template enclosing = executing;
+		executing = target;
 		env.pushScope();
 		try {
 			List<Variable> params = target.getParameter();
@@ -978,6 +980,7 @@ public class M2tEvaluator {
 		} finally {
 			env.popScope();
 			templateDepth--;
+			executing = enclosing;
 		}
 	}
 

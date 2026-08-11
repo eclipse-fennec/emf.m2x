@@ -1202,10 +1202,10 @@ One method that makes sense for two receiver types is registered twice, once per
 **What a generation diagnostic looks like.** A problem found while generating names the place it happened, so a log is enough to find it:
 
 ```
-7:11 [template main → books/anonymous-work.md] Null source for property 'name' — evaluated as null (lenient)
+librarydoc:7:11 [template main → books/anonymous-work.md] Null source for property 'name' — evaluated as null (lenient)
 ```
 
-Line and column are those of the expression in the template; the template and the document it was writing come next. The position also travels as `SourcePosition` in the diagnostic's data, for a consumer that would rather not read the text. Two cases have no position and say so by leaving it out: an expression the engine took from its cache — it belongs to a parse this run did not do — and an OCL expression that came from an `EAnnotation`, which has no template at all.
+The unit comes first, then line and column of the expression inside it, then the template that was running and the document it was writing. The unit matters as soon as a module `extends` or `imports` another: several units contribute to one generation, and a bare line reads as the main file's. The template named is the one that was executing when the problem occurred, not the one the generation started from — so a problem inside an imported template names that template. The position also travels as `SourcePosition` in the diagnostic's data, for a consumer that would rather not read the text. Two cases have no position and say so by leaving it out: an expression the engine took from its cache — it belongs to a parse this run did not do — and an OCL expression that came from an `EAnnotation`, which has no template at all.
 
 Operations of the same name are told apart by how many arguments the call passes, and then by receiver type. Among equally applicable candidates the first registered one answers, so registration order is what decides — not which provider it came from.
 

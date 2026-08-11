@@ -214,11 +214,12 @@ class M2tDocGenerationExampleTest {
 
 		M2tResult result = generate(book, "- Author: [b.author.name/]");
 
-		// The author line is line 7 of the template text above, and column 11 is where b.author
-		// begins on it — "- Author: [" is eleven characters.
+		// The unit comes first, because with imports a bare line names the wrong file. The author
+		// line is line 7 of the template text above, and column 11 is where b.author begins on it
+		// — "- Author: [" is eleven characters.
 		assertTrue(result.diagnostics().stream()
-				.anyMatch(d -> d.getMessage().startsWith("7:11 ")),
-				() -> "expected 7:11 in the message: " + result.diagnostics());
+				.anyMatch(d -> d.getMessage().startsWith("librarydoc:7:11 ")),
+				() -> "expected librarydoc:7:11 in the message: " + result.diagnostics());
 		assertTrue(result.diagnostics().stream()
 				.anyMatch(d -> d.getData() != null && d.getData().stream()
 						.anyMatch(SourcePosition.class::isInstance)),
