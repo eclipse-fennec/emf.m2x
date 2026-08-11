@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
@@ -26,6 +28,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.util.EcoreUtil;
@@ -177,15 +180,62 @@ class OclPackageRegistryTest {
 		}
 
 		@Test
-		@DisplayName("an unqualified unknown name stays an external variable — by design")
+		@DisplayName("an unqualified unknown name in a value position stays an external variable")
 		void unqualifiedNameRemainsAnExternalVariable() throws OclParseException {
 			// A bare name that resolves to no property and no classifier becomes an
 			// external variable reference, which OclContext can bind at evaluation time.
 			// Turning that into an error would break context variables, so a name in a
-			// value position keeps this behaviour; only qualified names are rejected.
+			// value position keeps this behaviour.
 			OclParserSupport parser = new OclParserSupport();
 
 			assertNotNull(parser.parse("threshold", bookClass));
+		}
+
+		@Test
+		@DisplayName("an unqualified unknown name in a type position is reported")
+		void unqualifiedNameInATypePositionIsReported() {
+			// OCL v2.4 §13.2: the argument of these three operations is a TypeExp referring to
+			// an *existing* type, so a name that names no type has no second reading left —
+			// unlike the same name in a value position, where OclContext may still bind it.
+			OclParserSupport parser = new OclParserSupport();
+
+			for (String expression : List.of("self.oclIsKindOf(NoSuchType)",
+					"self.oclIsTypeOf(NoSuchType)", "self.oclAsType(NoSuchType).title")) {
+				OclParseException failure = assertThrows(OclParseException.class,
+						() -> parser.parse(expression, bookClass), expression);
+				assertTrue(messagesOf(failure).stream()
+						.anyMatch(m -> m.contains("Unknown type (NoSuchType)")),
+						() -> expression + " → " + messagesOf(failure));
+			}
+		}
+
+		@Test
+		@DisplayName("the mistake used to survive until evaluation, as the wrong noun")
+		void previouslyThisAnsweredFalseAtEvaluationTime() {
+			// Kept as a statement of what changed: the name became an external variable, the
+			// evaluator reported "Unresolved variable", and evaluate() answered false — which
+			// for oclIsKindOf is an answer nobody questions. It is a parse error now.
+			OclParserSupport parser = new OclParserSupport();
+
+			OclParseException failure = assertThrows(OclParseException.class,
+					() -> parser.parse("self.oclIsKindOf(Novel)", bookClass));
+
+			assertTrue(messagesOf(failure).stream().noneMatch(m -> m.contains("variable")),
+					() -> "a type position must not talk about variables: " + messagesOf(failure));
+		}
+
+		@Test
+		@DisplayName("a bound variable in a type position is left to evaluation")
+		void aBoundVariableInATypePositionIsAccepted() throws OclParseException {
+			// The check is about names that resolve nowhere. Whether a *bound* value may serve
+			// as a type is a question about the value, and belongs to evaluation.
+			OclParserSupport parser = new OclParserSupport();
+
+			assertNotNull(parser.parse("Sequence{1}->exists(x | self.oclIsKindOf(x))", bookClass));
+		}
+
+		private static List<String> messagesOf(OclParseException failure) {
+			return failure.getErrors().stream().map(Resource.Diagnostic::getMessage).toList();
 		}
 	}
 

@@ -527,6 +527,8 @@ The spec defines how OCL integrates with UML metamodel features that have no dir
 
 **Current state:** `validate()` is a no-op stub. The parser does basic name resolution but doesn't enforce all static type rules.
 
+What the parser *does* reject, since #70, is a name in a **type position** that names no type — the argument of `oclIsKindOf`/`oclIsTypeOf`/`oclAsType` (§13.2) and every `: Type` annotation. That is name resolution rather than type checking: it says the name denotes nothing, not that the denoted type is wrong for its use. Whether the argument's type *conforms* is still unchecked and belongs here.
+
 **Eclipse OCL:** Full type-checker in the Pivot layer.
 
 **Decision:** Deferred to Phase 5 (Language Server). Der Type-Checker bringt erst im LSP echten Mehrwert (Echtzeit-Feedback, Diagnostics, Quick-Fixes). Ohne LSP wird die Engine korrekt evaluiert — fehlende statische Prüfung führt nur zu Laufzeitfehlern statt Kompilierfehlern.
