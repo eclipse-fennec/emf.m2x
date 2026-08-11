@@ -32,6 +32,7 @@ import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 
 /**
  * Visitor that transforms a Complete OCL document parse tree into a list of
@@ -143,7 +144,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	/** Records a diagnostic for the document being built. */
 	private void addError(String message) {
-		diagnostics.add(new OclParseDiagnostic(message, 0, 0));
+		diagnostics.add(new ParseDiagnostic(message, 0, 0));
 	}
 
 	@Override

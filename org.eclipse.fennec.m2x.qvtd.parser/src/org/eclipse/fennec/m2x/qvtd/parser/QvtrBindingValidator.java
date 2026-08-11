@@ -40,6 +40,7 @@ import org.eclipse.fennec.m2x.model.qvttemplate.CollectionTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 
 /**
  * Static validator for QVT-R §7.5 "Restrictions on Expressions".
@@ -126,7 +127,7 @@ class QvtrBindingValidator {
 					continue;
 				}
 				if (!ownBindings.contains(usage) && !externalBindings.contains(usage)) {
-					diagnostics.add(new QvtdParseDiagnostic(
+					diagnostics.add(new ParseDiagnostic(
 							"§7.5: Variable '" + usage + "' in domain '"
 									+ domain.getName() + "' of relation '" + relName
 									+ "' is never bound (no valid binding order exists)",
@@ -394,7 +395,7 @@ class QvtrBindingValidator {
 				continue;
 			}
 			if (!available.contains(ref)) {
-				diagnostics.add(new QvtdParseDiagnostic(
+				diagnostics.add(new ParseDiagnostic(
 						"§7.5: Variable '" + ref + "' in " + context
 								+ " of relation '" + relName + "' is not bound",
 						0, 0));

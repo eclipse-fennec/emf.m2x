@@ -66,6 +66,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 
 /**
  * Visitor that transforms module-level ANTLR4 parse tree nodes into QVT-O EMF AST nodes.
@@ -406,7 +407,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			} else {
 				// §8.2.1.6: ModelType.metamodel is [1..*] — a model type without a
 				// metamodel is not a well-formed AST, so this cannot pass silently (#66)
-				diagnostics.add(new QvtoParseDiagnostic(
+				diagnostics.add(new ParseDiagnostic(
 						"Failed to resolve metamodel (" + refCtx.getText() + ")",
 						refCtx.getStart().getLine(), refCtx.getStart().getCharPositionInLine()));
 			}
