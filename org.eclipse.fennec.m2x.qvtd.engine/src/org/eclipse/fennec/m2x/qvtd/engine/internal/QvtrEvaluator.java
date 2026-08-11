@@ -95,6 +95,12 @@ public class QvtrEvaluator {
 	 */
 	private Function<EObject, SourcePosition> positionLookup = node -> null;
 
+	/**
+	 * The transformation's queries and blackboxes, as operations the OCL engine can resolve —
+	 * built lazily because it captures {@code this} for recursive body evaluation (#118).
+	 */
+	private QvtrOperationProvider operationProvider;
+
 	private final QvtrEnforcer enforcer;
 	private final QvtrBlackboxBridge blackboxBridge;
 	private final QvtrQueryEvaluator queryEvaluator;
@@ -548,25 +554,29 @@ public class QvtrEvaluator {
 			// were dropped, exactly as M2T dropped them until #114.
 			// LENIENT for the same reason QVT-O uses it: a relation's queries and blackboxes have
 			// no self, and a call on a null source has to proceed to the providers rather than
-			// fail (#112). Forwarding diagnostics made this visible — with the default options a
-			// blackbox query reported "Null source for operation" and the transformation counted
-			// as failed while producing the right result.
+			// fail (#112). The providers are the transformation's own queries and blackboxes —
+			// without them OCL reported "Unknown operation" for a nested query call and no error
+			// could be trusted (#118).
 			OclResult result = oclEngine.evaluateWithDiagnostics(expression, ctx,
-					OclEvaluationOptions.lenient());
-			// Warnings only, for now. QVT-R does not hand OCL its own queries and blackboxes as
-			// operation providers the way QVT-O does, so OCL reports "Unknown operation" for a
-			// query it cannot see and QVT-R resolves it afterwards itself. Adopting those errors
-			// would mark a working transformation as failed; adopting the warnings — the lenient
-			// null navigation an author wants to know about — costs nothing. See #118.
-			result.diagnostics().stream()
-					.filter(d -> d.getSeverity() < Diagnostic.ERROR)
-					.forEach(this::addOclDiagnostic);
+					OclEvaluationOptions.lenient()
+							.withCustomOperationsEnabled(true)
+							.withAdditionalProviders(List.of(operationProvider())));
+			result.diagnostics().forEach(this::addOclDiagnostic);
 			return result.value();
 		} catch (Exception e) {
 			diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
 					"OCL evaluation error: " + e.getMessage(), null));
 			return null;
 		}
+	}
+
+	/** The provider over this transformation's queries and blackboxes — see the field. */
+	private QvtrOperationProvider operationProvider() {
+		if (operationProvider == null) {
+			operationProvider = new QvtrOperationProvider(transformation,
+					blackboxBridge, this::evaluateOcl);
+		}
+		return operationProvider;
 	}
 
 	/**

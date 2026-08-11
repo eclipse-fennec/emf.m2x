@@ -42,7 +42,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvtd.engine` | Relation evaluator, enforcer, traces | Done |
-| `org.eclipse.fennec.m2x.qvtd.tests` | 178 tests (2 disabled), 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvtd.tests` | 183 tests (2 disabled), 0 failures | Done |
 
 ### M2T — MOF Model to Text
 
