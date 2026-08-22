@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<addressbook:AddressBook xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:addressbook="http://www.eclipse.org/fennec/m2x/example/addressbook/1.0"
+    xmlns:contact="http://www.eclipse.org/fennec/m2x/example/contact/1.0"
+    owner="Eclipse Fennec">
+  <entries firstName="Ada" lastName="Lovelace" organization="Analytical Engines" title="Mathematician">
+    <addresses xsi:type="contact:PostalAddress" city="London" country="GB" street="12 Sackville Street" postalCode="W1S 3DE"/>
+    <emails address="ada@example.org" kind="work"/>
+    <emails address="ada@home.example.org" kind="home"/>
+    <phones number="+44 20 7946 0111" kind="work"/>
+  </entries>
+  <entries firstName="Grace" lastName="Hopperman" organization="Compiler Works" title="Rear Admiral">
+    <addresses xsi:type="contact:PoBoxAddress" city="Arlington" country="US" poBox="PO Box 1906"/>
+    <emails address="grace@example.org" kind="work"/>
+    <phones number="+1 202 555 0143" kind="mobile"/>
+  </entries>
+</addressbook:AddressBook>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="contact"
+    nsURI="http://www.eclipse.org/fennec/m2x/example/contact/1.0" nsPrefix="contact">
+  <eClassifiers xsi:type="ecore:EClass" name="Address" abstract="true">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="city" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="country" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="PostalAddress" eSuperTypes="#//Address">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="street" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="postalCode" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="PoBoxAddress" eSuperTypes="#//Address">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="poBox" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Email">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="address" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="kind" eType="#//types/ContactKind"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="Phone">
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="number" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="kind" eType="#//types/ContactKind"/>
+  </eClassifiers>
+  <eSubpackages name="types" nsURI="http://www.eclipse.org/fennec/m2x/example/contact/types/1.0" nsPrefix="contacttypes">
+    <eClassifiers xsi:type="ecore:EEnum" name="ContactKind">
+      <eLiterals name="home"/>
+      <eLiterals name="work" value="1"/>
+      <eLiterals name="mobile" value="2"/>
+    </eClassifiers>
+  </eSubpackages>
+</ecore:EPackage>

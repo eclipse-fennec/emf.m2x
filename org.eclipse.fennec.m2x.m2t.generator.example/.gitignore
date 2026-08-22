@@ -1,0 +1,3 @@
+# Output of the two -generate steps in bnd.bnd — build output, regenerated on every build.
+gen-resources/
+gen-doc/

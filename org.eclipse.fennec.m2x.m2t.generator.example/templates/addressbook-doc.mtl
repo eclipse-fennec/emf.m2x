@@ -1,0 +1,32 @@
+[module addressbookdoc(_'http://www.eclipse.org/fennec/m2x/example/addressbook/1.0', _'http://www.eclipse.org/fennec/m2x/example/contact/1.0')/]
+[comment]
+The same model, generated as documentation instead of as data: nothing about the setup
+changes between the two, only the template.
+[/comment]
+[template public main(book : AddressBook)]
+[file ('addressbook.md', false)]
+# Address book of [book.owner/]
+
+[book.entries->size()/] entries.
+
+[for (person : Person | book.entries)]
+## [person.firstName/] [person.lastName/]
+
+- Title: [person.title/]
+- Organization: [person.organization/]
+[for (email : Email | person.emails)]
+- Email: [email.address/] ([email.kind/])
+[/for]
+
+[for (phone : Phone | person.phones)]
+- Phone: [phone.number/]
+[/for]
+
+[for (address : Address | person.addresses)]
+- Address: [address.city/], [address.country/]
+[/for]
+
+
+[/for]
+[/file]
+[/template]

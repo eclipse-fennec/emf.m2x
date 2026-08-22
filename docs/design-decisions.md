@@ -53,6 +53,7 @@
 | D43 | Eine DS-Komponente je Engine, OCL-Engine als mandatorische Referenz | `DefaultM2tEngine`/`DefaultQvtoEngine`/`DefaultQvtdEngine`, `PROTOTYPE`, `configurationPolicy=OPTIONAL`, Konstruktor-Injection; drei Türen für den Aufrufer. Siehe DR-D43. |
 | D44 | Kompilierte OCL: abgeleiteter Fingerprint als Schlüssel, Modell-Fingerprint als Version | Zwei Fingerprints mit zwei Aufgaben; Auslöser ist der `EPackage`-Service, nicht `MetadataHandler.onPackageRegistered`; `OclVersionedExpressions` als versions-bewusste Fläche des Caches. Siehe DR-D44. |
 | D45 | M2T-Extent für `allInstances()`: Eclipse-Parität plus Input-Fallback | Resource der Wurzel von `self`, sonst deren Containment-Baum; ist `self` kein `EObject`, treten die Input-Elemente an die Stelle. Pro Wurzel und Klasse einmal erhoben. Siehe DR-D45. |
+| D46 | M2T-Buildintegration als bnd External Plugin, selbsttragendes JAR | `fennecM2T` in `org.eclipse.fennec.m2x.m2t.generator`; EMF, ANTLR und die Engines liegen im JAR, Konfiguration über die Attribute von `-generate`, Metamodelle werden aus Datei-URIs geladen und unter ihrer nsURI in einer isolierten Registry registriert. Siehe DR-D46. |
 
 ---
 
@@ -1066,3 +1067,17 @@ Tür 1 liegt bewusst auf der Factory, nicht auf der Configuration: die `*.api`-B
 **Warum nicht das ganze ResourceSet:** Mächtiger, aber abhängig von der Ladereihenfolge — und ein Template sähe Modelle, die nicht sein Input sind. Ein Generator generiert aus einem Modell, nicht aus allem, was geladen ist.
 
 **Zwischenspeichern gehört dazu:** Ein Template stellt dieselbe Frage in jedem Schleifendurchlauf. Ohne Caching würde ein einzelnes `[for]` das Modell pro Durchlauf neu durchlaufen — genau die Klasse von Kosten, die #87 (`OclSet` quadratisch) sichtbar gemacht hat. Erhoben wird deshalb pro Wurzel und Klasse einmal; die Obergrenze `maxCollectionSize` schützt weiterhin vor Explosion.
+
+### DR-D46: M2T-Buildintegration als bnd External Plugin mit selbsttragendem JAR
+
+**Entscheidung:** Die Buildintegration ist ein bnd `Generator` namens `fennecM2T` (`org.eclipse.fennec.m2x.m2t.generator`), konfiguriert über die **Attribute** der `-generate`-Instruktion. Das Bundle trägt EMF, die ANTLR-Runtime und die vier m2x-Engines per `-conditionalpackage` in sich; `Import-Package: !*`, `Export-Package` und `Require-Capability` werden entfernt.
+
+**Warum selbsttragend:** bnd lädt ein External Plugin mit einem `URLClassLoader` über **genau ein** JAR, mit seinem eigenen Classloader als Parent (`WorkspaceExternalPluginHandler`). Ein `Bundle-ClassPath` wird dabei nicht gelesen, und aufgelöst wird nichts. Alles außer den `aQute.*`-Klassen muss also im JAR liegen. Für M2T ist das billig — EMF, ANTLR und die Engines, rund 3,4 MB — weil kein Eclipse Platform und kein JDT gebraucht wird. Genau daran hängt der Aufwand bei `org.eclipse.fennec.emf.osgi.codegen`, das `org.eclipse.core.runtime` und `org.eclipse.jdt.core` mitziehen muss.
+
+**Warum Attribute statt Kommandozeile:** Beides ist möglich (`biz.aQute.bnd.javagen` zeigt die Kommandozeile, `fennecEMF` die Attribute). Die Attribute stehen mit `output` und `generate` ohnehin schon da und lesen sich als Konfiguration statt als Aufruf. Gelesen werden sie über die **lokalen** Properties des `BuildContext`, nicht mit `get` allein: bnd legt die Attribute als lokale Properties über das Projekt, und Namen wie `model` oder `template` kann ein Buildfile auch für etwas anderes verwenden — ohne die Präsenzprüfung würde eine fehlende Angabe eine Projekt-Property erben.
+
+**Datei-URI laden, nsURI registrieren:** Ein `.ecore` im Projekt ist ein Ort, keine Identität. Modul-Deklaration, Instanzmodell und Typauflösung im Parser adressieren das Metamodell dagegen über seine nsURI. Der Generator lädt darum jede `ecore`-Datei von ihrer Datei-URI und registriert **jedes** enthaltene `EPackage` — Wurzel und Subpackages — unter seiner nsURI, bevor irgendetwas geparst wird. Zusätzlich wird die nsURI jedes Wurzelpakets im `URIConverter` auf die Datei abgebildet, damit Querverweise zwischen Metamodellen auch dann auflösen, wenn sie als nsURI geschrieben sind statt als relativer Pfad.
+
+**Isolierte Registry (D42 im Build):** Das `ResourceSet` bekommt eine `EPackageRegistryImpl` **ohne** Delegate auf `EPackage.Registry.INSTANCE`. Der Generator läuft im Buildwerkzeug, wo die globale Registry weder uns gehört noch vorhersagbar ist: unter bndtools liegt ein Eclipse-eigenes EMF im Parent-Classloader, dessen `EPackage`-Klasse eine andere ist als die im Plugin-JAR. Sichtbar ist deshalb nur, was konfiguriert wurde, plus Ecore und XMLType.
+
+**Bindung an `main`:** Hat `main` genau einen Parameter, wird es einmal pro Modellwurzel ausgeführt — ein Generierungslauf pro Eingabemodell, der Normalfall. Sonst werden die Wurzeln positionsweise an die Parameter gebunden, womit ein Template ein zweites Eingabemodell bekommt. Die Regel hängt an der Parameterzahl und ist damit ablesbar, statt aus der Anzahl der Modelle geraten zu werden.
