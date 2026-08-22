@@ -152,14 +152,18 @@ class M2tSpecExampleTest {
 					"[/template]\n";
 			M2tResult result = executeOnClass(mtl);
 			String content = getFile(result, "Employee.java");
-			// For body produces "  EString name;\n  EDouble salary;"
-			// then "}" follows directly (no newline — [/for] standalone stripping consumed it)
+			// The for body produces "  EString name;\n  EDouble salary;", and the newline
+			// that ended the [/for] line follows it: §8.4 lets the body of a multi-line
+			// block end before the newline in front of the tail, so the one after the tail
+			// is a whitespace body element of the enclosing body and is output as is.
+			// See M2tStandaloneBlockWhitespaceTest (#122).
 			assertEquals(
 					"class Employee\n" +
 					"{\n" +
 					"  // Attributes\n" +
 					"  EString name;\n" +
-					"  EDouble salary;}", content);
+					"  EDouble salary;\n" +
+					"}", content);
 		}
 
 		@Test

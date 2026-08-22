@@ -8,8 +8,8 @@ changes between the two, only the template.
 # Address book of [book.owner/]
 
 [book.entries->size()/] entries.
-
 [for (person : Person | book.entries)]
+
 ## [person.firstName/] [person.lastName/]
 
 - Title: [person.title/]
@@ -17,16 +17,12 @@ changes between the two, only the template.
 [for (email : Email | person.emails)]
 - Email: [email.address/] ([email.kind/])
 [/for]
-
 [for (phone : Phone | person.phones)]
 - Phone: [phone.number/]
 [/for]
-
 [for (address : Address | person.addresses)]
 - Address: [address.city/], [address.country/]
 [/for]
-
-
 [/for]
 [/file]
 [/template]

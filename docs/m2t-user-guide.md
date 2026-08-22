@@ -1336,10 +1336,35 @@ MOFM2T §8.4 defines precise whitespace normalization rules. The engine supports
 The whitespace normalizer applies these rules:
 
 1. **Body-trimming** — The first and last newlines of template and multi-line block bodies are stripped
-2. **Standalone block stripping** — When a block tag (`[for]`, `[if]`, `[/for]`, `[/if]`, etc.) is alone on a line, the entire line (including trailing newline) is removed from output
+2. **Standalone block stripping** — When a block tag (`[for]`, `[if]`, `[/for]`, `[/if]`, etc.) is alone on a line, the whitespace in front of the tag is removed from the output. What happens to the newline that ends the tag line follows the shape of the block — see 16.2.2
 3. **Default separator injection** — Standalone `[for]` blocks without an explicit `separator()` get a `"\n"` separator
 4. **BOL indicator** (**SPEC mode only**) — The `^` character at the beginning of a line resets indentation to column 0. In ACCELEO mode, `^` is passed through as literal text (Acceleo 3.7 does not implement this feature)
 5. **Indent propagation** — When a template invocation is indented, that indent is propagated to all subsequent lines of the invoked template's output
+
+### 16.2.2 The Newline After a Standalone Block
+
+§8.4 defines the body of the two block shapes differently, and that decides what becomes of
+the newline ending the tail line:
+
+| Shape | Body per §8.4 | Newline after the tail |
+|-------|---------------|------------------------|
+| multi-line (`[for]` … `[/for]` on their own lines) | starts on the line after the head, ends **excluding** the newline in front of the tail | **kept** — the construct already spent a newline in front of its tail |
+| single-line (`[if (…)]text[/if]` on one line) | starts after the head's closing bracket, ends before the tail's opening bracket | **removed** — no newline was spent, so the tag line takes its own |
+
+So a multi-line block leaves the line after it on its own line, while a single-line block on
+a line by itself contributes only the text it produced:
+
+```mtl
+A
+[for (a : EAttribute | c.eAttributes)]
+  [a.name/];
+[/for]
+Z
+```
+
+produces `A\n  name;\n  salary;\nZ` — the `[for]` and `[/for]` tag lines are gone, every
+line the body wrote keeps its newline. Every branch of an `[if]` behaves the same way,
+whether the `if`, an `elseif` or the `else` is taken.
 
 ### 16.2.1 SPEC vs ACCELEO Differences
 

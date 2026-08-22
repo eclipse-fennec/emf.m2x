@@ -10,7 +10,7 @@
     <emails address="ada@home.example.org" kind="home"/>
     <phones number="+44 20 7946 0111" kind="work"/>
   </entries>
-  <entries firstName="Grace" lastName="Hopperman" organization="Compiler Works" title="Rear Admiral">
+  <entries firstName="Grace" lastName="Hopper" organization="Compiler Works" title="Rear Admiral">
     <addresses xsi:type="contact:PoBoxAddress" city="Arlington" country="US" poBox="PO Box 1906"/>
     <emails address="grace@example.org" kind="work"/>
     <phones number="+1 202 555 0143" kind="mobile"/>

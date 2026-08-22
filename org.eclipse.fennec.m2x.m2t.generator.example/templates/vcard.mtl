@@ -7,10 +7,6 @@ Both metamodels are named by their namespace URI above. They live as .ecore file
 model/ and are registered under those URIs by the fennecM2T generator before this module
 is parsed, which is what makes the type names below resolvable — Person comes from one
 metamodel, Address and its subtypes from the other, ContactKind from a subpackage of it.
-
-The empty line after each closing for tag is deliberate: a for block whose tags stand
-alone on their lines has the newline in front of its closing tag stripped, so the line
-that follows the block needs one of its own.
 [/comment]
 [template public main(book : AddressBook)]
 [for (person : Person | book.entries)]
@@ -24,15 +20,12 @@ TITLE:[person.title/]
 [for (address : Address | person.addresses)]
 ADR;TYPE=work:[if (address.oclIsKindOf(PoBoxAddress))][address.oclAsType(PoBoxAddress).poBox/][/if];;[if (address.oclIsKindOf(PostalAddress))][address.oclAsType(PostalAddress).street/][/if];[address.city/];;[if (address.oclIsKindOf(PostalAddress))][address.oclAsType(PostalAddress).postalCode/][/if];[address.country/]
 [/for]
-
 [for (email : Email | person.emails)]
 EMAIL;TYPE=[if (email.kind = ContactKind::work)]WORK[else]HOME[/if]:[email.address/]
 [/for]
-
 [for (phone : Phone | person.phones)]
 TEL;TYPE=[if (phone.kind = ContactKind::mobile)]CELL[elseif (phone.kind = ContactKind::work)]WORK[else]HOME[/if]:[phone.number/]
 [/for]
-
 NOTE:From the address book of [book.owner/]
 END:VCARD
 [/file]
