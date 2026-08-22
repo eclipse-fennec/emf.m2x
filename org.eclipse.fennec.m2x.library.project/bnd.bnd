@@ -16,5 +16,10 @@ fennec-base:\
         bnd.library     = enableQVTD; \
         version			= 1.0.0;\
         path            = qvtd,\
+    bnd.library;\
+        bnd.library     = enableM2T; \
+        version			= 1.0.0;\
+        path            = m2t
+
 Bundle-Name: Eclipse Fennec M2X Project Library
 Bundle-Description: Bnd project library for M2X 

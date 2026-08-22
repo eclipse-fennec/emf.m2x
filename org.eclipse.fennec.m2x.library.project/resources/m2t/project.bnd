@@ -1,0 +1,13 @@
+-library: enableEMF
+
+-buildpath.m2t = ${m2t.lib}
+
+# The OCL bundles are part of this library, not an extra: M2T's API surface is partly
+# OCL. M2tConfiguration.builder(...) is overloaded on OclEngine and OclConfiguration and
+# M2tEngine.getOclEngine() returns one, so without them javac cannot even resolve the
+# builder call, let alone the engine an M2T evaluation runs on.
+m2t.lib: \
+	org.eclipse.fennec.m2x.m2t.api;version=latest,\
+	org.eclipse.fennec.m2x.m2t.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.api;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=latest
