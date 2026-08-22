@@ -2,6 +2,11 @@
 
 -buildpath.qvtd = ${qvtd.lib}
 
+# The OCL bundles belong to this library, not beside it: the API surface is partly OCL.
+# QvtdEngine.getOclEngine() returns one and the configuration is built from one, so
+# without them javac cannot resolve those calls.
 qvtd.lib: \
 	org.eclipse.fennec.m2x.qvtd.api;version=latest,\
-	org.eclipse.fennec.m2x.qvtd.model;version=latest
+	org.eclipse.fennec.m2x.qvtd.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.api;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=latest

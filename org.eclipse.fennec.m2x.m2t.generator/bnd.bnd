@@ -35,8 +35,16 @@ Import-Package: !*
 # the inlined EMF and ANTLR packages.
 -jpms-module-info:
 
-# The m2x packages arrive here through -conditionalpackage, and their package-info still
-# carries @Export. Nothing ever resolves this JAR, so exporting anything from it would be
-# a claim without a consumer — and it is what the "private references" warnings are about.
+# Only this bundle's own classes may contribute bundle annotations. The inlined m2x
+# packages carry theirs — @Export on their package-info, and the @Provide/@Requirement
+# behind the org.eclipse.fennec.m2x and org.eclipse.emf.ecore.generated_package
+# namespaces. Left alone, this JAR advertises itself as a provider of "m2t.engine" and
+# "ocl.engine", and a resolver in the workspace then picks the plugin instead of the real
+# bundles: it exports nothing, so nothing wires and no engine service ever appears.
+# The only capability this JAR should carry is the external plugin it is.
+-bundleannotations: org.eclipse.fennec.m2x.m2t.generator.*
+
+# Nothing resolves this JAR, so exporting from it would be a claim without a consumer —
+# and it is what the "private references" warnings are about.
 -removeheaders.exports: Export-Package, Require-Capability
 -fixupmessages.exports: "private references";is:=ignore

@@ -93,6 +93,16 @@ Five lines of setup, one template, one generated file.
 
 ## 3. Engine Setup
 
+In a bnd workspace, one instruction puts the M2T API on the buildpath — the OCL API comes
+with it, because part of M2T's API surface is OCL:
+
+```
+-library: enableM2T
+```
+
+Running templates from a build needs none of this: see the
+[M2T bnd Generator Guide](m2t-generator-guide.md).
+
 ### 3.1 Three ways to give M2T its OCL engine
 
 M2T evaluates template expressions with an OCL engine. Which one, is the caller's choice — and the first door needs no OCL knowledge at all:

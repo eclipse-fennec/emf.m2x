@@ -2,6 +2,11 @@
 
 -buildpath.qvto = ${qvto.lib}
 
+# The OCL bundles belong to this library, not beside it: the API surface is partly OCL.
+# QvtoEngine.getOclEngine() returns one and the configuration is built from one, so
+# without them javac cannot resolve those calls.
 qvto.lib: \
 	org.eclipse.fennec.m2x.qvto.api;version=latest,\
-	org.eclipse.fennec.m2x.qvto.model;version=latest
+	org.eclipse.fennec.m2x.qvto.model;version=latest,\
+	org.eclipse.fennec.m2x.ocl.api;version=latest,\
+	org.eclipse.fennec.m2x.ocl.model;version=latest
