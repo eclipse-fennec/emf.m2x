@@ -8,5 +8,6 @@ export const GUIDES = [
   { file: 'qvto-user-guide.md', slug: 'qvto', title: 'QVT-O Engine' },
   { file: 'qvtd-user-guide.md', slug: 'qvtd', title: 'QVT-R Engine' },
   { file: 'm2t-user-guide.md', slug: 'm2t', title: 'M2T Engine' },
+  { file: 'm2t-generator-guide.md', slug: 'm2t-generator', title: 'M2T bnd Generator' },
   { file: 'ocl-ide-installation.md', slug: 'ide-installation', title: 'Eclipse IDE Installation' },
 ];
