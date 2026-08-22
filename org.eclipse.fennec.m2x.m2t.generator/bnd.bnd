@@ -1,0 +1,42 @@
+Bundle-Name: Fennec M2T bnd Generator
+Bundle-Description: bnd external plugin that runs MOFM2T v1.0 templates during a build
+
+-library: enableEMF
+
+# bnd loads an external plugin with a URLClassLoader over this one JAR, with its own
+# class loader as the parent. Only the aQute.* classes therefore come for free; EMF,
+# ANTLR and the m2x engines have to be inside the JAR. That is what makes this
+# generator packageable at all: it needs no Eclipse Platform and no JDT.
+-buildpath: \
+	biz.aQute.bndlib;version=latest;packages=*,\
+	org.antlr.antlr4-runtime;version=latest,\
+	org.eclipse.fennec.m2x.m2t.api;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.model;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot
+
+-privatepackage: \
+	org.eclipse.fennec.m2x.m2t.generator
+
+-conditionalpackage: \
+	org.eclipse.fennec.m2x.*,\
+	org.eclipse.emf.*,\
+	org.antlr.v4.runtime.*
+
+# Nothing resolves this JAR as a bundle — it is read by a plain class loader — so an
+# unsatisfiable import would only be noise.
+Import-Package: !*
+
+# A build tool plugin is not a JPMS module; the workspace default would derive one from
+# the inlined EMF and ANTLR packages.
+-jpms-module-info:
+
+# The m2x packages arrive here through -conditionalpackage, and their package-info still
+# carries @Export. Nothing ever resolves this JAR, so exporting anything from it would be
+# a claim without a consumer — and it is what the "private references" warnings are about.
+-removeheaders.exports: Export-Package, Require-Capability
+-fixupmessages.exports: "private references";is:=ignore

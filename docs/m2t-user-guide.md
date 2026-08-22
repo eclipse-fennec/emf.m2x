@@ -20,6 +20,7 @@ Fennec M2T is a lightweight, spec-compliant MOFM2T v1.0 (Model to Text) engine t
 14. [Engine Lifetime and Module Retention](#14-engine-lifetime-and-module-retention)
 15. [M2tGenerationStrategy](#15-m2tgenerationstrategy)
 16. [Whitespace Handling](#16-whitespace-handling)
+17. [Generating from a bnd Build](#17-generating-from-a-bnd-build)
 
 ---
 
@@ -1383,4 +1384,116 @@ class Employee {
   EString name;
   EDouble salary;
 }
+```
+
+---
+
+## 17. Generating from a bnd Build
+
+The engine is also available as a bnd *external plugin*, so a bnd project can run templates
+as a build step instead of from Java. The plugin is called `fennecM2T` and lives in
+`org.eclipse.fennec.m2x.m2t.generator`; `org.eclipse.fennec.m2x.m2t.generator.example` is a
+working project that uses it.
+
+Everything the plugin needs is inside its JAR — EMF, ANTLR and the engines. bnd loads an
+external plugin with a plain class loader over one JAR, so nothing is resolved and nothing
+else has to be installed. In particular no Eclipse Platform is involved.
+
+### 17.1 Making the plugin available
+
+bnd finds the plugin through the capability index of the workspace repositories, so it is
+enough for the bundle to be in one of them. Add it to the Maven index of the workspace
+(`cnf/central.mvn` or equivalent):
+
+```
+org.eclipse.fennec.m2x:org.eclipse.fennec.m2x.m2t.generator:<version>
+```
+
+Inside this workspace nothing has to be added — the workspace repository provides the
+project's own output. A project generating from it should declare
+`-dependson: org.eclipse.fennec.m2x.m2t.generator`, because a `-generate` instruction alone
+creates no build order.
+
+### 17.2 The instruction
+
+```
+-generate: \
+    "model/*.ecore,model/*.xmi,templates/vcard.mtl"; \
+        output   = gen-resources/; \
+        generate = fennecM2T; \
+        ecore    = "model/addressbook.ecore,model/contact.ecore"; \
+        model    = "model/addressbook.xmi"; \
+        template = "templates/vcard.mtl"
+```
+
+The key in front of the attributes is the fileset bnd watches for changes. Metamodels,
+models and templates all belong in it, or editing one of them does not trigger a
+regeneration. It has to be quoted, because an unquoted comma would start a second
+instruction entry.
+
+| Attribute | Meaning |
+|-----------|---------|
+| `template` | the module that holds the `main` template; required |
+| `modules` | further modules to link, for `extends` and `import` |
+| `ecore` | the metamodels; every `EPackage` in them is registered under its nsURI |
+| `model` | the instance models handed to `main` |
+| `output` | where generated files go; defaults to `src-gen`. bnd needs this attribute anyway |
+| `charset` | encoding of templates and generated files; defaults to UTF-8 |
+| `whitespace` | `NONE`, `SPEC` or `ACCELEO`; defaults to `ACCELEO` (see section 16) |
+| `protectedAreas` | whether `[protected]` blocks are merged; defaults to `true` |
+
+Every file attribute takes a comma separated list, and each entry is either a path or a
+bnd fileset such as `templates/**/*.mtl`. Paths keep the order they are written in,
+matches of a fileset are sorted, because the models are bound to the parameters of `main`
+in that order.
+
+### 17.3 Why the metamodels have to be listed
+
+An `.ecore` file in a project is a location, not an identity. Everything else addresses a
+metamodel by its namespace URI: the module declaration names it, an instance model names
+it, and template type names are resolved against an `EPackage.Registry`. The generator
+therefore loads each `ecore` file from its file URI and registers every package it
+contains — root packages and subpackages alike — under its nsURI, before parsing anything:
+
+```mtl
+[module vcard(_'http://www.eclipse.org/fennec/m2x/example/addressbook/1.0',
+              _'http://www.eclipse.org/fennec/m2x/example/contact/1.0')/]
+[template public main(book : AddressBook)]
+```
+
+This is what lets a model use `xsi:type="contact:PostalAddress"`, a template name a type
+from a second metamodel, or an enum literal from a subpackage — with nothing installed
+anywhere. Cross references between two `.ecore` files work both as relative paths and as
+nsURIs; for the latter the nsURI of each root package is also mapped to its file.
+
+Everything lives in one `ResourceSet` whose package registry has no delegate to
+`EPackage.Registry.INSTANCE` (D42). The generator runs inside the build tool, where the
+global registry is neither ours nor predictable.
+
+### 17.4 How the models reach `main`
+
+If `main` declares a single parameter, it is executed once per model root — the usual case,
+one generation per input model. Otherwise the roots are bound to its parameters
+positionally, which is how a template that needs a second input model gets it.
+
+### 17.5 Protected areas and `clear`
+
+bnd empties the output directory before each generation unless the instruction says
+`clear=false`. A generation whose templates use `[protected]` blocks (section 10) has to
+set it, or the content that was to be preserved is deleted before it can be read back.
+
+### 17.6 Two generations in one project
+
+`-generate` is a merged instruction, so a project can hold several generations by suffixing
+the name — for instance code into one directory and documentation into another. Give each
+its own `output`, because the output of a generation is cleared before it runs.
+
+```
+-generate.doc: \
+    "model/*.ecore,model/*.xmi,templates/addressbook-doc.mtl"; \
+        output   = gen-doc/; \
+        generate = fennecM2T; \
+        ecore    = "model/*.ecore"; \
+        model    = "model/addressbook.xmi"; \
+        template = "templates/addressbook-doc.mtl"
 ```

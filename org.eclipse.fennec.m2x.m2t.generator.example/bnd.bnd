@@ -1,0 +1,38 @@
+Bundle-Name: Fennec M2T Generator Example
+Bundle-Description: Generates vCards and documentation from an address book model, \
+ with the fennecM2T bnd generator. Two metamodels and one instance model, all \
+ referenced as files in this project — nothing is installed anywhere.
+
+# No Java code here: what this bundle carries is what the templates generated.
+-resourceonly: true
+
+# The generator is built in this workspace, and a -generate instruction creates no build
+# order on its own, so on a full build the generation could run before the plugin exists.
+-dependson: org.eclipse.fennec.m2x.m2t.generator
+
+# vCards: one file per entry of the address book. The fileset in front of the attributes
+# is what bnd watches — metamodels, model and template all belong in it, or an edit does
+# not trigger a regeneration.
+-generate: \
+	"model/*.ecore,model/*.xmi,templates/vcard.mtl"; \
+		output   = gen-resources/; \
+		generate = fennecM2T; \
+		ecore    = "model/addressbook.ecore,model/contact.ecore"; \
+		model    = "model/addressbook.xmi"; \
+		template = "templates/vcard.mtl"
+
+# The same model as documentation. A separate output directory, because bnd empties the
+# output of a generation before running it.
+-generate.doc: \
+	"model/*.ecore,model/*.xmi,templates/addressbook-doc.mtl"; \
+		output   = gen-doc/; \
+		generate = fennecM2T; \
+		ecore    = "model/*.ecore"; \
+		model    = "model/addressbook.xmi"; \
+		template = "templates/addressbook-doc.mtl"
+
+-includeresource: \
+	vcards=gen-resources/vcards,\
+	doc=gen-doc,\
+	model=model,\
+	templates=templates

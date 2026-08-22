@@ -1,0 +1,40 @@
+[module vcard(_'http://www.eclipse.org/fennec/m2x/example/addressbook/1.0', _'http://www.eclipse.org/fennec/m2x/example/contact/1.0')/]
+[comment]
+One vCard 3.0 file per entry of an address book — the file blocks below decide the file
+names, so a single execution writes as many files as the book has entries.
+
+Both metamodels are named by their namespace URI above. They live as .ecore files in
+model/ and are registered under those URIs by the fennecM2T generator before this module
+is parsed, which is what makes the type names below resolvable — Person comes from one
+metamodel, Address and its subtypes from the other, ContactKind from a subpackage of it.
+
+The empty line after each closing for tag is deliberate: a for block whose tags stand
+alone on their lines has the newline in front of its closing tag stripped, so the line
+that follows the block needs one of its own.
+[/comment]
+[template public main(book : AddressBook)]
+[for (person : Person | book.entries)]
+[file ('vcards/' + person.lastName.toLower() + '.vcf', false)]
+BEGIN:VCARD
+VERSION:3.0
+FN:[person.firstName/] [person.lastName/]
+N:[person.lastName/];[person.firstName/];;;
+ORG:[person.organization/]
+TITLE:[person.title/]
+[for (address : Address | person.addresses)]
+ADR;TYPE=work:[if (address.oclIsKindOf(PoBoxAddress))][address.oclAsType(PoBoxAddress).poBox/][/if];;[if (address.oclIsKindOf(PostalAddress))][address.oclAsType(PostalAddress).street/][/if];[address.city/];;[if (address.oclIsKindOf(PostalAddress))][address.oclAsType(PostalAddress).postalCode/][/if];[address.country/]
+[/for]
+
+[for (email : Email | person.emails)]
+EMAIL;TYPE=[if (email.kind = ContactKind::work)]WORK[else]HOME[/if]:[email.address/]
+[/for]
+
+[for (phone : Phone | person.phones)]
+TEL;TYPE=[if (phone.kind = ContactKind::mobile)]CELL[elseif (phone.kind = ContactKind::work)]WORK[else]HOME[/if]:[phone.number/]
+[/for]
+
+NOTE:From the address book of [book.owner/]
+END:VCARD
+[/file]
+[/for]
+[/template]

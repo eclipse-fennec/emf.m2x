@@ -1,4 +1,5 @@
 biz.aQute.bnd:aQute.libg:6.4.0
+biz.aQute.bnd:biz.aQute.bndlib:7.2.1
 biz.aQute:biz.aQute.gogo.commands.provider:1.9.0
 biz.aQute.bnd:biz.aQute.bnd.annotation:6.4.0
 biz.aQute:biz.aQute.wrapper.hamcrest:1.9.0
