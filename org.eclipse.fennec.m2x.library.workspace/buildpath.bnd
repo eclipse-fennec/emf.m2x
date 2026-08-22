@@ -7,3 +7,9 @@
 	org.osgi.framework;version=latest,\
 	org.osgi.annotation.versioning;version=latest,\
 	org.osgi.annotation.bundle;version=latest
+# The build-time plugin. Nothing compiles against it — it is here so that its Maven
+# coordinates land in fennecM2X.maven, which is what lets a workspace using the
+# fennecM2X library resolve the fennecM2T generator from a -generate instruction.
+# The example project is deliberately not part of the library.
+-buildpath.generator: \
+	org.eclipse.fennec.m2x.m2t.generator;version=snapshot

@@ -105,6 +105,7 @@ All bundles are published under the group id `org.eclipse.fennec.m2x`, with the 
 - **[OCL Security Analysis](docs/ocl-security-analysis.md)** — OCL threat model, attack vectors, hardening measures, BSI TR-03185 mapping
 - **[QVT-R Engine User Guide](docs/qvtd-user-guide.md)** — How to use the QVT-R engine (setup, relations, binding validation, blackbox, hybrid QVT-O)
 - **[M2T Engine User Guide](docs/m2t-user-guide.md)** — How to use the M2T engine (setup, template syntax, file output, protected areas, module composition)
+- **[M2T bnd Generator Guide](docs/m2t-generator-guide.md)** — Running templates as a build step with the `fennecM2T` bnd plugin (dependencies, `-generate` attributes, nsURI registration)
 - **[OCL IDE Installation](docs/ocl-ide-installation.md)** — Installing the generic EMF editor support from the p2 repository
 - **[QVT-O Security Analysis](docs/qvto-security-analysis.md)** — QVT-O threat model, attack vectors, hardening measures, BSI TR-03185 mapping
 - **[QVT-R Security Analysis](docs/qvtd-security-analysis.md)** — QVT-R threat model, attack vectors, hardening measures, BSI TR-03185 mapping
