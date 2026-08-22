@@ -22,6 +22,7 @@ import org.eclipse.emf.common.util.EList;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
 import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
+import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
@@ -39,8 +40,9 @@ import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
  * <ol>
  *   <li><b>Body-trimming</b>: Strip leading newline after head and trailing
  *       newline+whitespace before tail for templates and multi-line blocks.</li>
- *   <li><b>Standalone-block detection</b>: Remove leading whitespace and
- *       trailing newline for blocks that occupy a line by themselves.</li>
+ *   <li><b>Standalone-block detection</b>: Remove the leading whitespace of blocks that
+ *       occupy a line by themselves. The newline ending the tail line stays — it is a
+ *       whitespace body element of the enclosing body (#122).</li>
  *   <li><b>Default separator</b>: Set {@code "\n"} as default separator
  *       for standalone for-blocks without explicit separator.</li>
  *   <li><b>BOL indicator</b>: Process {@code ^} markers in text expressions
@@ -55,6 +57,14 @@ import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 public class M2tWhitespaceNormalizer {
 
 	private final Map<TemplateInvocation, String> indentationMap = new IdentityHashMap<>();
+
+	/**
+	 * Which blocks are multi-line, i.e. have their head and their tail on different lines.
+	 * §8.4 gives the two shapes different body rules, and that difference decides what
+	 * happens to the newline ending the tail line — see {@link #processStandaloneBlock}.
+	 * Filled while trimming, read in the pass after it.
+	 */
+	private final Map<Block, Boolean> multiLineBlocks = new IdentityHashMap<>();
 	private final WhitespaceMode mode;
 
 	/**
@@ -91,12 +101,16 @@ public class M2tWhitespaceNormalizer {
 	/**
 	 * Trims the body of a block: removes leading newline after head
 	 * and trailing newline+whitespace before tail.
+	 *
+	 * @return {@code true} if a head-line newline was trimmed, which is what makes the
+	 *         block multi-line in the sense of §8.4
 	 */
-	private void trimBody(Block block) {
+	private boolean trimBody(Block block) {
 		EList<TemplateExpression> body = block.getBody();
 		if (body.isEmpty()) {
-			return;
+			return false;
 		}
+		boolean multiLine = false;
 
 		// Trim leading: first body element — remove text up to and including first newline
 		if (body.get(0) instanceof TextExpression first) {
@@ -106,6 +120,7 @@ public class M2tWhitespaceNormalizer {
 				// Only trim if text before newline is whitespace-only (part of head line)
 				String beforeNl = value.substring(0, nlIdx);
 				if (beforeNl.isBlank()) {
+					multiLine = true;
 					String trimmed = value.substring(nlIdx + 1);
 					if (trimmed.isEmpty()) {
 						body.remove(0);
@@ -117,7 +132,7 @@ public class M2tWhitespaceNormalizer {
 		}
 
 		if (body.isEmpty()) {
-			return;
+			return multiLine;
 		}
 
 		// Trim trailing: last body element
@@ -138,6 +153,7 @@ public class M2tWhitespaceNormalizer {
 				}
 			}
 		}
+		return multiLine;
 	}
 
 	// --- Recursive body processing ---
@@ -147,8 +163,9 @@ public class M2tWhitespaceNormalizer {
 		// Skip inline LetBlocks — they are expression wrappers, not structural blocks
 		for (TemplateExpression expr : body) {
 			if (expr instanceof Block nested && !isInlineLetBlock(nested)) {
-				trimBody(nested);
+				multiLineBlocks.put(nested, trimBody(nested));
 				processBody(nested.getBody());
+				processAlternatives(nested);
 			}
 		}
 
@@ -173,6 +190,45 @@ public class M2tWhitespaceNormalizer {
 		}
 	}
 
+	/**
+	 * Normalizes the branches a conditional block carries beside its primary body: the
+	 * {@code elseif} chain and the {@code else} of an {@link IfBlock}, the {@code elselet}
+	 * chain and the {@code else} of a {@link LetBlock}.
+	 *
+	 * <p>§8.4 defines the body of a multi-line block as starting on the line after the
+	 * head and ending before the newline in front of the tail. An {@code [elseif]} head is
+	 * a block head like any other, so its own line's newline is not part of the body it
+	 * introduces — without this, a taken {@code elseif} branch emits a blank line that the
+	 * same body would not emit as the {@code if} branch (#123). Recursing here is also
+	 * what gives a standalone block *inside* a branch its standalone handling.
+	 */
+	private void processAlternatives(Block block) {
+		if (block instanceof IfBlock ifBlock) {
+			for (IfBlock elseIf : ifBlock.getElseIf()) {
+				trimBody(elseIf);
+				processBody(elseIf.getBody());
+				processAlternatives(elseIf);
+			}
+			processElse(ifBlock.getElse());
+		} else if (block instanceof LetBlock letBlock) {
+			for (LetBlock elseLet : letBlock.getElseLet()) {
+				trimBody(elseLet);
+				processBody(elseLet.getBody());
+				processAlternatives(elseLet);
+			}
+			processElse(letBlock.getElse());
+		}
+	}
+
+	private void processElse(Block elseBlock) {
+		if (elseBlock == null) {
+			return;
+		}
+		trimBody(elseBlock);
+		processBody(elseBlock.getBody());
+		processAlternatives(elseBlock);
+	}
+
 	// --- Standalone Block Detection (§8.4 Rule 3) ---
 
 	private void processStandaloneBlock(EList<TemplateExpression> body, int index, Block block) {
@@ -186,10 +242,26 @@ public class M2tWhitespaceNormalizer {
 			return; // not standalone
 		}
 
-		// Strip leading whitespace from previous TextExpression
+		// Strip the whitespace in front of the head — §8.4's one rule for a standalone
+		// block.
 		stripLeadingWhitespace(body, index);
-		// Strip trailing newline from following TextExpression
-		stripTrailingNewline(body, index);
+
+		// What happens to the newline that ends the tail line follows the two body rules
+		// §8.4 gives the two block shapes (#122). A multi-line block has already spent a
+		// newline there: its body "ends on the last character (excluding the new line) of
+		// the line previous to the block tail", so the newline in front of the tail is
+		// gone. Removing the one after the tail as well would delete a second newline,
+		// and the line after the block would be glued to the block's last line. A
+		// single-line block consumed no newline — its body "starts after the closing
+		// bracket of the block head" — so its line ends where the tag line ends and the
+		// newline goes with it.
+		//
+		// Acceleo 3.7 draws the same line: in the engine tests, template_if's testingElseif
+		// keeps a newline after each multi-line branch, while testingIf's single-line
+		// [if …][/if] runs the next iteration onto the same line.
+		if (!Boolean.TRUE.equals(multiLineBlocks.get(block))) {
+			stripTrailingNewline(body, index);
+		}
 
 		// Inject default "\n" separator for standalone for-blocks without explicit separator.
 		// Both SPEC and ACCELEO modes do this — the newline between iterations is a
@@ -261,12 +333,7 @@ public class M2tWhitespaceNormalizer {
 			String value = next.getValue();
 			int nlIdx = value.indexOf('\n');
 			if (nlIdx >= 0) {
-				String remaining = value.substring(nlIdx + 1);
-				if (remaining.isEmpty()) {
-					next.setValue("");
-				} else {
-					next.setValue(remaining);
-				}
+				next.setValue(value.substring(nlIdx + 1));
 			} else if (value.isBlank()) {
 				next.setValue("");
 			}
