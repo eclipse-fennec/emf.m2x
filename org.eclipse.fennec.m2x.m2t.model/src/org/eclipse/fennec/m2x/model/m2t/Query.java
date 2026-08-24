@@ -81,25 +81,25 @@ public interface Query extends ModuleElement {
 	void setExpression(OclExpression value);
 
 	/**
-	 * Returns the value of the '<em><b>Return Type</b></em>' reference.
+	 * Returns the value of the '<em><b>Return Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * <!-- begin-model-doc -->
 	 * The declared return type of this query. Named 'returnType' to avoid conflict with OclExpression.type.
 	 * <!-- end-model-doc -->
-	 * @return the value of the '<em>Return Type</em>' reference.
+	 * @return the value of the '<em>Return Type</em>' containment reference.
 	 * @see #setReturnType(OclType)
 	 * @see org.eclipse.fennec.m2x.model.m2t.M2tPackage#getQuery_ReturnType()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	OclType getReturnType();
 
 	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.m2t.Query#getReturnType <em>Return Type</em>}' reference.
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.m2t.Query#getReturnType <em>Return Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Return Type</em>' reference.
+	 * @param value the new value of the '<em>Return Type</em>' containment reference.
 	 * @see #getReturnType()
 	 * @generated
 	 */

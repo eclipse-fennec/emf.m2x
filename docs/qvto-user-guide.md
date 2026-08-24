@@ -425,6 +425,28 @@ for (EObject input : inputs) {
 }
 ```
 
+### 5.4 Persisting Parsed ASTs
+
+The parsed `OperationalTransformation` is a self-contained EMF containment tree: everything the parser creates lives inside it, and its only external references point at your metamodel packages. It can therefore be saved as XMI, stored, and reloaded like any other model — parse at publish time, execute after loading:
+
+```java
+// Save: put the AST into a resource and write it
+Resource out = resourceSet.createResource(URI.createFileURI("trafo.xmi"));
+out.getContents().add(engine.parse(source, "MyTrafo"));
+out.save(null);
+
+// Load (any process, any time) and execute
+Resource in = resourceSet.createResource(URI.createFileURI("trafo.xmi"));
+in.load(null);
+OperationalTransformation trafo = (OperationalTransformation) in.getContents().get(0);
+QvtoExecutionResult result = engine.execute(trafo, QvtoExecutionContext.of(extents));
+```
+
+Two things must line up on the load side:
+
+- **The metamodels.** References to your `EPackage`s serialize as hrefs against their nsURI (or resource URI). Loading needs the same packages resolvable — registered in the package registry the loading resource set uses, exactly as for parsing (§3).
+- **Imports are per-unit.** A `ModuleImport` of another file's module serializes as a cross-resource reference: each unit is its own resource, saved separately. Inline libraries in the same unit travel inside the transformation.
+
 ---
 
 ## 6. Executing Transformations

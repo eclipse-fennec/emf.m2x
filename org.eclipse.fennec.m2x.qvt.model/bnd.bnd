@@ -8,6 +8,7 @@ Bundle-Description: QVT v1.3 shared base metamodel (QVTBase EPackage, 9 classifi
 #	model/qvt.genmodel;\
 #		generate=fennecEMF;\
 #		genmodel=model/qvt.genmodel;\
+#		lineEndings=lf;\
 #		output=src
 
 -includeresource.model: model=model

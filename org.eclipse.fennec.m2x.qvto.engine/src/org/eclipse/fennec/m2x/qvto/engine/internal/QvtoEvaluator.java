@@ -243,10 +243,13 @@ public class QvtoEvaluator {
 		// §8.3.19: Build predefined tag registry (proxy, topclasses)
 		tagRegistry.build();
 
-		// Initialize module-level properties (property name : Type = init;)
+		// Initialize module-level properties (property name : Type = init;).
+		// ownedVariable also contains the variables that represent model parameters
+		// (#127) — those are already bound to their extents above and must not be
+		// redefined as null-valued properties.
 		for (Variable moduleVar : transformation.getOwnedVariable()) {
 			String varName = moduleVar.getName();
-			if (varName != null) {
+			if (varName != null && !isModelParameterVariable(moduleVar)) {
 				Object value = null;
 				if (moduleVar.getOwnedInit() != null) {
 					value = eval(moduleVar.getOwnedInit());
@@ -275,6 +278,19 @@ public class QvtoEvaluator {
 		}
 		processDeferredTasks();
 		return diagnostics;
+	}
+
+	/**
+	 * A module-owned variable that represents a model parameter (#127) is not a
+	 * module property — its value is the extent bound during setup.
+	 */
+	private boolean isModelParameterVariable(Variable variable) {
+		for (ModelParameter mp : transformation.getModelParameter()) {
+			if (mp.getRepresentedParameter() == variable) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

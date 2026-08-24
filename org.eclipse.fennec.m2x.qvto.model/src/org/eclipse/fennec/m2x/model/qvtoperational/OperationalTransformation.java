@@ -73,13 +73,16 @@ public interface OperationalTransformation extends org.eclipse.fennec.m2x.model.
 	EList<EClass> getIntermediateClass();
 
 	/**
-	 * Returns the value of the '<em><b>Intermediate Property</b></em>' reference list.
+	 * Returns the value of the '<em><b>Intermediate Property</b></em>' containment reference list.
 	 * The list contents are of type {@link org.eclipse.emf.ecore.EStructuralFeature}.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the value of the '<em>Intermediate Property</em>' reference list.
+	 * <!-- begin-model-doc -->
+	 * Intermediate (contextual) properties of the transformation (QVT v1.3 §8.2.1.3). Contained: the parser never installs them into an EClass, the engine's property store resolves them by context (#127).
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Intermediate Property</em>' containment reference list.
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getOperationalTransformation_IntermediateProperty()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	EList<EStructuralFeature> getIntermediateProperty();

@@ -182,6 +182,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Add all collected modeltypes to transformation
 		transformation.getUsedModelType().addAll(modelTypes);
+		// #127: the module owns its model types — Module extends EPackage and ModelType
+		// extends EClass, so eClassifiers is their containment home; usedModelType is
+		// the spec-level cross-reference.
+		transformation.getEClassifiers().addAll(modelTypes);
 
 		// Link model parameters to their ModelType declarations
 		for (ModelParameter mp : transformation.getModelParameter()) {
@@ -220,9 +224,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (hasTopLevelModuleElements && transformation != null) {
 			savedEnv = this.environment;
 			for (ModelParameter mp : transformation.getModelParameter()) {
-				Variable var = OCL.createVariable();
-				var.setName(mp.getName());
-				this.environment = this.environment.nested(var);
+				this.environment = this.environment.nested(
+						modelParameterVariable(transformation, mp));
 			}
 			updateExpressionBuilder();
 		}
@@ -266,6 +269,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (intermediatePackageUri != null && packageRegistry != null) {
 			packageRegistry.remove(intermediatePackageUri);
 		}
+
+		// #127: the returned AST must be one self-contained containment tree
+		containSatellites(transformation);
 
 		return transformation;
 	}
@@ -312,9 +318,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Set up environment with model parameters as variables
 		QvtoEnvironment savedEnv = this.environment;
 		for (ModelParameter mp : transformation.getModelParameter()) {
-			Variable var = OCL.createVariable();
-			var.setName(mp.getName());
-			this.environment = this.environment.nested(var);
+			this.environment = this.environment.nested(
+					modelParameterVariable(transformation, mp));
 		}
 		updateExpressionBuilder();
 
@@ -1651,6 +1656,142 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		module.getESubpackages().add(pkg);
 		return pkg;
 	}
+
+	// ==================== Containment repair (#127) ====================
+
+	/**
+	 * Returns the OCL Variable representing a model parameter, creating and containing
+	 * it on first use. The variable lives in the module's ownedVariable list and is
+	 * linked via VarParameter.representedParameter, so VariableExps referencing it
+	 * serialize as intra-resource references.
+	 */
+	private Variable modelParameterVariable(OperationalTransformation transformation,
+			ModelParameter mp) {
+		Variable var = mp.getRepresentedParameter();
+		if (var == null) {
+			var = OCL.createVariable();
+			var.setName(mp.getName());
+			transformation.getOwnedVariable().add(var);
+			mp.setRepresentedParameter(var);
+		}
+		return var;
+	}
+
+	/**
+	 * Contains every satellite object the parse created but nothing owns, so the
+	 * returned AST is a self-contained containment tree that can be added to a
+	 * Resource and serialized as XMI (#127). Handles:
+	 * <ul>
+	 * <li>ocl Variables referenced through non-containment references (operation
+	 * environment variables like self/parameters/result, desugared iterator and
+	 * extent variables): attached to the nearest enclosing OperationBody, falling
+	 * back to the module's ownedVariable list;</li>
+	 * <li>modules referenced from ModuleImport.importedModule (inline libraries and
+	 * linker stubs) and the qvtbase Transformation stub in
+	 * OperationalTransformation.refined: attached as eSubpackages;</li>
+	 * <li>synthetic package-less EClassifiers (the EDataType a primitive context
+	 * type is stored as): attached to the module's eClassifiers.</li>
+	 * </ul>
+	 * Runs to a fixpoint because an attached variable's ownedInit tree can reference
+	 * further satellites. Objects that live in a Resource or another containment
+	 * tree (registered metamodel packages, their classifiers) are never touched.
+	 */
+	private void containSatellites(OperationalTransformation transformation) {
+		boolean changed = true;
+		while (changed) {
+			changed = false;
+			List<EObject> tree = new ArrayList<>();
+			tree.add(transformation);
+			transformation.eAllContents().forEachRemaining(tree::add);
+			for (EObject owner : tree) {
+				for (EReference ref : owner.eClass().getEAllReferences()) {
+					if (ref.isContainment() || ref.isContainer() || ref.isDerived()
+							|| !ref.isChangeable()) {
+						continue;
+					}
+					for (EObject target : referencedObjects(owner, ref)) {
+						if (target == transformation || target.eContainer() != null
+								|| target.eResource() != null) {
+							continue;
+						}
+						changed |= containSatellite(transformation, owner, ref, target);
+					}
+				}
+			}
+		}
+	}
+
+	private List<EObject> referencedObjects(EObject owner, EReference ref) {
+		Object value = owner.eGet(ref);
+		if (value instanceof List<?> list) {
+			List<EObject> result = new ArrayList<>();
+			for (Object o : list) {
+				if (o instanceof EObject eo) {
+					result.add(eo);
+				}
+			}
+			return result;
+		}
+		return value instanceof EObject eo ? List.of(eo) : List.of();
+	}
+
+	private boolean containSatellite(OperationalTransformation transformation,
+			EObject referrer, EReference ref, EObject target) {
+		if (target instanceof Variable var) {
+			for (EObject c = referrer; c != null; c = c.eContainer()) {
+				if (c instanceof OperationBody body) {
+					body.getVariable().add(var);
+					return true;
+				}
+			}
+			transformation.getOwnedVariable().add(var);
+			return true;
+		}
+		// Inline libraries, import stubs, refine stubs: same-unit packages
+		if (target instanceof EPackage pkg
+				&& (referrer instanceof ModuleImport && "importedModule".equals(ref.getName())
+						|| referrer instanceof OperationalTransformation
+								&& "refined".equals(ref.getName()))) {
+			transformation.getESubpackages().add(pkg);
+			return true;
+		}
+		// A package-less classifier can only be parser-made (setParameterType's EDataType)
+		if (target instanceof EClassifier classifier && classifier.getEPackage() == null) {
+			transformation.getEClassifiers().add(classifier);
+			return true;
+		}
+		// Synthetic features and operations (an unresolvable property becomes a detached
+		// EAttribute carrying just the name for runtime resolution) get a holder class
+		if (target instanceof EStructuralFeature feature) {
+			syntheticMemberHolder(transformation).getEStructuralFeatures().add(feature);
+			return true;
+		}
+		if (target instanceof EOperation operation) {
+			syntheticMemberHolder(transformation).getEOperations().add(operation);
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * The holder class for synthetic members the parse created without a class of
+	 * their own — they only carry a name for runtime resolution, but need a
+	 * containment home to be serializable (#127).
+	 */
+	private EClass syntheticMemberHolder(OperationalTransformation transformation) {
+		for (EClassifier classifier : transformation.getEClassifiers()) {
+			if (classifier instanceof EClass ec && SYNTHETIC_MEMBERS_CLASS.equals(ec.getName())) {
+				return ec;
+			}
+		}
+		EClass holder = EcoreFactory.eINSTANCE.createEClass();
+		holder.setName(SYNTHETIC_MEMBERS_CLASS);
+		holder.setAbstract(true);
+		transformation.getEClassifiers().add(holder);
+		return holder;
+	}
+
+	private static final String SYNTHETIC_MEMBERS_CLASS = "_SYNTHETIC_MEMBERS";
 
 	// ==================== Tag ====================
 

@@ -8,6 +8,7 @@ Bundle-Description: QVT-Operational v1.3 EMF metamodel (3 EPackages, 59 classifi
 #	model/qvto.genmodel;\
 #		generate=fennecEMF;\
 #		genmodel=model/qvto.genmodel;\
+#		lineEndings=lf;\
 #		output=src
 
 -includeresource.model: model=model

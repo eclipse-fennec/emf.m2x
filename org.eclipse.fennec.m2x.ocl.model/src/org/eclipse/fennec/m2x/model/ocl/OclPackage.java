@@ -42,7 +42,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = OclPackage.eNS_URI, fingerprint = "fp1:50e8809ad65f1b659f16c5bf655b0408d452ef5597b3839255acaa0df56bbfc5", genModel = "/model/ocl.genmodel", genModelSourceLocations = {"model/ocl.genmodel","org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel"}, ecore = "/model/ocl.ecore", ecoreSourceLocations = "/model/ocl.ecore")
+@EPackage(uri = OclPackage.eNS_URI, fingerprint = "fp1:58551012b042b88f67c1e2d18dae1746c8f9f28d3cf581e99540f3133fb3701f", genModel = "/model/ocl.genmodel", genModelSourceLocations = {"model/ocl.genmodel","org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel"}, ecore = "/model/ocl.ecore", ecoreSourceLocations = "/model/ocl.ecore")
 public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -281,7 +281,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int COLLECTION_TYPE__NAME = OCL_TYPE__NAME;
 
 	/**
-	 * The feature id for the '<em><b>Element Type</b></em>' reference.
+	 * The feature id for the '<em><b>Element Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -336,7 +336,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int SET_TYPE__NAME = COLLECTION_TYPE__NAME;
 
 	/**
-	 * The feature id for the '<em><b>Element Type</b></em>' reference.
+	 * The feature id for the '<em><b>Element Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -391,7 +391,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ORDERED_SET_TYPE__NAME = COLLECTION_TYPE__NAME;
 
 	/**
-	 * The feature id for the '<em><b>Element Type</b></em>' reference.
+	 * The feature id for the '<em><b>Element Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -446,7 +446,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int BAG_TYPE__NAME = COLLECTION_TYPE__NAME;
 
 	/**
-	 * The feature id for the '<em><b>Element Type</b></em>' reference.
+	 * The feature id for the '<em><b>Element Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -501,7 +501,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int SEQUENCE_TYPE__NAME = COLLECTION_TYPE__NAME;
 
 	/**
-	 * The feature id for the '<em><b>Element Type</b></em>' reference.
+	 * The feature id for the '<em><b>Element Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -556,7 +556,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int MAP_TYPE__NAME = OCL_TYPE__NAME;
 
 	/**
-	 * The feature id for the '<em><b>Key Type</b></em>' reference.
+	 * The feature id for the '<em><b>Key Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -565,7 +565,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int MAP_TYPE__KEY_TYPE = OCL_TYPE_FEATURE_COUNT + 0;
 
 	/**
-	 * The feature id for the '<em><b>Value Type</b></em>' reference.
+	 * The feature id for the '<em><b>Value Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -749,7 +749,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int OCL_EXPRESSION = 14;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -786,7 +786,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int CALL_EXP = 15;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -850,7 +850,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int FEATURE_CALL_EXP = 16;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -923,7 +923,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int PROPERTY_CALL_EXP = 17;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1005,7 +1005,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int NAVIGATION_CALL_EXP = 18;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1087,7 +1087,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ASSOCIATION_CLASS_CALL_EXP = 19;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1178,7 +1178,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int OPERATION_CALL_EXP = 20;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1278,7 +1278,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int LOOP_EXP = 21;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1360,7 +1360,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ITERATOR_EXP = 22;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1451,7 +1451,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ITERATE_EXP = 23;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1542,7 +1542,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int LITERAL_EXP = 24;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1579,7 +1579,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int PRIMITIVE_LITERAL_EXP = 25;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1616,7 +1616,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int INTEGER_LITERAL_EXP = 26;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1662,7 +1662,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int REAL_LITERAL_EXP = 27;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1708,7 +1708,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int UNLIMITED_NATURAL_LITERAL_EXP = 28;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1754,7 +1754,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int STRING_LITERAL_EXP = 29;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1800,7 +1800,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int BOOLEAN_LITERAL_EXP = 30;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1846,7 +1846,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int NULL_LITERAL_EXP = 31;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1883,7 +1883,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int INVALID_LITERAL_EXP = 32;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1920,7 +1920,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ENUM_LITERAL_EXP = 33;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1966,7 +1966,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int COLLECTION_LITERAL_EXP = 34;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2021,7 +2021,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int TUPLE_LITERAL_EXP = 35;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2067,7 +2067,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int MAP_LITERAL_EXP = 36;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2113,7 +2113,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int IF_EXP = 37;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2177,7 +2177,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int LET_EXP = 38;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2232,7 +2232,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int VARIABLE_EXP = 39;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2278,7 +2278,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int TYPE_EXP = 40;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2287,7 +2287,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int TYPE_EXP__TYPE = OCL_EXPRESSION__TYPE;
 
 	/**
-	 * The feature id for the '<em><b>Referred Type</b></em>' reference.
+	 * The feature id for the '<em><b>Referred Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2324,7 +2324,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int MESSAGE_EXP = 41;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2406,7 +2406,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int VARIABLE__NAME = 0;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2663,7 +2663,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int TUPLE_LITERAL_PART__NAME = 0;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2764,7 +2764,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int TUPLE_PART__NAME = 0;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2801,7 +2801,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int STATE_EXP = 50;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2929,10 +2929,10 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EClass getCollectionType();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.CollectionType#getElementType <em>Element Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.CollectionType#getElementType <em>Element Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Element Type</em>'.
+	 * @return the meta object for the containment reference '<em>Element Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.ocl.CollectionType#getElementType()
 	 * @see #getCollectionType()
 	 * @generated
@@ -3001,10 +3001,10 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EClass getMapType();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getKeyType <em>Key Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getKeyType <em>Key Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Key Type</em>'.
+	 * @return the meta object for the containment reference '<em>Key Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.ocl.MapType#getKeyType()
 	 * @see #getMapType()
 	 * @generated
@@ -3012,10 +3012,10 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getMapType_KeyType();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getValueType <em>Value Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getValueType <em>Value Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Value Type</em>'.
+	 * @return the meta object for the containment reference '<em>Value Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.ocl.MapType#getValueType()
 	 * @see #getMapType()
 	 * @generated
@@ -3107,10 +3107,10 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EClass getOclExpression();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.OclExpression#getType <em>Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.OclExpression#getType <em>Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Type</em>'.
+	 * @return the meta object for the containment reference '<em>Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclExpression#getType()
 	 * @see #getOclExpression()
 	 * @generated
@@ -3708,10 +3708,10 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EClass getTypeExp();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.TypeExp#getReferredType <em>Referred Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.TypeExp#getReferredType <em>Referred Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Referred Type</em>'.
+	 * @return the meta object for the containment reference '<em>Referred Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.ocl.TypeExp#getReferredType()
 	 * @see #getTypeExp()
 	 * @generated
@@ -3794,10 +3794,10 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EAttribute getVariable_Name();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.Variable#getType <em>Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.Variable#getType <em>Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Type</em>'.
+	 * @return the meta object for the containment reference '<em>Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.ocl.Variable#getType()
 	 * @see #getVariable()
 	 * @generated
@@ -3987,10 +3987,10 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EAttribute getTupleLiteralPart_Name();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart#getType <em>Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart#getType <em>Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Type</em>'.
+	 * @return the meta object for the containment reference '<em>Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart#getType()
 	 * @see #getTupleLiteralPart()
 	 * @generated
@@ -4062,10 +4062,10 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EAttribute getTuplePart_Name();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.TuplePart#getType <em>Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.TuplePart#getType <em>Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Type</em>'.
+	 * @return the meta object for the containment reference '<em>Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.ocl.TuplePart#getType()
 	 * @see #getTuplePart()
 	 * @generated
@@ -4205,7 +4205,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EClass COLLECTION_TYPE = eINSTANCE.getCollectionType();
 
 		/**
-		 * The meta object literal for the '<em><b>Element Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Element Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -4271,7 +4271,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EClass MAP_TYPE = eINSTANCE.getMapType();
 
 		/**
-		 * The meta object literal for the '<em><b>Key Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Key Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -4279,7 +4279,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference MAP_TYPE__KEY_TYPE = eINSTANCE.getMapType_KeyType();
 
 		/**
-		 * The meta object literal for the '<em><b>Value Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Value Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -4359,7 +4359,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EClass OCL_EXPRESSION = eINSTANCE.getOclExpression();
 
 		/**
-		 * The meta object literal for the '<em><b>Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -4867,7 +4867,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EClass TYPE_EXP = eINSTANCE.getTypeExp();
 
 		/**
-		 * The meta object literal for the '<em><b>Referred Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Referred Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -4935,7 +4935,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EAttribute VARIABLE__NAME = eINSTANCE.getVariable_Name();
 
 		/**
-		 * The meta object literal for the '<em><b>Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -5089,7 +5089,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EAttribute TUPLE_LITERAL_PART__NAME = eINSTANCE.getTupleLiteralPart_Name();
 
 		/**
-		 * The meta object literal for the '<em><b>Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -5149,7 +5149,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		EAttribute TUPLE_PART__NAME = eINSTANCE.getTuplePart_Name();
 
 		/**
-		 * The meta object literal for the '<em><b>Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated

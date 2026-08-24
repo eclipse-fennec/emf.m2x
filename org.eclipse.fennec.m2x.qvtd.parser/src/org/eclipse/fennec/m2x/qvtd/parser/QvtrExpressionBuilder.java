@@ -422,10 +422,10 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 		if (AbstractExpressionBuilder.ITERATOR_NAMES.contains(opName) && ctx.argumentList() != null
 				&& ctx.argumentList().expression().size() == 1) {
 			OclEnvironment savedEnv = env();
-			support.pushImplicitIteratorEnv(source);
+			Variable iterVar = support.pushImplicitIteratorEnv(source);
 			OclExpression body = (OclExpression) visit(ctx.argumentList().expression(0));
 			setEnv(savedEnv);
-			return support.buildImplicitIterator(source, opName, body, isSafe);
+			return support.buildImplicitIterator(source, opName, iterVar, body, isSafe);
 		}
 
 		List<OclExpression> args = new ArrayList<>();

@@ -31,6 +31,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.emf.ecore.EReference;
@@ -1198,7 +1199,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				Variable initVar = OCL.createVariable();
 				initVar.setName(varName);
 				if (iterVar.getType() != null) {
-					initVar.setType(iterVar.getType());
+					initVar.setType(copyType(iterVar.getType()));
 				}
 				initVar.setOwnedInit((OclExpression) visit(iterCtx.expression()));
 				varInitExp = IMP.createVariableInitExp();
@@ -1274,7 +1275,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			if (type instanceof ClassifierType ct && ct.getReferredClassifier() instanceof EClass ec) {
 				objectExp.setInstantiatedClass(ec);
 				objectExp.setType(type);
-				refVar.setType(type);
+				refVar.setType(copyType(type));
 			}
 		}
 
@@ -2118,7 +2119,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			if (i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null) {
 				iterVar.setType(resolveTypeExpression(varsCtx.typeExpression(i)));
 			} else if (elementType != null) {
-				iterVar.setType(elementType);
+				iterVar.setType(copyType(elementType));
 			}
 			iterVars.add(iterVar);
 			exp.getOwnedIterators().add(iterVar);
@@ -2234,7 +2235,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private VariableExp createVariableExp(Variable variable) {
 		VariableExp exp = OCL.createVariableExp();
 		exp.setReferredVariable(variable);
-		exp.setType(variable.getType());
+		exp.setType(copyType(variable.getType()));
 		return exp;
 	}
 
@@ -2306,19 +2307,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return colType;
 	}
 
+	/**
+	 * Deep-copies a type. Types are contained by their owner (Variable.type,
+	 * OclExpression.type, ... are containment references, #127), so a type instance
+	 * must never be assigned to a second owner — copy it instead.
+	 */
 	private OclType copyType(OclType type) {
-		if (type instanceof ClassifierType ct) {
-			return createClassifierType(ct.getReferredClassifier());
+		if (type == null) {
+			return null;
 		}
-		if (type instanceof CollectionType colType) {
-			CollectionType copy = OCL.createCollectionType();
-			if (colType.getElementType() != null) {
-				copy.setElementType(copyType(colType.getElementType()));
-			}
-			copy.setKind(colType.getKind());
-			return copy;
-		}
-		return null;
+		return EcoreUtil.copy(type);
 	}
 
 	private BlockExp buildBlock(QvtOParser.BlockContext ctx) {

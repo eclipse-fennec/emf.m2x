@@ -90,7 +90,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int IMPERATIVE_EXPRESSION = 0;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -127,7 +127,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ASSIGN_EXP = 1;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -209,7 +209,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int BLOCK_EXP = 2;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -255,7 +255,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int BREAK_EXP = 3;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -292,7 +292,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int CONTINUE_EXP = 4;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -329,7 +329,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int RETURN_EXP = 5;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -375,7 +375,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int WHILE_EXP = 6;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -430,7 +430,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int IMPERATIVE_LOOP_EXP = 7;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -521,7 +521,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int FOR_EXP = 8;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -621,7 +621,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int IMPERATIVE_ITERATE_EXP = 9;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -721,7 +721,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int SWITCH_EXP = 10;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -776,7 +776,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ALT_EXP = 11;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -831,7 +831,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int COMPUTE_EXP = 12;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -886,7 +886,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int ASSERT_EXP = 13;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -950,7 +950,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int LOG_EXP = 14;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1059,7 +1059,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int RAISE_EXP = 15;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1114,7 +1114,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int TRY_EXP = 16;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1169,7 +1169,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int CATCH_EXP = 17;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1224,7 +1224,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int INSTANTIATION_EXP = 18;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1288,7 +1288,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int TRANSFORMATION_INSTANTIATION_EXP = 19;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1361,7 +1361,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int VARIABLE_INIT_EXP = 20;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1416,7 +1416,7 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int UNLINK_EXP = 21;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated

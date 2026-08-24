@@ -41,25 +41,25 @@ import org.osgi.annotation.versioning.ProviderType;
 @ProviderType
 public interface OclExpression extends EObject {
 	/**
-	 * Returns the value of the '<em><b>Type</b></em>' reference.
+	 * Returns the value of the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * <!-- begin-model-doc -->
-	 * The resolved type of this expression, assigned during type checking.
+	 * The resolved type of this expression, assigned during type checking. Contained, so a parsed AST is a self-contained tree (#127); type instances are never shared between owners.
 	 * <!-- end-model-doc -->
-	 * @return the value of the '<em>Type</em>' reference.
+	 * @return the value of the '<em>Type</em>' containment reference.
 	 * @see #setType(OclType)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getOclExpression_Type()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	OclType getType();
 
 	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.OclExpression#getType <em>Type</em>}' reference.
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.OclExpression#getType <em>Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Type</em>' reference.
+	 * @param value the new value of the '<em>Type</em>' containment reference.
 	 * @see #getType()
 	 * @generated
 	 */

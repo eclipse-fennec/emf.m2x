@@ -63,7 +63,8 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Base class for OCL collection types. Carries the element type and collection kind (OCL v2.4 Section 8.2.5)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="elementType" eType="#//OclType"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="elementType" eType="#//OclType"
+        containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="kind" eType="#//CollectionKind"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="SetType" eSuperTypes="#//CollectionType">
@@ -90,8 +91,10 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="The Map(K, V) type. OCL v2.5 extension for key-value mappings."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="keyType" eType="#//OclType"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="valueType" eType="#//OclType"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="keyType" eType="#//OclType"
+        containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="valueType" eType="#//OclType"
+        containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="TupleType" eSuperTypes="#//OclType">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -129,9 +132,10 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base class for all OCL expression AST nodes. Every expression has a resolved type (OCL v2.4 Section 8.3)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"
+        containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="The resolved type of this expression, assigned during type checking."/>
+        <details key="documentation" value="The resolved type of this expression, assigned during type checking. Contained, so a parsed AST is a self-contained tree (#127); type instances are never shared between owners."/>
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
@@ -378,7 +382,8 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A type literal used in oclIsKindOf(), oclAsType(), etc. (OCL v2.4 Section 8.3.16)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="referredType" eType="#//OclType">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="referredType" eType="#//OclType"
+        containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The OCL type this expression refers to."/>
       </eAnnotations>
@@ -412,7 +417,8 @@
       <details key="documentation" value="A variable declaration used as self, iterator variable, let variable, iterate accumulator, or operation parameter (OCL v2.4 Section 8.3)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"
+        containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedInit" eType="#//OclExpression"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -479,7 +485,8 @@
       <details key="documentation" value="A name-value pair in a tuple literal, e.g. 'name = 'John'' in Tuple{name = 'John', age = 30}."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"
+        containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="ownedInit" eType="#//OclExpression"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -501,7 +508,8 @@
       <details key="documentation" value="A named, typed part in a TupleType definition. Defines the structure of a tuple type."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="type" eType="#//OclType"
+        containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="StateExp" eSuperTypes="#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">

@@ -45,7 +45,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = M2tPackage.eNS_URI, fingerprint = "fp1:f501f4fe8cd550795b07715bfcb5e2c1c57d77be38483899f3281fe3533da2c6", genModel = "/model/m2t.genmodel", genModelSourceLocations = {"model/m2t.genmodel","org.eclipse.fennec.m2x.m2t.model/model/m2t.genmodel"}, ecore = "/model/m2t.ecore", ecoreSourceLocations = "/model/m2t.ecore")
+@EPackage(uri = M2tPackage.eNS_URI, fingerprint = "fp1:7d05cd6e3552106da9ff7c677648e16373a4e82ce729afad03495d81c29c6189", genModel = "/model/m2t.genmodel", genModelSourceLocations = {"model/m2t.genmodel","org.eclipse.fennec.m2x.m2t.model/model/m2t.genmodel"}, ecore = "/model/m2t.ecore", ecoreSourceLocations = "/model/m2t.ecore")
 public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -299,7 +299,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int TEMPLATE_EXPRESSION = 4;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -336,7 +336,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int BLOCK = 2;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -428,7 +428,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int TEMPLATE = 5;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -600,7 +600,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int QUERY__EXPRESSION = MODULE_ELEMENT_FEATURE_COUNT + 1;
 
 	/**
-	 * The feature id for the '<em><b>Return Type</b></em>' reference.
+	 * The feature id for the '<em><b>Return Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -637,7 +637,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int MACRO = 7;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -700,7 +700,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int MACRO__PARAMETER = BLOCK_FEATURE_COUNT + 3;
 
 	/**
-	 * The feature id for the '<em><b>Return Type</b></em>' reference.
+	 * The feature id for the '<em><b>Return Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -737,7 +737,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int FOR_BLOCK = 8;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -846,7 +846,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int IF_BLOCK = 9;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -928,7 +928,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int LET_BLOCK = 10;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1010,7 +1010,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int FILE_BLOCK = 11;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1101,7 +1101,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int PROTECTED_AREA_BLOCK = 12;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1165,7 +1165,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int TRACE_BLOCK = 13;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1229,7 +1229,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int TEXT_EXPRESSION = 14;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1275,7 +1275,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int TEMPLATE_INVOCATION = 15;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1366,7 +1366,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int QUERY_INVOCATION = 16;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1421,7 +1421,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int MACRO_INVOCATION = 17;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -1744,10 +1744,10 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getQuery_Expression();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.m2t.Query#getReturnType <em>Return Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.m2t.Query#getReturnType <em>Return Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Return Type</em>'.
+	 * @return the meta object for the containment reference '<em>Return Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.m2t.Query#getReturnType()
 	 * @see #getQuery()
 	 * @generated
@@ -1776,10 +1776,10 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getMacro_Parameter();
 
 	/**
-	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.m2t.Macro#getReturnType <em>Return Type</em>}'.
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.m2t.Macro#getReturnType <em>Return Type</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference '<em>Return Type</em>'.
+	 * @return the meta object for the containment reference '<em>Return Type</em>'.
 	 * @see org.eclipse.fennec.m2x.model.m2t.Macro#getReturnType()
 	 * @see #getMacro()
 	 * @generated
@@ -2455,7 +2455,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference QUERY__EXPRESSION = eINSTANCE.getQuery_Expression();
 
 		/**
-		 * The meta object literal for the '<em><b>Return Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Return Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -2481,7 +2481,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference MACRO__PARAMETER = eINSTANCE.getMacro_Parameter();
 
 		/**
-		 * The meta object literal for the '<em><b>Return Type</b></em>' reference feature.
+		 * The meta object literal for the '<em><b>Return Type</b></em>' containment reference feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated

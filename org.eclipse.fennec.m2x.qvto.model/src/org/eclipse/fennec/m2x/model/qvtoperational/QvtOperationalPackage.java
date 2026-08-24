@@ -48,7 +48,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = QvtOperationalPackage.eNS_URI, fingerprint = "fp1:74a71b555625b34936060dbf5eec28da48abd58333b97daef77a9ed1f88eaa58", genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/qvtoperational.ecore", ecoreSourceLocations = "/model/qvtoperational.ecore")
+@EPackage(uri = QvtOperationalPackage.eNS_URI, fingerprint = "fp1:c7b351527a410daa817503adc67f864da2ca53fd33bf663ed557e0cd3bd8e20d", genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/qvtoperational.ecore", ecoreSourceLocations = "/model/qvtoperational.ecore")
 public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -2246,7 +2246,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int MODULE__ENTRY = EcorePackage.EPACKAGE_FEATURE_COUNT + 4;
 
 	/**
-	 * The feature id for the '<em><b>Config Property</b></em>' reference list.
+	 * The feature id for the '<em><b>Config Property</b></em>' containment reference list.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2427,7 +2427,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int OPERATIONAL_TRANSFORMATION__ENTRY = MODULE__ENTRY;
 
 	/**
-	 * The feature id for the '<em><b>Config Property</b></em>' reference list.
+	 * The feature id for the '<em><b>Config Property</b></em>' containment reference list.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2463,7 +2463,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int OPERATIONAL_TRANSFORMATION__INTERMEDIATE_CLASS = MODULE_FEATURE_COUNT + 1;
 
 	/**
-	 * The feature id for the '<em><b>Intermediate Property</b></em>' reference list.
+	 * The feature id for the '<em><b>Intermediate Property</b></em>' containment reference list.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -2644,7 +2644,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int LIBRARY__ENTRY = MODULE__ENTRY;
 
 	/**
-	 * The feature id for the '<em><b>Config Property</b></em>' reference list.
+	 * The feature id for the '<em><b>Config Property</b></em>' containment reference list.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -3586,7 +3586,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int IMPERATIVE_CALL_EXP = 19;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -3695,7 +3695,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int MAPPING_CALL_EXP = 20;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -3813,7 +3813,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int OBJECT_EXP = 21;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -3895,7 +3895,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int RESOLVE_EXP = 22;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -4004,7 +4004,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int RESOLVE_IN_EXP = 23;
 
 	/**
-	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * The feature id for the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
@@ -4582,10 +4582,10 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getModule_Entry();
 
 	/**
-	 * Returns the meta object for the reference list '{@link org.eclipse.fennec.m2x.model.qvtoperational.Module#getConfigProperty <em>Config Property</em>}'.
+	 * Returns the meta object for the containment reference list '{@link org.eclipse.fennec.m2x.model.qvtoperational.Module#getConfigProperty <em>Config Property</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference list '<em>Config Property</em>'.
+	 * @return the meta object for the containment reference list '<em>Config Property</em>'.
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.Module#getConfigProperty()
 	 * @see #getModule()
 	 * @generated
@@ -4636,10 +4636,10 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getOperationalTransformation_IntermediateClass();
 
 	/**
-	 * Returns the meta object for the reference list '{@link org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation#getIntermediateProperty <em>Intermediate Property</em>}'.
+	 * Returns the meta object for the containment reference list '{@link org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation#getIntermediateProperty <em>Intermediate Property</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the meta object for the reference list '<em>Intermediate Property</em>'.
+	 * @return the meta object for the containment reference list '<em>Intermediate Property</em>'.
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation#getIntermediateProperty()
 	 * @see #getOperationalTransformation()
 	 * @generated
@@ -5482,7 +5482,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference MODULE__ENTRY = eINSTANCE.getModule_Entry();
 
 		/**
-		 * The meta object literal for the '<em><b>Config Property</b></em>' reference list feature.
+		 * The meta object literal for the '<em><b>Config Property</b></em>' containment reference list feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated
@@ -5524,7 +5524,7 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference OPERATIONAL_TRANSFORMATION__INTERMEDIATE_CLASS = eINSTANCE.getOperationalTransformation_IntermediateClass();
 
 		/**
-		 * The meta object literal for the '<em><b>Intermediate Property</b></em>' reference list feature.
+		 * The meta object literal for the '<em><b>Intermediate Property</b></em>' containment reference list feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
 		 * @generated

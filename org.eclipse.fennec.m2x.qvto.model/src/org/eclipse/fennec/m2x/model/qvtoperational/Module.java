@@ -136,13 +136,16 @@ public interface Module extends EObject, EPackage {
 	void setEntry(EntryOperation value);
 
 	/**
-	 * Returns the value of the '<em><b>Config Property</b></em>' reference list.
+	 * Returns the value of the '<em><b>Config Property</b></em>' containment reference list.
 	 * The list contents are of type {@link org.eclipse.emf.ecore.EStructuralFeature}.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the value of the '<em>Config Property</em>' reference list.
+	 * <!-- begin-model-doc -->
+	 * Configuration properties of the module (QVT v1.3 §8.2.1.10). Contained: the parser creates these features exclusively for the module, they belong to no EClass (#127).
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Config Property</em>' containment reference list.
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getModule_ConfigProperty()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	EList<EStructuralFeature> getConfigProperty();

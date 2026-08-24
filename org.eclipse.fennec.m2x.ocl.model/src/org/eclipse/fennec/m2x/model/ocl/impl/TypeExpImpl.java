@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.model.ocl.impl;
 
 import org.eclipse.emf.common.notify.Notification;
+import org.eclipse.emf.common.notify.NotificationChain;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.InternalEObject;
@@ -40,7 +41,7 @@ import org.eclipse.fennec.m2x.model.ocl.TypeExp;
  */
 public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	/**
-	 * The cached value of the '{@link #getReferredType() <em>Referred Type</em>}' reference.
+	 * The cached value of the '{@link #getReferredType() <em>Referred Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @see #getReferredType()
@@ -75,14 +76,6 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	 */
 	@Override
 	public OclType getReferredType() {
-		if (referredType != null && referredType.eIsProxy()) {
-			InternalEObject oldReferredType = (InternalEObject)referredType;
-			referredType = (OclType)eResolveProxy(oldReferredType);
-			if (referredType != oldReferredType) {
-				if (eNotificationRequired())
-					eNotify(new ENotificationImpl(this, Notification.RESOLVE, OclPackage.TYPE_EXP__REFERRED_TYPE, oldReferredType, referredType));
-			}
-		}
 		return referredType;
 	}
 
@@ -91,8 +84,14 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetReferredType() {
-		return referredType;
+	public NotificationChain basicSetReferredType(OclType newReferredType, NotificationChain msgs) {
+		OclType oldReferredType = referredType;
+		referredType = newReferredType;
+		if (eNotificationRequired()) {
+			ENotificationImpl notification = new ENotificationImpl(this, Notification.SET, OclPackage.TYPE_EXP__REFERRED_TYPE, oldReferredType, newReferredType);
+			if (msgs == null) msgs = notification; else msgs.add(notification);
+		}
+		return msgs;
 	}
 
 	/**
@@ -102,10 +101,31 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	 */
 	@Override
 	public void setReferredType(OclType newReferredType) {
-		OclType oldReferredType = referredType;
-		referredType = newReferredType;
-		if (eNotificationRequired())
-			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.TYPE_EXP__REFERRED_TYPE, oldReferredType, referredType));
+		if (newReferredType != referredType) {
+			NotificationChain msgs = null;
+			if (referredType != null)
+				msgs = ((InternalEObject)referredType).eInverseRemove(this, EOPPOSITE_FEATURE_BASE - OclPackage.TYPE_EXP__REFERRED_TYPE, null, msgs);
+			if (newReferredType != null)
+				msgs = ((InternalEObject)newReferredType).eInverseAdd(this, EOPPOSITE_FEATURE_BASE - OclPackage.TYPE_EXP__REFERRED_TYPE, null, msgs);
+			msgs = basicSetReferredType(newReferredType, msgs);
+			if (msgs != null) msgs.dispatch();
+		}
+		else if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.TYPE_EXP__REFERRED_TYPE, newReferredType, newReferredType));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
+		switch (featureID) {
+			case OclPackage.TYPE_EXP__REFERRED_TYPE:
+				return basicSetReferredType(null, msgs);
+		}
+		return super.eInverseRemove(otherEnd, featureID, msgs);
 	}
 
 	/**
@@ -117,8 +137,7 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	public Object eGet(int featureID, boolean resolve, boolean coreType) {
 		switch (featureID) {
 			case OclPackage.TYPE_EXP__REFERRED_TYPE:
-				if (resolve) return getReferredType();
-				return basicGetReferredType();
+				return getReferredType();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}

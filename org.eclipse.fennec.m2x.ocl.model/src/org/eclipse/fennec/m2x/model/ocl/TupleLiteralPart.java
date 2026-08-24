@@ -65,22 +65,22 @@ public interface TupleLiteralPart extends EObject {
 	void setName(String value);
 
 	/**
-	 * Returns the value of the '<em><b>Type</b></em>' reference.
+	 * Returns the value of the '<em><b>Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the value of the '<em>Type</em>' reference.
+	 * @return the value of the '<em>Type</em>' containment reference.
 	 * @see #setType(OclType)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getTupleLiteralPart_Type()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	OclType getType();
 
 	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart#getType <em>Type</em>}' reference.
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart#getType <em>Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Type</em>' reference.
+	 * @param value the new value of the '<em>Type</em>' containment reference.
 	 * @see #getType()
 	 * @generated
 	 */

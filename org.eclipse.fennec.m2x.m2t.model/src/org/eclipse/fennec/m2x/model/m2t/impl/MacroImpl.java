@@ -107,7 +107,7 @@ public class MacroImpl extends BlockImpl implements Macro {
 	protected EList<Variable> parameter;
 
 	/**
-	 * The cached value of the '{@link #getReturnType() <em>Return Type</em>}' reference.
+	 * The cached value of the '{@link #getReturnType() <em>Return Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @see #getReturnType()
@@ -244,14 +244,6 @@ public class MacroImpl extends BlockImpl implements Macro {
 	 */
 	@Override
 	public OclType getReturnType() {
-		if (returnType != null && returnType.eIsProxy()) {
-			InternalEObject oldReturnType = (InternalEObject)returnType;
-			returnType = (OclType)eResolveProxy(oldReturnType);
-			if (returnType != oldReturnType) {
-				if (eNotificationRequired())
-					eNotify(new ENotificationImpl(this, Notification.RESOLVE, M2tPackage.MACRO__RETURN_TYPE, oldReturnType, returnType));
-			}
-		}
 		return returnType;
 	}
 
@@ -260,8 +252,14 @@ public class MacroImpl extends BlockImpl implements Macro {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetReturnType() {
-		return returnType;
+	public NotificationChain basicSetReturnType(OclType newReturnType, NotificationChain msgs) {
+		OclType oldReturnType = returnType;
+		returnType = newReturnType;
+		if (eNotificationRequired()) {
+			ENotificationImpl notification = new ENotificationImpl(this, Notification.SET, M2tPackage.MACRO__RETURN_TYPE, oldReturnType, newReturnType);
+			if (msgs == null) msgs = notification; else msgs.add(notification);
+		}
+		return msgs;
 	}
 
 	/**
@@ -271,10 +269,17 @@ public class MacroImpl extends BlockImpl implements Macro {
 	 */
 	@Override
 	public void setReturnType(OclType newReturnType) {
-		OclType oldReturnType = returnType;
-		returnType = newReturnType;
-		if (eNotificationRequired())
-			eNotify(new ENotificationImpl(this, Notification.SET, M2tPackage.MACRO__RETURN_TYPE, oldReturnType, returnType));
+		if (newReturnType != returnType) {
+			NotificationChain msgs = null;
+			if (returnType != null)
+				msgs = ((InternalEObject)returnType).eInverseRemove(this, EOPPOSITE_FEATURE_BASE - M2tPackage.MACRO__RETURN_TYPE, null, msgs);
+			if (newReturnType != null)
+				msgs = ((InternalEObject)newReturnType).eInverseAdd(this, EOPPOSITE_FEATURE_BASE - M2tPackage.MACRO__RETURN_TYPE, null, msgs);
+			msgs = basicSetReturnType(newReturnType, msgs);
+			if (msgs != null) msgs.dispatch();
+		}
+		else if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, M2tPackage.MACRO__RETURN_TYPE, newReturnType, newReturnType));
 	}
 
 	/**
@@ -305,6 +310,8 @@ public class MacroImpl extends BlockImpl implements Macro {
 				return basicSetModule(null, msgs);
 			case M2tPackage.MACRO__PARAMETER:
 				return ((InternalEList<?>)getParameter()).basicRemove(otherEnd, msgs);
+			case M2tPackage.MACRO__RETURN_TYPE:
+				return basicSetReturnType(null, msgs);
 		}
 		return super.eInverseRemove(otherEnd, featureID, msgs);
 	}
@@ -340,8 +347,7 @@ public class MacroImpl extends BlockImpl implements Macro {
 			case M2tPackage.MACRO__PARAMETER:
 				return getParameter();
 			case M2tPackage.MACRO__RETURN_TYPE:
-				if (resolve) return getReturnType();
-				return basicGetReturnType();
+				return getReturnType();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}

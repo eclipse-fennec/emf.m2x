@@ -8,6 +8,7 @@ Bundle-Description: OCL v2.5 EMF metamodel (51 EClasses + 2 EEnums)
 #	model/ocl.genmodel;\
 #		generate=fennecEMF;\
 #		genmodel=model/ocl.genmodel;\
+#		lineEndings=lf;\
 #		output=src
 
 -includeresource.model: model=model

@@ -40,44 +40,44 @@ import org.osgi.annotation.versioning.ProviderType;
 @ProviderType
 public interface MapType extends OclType {
 	/**
-	 * Returns the value of the '<em><b>Key Type</b></em>' reference.
+	 * Returns the value of the '<em><b>Key Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the value of the '<em>Key Type</em>' reference.
+	 * @return the value of the '<em>Key Type</em>' containment reference.
 	 * @see #setKeyType(OclType)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getMapType_KeyType()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	OclType getKeyType();
 
 	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getKeyType <em>Key Type</em>}' reference.
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getKeyType <em>Key Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Key Type</em>' reference.
+	 * @param value the new value of the '<em>Key Type</em>' containment reference.
 	 * @see #getKeyType()
 	 * @generated
 	 */
 	void setKeyType(OclType value);
 
 	/**
-	 * Returns the value of the '<em><b>Value Type</b></em>' reference.
+	 * Returns the value of the '<em><b>Value Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the value of the '<em>Value Type</em>' reference.
+	 * @return the value of the '<em>Value Type</em>' containment reference.
 	 * @see #setValueType(OclType)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getMapType_ValueType()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	OclType getValueType();
 
 	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getValueType <em>Value Type</em>}' reference.
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getValueType <em>Value Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Value Type</em>' reference.
+	 * @param value the new value of the '<em>Value Type</em>' containment reference.
 	 * @see #getValueType()
 	 * @generated
 	 */

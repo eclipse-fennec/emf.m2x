@@ -122,7 +122,7 @@ public class ModuleImpl extends EPackageImpl implements org.eclipse.fennec.m2x.m
 	protected EntryOperation entry;
 
 	/**
-	 * The cached value of the '{@link #getConfigProperty() <em>Config Property</em>}' reference list.
+	 * The cached value of the '{@link #getConfigProperty() <em>Config Property</em>}' containment reference list.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @see #getConfigProperty()
@@ -270,7 +270,7 @@ public class ModuleImpl extends EPackageImpl implements org.eclipse.fennec.m2x.m
 	@Override
 	public EList<EStructuralFeature> getConfigProperty() {
 		if (configProperty == null) {
-			configProperty = new EObjectResolvingEList<EStructuralFeature>(EStructuralFeature.class, this, QvtOperationalPackage.MODULE__CONFIG_PROPERTY);
+			configProperty = new EObjectContainmentEList<EStructuralFeature>(EStructuralFeature.class, this, QvtOperationalPackage.MODULE__CONFIG_PROPERTY);
 		}
 		return configProperty;
 	}
@@ -317,6 +317,8 @@ public class ModuleImpl extends EPackageImpl implements org.eclipse.fennec.m2x.m
 				return ((InternalEList<?>)getOwnedVariable()).basicRemove(otherEnd, msgs);
 			case QvtOperationalPackage.MODULE__OWNED_TAG:
 				return ((InternalEList<?>)getOwnedTag()).basicRemove(otherEnd, msgs);
+			case QvtOperationalPackage.MODULE__CONFIG_PROPERTY:
+				return ((InternalEList<?>)getConfigProperty()).basicRemove(otherEnd, msgs);
 		}
 		return super.eInverseRemove(otherEnd, featureID, msgs);
 	}

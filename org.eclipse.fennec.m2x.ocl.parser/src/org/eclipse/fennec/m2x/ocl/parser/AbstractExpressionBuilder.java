@@ -34,6 +34,7 @@ import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
@@ -197,7 +198,7 @@ public class AbstractExpressionBuilder {
 		Variable selfVar = environment.lookup("self").orElseThrow();
 		Variable aliasVar = FACTORY.createVariable();
 		aliasVar.setName(alias);
-		aliasVar.setType(selfVar.getType());
+		aliasVar.setType(copyType(selfVar.getType()));
 		this.environment = this.environment.nested(aliasVar);
 	}
 
@@ -298,7 +299,7 @@ public class AbstractExpressionBuilder {
 	public VariableExp createVariableExp(Variable variable) {
 		VariableExp exp = FACTORY.createVariableExp();
 		exp.setReferredVariable(variable);
-		exp.setType(variable.getType());
+		exp.setType(copyType(variable.getType()));
 		return exp;
 	}
 
@@ -539,26 +540,22 @@ public class AbstractExpressionBuilder {
 	 * <p>Note: the caller must manage environment push/pop.
 	 */
 	public IteratorExp buildImplicitIterator(OclExpression source, String iterName,
-			OclExpression body, boolean isSafe) {
+			Variable iterVar, OclExpression body, boolean isSafe) {
 		IteratorExp exp = FACTORY.createIteratorExp();
 		exp.setOwnedSource(source);
 		exp.setName(iterName);
 		exp.setIsSafe(isSafe);
 		ArrowCallMarker.mark(exp);
 
-		OclType elementType = inferElementType(source);
-		Variable iterVar = FACTORY.createVariable();
-		iterVar.setName("_implicit");
-		if (elementType != null) {
-			iterVar.setType(elementType);
-		}
+		// The iterator variable is the one pushed via pushImplicitIteratorEnv, so the
+		// body's VariableExps reference the contained variable (#127).
 		exp.getOwnedIterators().add(iterVar);
 		exp.setOwnedBody(body);
 
-		if (elementType != null) {
+		if (iterVar.getType() != null) {
 			switch (iterName) {
 				case "select", "reject", "sortedBy", "closure":
-					exp.setType(elementType);
+					exp.setType(copyType(iterVar.getType()));
 					break;
 				default:
 					break;
@@ -931,19 +928,16 @@ public class AbstractExpressionBuilder {
 
 	// ==================== Type Utilities ====================
 
+	/**
+	 * Deep-copies a type. Types are contained by their owner (Variable.type,
+	 * OclExpression.type, ... are containment references, #127), so a type instance
+	 * must never be assigned to a second owner — copy it instead.
+	 */
 	public OclType copyType(OclType type) {
-		if (type instanceof ClassifierType ct) {
-			return createClassifierType(ct.getReferredClassifier());
+		if (type == null) {
+			return null;
 		}
-		if (type instanceof CollectionType colType) {
-			CollectionType copy = FACTORY.createCollectionType();
-			if (colType.getElementType() != null) {
-				copy.setElementType(copyType(colType.getElementType()));
-			}
-			copy.setKind(colType.getKind());
-			return copy;
-		}
-		return null;
+		return EcoreUtil.copy(type);
 	}
 
 	public OclType inferElementType(OclExpression source) {

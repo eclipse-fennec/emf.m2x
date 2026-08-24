@@ -39,25 +39,25 @@ import org.osgi.annotation.versioning.ProviderType;
 @ProviderType
 public interface TypeExp extends OclExpression {
 	/**
-	 * Returns the value of the '<em><b>Referred Type</b></em>' reference.
+	 * Returns the value of the '<em><b>Referred Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * <!-- begin-model-doc -->
 	 * The OCL type this expression refers to.
 	 * <!-- end-model-doc -->
-	 * @return the value of the '<em>Referred Type</em>' reference.
+	 * @return the value of the '<em>Referred Type</em>' containment reference.
 	 * @see #setReferredType(OclType)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getTypeExp_ReferredType()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	OclType getReferredType();
 
 	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.TypeExp#getReferredType <em>Referred Type</em>}' reference.
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.TypeExp#getReferredType <em>Referred Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Referred Type</em>' reference.
+	 * @param value the new value of the '<em>Referred Type</em>' containment reference.
 	 * @see #getReferredType()
 	 * @generated
 	 */

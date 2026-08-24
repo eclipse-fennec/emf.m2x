@@ -75,7 +75,7 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 	protected EList<EClass> intermediateClass;
 
 	/**
-	 * The cached value of the '{@link #getIntermediateProperty() <em>Intermediate Property</em>}' reference list.
+	 * The cached value of the '{@link #getIntermediateProperty() <em>Intermediate Property</em>}' containment reference list.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @see #getIntermediateProperty()
@@ -147,7 +147,7 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 	@Override
 	public EList<EStructuralFeature> getIntermediateProperty() {
 		if (intermediateProperty == null) {
-			intermediateProperty = new EObjectResolvingEList<EStructuralFeature>(EStructuralFeature.class, this, QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY);
+			intermediateProperty = new EObjectContainmentEList<EStructuralFeature>(EStructuralFeature.class, this, QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY);
 		}
 		return intermediateProperty;
 	}
@@ -202,6 +202,8 @@ public class OperationalTransformationImpl extends ModuleImpl implements Operati
 		switch (featureID) {
 			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__MODEL_PARAMETER:
 				return ((InternalEList<?>)getModelParameter()).basicRemove(otherEnd, msgs);
+			case QvtOperationalPackage.OPERATIONAL_TRANSFORMATION__INTERMEDIATE_PROPERTY:
+				return ((InternalEList<?>)getIntermediateProperty()).basicRemove(otherEnd, msgs);
 		}
 		return super.eInverseRemove(otherEnd, featureID, msgs);
 	}

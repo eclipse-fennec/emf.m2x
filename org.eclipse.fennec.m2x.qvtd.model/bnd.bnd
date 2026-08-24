@@ -8,6 +8,7 @@ Bundle-Description: QVT-Relations v1.3 EMF metamodel (2 EPackages: qvtrelation, 
 #	model/qvtd.genmodel;\
 #		generate=fennecEMF;\
 #		genmodel=model/qvtd.genmodel;\
+#		lineEndings=lf;\
 #		output=src
 
 -includeresource.model: model=model

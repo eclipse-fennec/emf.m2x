@@ -505,11 +505,14 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		for (QvtRParser.IdentifierContext idCtx : ctx.identifier()) {
 			Variable var = OCL.createVariable();
 			var.setName(identifierText(idCtx));
+			// type and ownedInit are containment references — only the first variable
+			// may take the original, every further one needs its own copy (#127)
 			if (type != null) {
-				var.setType(type);
+				var.setType(vars.isEmpty() ? type
+						: expressionBuilder.support.copyType(type));
 			}
 			if (initExp != null) {
-				var.setOwnedInit(initExp);
+				var.setOwnedInit(vars.isEmpty() ? initExp : EcoreUtil.copy(initExp));
 			}
 			vars.add(var);
 		}

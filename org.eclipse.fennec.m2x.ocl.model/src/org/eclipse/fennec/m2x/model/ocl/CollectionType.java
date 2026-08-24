@@ -40,22 +40,22 @@ import org.osgi.annotation.versioning.ProviderType;
 @ProviderType
 public interface CollectionType extends OclType {
 	/**
-	 * Returns the value of the '<em><b>Element Type</b></em>' reference.
+	 * Returns the value of the '<em><b>Element Type</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @return the value of the '<em>Element Type</em>' reference.
+	 * @return the value of the '<em>Element Type</em>' containment reference.
 	 * @see #setElementType(OclType)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getCollectionType_ElementType()
-	 * @model
+	 * @model containment="true"
 	 * @generated
 	 */
 	OclType getElementType();
 
 	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.CollectionType#getElementType <em>Element Type</em>}' reference.
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.CollectionType#getElementType <em>Element Type</em>}' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Element Type</em>' reference.
+	 * @param value the new value of the '<em>Element Type</em>' containment reference.
 	 * @see #getElementType()
 	 * @generated
 	 */

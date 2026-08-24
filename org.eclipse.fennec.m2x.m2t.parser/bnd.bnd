@@ -17,13 +17,13 @@ antlr4.tool.cp = \
 
 # Split grammar: run grammar/generate.sh manually to regenerate src-gen/.
 # Commented out because the shell script is Linux/Mac only.
--generate: \
-	grammar/M2tLexer.g4; \
-		output=src-gen; \
-		system='${project}/grammar/generate.sh \
-			${antlr4.tool.cp} \
-			src-gen/org/eclipse/fennec/m2x/m2t/parser \
-			${project}/grammar'
+#-generate: \
+#	grammar/M2tLexer.g4; \
+#		output=src-gen; \
+#		system='${project}/grammar/generate.sh \
+#			${antlr4.tool.cp} \
+#			src-gen/org/eclipse/fennec/m2x/m2t/parser \
+#			${project}/grammar'
 
 # Include grammar file for downstream import
 -includeresource.grammar: grammar=grammar

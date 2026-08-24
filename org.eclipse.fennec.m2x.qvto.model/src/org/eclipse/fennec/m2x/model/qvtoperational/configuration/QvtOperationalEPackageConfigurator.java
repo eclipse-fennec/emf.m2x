@@ -39,7 +39,7 @@ public class QvtOperationalEPackageConfigurator implements EPackageConfigurator 
 	 * service property.
 	 * @generated
 	 */
-	public static final String FINGERPRINT = "fp1:74a71b555625b34936060dbf5eec28da48abd58333b97daef77a9ed1f88eaa58";
+	public static final String FINGERPRINT = "fp1:c7b351527a410daa817503adc67f864da2ca53fd33bf663ed557e0cd3bd8e20d";
 
 	private QvtOperationalPackage ePackage;
 
