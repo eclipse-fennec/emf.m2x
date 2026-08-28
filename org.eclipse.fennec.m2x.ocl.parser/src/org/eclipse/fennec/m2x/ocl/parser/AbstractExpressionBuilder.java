@@ -320,6 +320,25 @@ public class AbstractExpressionBuilder {
 				return enumExp;
 			}
 		}
+		if (segments.size() >= 3) {
+			// pkg::Enum::LITERAL — a path-qualified literal (OCL v2.4 §7.5.3). Before #133 the
+			// three segments were read as a type name and failed silently as an always-false
+			// comparison; now the enumeration is looked up by its qualified name.
+			EClassifier qualified = findClassifier(segments.subList(0, segments.size() - 1));
+			if (qualified instanceof EEnum eEnum) {
+				String literalName = segments.get(segments.size() - 1);
+				EEnumLiteral literal = eEnum.getEEnumLiteral(literalName);
+				if (literal != null) {
+					EnumLiteralExp exp = FACTORY.createEnumLiteralExp();
+					exp.setReferredLiteral(literal);
+					return exp;
+				}
+				addError("Unknown enumeration literal (" + String.join("::", segments) + ")");
+				TypeExp placeholder = FACTORY.createTypeExp();
+				placeholder.setReferredType(eEnum);
+				return placeholder;
+			}
+		}
 		return resolveQualifiedName(segments);
 	}
 
@@ -856,6 +875,18 @@ public class AbstractExpressionBuilder {
 	}
 
 	public EClassifier resolveClassifier(List<String> segments) {
+		EClassifier found = findClassifier(segments);
+		return found != null ? found : unresolvedName(segments);
+	}
+
+	/**
+	 * Looks a classifier up by its simple or qualified name without reporting a miss — for a
+	 * caller that has an alternative reading of the name to try first.
+	 *
+	 * @param segments the name, simple or {@code pkg::…::Name}
+	 * @return the classifier, or {@code null} if nothing in scope has that name
+	 */
+	public EClassifier findClassifier(List<String> segments) {
 		if (segments.size() == 1) {
 			String name = segments.get(0);
 			if (contextType instanceof EClass contextClass) {
@@ -864,11 +895,7 @@ public class AbstractExpressionBuilder {
 					return found;
 				}
 			}
-			EClassifier inScope = findInScope(name);
-			if (inScope != null) {
-				return inScope;
-			}
-			return unresolvedName(segments);
+			return findInScope(name);
 		}
 		String classifierName = segments.get(segments.size() - 1);
 		String packageName = String.join("::", segments.subList(0, segments.size() - 1));
@@ -895,7 +922,7 @@ public class AbstractExpressionBuilder {
 				}
 			}
 		}
-		return unresolvedName(segments);
+		return null;
 	}
 
 	public OclExpression resolveImplicitProperty(String name) {

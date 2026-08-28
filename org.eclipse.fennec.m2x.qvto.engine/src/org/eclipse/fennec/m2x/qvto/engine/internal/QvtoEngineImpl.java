@@ -76,9 +76,6 @@ import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
  */
 public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvider {
 
-	/** Language tag of this engine's units, as used in store keys and manifests. */
-	private static final String LANGUAGE = "qvto";
-
 	private final QvtoParserSupport parserSupport;
 	private final EPackage.Registry packageRegistry;
 	/**
