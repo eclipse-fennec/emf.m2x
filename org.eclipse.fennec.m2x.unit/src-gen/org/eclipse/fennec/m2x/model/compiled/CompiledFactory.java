@@ -55,6 +55,15 @@ public interface CompiledFactory extends EFactory {
 	CompiledUnitManifest createCompiledUnitManifest();
 
 	/**
+	 * Returns a new object of class '<em>Source Unit</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>Source Unit</em>'.
+	 * @generated
+	 */
+	SourceUnit createSourceUnit();
+
+	/**
 	 * Returns a new object of class '<em>Package Entry</em>'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->

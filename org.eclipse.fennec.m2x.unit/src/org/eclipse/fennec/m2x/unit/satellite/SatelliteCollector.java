@@ -23,7 +23,9 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 
 /**
@@ -50,13 +52,16 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
  * That is what lets one collector serve QVT-O, QVT-R and MOFM2T: they share the OCL classes
  * their satellites are instances of, and they share {@code EPackage} as their unit root.
  *
- * <p>What is deliberately <b>not</b> a satellite: anything that already lives in a resource.
- * A reference into a loaded metamodel — {@code EString}, a user's {@code EClass} — stays a
- * cross-document reference and must, because a unit lends its types rather than owning them.
- * Anything already contained in the tree is not one either, wherever in the tree it sits. And
- * the one-to-one partner of a bidirectional pair is not one: an {@code EPackage}'s
- * {@code eFactoryInstance} is created by EMF for every package and belongs to it by
- * construction, not to a parser — see {@link #isBackLinkToOwner}.
+ * <p>What is deliberately <b>not</b> a satellite: anything that already lives in a resource,
+ * and anything that belongs to a metamodel — see {@link #isMetamodelElement}. A reference into
+ * a metamodel — {@code EString}, a user's {@code EClass} — stays a cross-document reference and
+ * must, because a unit lends its types rather than owning them; and a metamodel is one whether
+ * it was loaded from an {@code .ecore} file, initialized from generated code or built in memory
+ * and registered — none of the latter two need live in a resource. Anything already contained
+ * in the tree is not one either, wherever in the tree it sits. And the one-to-one partner of a
+ * bidirectional pair is not one: an {@code EPackage}'s {@code eFactoryInstance} is created by
+ * EMF for every package and belongs to it by construction, not to a parser — see
+ * {@link #isBackLinkToOwner}.
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -164,9 +169,34 @@ public final class SatelliteCollector {
 		if (target instanceof EObject candidate
 				&& candidate.eResource() == null
 				&& EcoreUtil.getRootContainer(candidate) != documentRoot
+				&& !isMetamodelElement(candidate)
 				&& seen.add(candidate)) {
 			found.add(candidate);
 		}
+	}
+
+	/**
+	 * Whether an object belongs to a metamodel: its outermost container is a plain
+	 * {@link EPackage} — an instance of Ecore's own {@code EPackage} class, not of a language
+	 * metaclass derived from it — that carries an nsURI.
+	 *
+	 * <p>That is what tells a user's {@code Book} apart from a parser's leftovers without asking
+	 * where either lives. A parser never produces a plain package with an nsURI: its stub for an
+	 * import is a language {@code Module}, its intermediate package sits inside the unit, and
+	 * the synthetic classifiers and features it leaves behind have no package at all. A
+	 * metamodel, on the other hand, may live in a resource, or not — a generated package that
+	 * was never given one, a package built in memory and put into a registry — and is external
+	 * to the unit in every case. Its elements are addressable by nsURI and fragment, which is
+	 * exactly how the fingerprint and XMI refer to them.
+	 *
+	 * @param object the object
+	 * @return {@code true} if it is, or sits inside, a plain EPackage with an nsURI
+	 */
+	public static boolean isMetamodelElement(EObject object) {
+		EObject root = EcoreUtil.getRootContainer(object);
+		return root instanceof EPackage ePackage
+				&& root.eClass() == EcorePackage.Literals.EPACKAGE
+				&& ePackage.getNsURI() != null;
 	}
 
 	private static String describe(EObject object) {

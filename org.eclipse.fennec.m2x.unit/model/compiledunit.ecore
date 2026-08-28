@@ -77,6 +77,12 @@
         <details key="documentation" value="Dependencies bound under the embed mode, each a complete compiled unit with its own metadata, manifest and satellites. Under pin and rebind a dependency is a DependencyEntry in the manifest instead and is resolved at prepare time."/>
       </eAnnotations>
     </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="packages" upperBound="-1"
+        eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EPackage" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Copies of the dynamic metamodels the unit was compiled against — packages without generated code, which a runtime may not be able to supply on its own. Each has a PackageEntry with role embedded and its fingerprint. Prepare compares that fingerprint with the runtime registry: an equal runtime instance replaces the copy (generated code wins), a missing one is served from here, a differing one is a hard failure. Packages with generated code are never copied; their entry carries the fingerprint alone."/>
+      </eAnnotations>
+    </eStructuralFeatures>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="CompiledUnitManifest">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -107,6 +113,11 @@
         <details key="documentation" value="Fingerprint of the unit in the form &lt;scheme>:&lt;digest>, computed Merkle-style over the unit and the fingerprints of its dependencies. Under rebind it describes the unit alone, which is why resolvedClosure exists."/>
       </eAnnotations>
     </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="sourceFingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Fingerprint of the source text this unit was compiled from, in the form &lt;scheme>:&lt;digest>. A store that holds the source as well can tell from this alone whether the compiled unit is behind it."/>
+      </eAnnotations>
+    </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="dependencyMode" eType="#//DependencyMode">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="How dependencies were bound when this unit was compiled. It has to be readable on load, otherwise prepare cannot behave correctly."/>
@@ -134,6 +145,36 @@
         eType="#//ResolvedDependency" containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="What prepare actually bound. Recorded under rebind, where the unit fingerprint says nothing about the dependencies: without this record nobody can reconstruct what a given run computed."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="SourceUnit">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A unit's source text as a store entry. A store holds sources and compiled units side by side and tells them apart by kind; a content-addressed backend can only hold EObjects, so the text travels in this wrapper. Its fingerprint is the source fingerprint of the m2x unit mechanism, computed over the normalized text — the same value a CompiledUnitManifest records as sourceFingerprint."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="language" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Language tag of the unit: qvto, qvtr or m2t."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="qualifiedName" lowerBound="1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Qualified name the unit is imported by."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="uri" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Where the source was read from, informational."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="source" lowerBound="1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The source text."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="fingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Fingerprint of the source text in the form &lt;scheme>:&lt;digest>."/>
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>

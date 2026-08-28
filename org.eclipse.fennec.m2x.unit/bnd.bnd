@@ -15,5 +15,7 @@ Bundle-Description: Language-neutral contracts for compiled units: unit abstract
 src=${^src},src-gen
 
 -buildpath: \
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest,\
 	org.osgi.service.condition;version=latest
 

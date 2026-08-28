@@ -44,6 +44,13 @@ import org.eclipse.fennec.m2x.model.m2t.Module;
  */
 public class M2tParserSupport {
 
+	static {
+		// Ecore registers itself in the global registry when its package class initializes,
+		// and nothing guarantees that happened before the first parse (see QvtoParserSupport).
+		EcorePackage.eINSTANCE.getNsURI();
+	}
+
+
 	/**
 	 * Parses a MOFM2T template source into a parse tree.
 	 *

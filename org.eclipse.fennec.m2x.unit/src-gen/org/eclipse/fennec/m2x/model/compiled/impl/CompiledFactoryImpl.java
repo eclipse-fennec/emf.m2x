@@ -71,6 +71,7 @@ public class CompiledFactoryImpl extends EFactoryImpl implements CompiledFactory
 		switch (eClass.getClassifierID()) {
 			case CompiledPackage.COMPILED_UNIT: return createCompiledUnit();
 			case CompiledPackage.COMPILED_UNIT_MANIFEST: return createCompiledUnitManifest();
+			case CompiledPackage.SOURCE_UNIT: return createSourceUnit();
 			case CompiledPackage.PACKAGE_ENTRY: return createPackageEntry();
 			case CompiledPackage.DEPENDENCY_ENTRY: return createDependencyEntry();
 			case CompiledPackage.BLACKBOX_REQUIREMENT: return createBlackboxRequirement();
@@ -134,6 +135,17 @@ public class CompiledFactoryImpl extends EFactoryImpl implements CompiledFactory
 	public CompiledUnitManifest createCompiledUnitManifest() {
 		CompiledUnitManifestImpl compiledUnitManifest = new CompiledUnitManifestImpl();
 		return compiledUnitManifest;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public SourceUnit createSourceUnit() {
+		SourceUnitImpl sourceUnit = new SourceUnitImpl();
+		return sourceUnit;
 	}
 
 	/**

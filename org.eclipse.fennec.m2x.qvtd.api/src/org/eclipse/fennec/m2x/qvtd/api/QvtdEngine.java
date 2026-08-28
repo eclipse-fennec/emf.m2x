@@ -20,6 +20,7 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -94,6 +95,47 @@ public interface QvtdEngine {
 	 * @since 1.0
 	 */
 	CompiledUnit compile(URI transformationUri) throws QvtdParseException;
+
+	/**
+	 * Compiles a QVT-R transformation with explicit options — chiefly how its imports are bound.
+	 *
+	 * <p>Compile resolves every import through the configured unit resolvers, under the same
+	 * enable flag and allow-list as execution (D29). What happens with a resolved import is the
+	 * {@link UnitCompileOptions#dependencyMode() dependency mode}. QVT-R binds an import by
+	 * merging the imported relations into the importing transformation (§7.11.1.1): under
+	 * {@code embed} that merge happens at compile time, the imported rules travel inside the unit
+	 * and the import is struck from the transformation, which then runs without any resolver.
+	 * Under {@code pin} the manifest records the name with the unit fingerprint of the imported
+	 * transformation, under {@code rebind} the name alone; in both the import stays declared and
+	 * is merged when the unit is prepared or executed. A blackbox query — one declared without a
+	 * body — becomes a manifest requirement naming the operation and its signature. An import
+	 * nobody can resolve fails the compile in every mode.
+	 *
+	 * <p>{@link #compile(String, String)} is this method with {@link UnitCompileOptions#defaults()}.
+	 *
+	 * @param source the source text
+	 * @param unitName the logical unit name — the name the unit is imported by
+	 * @param options how to bind the dependencies
+	 * @return the compiled unit, never {@code null}
+	 * @throws QvtdParseException if parsing fails, an import cannot be resolved, imports form a
+	 *             cycle (under {@code embed} and {@code pin}, where the dependency is followed),
+	 *             or the result cannot be made self-contained
+	 * @since 1.0
+	 */
+	CompiledUnit compile(String source, String unitName, UnitCompileOptions options)
+			throws QvtdParseException;
+
+	/**
+	 * Compiles a QVT-R transformation read from the given URI with explicit options — see
+	 * {@link #compile(String, String, UnitCompileOptions)}.
+	 *
+	 * @param transformationUri the URI of the source
+	 * @param options how to bind the dependencies
+	 * @return the compiled unit, never {@code null}
+	 * @throws QvtdParseException if the source cannot be read or compiled
+	 * @since 1.0
+	 */
+	CompiledUnit compile(URI transformationUri, UnitCompileOptions options) throws QvtdParseException;
 
 	/**
 	 * Executes a parsed QVT-R transformation in the given context.

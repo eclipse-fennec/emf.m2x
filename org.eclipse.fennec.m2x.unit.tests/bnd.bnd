@@ -10,6 +10,8 @@ src=${^src}
 # on their build path, and bnd rejects the cycle. The direction stays one-way (D39).
 -buildpath: \
 	org.eclipse.fennec.m2x.unit;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest,\
 	org.eclipse.fennec.m2x.qvto.api;version=snapshot,\
 	org.eclipse.fennec.m2x.qvto.model;version=snapshot,\
 	org.eclipse.fennec.m2x.qvtd.api;version=snapshot,\

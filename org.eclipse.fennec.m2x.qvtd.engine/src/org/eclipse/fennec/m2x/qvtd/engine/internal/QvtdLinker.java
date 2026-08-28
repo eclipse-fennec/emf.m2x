@@ -133,7 +133,11 @@ public class QvtdLinker {
 	 * <p>Deep-copied for the same reason {@code extends} does it: a rule is contained by its
 	 * transformation, so moving it would take it out of the unit it came from.
 	 */
-	private void merge(RelationalTransformation target, RelationalTransformation imported) {
+	/**
+	 * Binds an import the QVT-R way: the imported rules are copied into the importing
+	 * transformation, a rule whose name the target already carries is skipped (§7.11.1.1).
+	 */
+	static void merge(RelationalTransformation target, RelationalTransformation imported) {
 		Set<String> own = new HashSet<>();
 		for (Rule rule : target.getRule()) {
 			own.add(rule.getName());

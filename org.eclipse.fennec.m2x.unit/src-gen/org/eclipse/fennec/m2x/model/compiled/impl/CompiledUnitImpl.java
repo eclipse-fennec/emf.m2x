@@ -52,6 +52,7 @@ import org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest;
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitImpl#getUnit <em>Unit</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitImpl#getSatellite <em>Satellite</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitImpl#getEmbedded <em>Embedded</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitImpl#getPackages <em>Packages</em>}</li>
  * </ul>
  *
  * @generated
@@ -176,6 +177,16 @@ public class CompiledUnitImpl extends MinimalEObjectImpl.Container implements Co
 	 * @ordered
 	 */
 	protected EList<CompiledUnit> embedded;
+
+	/**
+	 * The cached value of the '{@link #getPackages() <em>Packages</em>}' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getPackages()
+	 * @generated
+	 * @ordered
+	 */
+	protected EList<EPackage> packages;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -410,6 +421,19 @@ public class CompiledUnitImpl extends MinimalEObjectImpl.Container implements Co
 	 * @generated
 	 */
 	@Override
+	public EList<EPackage> getPackages() {
+		if (packages == null) {
+			packages = new EObjectContainmentEList<EPackage>(EPackage.class, this, CompiledPackage.COMPILED_UNIT__PACKAGES);
+		}
+		return packages;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
 		switch (featureID) {
 			case CompiledPackage.COMPILED_UNIT__MANIFEST:
@@ -420,6 +444,8 @@ public class CompiledUnitImpl extends MinimalEObjectImpl.Container implements Co
 				return ((InternalEList<?>)getSatellite()).basicRemove(otherEnd, msgs);
 			case CompiledPackage.COMPILED_UNIT__EMBEDDED:
 				return ((InternalEList<?>)getEmbedded()).basicRemove(otherEnd, msgs);
+			case CompiledPackage.COMPILED_UNIT__PACKAGES:
+				return ((InternalEList<?>)getPackages()).basicRemove(otherEnd, msgs);
 		}
 		return super.eInverseRemove(otherEnd, featureID, msgs);
 	}
@@ -448,6 +474,8 @@ public class CompiledUnitImpl extends MinimalEObjectImpl.Container implements Co
 				return getSatellite();
 			case CompiledPackage.COMPILED_UNIT__EMBEDDED:
 				return getEmbedded();
+			case CompiledPackage.COMPILED_UNIT__PACKAGES:
+				return getPackages();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}
@@ -487,6 +515,10 @@ public class CompiledUnitImpl extends MinimalEObjectImpl.Container implements Co
 				getEmbedded().clear();
 				getEmbedded().addAll((Collection<? extends CompiledUnit>)newValue);
 				return;
+			case CompiledPackage.COMPILED_UNIT__PACKAGES:
+				getPackages().clear();
+				getPackages().addAll((Collection<? extends EPackage>)newValue);
+				return;
 		}
 		super.eSet(featureID, newValue);
 	}
@@ -523,6 +555,9 @@ public class CompiledUnitImpl extends MinimalEObjectImpl.Container implements Co
 			case CompiledPackage.COMPILED_UNIT__EMBEDDED:
 				getEmbedded().clear();
 				return;
+			case CompiledPackage.COMPILED_UNIT__PACKAGES:
+				getPackages().clear();
+				return;
 		}
 		super.eUnset(featureID);
 	}
@@ -551,6 +586,8 @@ public class CompiledUnitImpl extends MinimalEObjectImpl.Container implements Co
 				return satellite != null && !satellite.isEmpty();
 			case CompiledPackage.COMPILED_UNIT__EMBEDDED:
 				return embedded != null && !embedded.isEmpty();
+			case CompiledPackage.COMPILED_UNIT__PACKAGES:
+				return packages != null && !packages.isEmpty();
 		}
 		return super.eIsSet(featureID);
 	}

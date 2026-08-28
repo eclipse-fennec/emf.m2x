@@ -63,6 +63,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
 /**
@@ -98,6 +99,7 @@ public class M2tEngineImpl implements M2tEngine {
 	 */
 	private final ResourceSet resourceSet;
 	private final M2tParserSupport parserSupport;
+	private final UnitPackager packager;
 
 	// The four caches below are keyed weakly. They used to hold every module ever
 	// parsed for the lifetime of the engine, which for a long-lived instance means a
@@ -142,7 +144,22 @@ public class M2tEngineImpl implements M2tEngine {
 	 * @param config the engine configuration, must not be {@code null}
 	 */
 	public M2tEngineImpl(M2tConfiguration config) {
+		this(config, UnitPackager.withDefaults());
+	}
+
+	/**
+	 * Creates a new engine from the given configuration, compiling with the given packager.
+	 *
+	 * <p>The packager is where the package fingerprints of a compiled unit come from. Under OSGi
+	 * the component hands in one built on the {@code FingerprintService} it was given; a plain JVM
+	 * uses {@link UnitPackager#withDefaults()}.
+	 *
+	 * @param config the engine configuration
+	 * @param packager the packager compiled units are built with
+	 */
+	public M2tEngineImpl(M2tConfiguration config, UnitPackager packager) {
 		this.config = Objects.requireNonNull(config, "config must not be null");
+		this.packager = Objects.requireNonNull(packager, "packager must not be null");
 		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
 		// The engine evaluates with the OCL engine it was given — its cache, its
 		// providers. Only when none was supplied is one built from the configuration;
@@ -169,42 +186,57 @@ public class M2tEngineImpl implements M2tEngine {
 
 	@Override
 	public Module parse(String source, String unitName) throws M2tParseException {
+		return parseCached(source, unitName).module();
+	}
+
+	/**
+	 * Parses and remembers the result, so that the module can be linked and executed by this
+	 * engine later — the parse result carries what the AST does not: the names still to bind.
+	 */
+	private M2tParseResult parseCached(String source, String unitName) throws M2tParseException {
 		Objects.requireNonNull(source, "source must not be null");
 		Objects.requireNonNull(unitName, "unitName must not be null");
 		M2tParseResult result = parserSupport.buildModuleWithPending(source, unitName,
 				EcorePackage.eINSTANCE.getEObject(), config.packageRegistry());
 		parseResultCache.put(result.module(), result);
 		globalPositions.putAll(result.positions());
-		return result.module();
+		return result;
 	}
 
 	@Override
 	public CompiledUnit compile(String source, String unitName) throws M2tParseException {
-		Module module = parse(source, unitName);
-		try {
-			return UnitPackager.compile(LANGUAGE, unitName, module);
-		} catch (IllegalStateException | IllegalArgumentException e) {
-			// A unit that is not self-contained is not storable; better said here, with the unit
-			// name, than on the first save() somewhere else with a dangling reference (#137).
-			throw new M2tParseException("Cannot compile '" + unitName + "': " + e.getMessage(), e,
-					List.of());
-		}
+		return compile(source, unitName, UnitCompileOptions.defaults());
 	}
 
 	@Override
 	public CompiledUnit compile(URI moduleUri) throws M2tParseException {
+		return compile(moduleUri, UnitCompileOptions.defaults());
+	}
+
+	@Override
+	public CompiledUnit compile(String source, String unitName, UnitCompileOptions options)
+			throws M2tParseException {
+		Objects.requireNonNull(source, "source must not be null");
+		Objects.requireNonNull(unitName, "unitName must not be null");
+		Objects.requireNonNull(options, "options must not be null");
+		// Compile asks the same resolvers under the same D29 limits as a link
+		return new M2tUnitCompiler(this::parseCached, parseResultCache, effectiveUnitResolvers(),
+				config.unitResolverEnabled() ? config.allowedUnitModules() : Set.of(), packager, options)
+				.compile(source, unitName);
+	}
+
+	@Override
+	public CompiledUnit compile(URI moduleUri, UnitCompileOptions options) throws M2tParseException {
 		Objects.requireNonNull(moduleUri, "moduleUri must not be null");
 		try (InputStream in = resourceSet.getURIConverter().createInputStream(moduleUri)) {
 			String source = new String(in.readAllBytes(), config.defaultCharset());
 			String unitName = moduleUri.lastSegment() != null
 					? moduleUri.lastSegment() : moduleUri.toString();
-			return compile(source, unitName);
+			return compile(source, unitName, options);
 		} catch (IOException e) {
 			throw new M2tParseException("Failed to read module: " + moduleUri, e, List.of());
 		}
 	}
-
-	// --- Execution ---
 
 	@Override
 	public List<String> link(Module... modules) {
@@ -214,6 +246,11 @@ public class M2tEngineImpl implements M2tEngine {
 		for (Module m : modules) {
 			Objects.requireNonNull(m, "module element must not be null");
 			M2tParseResult pr = parseResultCache.get(m);
+			if (pr == null) {
+				// A module compiled under pin or rebind and loaded here carries what it still
+				// has to bind on itself (#139); an engine that never parsed it binds it from that
+				pr = M2tLinkInfo.recover(m).orElse(null);
+			}
 			if (pr != null) {
 				results.add(pr);
 			} else {

@@ -490,9 +490,67 @@ classifier directly, without a `ClassifierType` wrapper (#154, #156). The same s
 satellites now instead of 13 — the four variables, the two model types and the intermediate class's
 default expression; QVT-R's sample went from 12 to 4, MOFM2T's from 15 to 5.
 
-What `compile()` does not yet do, because a later step of #135 owns it: bind dependencies under
-embed/pin/rebind and record package entries and blackbox requirements (#139). The fingerprint
-already folds dependency entries in Merkle-style, so it will cover them once they are written.
+### 4.w Dependencies: embed, pin, rebind (#139)
+
+`compile()` is parse → resolve → package. The resolve step asks the same sources the link phase of
+`execute()` asks — inline modules, the configured unit resolvers, the blackbox registry, under the
+same D29 enable flags, allow-lists and limits — but what it does with an answer is the
+`UnitCompileOptions.dependencyMode()` (bundle `org.eclipse.fennec.m2x.unit`; `compile(source, name)`
+is `compile(source, name, UnitCompileOptions.defaults())`, and the default is `pin`):
+
+| mode | the dependency | the import in the AST | manifest `dependencyEntry` |
+|---|---|---|---|
+| `embed` | compiled in turn, recursively in the same mode, attached under `CompiledUnit.embedded` | bound to the module inside the embedded unit — in-tree, so the document saves | name, `embed`, the embedded unit's fingerprint |
+| `pin` | compiled to learn its unit fingerprint, then dropped | stays the parser's stub, contained as a satellite | name, `pin`, that fingerprint |
+| `rebind` | resolved — the name has to be servable — and dropped | stays the stub | name, `rebind`, no fingerprint |
+
+Under `embed` the unit runs on an engine that knows no resolver, also after a reload from XMI;
+under `pin` and `rebind` the execute-time linker binds the stub as it always did, and prepare
+(#140) will do it from the manifest. A same-file resolution — a stub for a library defined in the
+same source — is not a dependency and is bound in every mode. An import nobody serves fails the
+compile in every mode with `Cannot resolve import`; a cycle is reported where the dependency is
+followed (`embed`, `pin`) — under `rebind` the closure is prepare's business.
+
+**Blackboxes are requirements, not dependencies.** An import the blackbox registry answers produces
+a `BlackboxRequirement` — the library name, the class that provided it, and a `SignatureFingerprint`
+over one line per operation (`name(context;params):return`, types as `nsURI#Name`, sorted). The
+implementation stays with the runtime, the stub stays in the AST; a provider with the right name and
+the wrong shape is caught when the unit is loaded, not at the call.
+
+**Package entries.** `UnitPackager.seal()` follows every reference that leaves the document
+(`ReferencedPackages`, an `ExternalCrossReferencer` walk) and records one `PackageEntry` per
+metamodel: nsURI, fingerprint, scheme, role. The fingerprint is `fp1` from emf.osgi's
+`FingerprintService` — the value the ecosystem keys models by (`@EPackage(fingerprint)`,
+`MetadataService`), so an entry can be looked up, not only compared. Ecore, XMLType and the OCL
+standard library are in every runtime by definition and get no entry. A package without generated
+code — a plain `EPackageImpl`, not a generated subclass — is *dynamic*: its entry is `embedded` and
+`seal()` copies its root package into `CompiledUnit.packages`, so a runtime that has nothing to
+offer for the nsURI can still serve the unit's types (#140 decides per package: equal fingerprint →
+the runtime instance wins, missing → the copy, differing → hard failure). A generated package is
+only `referenced`. The service arrives under OSGi as a reference of the engine component
+(`FingerprintService`, optional); a plain JVM uses `UnitPackager.withDefaults()`, which reaches the
+default implementation through `FingerprintHelper`.
+
+**Nothing a resolver lends is mutated.** A `SourceUnit` is parsed afresh; a `CompiledUnit` whose
+AST sits in a compiled document is taken as a copy of that document (and its manifest fingerprint
+serves a `pin` without compiling again); a bare AST is copied together with its satellites first
+(`UnitPackager.detach` — a plain `EcoreUtil.copy` would point the copy's references at the
+original's uncontained satellites, §5.5 of the concept). The manifest also records the source
+fingerprint (`sourceFingerprint`, over the LF-normalized text) and the format version, so a store
+holding the source as well can tell whether the compiled unit is behind it.
+
+**Metamodel elements are never satellites.** `SatelliteCollector.isMetamodelElement` treats anything
+whose outermost container is a plain `EPackage` with an nsURI as external — whether that package
+lives in a resource or not. A generated package that was never given a resource and a package built
+in memory and put into a registry are metamodels all the same; before #139 the collector would have
+pulled such a package into the satellite container. The fingerprint canonicalizer applies the same
+rule and writes them by URI. XMI still needs a resource to write an href, so a store gives such a
+package the resource EMF gives a generated one: `createResource(nsURI)`.
+
+The three compilers are one shape in three languages: `QvtoUnitCompiler` (this section),
+`QvtdUnitCompiler` (QVT-R: binding is a merge of rules, see the QVT-R architecture) and
+`M2tUnitCompiler` (MOFM2T: `extends`/`imports`; the names to bind are kept on the module under
+`pin`/`rebind`, see the M2T user guide §3.7).
 
 ### 4.y Type names resolve in what the unit declares
 

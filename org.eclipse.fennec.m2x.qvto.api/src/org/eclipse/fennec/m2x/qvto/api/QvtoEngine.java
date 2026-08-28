@@ -19,6 +19,7 @@ import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -97,6 +98,46 @@ public interface QvtoEngine {
 	 * @since 1.0
 	 */
 	CompiledUnit compile(URI transformationUri) throws QvtoParseException;
+
+	/**
+	 * Compiles a QVT-O transformation with explicit options — chiefly how its imports are bound.
+	 *
+	 * <p>Compile resolves every import through the configured unit resolvers and the blackbox
+	 * registry, under the same enable flags and allow-lists as execution (D29). What happens with
+	 * a resolved import is the {@link UnitCompileOptions#dependencyMode() dependency mode}:
+	 * under {@code embed} the dependency is compiled in turn and carried inside the unit, which
+	 * then runs without any resolver; under {@code pin} the manifest records its name and unit
+	 * fingerprint; under {@code rebind} the name alone. Under {@code pin} and {@code rebind} the
+	 * import stays unbound in the AST — a stub, contained as a satellite — and is bound when the
+	 * unit is prepared or executed. A blackbox import is never embedded: its declaration becomes
+	 * a manifest requirement, its implementation stays with the runtime. An import nobody can
+	 * resolve fails the compile in every mode.
+	 *
+	 * <p>{@link #compile(String, String)} is this method with {@link UnitCompileOptions#defaults()}.
+	 *
+	 * @param source the source text
+	 * @param unitName the logical unit name — the name the unit is imported by
+	 * @param options how to bind the dependencies
+	 * @return the compiled unit, never {@code null}
+	 * @throws QvtoParseException if parsing fails, an import cannot be resolved, imports form a
+	 *             cycle (under {@code embed} and {@code pin}, where the dependency is followed),
+	 *             or the result cannot be made self-contained
+	 * @since 1.0
+	 */
+	CompiledUnit compile(String source, String unitName, UnitCompileOptions options)
+			throws QvtoParseException;
+
+	/**
+	 * Compiles a QVT-O transformation read from the given URI with explicit options — see
+	 * {@link #compile(String, String, UnitCompileOptions)}.
+	 *
+	 * @param transformationUri the URI of the source
+	 * @param options how to bind the dependencies
+	 * @return the compiled unit, never {@code null}
+	 * @throws QvtoParseException if the source cannot be read or compiled
+	 * @since 1.0
+	 */
+	CompiledUnit compile(URI transformationUri, UnitCompileOptions options) throws QvtoParseException;
 
 	// --- Execution ---
 

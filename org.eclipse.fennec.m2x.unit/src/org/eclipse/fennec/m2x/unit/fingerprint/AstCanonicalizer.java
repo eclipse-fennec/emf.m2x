@@ -30,6 +30,7 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
 
 /**
  * Writes an AST as one canonical string: the same tree yields the same text, whatever object
@@ -242,8 +243,10 @@ final class AstCanonicalizer {
 			node(target);
 			return;
 		}
-		if (target.eResource() != null) {
-			// A metamodel type, a standard-library type, anything that lives elsewhere: by URI
+		if (target.eResource() != null || SatelliteCollector.isMetamodelElement(target)) {
+			// A metamodel type, a standard-library type, anything that lives elsewhere: by URI.
+			// A metamodel counts as elsewhere even without a resource — a package initialized
+			// from generated code or built in memory is addressable by nsURI just the same.
 			out.append('<').append(EcoreUtil.getURI(target)).append('>');
 			return;
 		}

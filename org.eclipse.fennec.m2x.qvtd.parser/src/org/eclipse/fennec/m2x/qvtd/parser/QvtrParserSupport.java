@@ -21,6 +21,7 @@ import java.util.Objects;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.qvtbase.Rule;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
@@ -46,6 +47,13 @@ import java.util.IdentityHashMap;
  * @since 1.0
  */
 public class QvtrParserSupport {
+
+	static {
+		// Ecore registers itself in the global registry when its package class initializes,
+		// and nothing guarantees that happened before the first parse (see QvtoParserSupport).
+		EcorePackage.eINSTANCE.getNsURI();
+	}
+
 
 	/** Where every expression node this support parsed stood — see {@link #positionOf}. */
 	private final Map<EObject, SourcePosition> nodePositions =

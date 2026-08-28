@@ -38,6 +38,7 @@ import org.osgi.annotation.versioning.ProviderType;
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getLanguage <em>Language</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getQualifiedName <em>Qualified Name</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getUnitFingerprint <em>Unit Fingerprint</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getSourceFingerprint <em>Source Fingerprint</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getDependencyMode <em>Dependency Mode</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getPackageEntry <em>Package Entry</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getDependencyEntry <em>Dependency Entry</em>}</li>
@@ -175,6 +176,31 @@ public interface CompiledUnitManifest extends EObject {
 	 * @generated
 	 */
 	void setUnitFingerprint(String value);
+
+	/**
+	 * Returns the value of the '<em><b>Source Fingerprint</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * Fingerprint of the source text this unit was compiled from, in the form <scheme>:<digest>. A store that holds the source as well can tell from this alone whether the compiled unit is behind it.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Source Fingerprint</em>' attribute.
+	 * @see #setSourceFingerprint(String)
+	 * @see org.eclipse.fennec.m2x.model.compiled.CompiledPackage#getCompiledUnitManifest_SourceFingerprint()
+	 * @model
+	 * @generated
+	 */
+	String getSourceFingerprint();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getSourceFingerprint <em>Source Fingerprint</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Source Fingerprint</em>' attribute.
+	 * @see #getSourceFingerprint()
+	 * @generated
+	 */
+	void setSourceFingerprint(String value);
 
 	/**
 	 * Returns the value of the '<em><b>Dependency Mode</b></em>' attribute.

@@ -20,6 +20,7 @@ import java.util.List;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -98,6 +99,45 @@ public interface M2tEngine {
 	 * @since 1.0
 	 */
 	CompiledUnit compile(URI moduleUri) throws M2tParseException;
+
+	/**
+	 * Compiles a MOFM2T module with explicit options — chiefly how its dependencies are bound.
+	 *
+	 * <p>A module depends on what it {@code extends} and {@code imports}. Compile resolves every
+	 * such name through the configured unit resolvers, under the same enable flag and allow-list
+	 * as generation (D29), and binds according to the {@link UnitCompileOptions#dependencyMode()
+	 * dependency mode}: under {@code embed} the dependency is compiled in turn and carried inside
+	 * the unit, which is linked against it and then generates without any resolver; under
+	 * {@code pin} the manifest records the name with the dependency's unit fingerprint, under
+	 * {@code rebind} the name alone, and the module stays unbound — with what it needs to be bound
+	 * later kept on it — until it is prepared or linked. A name nobody can resolve fails the
+	 * compile in every mode.
+	 *
+	 * <p>{@link #compile(String, String)} is this method with {@link UnitCompileOptions#defaults()}.
+	 *
+	 * @param source the source text
+	 * @param unitName the logical unit name — the name the unit is imported by
+	 * @param options how to bind the dependencies
+	 * @return the compiled unit, never {@code null}
+	 * @throws M2tParseException if parsing fails, a dependency cannot be resolved, dependencies
+	 *             form a cycle (under {@code embed} and {@code pin}, where the dependency is
+	 *             followed), or the result cannot be made self-contained
+	 * @since 1.0
+	 */
+	CompiledUnit compile(String source, String unitName, UnitCompileOptions options)
+			throws M2tParseException;
+
+	/**
+	 * Compiles a MOFM2T module read from the given URI with explicit options — see
+	 * {@link #compile(String, String, UnitCompileOptions)}.
+	 *
+	 * @param moduleUri the URI of the source
+	 * @param options how to bind the dependencies
+	 * @return the compiled unit, never {@code null}
+	 * @throws M2tParseException if the source cannot be read or compiled
+	 * @since 1.0
+	 */
+	CompiledUnit compile(URI moduleUri, UnitCompileOptions options) throws M2tParseException;
 
 	// --- Execution ---
 
