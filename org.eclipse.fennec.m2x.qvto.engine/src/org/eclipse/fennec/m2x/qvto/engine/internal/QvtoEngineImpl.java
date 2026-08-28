@@ -27,6 +27,8 @@ import java.util.stream.Stream;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
@@ -69,6 +71,9 @@ import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
  * @since 1.0
  */
 public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvider {
+
+	/** Language tag of this engine's units, as used in store keys and manifests. */
+	private static final String LANGUAGE = "qvto";
 
 	private final QvtoParserSupport parserSupport;
 	private final EPackage.Registry packageRegistry;
@@ -137,6 +142,29 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		Objects.requireNonNull(source, "source must not be null");
 		Objects.requireNonNull(unitName, "unitName must not be null");
 		return parserSupport.parse(source, unitName, packageRegistry);
+	}
+
+	@Override
+	public CompiledUnit compile(String source, String unitName) throws QvtoParseException {
+		OperationalTransformation transformation = parse(source, unitName);
+		try {
+			return UnitPackager.compile(LANGUAGE, unitName, transformation);
+		} catch (IllegalStateException | IllegalArgumentException e) {
+			// A unit that is not self-contained is not storable; better said here, with the unit
+			// name, than on the first save() somewhere else with a dangling reference (#137).
+			throw new QvtoParseException("Cannot compile '" + unitName + "': " + e.getMessage(), e);
+		}
+	}
+
+	@Override
+	public CompiledUnit compile(URI transformationUri) throws QvtoParseException {
+		Objects.requireNonNull(transformationUri, "transformationUri must not be null");
+		try (InputStream in = resourceSet.getURIConverter().createInputStream(transformationUri)) {
+			String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+			return compile(source, transformationUri.toString());
+		} catch (IOException e) {
+			throw new QvtoParseException("Failed to read transformation: " + transformationUri, e);
+		}
 	}
 
 	/**

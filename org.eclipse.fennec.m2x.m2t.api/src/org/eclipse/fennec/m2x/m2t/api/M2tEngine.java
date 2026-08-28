@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.m2t.api;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import java.util.List;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;
@@ -61,6 +62,42 @@ public interface M2tEngine {
 	 * @throws M2tParseException if parsing fails
 	 */
 	Module parse(String source, String unitName) throws M2tParseException;
+
+	// --- Compiling ---
+
+	/**
+	 * Compiles a MOFM2T module from source text into a {@link CompiledUnit}: one document that holds the
+	 * parsed script, everything the parser created for it, and a manifest.
+	 *
+	 * <p>{@code parse()} yields the in-memory graph and is what execution needs; {@code compile()}
+	 * yields the storable form. The difference is ownership. A parser creates objects the script
+	 * references but that no metamodel feature contains — {@code self}, a type instance for every
+	 * {@code Integer}, the default expression of an intermediate class — and in memory that costs
+	 * nothing. Saving or copying the result of {@code parse()} fails on exactly those objects. The
+	 * compiled unit gives them a home beside the script, so the whole document saves, loads and
+	 * copies, and every reference resolves within it (#137).
+	 *
+	 * <p>The script is reachable as {@link CompiledUnit#getUnit()} and is the same
+	 * {@link Module} {@code parse()} would have returned; it can be executed as before.
+	 *
+	 * @param source the source text
+	 * @param unitName the logical unit name — the name the unit is imported by
+	 * @return the compiled unit, never {@code null}
+	 * @throws M2tParseException if parsing fails, or if the result cannot be made self-contained
+	 * @since 1.0
+	 */
+	CompiledUnit compile(String source, String unitName) throws M2tParseException;
+
+	/**
+	 * Compiles a MOFM2T module read from the given URI — see {@link #compile(String, String)}.
+	 *
+	 * @param moduleUri the URI of the source
+	 * @return the compiled unit, never {@code null}
+	 * @throws M2tParseException if the source cannot be read or parsed, or the result cannot be made
+	 *             self-contained
+	 * @since 1.0
+	 */
+	CompiledUnit compile(URI moduleUri) throws M2tParseException;
 
 	// --- Execution ---
 

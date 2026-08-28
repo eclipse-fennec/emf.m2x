@@ -37,6 +37,8 @@ import java.util.WeakHashMap;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
@@ -80,6 +82,9 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
  * @since 1.0
  */
 public class M2tEngineImpl implements M2tEngine {
+
+	/** Language tag of this engine's units, as used in store keys and manifests. */
+	private static final String LANGUAGE = "m2t";
 
 	private final OclEngine oclEngine;
 	private final M2tConfiguration config;
@@ -171,6 +176,32 @@ public class M2tEngineImpl implements M2tEngine {
 		parseResultCache.put(result.module(), result);
 		globalPositions.putAll(result.positions());
 		return result.module();
+	}
+
+	@Override
+	public CompiledUnit compile(String source, String unitName) throws M2tParseException {
+		Module module = parse(source, unitName);
+		try {
+			return UnitPackager.compile(LANGUAGE, unitName, module);
+		} catch (IllegalStateException | IllegalArgumentException e) {
+			// A unit that is not self-contained is not storable; better said here, with the unit
+			// name, than on the first save() somewhere else with a dangling reference (#137).
+			throw new M2tParseException("Cannot compile '" + unitName + "': " + e.getMessage(), e,
+					List.of());
+		}
+	}
+
+	@Override
+	public CompiledUnit compile(URI moduleUri) throws M2tParseException {
+		Objects.requireNonNull(moduleUri, "moduleUri must not be null");
+		try (InputStream in = resourceSet.getURIConverter().createInputStream(moduleUri)) {
+			String source = new String(in.readAllBytes(), config.defaultCharset());
+			String unitName = moduleUri.lastSegment() != null
+					? moduleUri.lastSegment() : moduleUri.toString();
+			return compile(source, unitName);
+		} catch (IOException e) {
+			throw new M2tParseException("Failed to read module: " + moduleUri, e, List.of());
+		}
 	}
 
 	// --- Execution ---

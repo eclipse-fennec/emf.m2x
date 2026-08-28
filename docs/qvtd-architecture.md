@@ -49,6 +49,18 @@ Three EPackages following the spec structure:
 | `QvtdUnitResolver` | Resolves import URIs to units (future: GAP-10) |
 | `QvtdParseException` | Parse errors with `Resource.Diagnostic` list |
 
+### 3.x `compile()` — the storable form
+
+`QvtdEngine.compile(source, unitName)` returns a `CompiledUnit` beside `parse()`'s
+`RelationalTransformation`. The distinction is ownership: `parse()` yields the in-memory graph, and
+that graph references objects the parser created but nothing contains — relation variables, type
+instances, synthetic features. Measured on a relation with a query, a when and a where clause:
+twelve such objects, and `save()` fails on the first. `compile()` moves them into
+`CompiledUnit.satellite` so the whole document saves, loads and copies; the script inside is the
+same `RelationalTransformation` and executes as before. The mechanism is language-neutral
+(`UnitPackager`, `SatelliteCollector` in `org.eclipse.fennec.m2x.unit`) — the QVT-O architecture
+describes it in full.
+
 ## 4. Parser
 
 **Grammar:** `QvtR.g4` imports `Ocl.g4` (shared OCL grammar).

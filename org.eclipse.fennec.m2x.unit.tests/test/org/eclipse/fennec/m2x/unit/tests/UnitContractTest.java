@@ -14,10 +14,6 @@
  */
 package org.eclipse.fennec.m2x.unit.tests;
 
-import org.eclipse.fennec.m2x.unit.api.Unit;
-import org.eclipse.fennec.m2x.unit.api.UnitKey;
-import org.eclipse.fennec.m2x.unit.api.UnitKind;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -35,6 +31,8 @@ import org.eclipse.fennec.m2x.model.qvtrelation.QvtrelationFactory;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitKind;
 import org.junit.jupiter.api.Test;
 
 /**

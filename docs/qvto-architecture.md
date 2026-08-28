@@ -412,6 +412,48 @@ error at runtime if called.
 
 ---
 
+### 4.x `parse()` and `compile()` — the graph and the document
+
+`QvtoEngine` offers two ways from source to something executable, and they differ in ownership:
+
+| | returns | what it is | storable |
+|---|---|---|---|
+| `parse(source, unitName)` | `OperationalTransformation` | the in-memory graph the evaluator needs | **no** |
+| `compile(source, unitName)` | `CompiledUnit` | one document: manifest, the script, the parser's satellites, embedded dependencies | yes |
+
+The parser creates objects the tree references but that no metamodel feature contains — the
+variable `self`, a `PrimitiveType` for every `Integer` it meets, a wrapper type for every classifier
+it resolves, the default expression of an intermediate class. In memory that costs nothing, because
+a Java reference needs no owner. Saving the result of `parse()` fails on exactly those objects with a
+`DanglingHREFException`, and `EcoreUtil.copy` points its references back at the originals. Measured:
+a minimal transformation with no import keeps one such object (`PrimitiveType(Integer)`); one with
+modeltypes, a mapping, a guard and an intermediate class keeps thirteen.
+
+`compile()` gives them a home. The language-neutral `UnitPackager` (bundle
+`org.eclipse.fennec.m2x.unit`) wraps the script into a `CompiledUnit`, then `SatelliteCollector`
+walks every non-containment reference of the document and moves whatever it finds uncontained into
+`CompiledUnit.satellite`, iterating until nothing is left — a satellite may itself reference a
+further uncontained object. Afterwards every reference resolves within the document; that is
+asserted, not assumed, and a document that does not become self-contained fails `compile()` with a
+`QvtoParseException` rather than the first `save()` somewhere else.
+
+Three things are deliberately so:
+
+- **The script is moved, not copied.** `compiled.getUnit()` is the very `OperationalTransformation`
+  `parse()` would have returned, and `execute()` takes it as before. `compile()` adds a document
+  around the graph; it does not replace the graph.
+- **References into metamodels stay external.** A referenced `EPackage` lives in its own resource
+  and must, otherwise a shared unit could not lend its types — the reason the containment approach
+  of PR #128 was rejected. The collector treats anything that already lives in a resource as
+  not-a-satellite.
+- **The container has no semantics.** `satellite` is typed `EObject`, the evaluator never reads it,
+  and the container knows nothing about what it holds. Metadata — `id`, `namespace`, `version`,
+  `description` — live on the `CompiledUnit`, because a satellite means nothing outside its unit.
+
+What `compile()` does not yet do, because a later step of #135 owns it: compute the fingerprint
+(#138), bind dependencies under embed/pin/rebind (#139), record package entries and blackbox
+requirements (#139). Those manifest slots stay empty.
+
 ## 5. Parser Architecture (`qvto.parser`)
 
 **Bundle:** `org.eclipse.fennec.m2x.qvto.parser`
@@ -690,9 +732,10 @@ no `modeltype`, parses, links and executes — the AST still holds one uncontain
 `Variable.type → PrimitiveType(Integer)`, and the save fails on it. With modeltypes, a mapping and
 `self` there are fifteen.
 
-That is the reduced, still valid core of #127: only the parser-created satellites need a home. The
-type references themselves stay non-containment, because a shared unit lends its types rather than
-owning them — see #137 and the compiled-unit concept behind epic #135.
+That is the reduced, still valid core of #127: only the parser-created satellites need a home, and
+`compile()` is where they get one (§4.x). The type references themselves stay non-containment,
+because a shared unit lends its types rather than owning them — see the compiled-unit concept behind
+epic #135.
 
 ---
 

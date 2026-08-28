@@ -14,10 +14,6 @@
  */
 package org.eclipse.fennec.m2x.unit.tests;
 
-import org.eclipse.fennec.m2x.unit.api.Unit;
-import org.eclipse.fennec.m2x.unit.api.UnitKey;
-import org.eclipse.fennec.m2x.unit.api.UnitKind;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -27,6 +23,7 @@ import java.io.InputStream;
 import java.util.List;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EPackage;
@@ -76,6 +73,55 @@ class CompiledUnitManifestModelTest {
 				"changing this nsURI makes every stored unit unreadable");
 		assertEquals("compiled", manifestPackage.getName());
 		assertEquals("compiled", manifestPackage.getNsPrefix());
+	}
+
+	// The compiled unit is one document with four parts, each with one role: metadata on
+	// the unit, how it was built in the manifest, the script, the parser's heap made
+	// persistent, and the dependencies embedded as complete units again.
+	@Test
+	void compiledUnit_hasTheFourParts() {
+		EClass unit = classifier("CompiledUnit");
+		assertFeatures(unit, "id", "namespace", "version", "description",
+				"manifest", "unit", "satellite", "embedded");
+	}
+
+	@Test
+	void compiledUnit_idIsTheIdentity() {
+		EClass unit = classifier("CompiledUnit");
+		EAttribute id = (EAttribute) unit.getEStructuralFeature("id");
+		assertTrue(id.isID(), "id is what makes two versions of one name distinguishable");
+		assertEquals(1, id.getLowerBound(), "a compiled unit without id is not addressable");
+	}
+
+	// Satellites have no identity of their own: the container holds EObjects and nothing
+	// about them. Metadata belong on the unit, and the evaluator never reads this list.
+	@Test
+	void satellites_areUntypedContainment() {
+		EClass unit = classifier("CompiledUnit");
+		EReference satellite = (EReference) unit.getEStructuralFeature("satellite");
+		assertTrue(satellite.isContainment());
+		assertEquals(-1, satellite.getUpperBound());
+		assertEquals("EObject", satellite.getEType().getName());
+	}
+
+	// The script is held as EPackage — the one supertype all three unit roots share.
+	@Test
+	void unit_isHeldAsEPackage() {
+		EClass unit = classifier("CompiledUnit");
+		EReference script = (EReference) unit.getEStructuralFeature("unit");
+		assertTrue(script.isContainment());
+		assertEquals(1, script.getLowerBound());
+		assertEquals("EPackage", script.getEType().getName());
+	}
+
+	// An embedded dependency is a compiled unit again, with its own manifest and its own
+	// satellites — a library lends its types, so its heap stays its own.
+	@Test
+	void embedded_areCompleteCompiledUnits() {
+		EClass unit = classifier("CompiledUnit");
+		EReference embedded = (EReference) unit.getEStructuralFeature("embedded");
+		assertTrue(embedded.isContainment());
+		assertEquals(unit, embedded.getEType());
 	}
 
 	@Test
