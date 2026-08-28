@@ -1220,6 +1220,11 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 				@Override
 				public List<String> getUsedPackageURIs() { return List.of(); }
 				@Override
+				public List<String> getOperationNames() {
+					return List.of("TypeMap");
+				}
+
+				@Override
 				public Object invoke(String operationName, Object self, Object[] args) {
 					if ("TypeMap".equals(operationName) && args.length == 1) {
 						return "Integer".equals(args[0]) ? "NUMBER" : "VARCHAR";
@@ -1415,6 +1420,11 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 				public String getUnitQualifiedName() { return "ops"; }
 				@Override
 				public List<String> getUsedPackageURIs() { return List.of(); }
+				@Override
+				public List<String> getOperationNames() {
+					return List.of("createTableOp");
+				}
+
 				@Override
 				public Object invoke(String operationName, Object self, Object[] args) {
 					if ("createTableOp".equals(operationName) && args.length == 1) {

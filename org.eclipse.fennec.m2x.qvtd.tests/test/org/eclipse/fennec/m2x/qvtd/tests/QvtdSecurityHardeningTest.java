@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -44,6 +46,7 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
@@ -54,6 +57,7 @@ import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrTraceManager;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -271,56 +275,53 @@ class QvtdSecurityHardeningTest {
 	}
 
 	@Test
-	void r4_blackboxAllowList_blocksUnlisted() throws QvtdParseException {
-		// Blackbox query transformation — TypeMap should be blocked by allow-list
-		String source = """
-				transformation allowListTest(uml : simpleuml, rdbms : simplerdbms) {
-				    top relation ClassToTable {
-				        cn : String;
-				        checkonly domain uml c : Class { name = cn };
-				        enforce domain rdbms t : Table { name = cn };
-				    }
-
-				    query TypeMap(umlType : String) : String;
-				}
-				""";
-
+	@DisplayName("R-4/M-R5: a blackbox query of a module the allow-list does not name is not invoked")
+	void r4_blackboxAllowList_blocksUnlisted() throws Exception {
+		// Before #180 this test asserted only that the transformation succeeded — which it does
+		// either way — while production compared the allow-list against the *operation* name and
+		// never consulted it for queries at all. The sentinel is what makes the guard real.
+		AtomicBoolean invoked = new AtomicBoolean();
 		BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
-		registry.register(new QvtdBlackboxLibrary() {
-			@Override
-			public String getModuleName() { return "helpers"; }
-			@Override
-			public String getUnitQualifiedName() { return "helpers"; }
-			@Override
-			public List<String> getUsedPackageURIs() { return List.of(); }
-			@Override
-			public Object invoke(String operationName, Object self, Object[] args) {
-				if ("TypeMap".equals(operationName)) {
-					return "BLOCKED_SHOULD_NOT_REACH";
-				}
-				return null;
-			}
-		});
+		registry.register(library("helpers", "TypeMap", () -> {
+			invoked.set(true);
+			return "BLOCKED_SHOULD_NOT_REACH";
+		}));
 
-		// Enable blackbox but restrict to "otherlib" — "TypeMap" not in allow-list
-		QvtdEngine engine = createEngine(b -> b
-				.blackboxRegistry(registry)
-				.blackboxEnabled(true)
-				.allowedBlackboxModules(Set.of("otherlib")));
-		RelationalTransformation t = engine.parse(source, "allowListTest");
+		QvtdExecutionResult result = runWithBlackbox(registry, Set.of("otherlib"));
 
-		QvtdModelExtent umlExtent = createUmlExtent("TestPkg");
-		QvtdModelExtent rdbmsExtent = new BasicQvtdModelExtent();
-		QvtdExecutionContext ctx = QvtdExecutionContext.enforce("rdbms",
-				Map.of("uml", umlExtent, "rdbms", rdbmsExtent));
-
-		// Should succeed (the query simply returns null, not an error)
-		// but the blackbox should NOT have been invoked
-		QvtdExecutionResult result = engine.execute(t, ctx);
-		assertTrue(result.isSuccess(), "Transformation should succeed even with blocked blackbox");
+		assertFalse(invoked.get(), "the library of an unlisted module must not be invoked");
+		assertTrue(result.diagnostics().stream().noneMatch(d -> String.valueOf(d.getMessage()).contains("BLOCKED")),
+				"and nothing of it reaches the run");
 	}
 
-	// ── R-8 / M-R8: Trace record limit ───────────────────────────────
+	@Test
+	@DisplayName("R-4/M-R5: the same query of a module the allow-list names is invoked")
+	void r4_blackboxAllowList_allowsListed() throws Exception {
+		AtomicBoolean invoked = new AtomicBoolean();
+		BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+		registry.register(library("helpers", "TypeMap", () -> {
+			invoked.set(true);
+			return "NUMBER";
+		}));
+
+		runWithBlackbox(registry, Set.of("helpers"));
+
+		assertTrue(invoked.get(), "the allow-list names the module, so the library is used");
+	}
+
+	@Test
+	@DisplayName("R-4: a blackbox that throws is an error diagnostic, not a silent fallthrough")
+	void r4_failingBlackbox_isReported() throws Exception {
+		BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+		registry.register(library("helpers", "TypeMap", () -> {
+			throw new IllegalStateException("library on fire");
+		}));
+
+		QvtdExecutionResult result = runWithBlackbox(registry, Set.of());
+
+		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("library on fire")),
+				() -> "the failure has to reach the caller: " + result.diagnostics());
+	}
 
 	@Test
 	void r8_traceLimit_dropsRecordsAtLimit() {
@@ -379,4 +380,63 @@ class QvtdSecurityHardeningTest {
 		}
 		return new BasicQvtdModelExtent(List.of(root));
 	}
+
+	// ── helpers for the blackbox tests (#180) ─────────────────────────
+
+	/** A library that serves exactly one operation of one module, and says so. */
+	private static QvtdBlackboxLibrary library(String moduleName, String operationName, Supplier<Object> body) {
+		return new QvtdBlackboxLibrary() {
+			@Override
+			public String getModuleName() {
+				return moduleName;
+			}
+
+			@Override
+			public String getUnitQualifiedName() {
+				return moduleName;
+			}
+
+			@Override
+			public List<String> getUsedPackageURIs() {
+				return List.of();
+			}
+
+			@Override
+			public List<String> getOperationNames() {
+				return List.of(operationName);
+			}
+
+			@Override
+			public Object invoke(String name, Object self, Object[] args) {
+				return operationName.equals(name) ? body.get() : null;
+			}
+		};
+	}
+
+	/**
+	 * Runs a transformation whose enforced value comes from a blackbox query, with blackboxes
+	 * enabled and the given allow-list.
+	 */
+	private QvtdExecutionResult runWithBlackbox(QvtdBlackboxRegistry registry, Set<String> allowed)
+			throws QvtdParseException {
+		String source = """
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					query TypeMap(umlType : String) : String;
+
+					top relation R {
+						cn : String;
+						checkonly domain uml c : Class { name = cn };
+						enforce domain rdbms t : Table { name = TypeMap(cn) };
+					}
+				}
+				""";
+		QvtdEngine engine = createEngine(b -> b.blackboxRegistry(registry)
+				.blackboxEnabled(true).allowedBlackboxModules(allowed));
+		RelationalTransformation t = engine.parse(source, "T");
+		QvtdModelExtent rdbmsExtent = new BasicQvtdModelExtent();
+		return engine.execute(t, QvtdExecutionContext.enforce("rdbms",
+				Map.of("uml", createUmlExtentMany(1), "rdbms", rdbmsExtent)));
+	}
+
+
 }

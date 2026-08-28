@@ -124,6 +124,11 @@ class QvtrQueryEvaluatorTest {
 			@Override
 			public java.util.List<String> getUsedPackageURIs() { return java.util.List.of(); }
 			@Override
+			public List<String> getOperationNames() {
+				return List.of("TypeMap");
+			}
+
+			@Override
 			public Object invoke(String operationName, Object self, Object[] args) {
 				return "TypeMap".equals(operationName) ? "BB_RESULT" : null;
 			}
