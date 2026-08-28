@@ -16,12 +16,14 @@ package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -379,6 +381,39 @@ class QvtdSecurityHardeningTest {
 			((List<EObject>) root.eGet(pkgClass.getEStructuralFeature("ownedClass"))).add(clazz);
 		}
 		return new BasicQvtdModelExtent(List.of(root));
+	}
+
+	@Test
+	@DisplayName("R-1: a query that calls itself ends in a diagnostic, not a StackOverflowError")
+	void r1_recursiveQuery_exceedingDepth_terminates() throws Exception {
+		// Relations have had a depth counter all along; queries had none, and a StackOverflowError
+		// is an Error — the engine's catch (Exception) never saw it, the thread died (#181)
+		String source = """
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					query Countdown(n : Integer) : Integer { Countdown(n + 1) }
+
+					top relation R {
+						cn : String;
+						checkonly domain uml c : Class { name = cn };
+						enforce domain rdbms t : Table { name = cn };
+						when { Countdown(0) > 0; }
+					}
+				}
+				""";
+		QvtdEngine engine = createEngine(b -> b.maxRelationDepth(20));
+		RelationalTransformation t = engine.parse(source, "T");
+		QvtdExecutionContext ctx = QvtdExecutionContext.enforce("rdbms",
+				Map.of("uml", createUmlExtentMany(1), "rdbms", new BasicQvtdModelExtent()));
+
+		// The limit is reached inside a guard, which OCL evaluates — so it arrives as a
+		// diagnostic and the run fails, rather than as a thrown exception. What matters is that
+		// it arrives at all: before #181 the JVM stack ran out and the thread died.
+		QvtdExecutionResult result = assertTimeoutPreemptively(Duration.ofSeconds(20),
+				() -> engine.execute(t, ctx));
+		assertFalse(result.isSuccess(), "a run whose guard blew the depth limit is not a success");
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> String.valueOf(d.getMessage()).contains("Query call depth limit exceeded")),
+				() -> "the limit has to be named: " + result.diagnostics());
 	}
 
 	// ── helpers for the blackbox tests (#180) ─────────────────────────

@@ -104,6 +104,7 @@ public class QvtrEvaluator {
 	private final QvtrEnforcer enforcer;
 	private final QvtrBlackboxBridge blackboxBridge;
 	private final QvtrQueryEvaluator queryEvaluator;
+	private final QvtrQueryEvaluator.QueryDepth queryDepth;
 
 	private final LongSupplier nanoTimeSource;
 
@@ -151,8 +152,10 @@ public class QvtrEvaluator {
 		this.blackboxBridge = new QvtrBlackboxBridge(
 				blackboxRegistry, config, implementationProviders,
 				extentManager, context, diagnostics, oclCallback);
+		// One counter for every way into a query body of this run (#181)
+		this.queryDepth = new QvtrQueryEvaluator.QueryDepth(config.maxRelationDepth());
 		this.queryEvaluator = new QvtrQueryEvaluator(
-				transformation, oclCallback, blackboxBridge);
+				transformation, oclCallback, blackboxBridge, queryDepth);
 		this.enforcer = new QvtrEnforcer(
 				extentManager, patternMatcher, transformation,
 				diagnostics, oclCallback, blackboxBridge);
@@ -620,7 +623,7 @@ public class QvtrEvaluator {
 	private QvtrOperationProvider operationProvider() {
 		if (operationProvider == null) {
 			operationProvider = new QvtrOperationProvider(transformation,
-					blackboxBridge, this::evaluateOcl);
+					blackboxBridge, this::evaluateOcl, queryDepth);
 		}
 		return operationProvider;
 	}

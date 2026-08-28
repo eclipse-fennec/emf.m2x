@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map;
 
 import org.eclipse.emf.common.util.EList;
@@ -27,6 +28,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.model.qvtbase.Function;
 import org.eclipse.fennec.m2x.model.qvtbase.Pattern;
 import org.eclipse.fennec.m2x.model.qvtbase.Predicate;
@@ -50,12 +52,71 @@ public class QvtrQueryEvaluator {
 	private final RelationalTransformation transformation;
 	private final QvtrOclCallback oclCallback;
 	private final QvtrBlackboxBridge blackboxBridge;
+	private final QueryDepth depth;
 
 	public QvtrQueryEvaluator(RelationalTransformation transformation,
 			QvtrOclCallback oclCallback, QvtrBlackboxBridge blackboxBridge) {
+		this(transformation, oclCallback, blackboxBridge, new QueryDepth(DEFAULT_MAX_QUERY_DEPTH));
+	}
+
+	/**
+	 * @param transformation the transformation whose queries are resolved
+	 * @param oclCallback how an expression is evaluated
+	 * @param blackboxBridge the bridge for body-less queries, may be {@code null}
+	 * @param depth the shared depth counter — a query may call a query, and only a counter that
+	 *            outlives one call can tell recursion from nesting
+	 */
+	public QvtrQueryEvaluator(RelationalTransformation transformation, QvtrOclCallback oclCallback,
+			QvtrBlackboxBridge blackboxBridge, QueryDepth depth) {
 		this.transformation = transformation;
 		this.oclCallback = oclCallback;
 		this.blackboxBridge = blackboxBridge;
+		this.depth = Objects.requireNonNull(depth, "depth must not be null");
+	}
+
+	/** The depth limit a query evaluator built without one enforces. */
+	static final int DEFAULT_MAX_QUERY_DEPTH = 1000;
+
+	/**
+	 * How deep the current chain of query calls is, shared by everything that evaluates a query
+	 * of one run.
+	 *
+	 * <p>A QVT-R query may call a query, and nothing stopped it: a query calling itself recursed
+	 * through the OCL operation provider until the JVM's stack ran out — and a
+	 * {@code StackOverflowError} is an {@code Error}, so the engine's {@code catch (Exception)}
+	 * did not turn it into a diagnostic; it killed the calling thread (#181). Relations have had
+	 * such a counter all along ({@code QvtrEvaluator.relationCallDepth}); queries have one now,
+	 * against the same {@code maxRelationDepth}.
+	 */
+	public static final class QueryDepth {
+
+		private final int max;
+		private int current;
+
+		/**
+		 * @param max how deep a chain of query calls may go
+		 */
+		public QueryDepth(int max) {
+			this.max = max;
+		}
+
+		/**
+		 * Enters a query call.
+		 *
+		 * @param queryName the query being entered, for the message
+		 * @throws QvtdExecutionException if the chain is already at the limit
+		 */
+		void enter(String queryName) {
+			if (current >= max) {
+				throw new QvtdExecutionException(
+						"Query call depth limit exceeded (%d) in query '%s'".formatted(max, queryName));
+			}
+			current++;
+		}
+
+		void leave() {
+			current--;
+		}
 	}
 
 	/**
@@ -156,6 +217,16 @@ public class QvtrQueryEvaluator {
 			return blackboxBridge.evaluateBlackboxQuery(query, callExpr, callerBindings);
 		}
 
+		depth.enter(query.getName());
+		try {
+			return evaluateBody(query, callExpr, queryBody, callerBindings);
+		} finally {
+			depth.leave();
+		}
+	}
+
+	private Object evaluateBody(Function query, OperationCallExp callExpr, OclExpression queryBody,
+			Map<String, Object> callerBindings) {
 		// Build parameter bindings
 		Map<String, Object> paramBindings = new HashMap<>();
 		EList<EParameter> params = query.getEParameters();
