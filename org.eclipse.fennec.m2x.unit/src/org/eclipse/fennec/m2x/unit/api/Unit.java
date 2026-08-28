@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.unit.api;
 
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 
 /**
  * A compilation unit of one of the m2x languages, addressed by qualified name.
@@ -106,6 +107,32 @@ public interface Unit {
 		@Override
 		default UnitKind kind() {
 			return UnitKind.COMPILED;
+		}
+	}
+
+	/**
+	 * A compiled unit in its document form: the AST together with the manifest, the satellites,
+	 * the embedded dependencies and the package copies — what {@code compile()} produces and what
+	 * a store holds and hands back.
+	 *
+	 * <p>A bare {@link Compiled} AST says what a unit is; the document also says what it was built
+	 * against and carries the unit fingerprint its manifest was sealed with. A store accepts only
+	 * this form for compiled units — a bare AST has no manifest to store it by.
+	 *
+	 * @author Data In Motion Consulting
+	 * @since 1.0
+	 */
+	interface Packaged extends Compiled {
+		/**
+		 * Returns the compiled-unit document.
+		 *
+		 * @return the document, never {@code null}
+		 */
+		CompiledUnit document();
+
+		@Override
+		default EObject root() {
+			return document().getUnit();
 		}
 	}
 }
