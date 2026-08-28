@@ -875,7 +875,30 @@ QvtoUnit source = new QvtoUnit.SourceUnit("my.pkg.Helper", uri, sourceCode);
 QvtoUnit compiled = new QvtoUnit.CompiledUnit("my.pkg.Helper", parsedTrafo);
 ```
 
-Use `CompiledUnit` to cache parsed transformations across executions.
+Use `CompiledUnit` to hand the engine a transformation it has already parsed, within one JVM.
+
+Note the two meanings of the word: `QvtoUnit.CompiledUnit` is a *parsed AST in memory* handed to a
+resolver, while `engine.compile(...)` returns a `CompiledUnit` **document** that can be stored,
+loaded elsewhere and executed there — with its dependencies embedded, pinned or rebound. See the
+[Compiled Units Guide](compiled-units-guide.md).
+
+### 12.2.1 Storable units, dependency modes, store, prepare
+
+```java
+// a document instead of a graph — storable, with the library carried inside it
+CompiledUnit unit = engine.compile(source, "Main", UnitCompileOptions.of(DependencyMode.EMBED));
+
+UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+UnitKey key = store.store("qvto", new PackagedUnit(unit));
+
+// somewhere else: load, prepare, run — no resolver is asked during execution
+PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder()).prepare(key);
+QvtoExecutionResult result = engine.execute(prepared, "Main", QvtoExecutionContext.of(extent));
+```
+
+`QvtoStoreUnitResolver` resolves imports from a store. The whole mechanism — modes, store,
+prepare, validation, fingerprints — is described in the
+[Compiled Units Guide](compiled-units-guide.md).
 
 ### 12.3 Registration
 

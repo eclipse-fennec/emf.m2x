@@ -47,7 +47,7 @@ one an error, disagreeing ones a conflict (#141), and a `UnitValidator` every lo
 | `org.eclipse.fennec.m2x.qvto.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvto.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvto.engine` | Evaluator (mappings, resolve, trace, blackbox) | Done |
-| `org.eclipse.fennec.m2x.qvto.tests` | 1,211 tests (1 disabled), 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvto.tests` | 1,216 tests (1 disabled), 0 failures | Done |
 | `org.eclipse.fennec.m2x.qvto.benchmark` | Performance benchmarks | Done |
 
 ### QVT-R — QVT Relations
@@ -96,7 +96,7 @@ The repository root is a Gradle + BND workspace:
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
 
-The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,295 tests and 50 OSGi tests, 0 failures, as of 2026-08-28**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
+The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,300 tests and 50 OSGi tests, 0 failures, as of 2026-08-28**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
 ## Branches & releases
 
@@ -122,6 +122,7 @@ All bundles are published under the group id `org.eclipse.fennec.m2x`, with the 
 - **[OCL Security Analysis](docs/ocl-security-analysis.md)** — OCL threat model, attack vectors, hardening measures, BSI TR-03185 mapping
 - **[QVT-R Engine User Guide](docs/qvtd-user-guide.md)** — How to use the QVT-R engine (setup, relations, binding validation, blackbox, hybrid QVT-O)
 - **[M2T Engine User Guide](docs/m2t-user-guide.md)** — How to use the M2T engine (setup, template syntax, file output, protected areas, module composition)
+- **[Compiled Units Guide](docs/compiled-units-guide.md)** — Storable units for QVT-O, QVT-R and MOFM2T: `compile()` beside `parse()`, the dependency modes embed / pin / rebind, the unit store, prepare and execute, resolution from several sources, validation on load, fingerprints
 - **[M2T bnd Generator Guide](docs/m2t-generator-guide.md)** — Running templates as a build step with the `fennecM2T` bnd plugin (dependencies, `-generate` attributes, nsURI registration)
 - **[OCL IDE Installation](docs/ocl-ide-installation.md)** — Installing the generic EMF editor support from the p2 repository
 - **[QVT-O Security Analysis](docs/qvto-security-analysis.md)** — QVT-O threat model, attack vectors, hardening measures, BSI TR-03185 mapping
