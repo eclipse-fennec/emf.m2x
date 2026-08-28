@@ -218,7 +218,7 @@ public class QvtoLinker {
 	 * Resolves a blackbox library by qualified name and creates a synthetic
 	 * {@link Library} module with blackbox operations as EOperations.
 	 */
-	private Module resolveBlackboxModule(String qualifiedName) {
+	Module resolveBlackboxModule(String qualifiedName) {
 		if (blackboxRegistry == null) {
 			return null;
 		}
