@@ -23,6 +23,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.m2x.model.compiled.CompiledFactory;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest;
+import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
 
 /**
@@ -39,9 +40,9 @@ import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
  * executing it — {@code compile()} adds a document around the graph, it does not replace the
  * graph.
  *
- * <p>What this step does not do, because a later step owns it: compute the fingerprint (#138),
- * bind dependencies under embed/pin/rebind (#139), record package entries and blackbox
- * requirements (#139). Those manifest slots stay empty here.
+ * <p>What this step does not do, because a later step owns it: bind dependencies under
+ * embed/pin/rebind (#139), record package entries and blackbox requirements (#139). Those
+ * manifest slots stay empty here; the unit fingerprint is computed (#138).
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -94,6 +95,8 @@ public final class UnitPackager {
 					+ "' still references " + left.size() + " uncontained object(s), first: "
 					+ left.get(0).eClass().getName());
 		}
+		// Fingerprinting is part of Package (concept §4): the manifest says what this is
+		manifest.setUnitFingerprint(DefaultUnitFingerprintService.INSTANCE.fingerprint(compiled));
 		return compiled;
 	}
 }

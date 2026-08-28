@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.Set;
 import java.util.LinkedHashSet;
 
@@ -89,8 +88,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private static final OclFactory OCL = OclFactory.eINSTANCE;
 	private static final ImperativeOclFactory IMP = ImperativeOclFactory.eINSTANCE;
 	private static final QvtOperationalFactory QVTO = QvtOperationalFactory.eINSTANCE;
-	private static final AtomicLong INTERMEDIATE_SEQ =
-			new AtomicLong();
+	/** nsURI prefix of a unit's intermediate package; the module name completes it. */
+	private static final String INTERMEDIATE_NS_PREFIX =
+			"http://www.eclipse.org/fennec/m2x/qvto/intermediate/";
 
 	/**
 	 * EAnnotation source used to mark stub modules that need link-time resolution.
@@ -122,6 +122,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
 	private final Map<String, Module> importedModuleStubs = new HashMap<>();
 	private String intermediatePackageUri;
+	private EPackage intermediatePackage;
 
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
@@ -266,11 +267,6 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (savedEnv != null) {
 			this.environment = savedEnv;
 			updateExpressionBuilder();
-		}
-
-		// Clean up intermediate package from global registry (no longer needed after parse)
-		if (intermediatePackageUri != null && packageRegistry != null) {
-			packageRegistry.remove(intermediatePackageUri);
 		}
 
 		return transformation;
@@ -1200,11 +1196,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			intermPkg.getESubpackages().add(metaPkg);
 		}
 
-		// Register sub-package in packageRegistry for type resolution
-		if (packageRegistry != null) {
-			packageRegistry.put(metaPkg.getNsURI(), metaPkg);
-		}
-		// A metamodel declared in the unit is in the unit's scope (QVT v1.3 §8.1.5, #158)
+		// A metamodel declared in the unit is in the unit's scope (QVT v1.3 §8.1.5, #158); it
+		// is not registered anywhere — the declaration is the scope
 		declaredPackages.add(metaPkg);
 
 		// Process each metamodel element
@@ -1641,23 +1634,19 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 * Registers the package in the packageRegistry so type resolution works.
 	 */
 	private EPackage getOrCreateIntermediatePackage(Module module) {
-		if (intermediatePackageUri != null && packageRegistry != null) {
-			EPackage existing = packageRegistry.getEPackage(intermediatePackageUri);
-			if (existing != null) {
-				declaredPackages.add(existing);
-				return existing;
-			}
+		if (intermediatePackage != null) {
+			return intermediatePackage;
 		}
-		// Unique URI per builder instance to avoid cross-parse collisions
-		intermediatePackageUri = "http://intermediate/" + module.getName()
-				+ "/" + INTERMEDIATE_SEQ.incrementAndGet();
+		// A deterministic nsURI: the same source parses to the same package, which is what a
+		// reproducible unit fingerprint needs (#138). It used to carry a per-parse counter to
+		// avoid collisions in the global registry — but the package is no longer registered
+		// there: the unit's own intermediate classes resolve through declaredPackages (#158).
+		intermediatePackageUri = INTERMEDIATE_NS_PREFIX + module.getName();
 		EPackage pkg = EcoreFactory.eINSTANCE.createEPackage();
 		pkg.setName("_INTERMEDIATE");
 		pkg.setNsPrefix("_intermediate");
 		pkg.setNsURI(intermediatePackageUri);
-		if (packageRegistry != null) {
-			packageRegistry.put(intermediatePackageUri, pkg);
-		}
+		intermediatePackage = pkg;
 		// The unit's own namespace: its intermediate classes resolve like any declared package
 		// (QVT v1.3 §8.1.10), not through a scan of the registry (#158)
 		declaredPackages.add(pkg);

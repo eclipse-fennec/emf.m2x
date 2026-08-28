@@ -450,9 +450,43 @@ Three things are deliberately so:
   and the container knows nothing about what it holds. Metadata — `id`, `namespace`, `version`,
   `description` — live on the `CompiledUnit`, because a satellite means nothing outside its unit.
 
-What `compile()` does not yet do, because a later step of #135 owns it: compute the fingerprint
-(#138), bind dependencies under embed/pin/rebind (#139), record package entries and blackbox
-requirements (#139). Those manifest slots stay empty.
+### 4.z The unit fingerprint (`m2x1`)
+
+`compile()` stamps `manifest.unitFingerprint` with the value of `DefaultUnitFingerprintService`
+(bundle `org.eclipse.fennec.m2x.unit`): `m2x1:` followed by the SHA-256 of a canonical form of the
+script. The contract is that of `emf.osgi`'s `FingerprintService` — `<scheme>:<digest>`, the tag
+versions the canonicalization, values of different tags are not comparable. Packages keep their `fp1`
+values; units get `m2x1`; a manifest carries both. `fp1` could not serve for units: it canonicalizes
+the Ecore metastructure only, and all three unit roots inherit from `EPackage`, so two
+transformations with the same intermediate classes and different mapping logic would share a value.
+
+The canonical form is a reflective walk with an **exclusion** list (`AstCanonicalizer`), not a
+hand-written switch with an inclusion list: the metamodels grow, and a forgotten class would make
+two different units silently share a value. Per node: the class as `nsURI#Name`; every set,
+non-derived, non-transient feature sorted by name; attribute values as `EcoreUtil.convertToString`;
+many-valued features in order — operand and statement order is semantic. A reference to an object
+in another resource (a metamodel class, a standard-library type) enters as its URI, so a metamodel
+change does not cascade into every expression's value. A reference into the script is the target's
+fragment path. A reference to a satellite — outside the script, in the compiled unit's container or
+uncontained in a freshly parsed graph — is the satellite **inline**: the value depends on what the
+satellite says, not on which object says it, so a parse, its compiled unit and that unit reloaded
+from XMI agree. Excluded: `documentation`/GenModel annotations, container references, the
+one-to-one back-link of a bidirectional pair. Source positions and comments never enter; they live
+beside the AST (#110/#116).
+
+The scheme is **frozen**: `UnitFingerprintServiceTest.m2x1_isFrozen` pins a recorded value, and a
+change to the canonicalization has to come with a new tag. Two decisions the concept left open were
+taken with it: bound variable names count (no alpha-invariance — `collect(a | a.x)` and
+`collect(b | b.x)` differ), and there is one tag for all four languages, because they nest.
+
+Two parser accidents had to go first, because a reproducible fingerprint cannot contain them: the
+intermediate package's nsURI carried a per-parse counter (it was registered in the global registry,
+which #158 made unnecessary; the nsURI is `…/qvto/intermediate/<module>` now), and MOFM2T named its
+inline variables by `identityHashCode`.
+
+What `compile()` does not yet do, because a later step of #135 owns it: bind dependencies under
+embed/pin/rebind and record package entries and blackbox requirements (#139). The fingerprint
+already folds dependency entries in Merkle-style, so it will cover them once they are written.
 
 ### 4.y Type names resolve in what the unit declares
 
