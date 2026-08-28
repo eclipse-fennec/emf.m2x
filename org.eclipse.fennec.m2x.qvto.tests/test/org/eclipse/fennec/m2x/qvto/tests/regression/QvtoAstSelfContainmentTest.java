@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -29,7 +30,10 @@ import java.util.Map;
 import java.util.Set;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
@@ -39,9 +43,13 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
 import org.eclipse.fennec.m2x.model.compiled.CompiledPackage;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
+import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
@@ -49,15 +57,6 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.tests.AbstractQvtoEngineTest;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
 import org.junit.jupiter.api.Test;
-import java.util.ArrayList;
-import java.util.HashMap;
-import org.eclipse.emf.ecore.EClassifier;
-import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
-import org.eclipse.fennec.m2x.model.ocl.Variable;
-import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
-import org.eclipse.emf.ecore.EClass;
-import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 
 /**
  * A compiled QVT-O unit is one self-contained document (#137, acceptance criteria).

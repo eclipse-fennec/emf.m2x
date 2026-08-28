@@ -22,10 +22,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.lang.annotation.Annotation;
 
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.ErrorRecovery;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
@@ -33,6 +32,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.engine.OclConfigurationHelper;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineConfiguration;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.Test;
 

@@ -22,7 +22,6 @@ import java.util.Objects;
 import java.util.StringTokenizer;
 import java.util.WeakHashMap;
 
-import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;

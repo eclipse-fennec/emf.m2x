@@ -17,12 +17,12 @@ package org.eclipse.fennec.m2x.m2t.parser;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.eclipse.emf.ecore.EObject;
-import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 /**
  * Result of parsing a MOFM2T module, carrying the parsed AST along with

@@ -26,10 +26,10 @@ import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.function.BiFunction;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
@@ -58,15 +58,15 @@ import org.eclipse.fennec.m2x.model.m2t.TextExpression;
 import org.eclipse.fennec.m2x.model.m2t.TraceBlock;
 import org.eclipse.fennec.m2x.model.m2t.util.M2tSwitch;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
-import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
+import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
-import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
-import org.eclipse.fennec.m2x.ocl.api.OclContext;
 
 /**
  * Switch-based interpreter for MOFM2T template evaluation.

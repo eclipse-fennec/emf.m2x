@@ -41,11 +41,11 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.Status;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
-import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * Bridge that exposes QVT-O helpers and queries as {@link OclOperationProvider}

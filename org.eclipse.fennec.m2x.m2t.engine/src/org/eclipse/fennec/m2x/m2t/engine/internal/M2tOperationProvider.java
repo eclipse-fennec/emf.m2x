@@ -20,11 +20,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
 
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Query;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
-import org.eclipse.fennec.m2x.model.ocl.OclFactory;
-import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;

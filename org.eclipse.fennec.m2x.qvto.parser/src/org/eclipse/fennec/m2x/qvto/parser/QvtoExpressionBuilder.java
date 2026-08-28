@@ -15,27 +15,26 @@
 package org.eclipse.fennec.m2x.qvto.parser;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.tree.ParseTree;
-import org.eclipse.emf.ecore.resource.Resource;
-import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
-import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.imperativeocl.AltExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.AssertExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.AssignExp;
@@ -94,9 +93,9 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveInExp;
-import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
-import java.util.HashMap;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 /**
  * Visitor that transforms ANTLR4 parse tree nodes into EMF OCL + Imperative OCL AST nodes.

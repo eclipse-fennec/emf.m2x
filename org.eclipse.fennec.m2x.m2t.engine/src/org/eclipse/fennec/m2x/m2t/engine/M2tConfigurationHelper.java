@@ -16,7 +16,6 @@ package org.eclipse.fennec.m2x.m2t.engine;
 
 import java.nio.charset.Charset;
 import java.util.Objects;
-
 import java.util.Set;
 
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
