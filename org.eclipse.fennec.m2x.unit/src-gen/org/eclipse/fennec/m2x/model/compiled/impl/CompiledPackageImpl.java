@@ -32,6 +32,7 @@ import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
 import org.eclipse.fennec.m2x.model.compiled.PackageEntry;
 import org.eclipse.fennec.m2x.model.compiled.PackageRole;
 import org.eclipse.fennec.m2x.model.compiled.ResolvedDependency;
+import org.eclipse.fennec.m2x.model.compiled.SourceUnit;
 
 /**
  * <!-- begin-user-doc -->
@@ -53,6 +54,13 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	private EClass compiledUnitManifestEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EClass sourceUnitEClass = null;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -252,6 +260,16 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
+	public EReference getCompiledUnit_Packages() {
+		return (EReference)compiledUnitEClass.getEStructuralFeatures().get(8);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getCompiledUnitManifest() {
 		return compiledUnitManifestEClass;
 	}
@@ -312,7 +330,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EAttribute getCompiledUnitManifest_DependencyMode() {
+	public EAttribute getCompiledUnitManifest_SourceFingerprint() {
 		return (EAttribute)compiledUnitManifestEClass.getEStructuralFeatures().get(5);
 	}
 
@@ -322,8 +340,8 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EReference getCompiledUnitManifest_PackageEntry() {
-		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(6);
+	public EAttribute getCompiledUnitManifest_DependencyMode() {
+		return (EAttribute)compiledUnitManifestEClass.getEStructuralFeatures().get(6);
 	}
 
 	/**
@@ -332,7 +350,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EReference getCompiledUnitManifest_DependencyEntry() {
+	public EReference getCompiledUnitManifest_PackageEntry() {
 		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(7);
 	}
 
@@ -342,7 +360,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EReference getCompiledUnitManifest_BlackboxRequirement() {
+	public EReference getCompiledUnitManifest_DependencyEntry() {
 		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(8);
 	}
 
@@ -352,8 +370,78 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EReference getCompiledUnitManifest_ResolvedClosure() {
+	public EReference getCompiledUnitManifest_BlackboxRequirement() {
 		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(9);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getCompiledUnitManifest_ResolvedClosure() {
+		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(10);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EClass getSourceUnit() {
+		return sourceUnitEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getSourceUnit_Language() {
+		return (EAttribute)sourceUnitEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getSourceUnit_QualifiedName() {
+		return (EAttribute)sourceUnitEClass.getEStructuralFeatures().get(1);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getSourceUnit_Uri() {
+		return (EAttribute)sourceUnitEClass.getEStructuralFeatures().get(2);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getSourceUnit_Source() {
+		return (EAttribute)sourceUnitEClass.getEStructuralFeatures().get(3);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EAttribute getSourceUnit_Fingerprint() {
+		return (EAttribute)sourceUnitEClass.getEStructuralFeatures().get(4);
 	}
 
 	/**
@@ -584,6 +672,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 		createEReference(compiledUnitEClass, COMPILED_UNIT__UNIT);
 		createEReference(compiledUnitEClass, COMPILED_UNIT__SATELLITE);
 		createEReference(compiledUnitEClass, COMPILED_UNIT__EMBEDDED);
+		createEReference(compiledUnitEClass, COMPILED_UNIT__PACKAGES);
 
 		compiledUnitManifestEClass = createEClass(COMPILED_UNIT_MANIFEST);
 		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__FORMAT_VERSION);
@@ -591,11 +680,19 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__LANGUAGE);
 		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__QUALIFIED_NAME);
 		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__UNIT_FINGERPRINT);
+		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT);
 		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE);
 		createEReference(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY);
 		createEReference(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__DEPENDENCY_ENTRY);
 		createEReference(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__BLACKBOX_REQUIREMENT);
 		createEReference(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__RESOLVED_CLOSURE);
+
+		sourceUnitEClass = createEClass(SOURCE_UNIT);
+		createEAttribute(sourceUnitEClass, SOURCE_UNIT__LANGUAGE);
+		createEAttribute(sourceUnitEClass, SOURCE_UNIT__QUALIFIED_NAME);
+		createEAttribute(sourceUnitEClass, SOURCE_UNIT__URI);
+		createEAttribute(sourceUnitEClass, SOURCE_UNIT__SOURCE);
+		createEAttribute(sourceUnitEClass, SOURCE_UNIT__FINGERPRINT);
 
 		packageEntryEClass = createEClass(PACKAGE_ENTRY);
 		createEAttribute(packageEntryEClass, PACKAGE_ENTRY__NS_URI);
@@ -662,6 +759,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 		initEReference(getCompiledUnit_Unit(), ecorePackage.getEPackage(), null, "unit", null, 1, 1, CompiledUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnit_Satellite(), ecorePackage.getEObject(), null, "satellite", null, 0, -1, CompiledUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnit_Embedded(), this.getCompiledUnit(), null, "embedded", null, 0, -1, CompiledUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getCompiledUnit_Packages(), ecorePackage.getEPackage(), null, "packages", null, 0, -1, CompiledUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(compiledUnitManifestEClass, CompiledUnitManifest.class, "CompiledUnitManifest", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getCompiledUnitManifest_FormatVersion(), ecorePackage.getEString(), "formatVersion", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
@@ -669,11 +767,19 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 		initEAttribute(getCompiledUnitManifest_Language(), ecorePackage.getEString(), "language", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getCompiledUnitManifest_QualifiedName(), ecorePackage.getEString(), "qualifiedName", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getCompiledUnitManifest_UnitFingerprint(), ecorePackage.getEString(), "unitFingerprint", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getCompiledUnitManifest_SourceFingerprint(), ecorePackage.getEString(), "sourceFingerprint", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getCompiledUnitManifest_DependencyMode(), this.getDependencyMode(), "dependencyMode", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnitManifest_PackageEntry(), this.getPackageEntry(), null, "packageEntry", null, 0, -1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnitManifest_DependencyEntry(), this.getDependencyEntry(), null, "dependencyEntry", null, 0, -1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnitManifest_BlackboxRequirement(), this.getBlackboxRequirement(), null, "blackboxRequirement", null, 0, -1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnitManifest_ResolvedClosure(), this.getResolvedDependency(), null, "resolvedClosure", null, 0, -1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
+		initEClass(sourceUnitEClass, SourceUnit.class, "SourceUnit", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEAttribute(getSourceUnit_Language(), ecorePackage.getEString(), "language", null, 0, 1, SourceUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getSourceUnit_QualifiedName(), ecorePackage.getEString(), "qualifiedName", null, 1, 1, SourceUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getSourceUnit_Uri(), ecorePackage.getEString(), "uri", null, 0, 1, SourceUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getSourceUnit_Source(), ecorePackage.getEString(), "source", null, 1, 1, SourceUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getSourceUnit_Fingerprint(), ecorePackage.getEString(), "fingerprint", null, 0, 1, SourceUnit.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(packageEntryEClass, PackageEntry.class, "PackageEntry", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getPackageEntry_NsURI(), ecorePackage.getEString(), "nsURI", null, 0, 1, PackageEntry.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

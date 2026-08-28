@@ -12,6 +12,8 @@ src=${^src}
 
 -buildpath: \
 	org.eclipse.fennec.m2x.unit;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest,\
 	org.osgi.test.junit5.cm;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.qvto.parser;version=snapshot,\

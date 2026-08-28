@@ -61,6 +61,25 @@ same `RelationalTransformation` and executes as before. The mechanism is languag
 (`UnitPackager`, `SatelliteCollector` in `org.eclipse.fennec.m2x.unit`) — the QVT-O architecture
 describes it in full.
 
+**Dependencies (#139).** `compile(source, unitName, UnitCompileOptions)` resolves every `import`
+through the configured unit resolvers (D29 gate and allow-list as in `execute()`) and binds by the
+dependency mode. QVT-R binds an import by *merging* the imported relations into the importer
+(§7.11.1.1, `QvtdLinker.merge`) — afterwards nothing refers to the imported unit. Hence:
+
+- **embed** — the dependency is compiled and merged at compile time, and the name is struck from the
+  `qvtr.imports` annotation. The merged rules *are* the embedding; no unit is attached under
+  `CompiledUnit.embedded`, it would be dead weight nothing points at. The `dependencyEntry` records
+  the name and the fingerprint of what was merged. The unit runs on an engine without resolvers.
+- **pin** — the dependency is compiled to learn its fingerprint; nothing is merged, the import stays
+  declared and the execute-time linker (or prepare, #140) merges it.
+- **rebind** — the name alone; import stays declared.
+
+A blackbox query — a `Function` declared without a body, evaluated through the blackbox registry
+(§7.8) — becomes a `BlackboxRequirement` naming the operation and the fingerprint of its signature
+(`name(params):return`, types as `nsURI#Name`). QVT-R addresses blackbox operations by name across
+all registered libraries, so the requirement names no provider. Package entries and copies of dynamic
+metamodels are recorded as for every language (QVT-O architecture §4.w).
+
 ## 4. Parser
 
 **Grammar:** `QvtR.g4` imports `Ocl.g4` (shared OCL grammar).
@@ -87,6 +106,7 @@ describes it in full.
 | `qvtr.optional` | `DomainPattern` | Marks `[?]` optional root variable |
 | `qvtr.extends` | `RelationalTransformation` | Stores base transformation name |
 | `qvtr.implementedby.args` | `RelationImplementation` | Stores argument expression references |
+| `qvtr.imports` | `RelationalTransformation` | Names of imported units still to merge; struck by `compile()` under `embed` |
 
 ## 5. Engine
 

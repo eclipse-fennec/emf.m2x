@@ -88,6 +88,10 @@ public class CompiledAdapterFactory extends AdapterFactoryImpl {
 				return createCompiledUnitManifestAdapter();
 			}
 			@Override
+			public Adapter caseSourceUnit(SourceUnit object) {
+				return createSourceUnitAdapter();
+			}
+			@Override
 			public Adapter casePackageEntry(PackageEntry object) {
 				return createPackageEntryAdapter();
 			}
@@ -148,6 +152,20 @@ public class CompiledAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createCompiledUnitManifestAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2x.model.compiled.SourceUnit <em>Source Unit</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2x.model.compiled.SourceUnit
+	 * @generated
+	 */
+	public Adapter createSourceUnitAdapter() {
 		return null;
 	}
 

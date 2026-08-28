@@ -358,8 +358,32 @@ resource set and copies without pointing back at the original. The module inside
 `parse()` would have returned; `compile()` adds a document around it, nothing else.
 
 The `CompiledUnit` carries an `id` (unique across all compiled units), `namespace`, `version` and
-`description` for a store to list it by, and a manifest that records the language and the qualified
-name. Fingerprint and dependency binding follow in later steps of the compiled-unit work.
+`description` for a store to list it by, and a manifest that records the language, the qualified
+name, the unit and source fingerprints, the metamodels the module was compiled against and the
+modules it depends on.
+
+**Dependencies.** A module depends on what it `extends` and `imports`. `compile()` resolves every
+such name through the unit resolvers of the engine configuration (they have to be enabled, exactly
+as for `link()`), and binds according to the dependency mode:
+
+```java
+CompiledUnit compiled = engine.compile(source, "my.module",
+        UnitCompileOptions.of(DependencyMode.EMBED));
+```
+
+| mode | what the unit carries | binding |
+|---|---|---|
+| `embed` | the dependency, compiled in turn, under `getEmbedded()` | done at compile time — `extends`, `imports`, `overrides` and invocations point into the document; the unit generates on an engine without any resolver, also after a reload |
+| `pin` (default) | the dependency's name and unit fingerprint in the manifest | later — the module stays unbound |
+| `rebind` | the dependency's name | later, against whatever the runtime then serves under the name |
+
+Under `pin` and `rebind` the module keeps what it still has to bind on itself (`m2t.link.*`
+annotations: the `extends`/`imports` names, pending `overrides` and invocations — the parser leaves
+those beside the AST, not in it), so an engine that never parsed the module can `link()` it from its
+own resolvers after a reload. A name nobody resolves fails `compile()` in every mode with
+`Cannot resolve import: <name>`; a cycle of `extends` is reported under `embed` and `pin`.
+MOFM2T has no blackboxes — Java services arrive through the OCL operation providers of the engine —
+so a compiled module never carries a blackbox requirement.
 
 ## 4. Template Syntax
 

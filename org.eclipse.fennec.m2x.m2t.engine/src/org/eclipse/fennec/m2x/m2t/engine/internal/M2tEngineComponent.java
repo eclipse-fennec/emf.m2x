@@ -14,15 +14,18 @@
  */
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
+import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
 import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
 import org.eclipse.fennec.m2x.m2t.engine.M2tConfigurationHelper;
 import org.eclipse.fennec.m2x.m2t.engine.M2tEngineConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -68,7 +71,10 @@ public class M2tEngineComponent extends M2tEngineImpl {
 			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine,
 			@Reference(name = "unitDiscovery",
 					target = "(" + M2tServiceUnitResolver.RESOLVER_KIND + "=discovery)")
-			M2tUnitResolver unitDiscovery) {
-		super(M2tConfigurationHelper.from(config, oclEngine, unitDiscovery));
+			M2tUnitResolver unitDiscovery,
+			@Reference(name = "fingerprints", cardinality = ReferenceCardinality.OPTIONAL)
+			FingerprintService fingerprints) {
+		super(M2tConfigurationHelper.from(config, oclEngine, unitDiscovery),
+				fingerprints == null ? UnitPackager.withDefaults() : new UnitPackager(fingerprints));
 	}
 }

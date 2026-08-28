@@ -17,13 +17,17 @@ Bundle-Description: bnd external plugin that runs MOFM2T v1.0 templates during a
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
-	org.eclipse.fennec.m2x.ocl.engine;version=snapshot
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest
 
 -privatepackage: \
 	org.eclipse.fennec.m2x.m2t.generator
 
 -conditionalpackage: \
 	org.eclipse.fennec.m2x.*,\
+	org.eclipse.fennec.emf.osgi.*,\
 	org.eclipse.emf.*,\
 	org.antlr.v4.runtime.*
 

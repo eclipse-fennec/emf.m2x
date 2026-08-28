@@ -157,6 +157,9 @@ public class M2tModuleLinker {
 		Module module = result.module();
 
 		for (String extendsName : result.extendsNames()) {
+			if (isBound(module.getExtends(), extendsName)) {
+				continue; // bound already — by a compile under embed, or by an earlier link
+			}
 			Module target = moduleIndex.get(extendsName);
 			if (target != null) {
 				module.getExtends().add(target);
@@ -167,6 +170,9 @@ public class M2tModuleLinker {
 		}
 
 		for (String importName : result.importNames()) {
+			if (isBound(module.getImports(), importName)) {
+				continue;
+			}
 			Module target = moduleIndex.get(importName);
 			if (target != null) {
 				module.getImports().add(target);
@@ -175,6 +181,15 @@ public class M2tModuleLinker {
 						+ "' in module '" + module.getName() + "'");
 			}
 		}
+	}
+
+	private static boolean isBound(List<Module> bound, String name) {
+		for (Module module : bound) {
+			if (name.equals(module.getName())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// --- Phase 3: Overrides ---

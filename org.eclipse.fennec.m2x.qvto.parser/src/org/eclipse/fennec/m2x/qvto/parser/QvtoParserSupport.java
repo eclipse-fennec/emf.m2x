@@ -23,6 +23,7 @@ import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
@@ -44,6 +45,15 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
  * @since 1.0
  */
 public class QvtoParserSupport {
+
+	static {
+		// Ecore registers itself in the global registry when its package class initializes,
+		// and nothing guarantees that happened before the first parse: a plain-JVM caller
+		// whose first EMF call is `modeltype ECORE uses ecore('…')` would otherwise be told
+		// the metamodel cannot be resolved. Touching it here makes the parser self-sufficient.
+		EcorePackage.eINSTANCE.getNsURI();
+	}
+
 
 	/**
 	 * Where every expression node this support parsed stood, across all units.

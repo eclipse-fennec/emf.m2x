@@ -51,6 +51,7 @@ import org.eclipse.fennec.m2x.model.compiled.ResolvedDependency;
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getLanguage <em>Language</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getQualifiedName <em>Qualified Name</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getUnitFingerprint <em>Unit Fingerprint</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getSourceFingerprint <em>Source Fingerprint</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getDependencyMode <em>Dependency Mode</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getPackageEntry <em>Package Entry</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getDependencyEntry <em>Dependency Entry</em>}</li>
@@ -160,6 +161,26 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 	 * @ordered
 	 */
 	protected String unitFingerprint = UNIT_FINGERPRINT_EDEFAULT;
+
+	/**
+	 * The default value of the '{@link #getSourceFingerprint() <em>Source Fingerprint</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getSourceFingerprint()
+	 * @generated
+	 * @ordered
+	 */
+	protected static final String SOURCE_FINGERPRINT_EDEFAULT = null;
+
+	/**
+	 * The cached value of the '{@link #getSourceFingerprint() <em>Source Fingerprint</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getSourceFingerprint()
+	 * @generated
+	 * @ordered
+	 */
+	protected String sourceFingerprint = SOURCE_FINGERPRINT_EDEFAULT;
 
 	/**
 	 * The default value of the '{@link #getDependencyMode() <em>Dependency Mode</em>}' attribute.
@@ -361,6 +382,29 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 	 * @generated
 	 */
 	@Override
+	public String getSourceFingerprint() {
+		return sourceFingerprint;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setSourceFingerprint(String newSourceFingerprint) {
+		String oldSourceFingerprint = sourceFingerprint;
+		sourceFingerprint = newSourceFingerprint;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, CompiledPackage.COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT, oldSourceFingerprint, sourceFingerprint));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public DependencyMode getDependencyMode() {
 		return dependencyMode;
 	}
@@ -468,6 +512,8 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 				return getQualifiedName();
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__UNIT_FINGERPRINT:
 				return getUnitFingerprint();
+			case CompiledPackage.COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT:
+				return getSourceFingerprint();
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE:
 				return getDependencyMode();
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY:
@@ -505,6 +551,9 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 				return;
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__UNIT_FINGERPRINT:
 				setUnitFingerprint((String)newValue);
+				return;
+			case CompiledPackage.COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT:
+				setSourceFingerprint((String)newValue);
 				return;
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE:
 				setDependencyMode((DependencyMode)newValue);
@@ -552,6 +601,9 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__UNIT_FINGERPRINT:
 				setUnitFingerprint(UNIT_FINGERPRINT_EDEFAULT);
 				return;
+			case CompiledPackage.COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT:
+				setSourceFingerprint(SOURCE_FINGERPRINT_EDEFAULT);
+				return;
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE:
 				setDependencyMode(DEPENDENCY_MODE_EDEFAULT);
 				return;
@@ -589,6 +641,8 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 				return QUALIFIED_NAME_EDEFAULT == null ? qualifiedName != null : !QUALIFIED_NAME_EDEFAULT.equals(qualifiedName);
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__UNIT_FINGERPRINT:
 				return UNIT_FINGERPRINT_EDEFAULT == null ? unitFingerprint != null : !UNIT_FINGERPRINT_EDEFAULT.equals(unitFingerprint);
+			case CompiledPackage.COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT:
+				return SOURCE_FINGERPRINT_EDEFAULT == null ? sourceFingerprint != null : !SOURCE_FINGERPRINT_EDEFAULT.equals(sourceFingerprint);
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE:
 				return dependencyMode != DEPENDENCY_MODE_EDEFAULT;
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY:
@@ -623,6 +677,8 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 		result.append(qualifiedName);
 		result.append(", unitFingerprint: ");
 		result.append(unitFingerprint);
+		result.append(", sourceFingerprint: ");
+		result.append(sourceFingerprint);
 		result.append(", dependencyMode: ");
 		result.append(dependencyMode);
 		result.append(')');

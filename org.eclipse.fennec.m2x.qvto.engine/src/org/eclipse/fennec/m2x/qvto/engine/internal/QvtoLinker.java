@@ -182,7 +182,7 @@ public class QvtoLinker {
 	 * Walks the AST of the transformation and updates all
 	 * {@link TransformationInstantiationExp} references from stubs to resolved modules.
 	 */
-	private void updateTransformationInstantiationRefs(
+	void updateTransformationInstantiationRefs(
 			OperationalTransformation transformation,
 			Map<Module, Module> stubToResolved) {
 		Iterator<EObject> it = transformation.eAllContents();
@@ -289,8 +289,15 @@ public class QvtoLinker {
 			case QvtoUnit.SourceUnit source -> parserSupport.parse(
 					source.source(), source.qualifiedName(), packageRegistry);
 		};
-		// For standalone library sources, the parser wraps the library in a synthetic OT.
-		// If the OT has no module class but has an inline library import, use the library instead.
+		return unwrapLibrary(module);
+	}
+
+	/**
+	 * The module an import actually means. For a standalone library source the parser wraps the
+	 * library in a synthetic transformation; if that transformation has no module class of its own
+	 * but an inline library that has, the library is what the importer wants.
+	 */
+	static Module unwrapLibrary(Module module) {
 		if (module instanceof OperationalTransformation ot
 				&& QvtoOperationResolver.findModuleClassIn(ot) == null) {
 			for (ModuleImport mi : ot.getModuleImport()) {
@@ -304,7 +311,7 @@ public class QvtoLinker {
 		return module;
 	}
 
-	private static boolean isLinkerStub(Module module) {
+	static boolean isLinkerStub(Module module) {
 		return module.getEAnnotation(QvtoParserSupport.LINKER_STUB_ANNOTATION) != null;
 	}
 }

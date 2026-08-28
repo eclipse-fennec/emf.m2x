@@ -75,14 +75,26 @@ class CompiledUnitManifestModelTest {
 		assertEquals("compiled", manifestPackage.getNsPrefix());
 	}
 
-	// The compiled unit is one document with four parts, each with one role: metadata on
+	// The compiled unit is one document with five parts, each with one role: metadata on
 	// the unit, how it was built in the manifest, the script, the parser's heap made
-	// persistent, and the dependencies embedded as complete units again.
+	// persistent, the dependencies embedded as complete units again, and copies of the
+	// dynamic metamodels a runtime may not be able to supply (#139).
 	@Test
-	void compiledUnit_hasTheFourParts() {
+	void compiledUnit_hasTheFiveParts() {
 		EClass unit = classifier("CompiledUnit");
 		assertFeatures(unit, "id", "namespace", "version", "description",
-				"manifest", "unit", "satellite", "embedded");
+				"manifest", "unit", "satellite", "embedded", "packages");
+	}
+
+	// A package copy is a whole EPackage, contained, so that a runtime without generated code
+	// for it can still resolve the unit's type references from the document alone.
+	@Test
+	void packages_areContainedEPackageCopies() {
+		EClass unit = classifier("CompiledUnit");
+		EReference packages = (EReference) unit.getEStructuralFeature("packages");
+		assertTrue(packages.isContainment());
+		assertEquals(-1, packages.getUpperBound());
+		assertEquals("EPackage", packages.getEType().getName());
 	}
 
 	@Test
@@ -128,8 +140,18 @@ class CompiledUnitManifestModelTest {
 	void manifest_carriesTheEntriesPrepareNeeds() {
 		EClass manifest = classifier("CompiledUnitManifest");
 		assertFeatures(manifest, "formatVersion", "producedBy", "language", "qualifiedName",
-				"unitFingerprint", "dependencyMode", "packageEntry", "dependencyEntry",
-				"blackboxRequirement", "resolvedClosure");
+				"unitFingerprint", "sourceFingerprint", "dependencyMode", "packageEntry",
+				"dependencyEntry", "blackboxRequirement", "resolvedClosure");
+	}
+
+	// A store holds sources beside compiled units; a content-addressed backend holds EObjects
+	// only, so the text travels in this wrapper together with the name it is asked for by.
+	@Test
+	void sourceUnit_wrapsTheTextForAStore() {
+		EClass source = classifier("SourceUnit");
+		assertFeatures(source, "language", "qualifiedName", "uri", "source", "fingerprint");
+		assertEquals(1, source.getEStructuralFeature("qualifiedName").getLowerBound());
+		assertEquals(1, source.getEStructuralFeature("source").getLowerBound());
 	}
 
 	@Test

@@ -14,15 +14,18 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
+import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdConfigurationHelper;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineConfiguration;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -67,7 +70,10 @@ public class QvtdEngineComponent extends QvtdEngineImpl {
 			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine,
 			@Reference(name = "unitDiscovery",
 					target = "(" + QvtdServiceUnitResolver.RESOLVER_KIND + "=discovery)")
-			QvtdUnitResolver unitDiscovery) {
-		super(QvtdConfigurationHelper.from(config, oclEngine, unitDiscovery));
+			QvtdUnitResolver unitDiscovery,
+			@Reference(name = "fingerprints", cardinality = ReferenceCardinality.OPTIONAL)
+			FingerprintService fingerprints) {
+		super(QvtdConfigurationHelper.from(config, oclEngine, unitDiscovery),
+				fingerprints == null ? UnitPackager.withDefaults() : new UnitPackager(fingerprints));
 	}
 }

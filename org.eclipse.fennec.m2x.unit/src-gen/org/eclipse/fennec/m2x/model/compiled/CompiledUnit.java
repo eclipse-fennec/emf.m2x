@@ -42,6 +42,7 @@ import org.osgi.annotation.versioning.ProviderType;
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnit#getUnit <em>Unit</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnit#getSatellite <em>Satellite</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnit#getEmbedded <em>Embedded</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnit#getPackages <em>Packages</em>}</li>
  * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.compiled.CompiledPackage#getCompiledUnit()
@@ -229,5 +230,20 @@ public interface CompiledUnit extends EObject {
 	 * @generated
 	 */
 	EList<CompiledUnit> getEmbedded();
+
+	/**
+	 * Returns the value of the '<em><b>Packages</b></em>' containment reference list.
+	 * The list contents are of type {@link org.eclipse.emf.ecore.EPackage}.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * Copies of the dynamic metamodels the unit was compiled against — packages without generated code, which a runtime may not be able to supply on its own. Each has a PackageEntry with role embedded and its fingerprint. Prepare compares that fingerprint with the runtime registry: an equal runtime instance replaces the copy (generated code wins), a missing one is served from here, a differing one is a hard failure. Packages with generated code are never copied; their entry carries the fingerprint alone.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Packages</em>' containment reference list.
+	 * @see org.eclipse.fennec.m2x.model.compiled.CompiledPackage#getCompiledUnit_Packages()
+	 * @model containment="true"
+	 * @generated
+	 */
+	EList<EPackage> getPackages();
 
 } // CompiledUnit

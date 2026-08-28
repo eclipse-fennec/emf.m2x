@@ -45,7 +45,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = CompiledPackage.eNS_URI, fingerprint = "fp1:1becaa90d584e7edf4d28f41771a0ef4060a771a998f7482d03101e56116b1a4", genModel = "/model/compiledunit.genmodel", genModelSourceLocations = {"model/compiledunit.genmodel","org.eclipse.fennec.m2x.unit/model/compiledunit.genmodel"}, ecore = "/model/compiledunit.ecore", ecoreSourceLocations = "/model/compiledunit.ecore")
+@EPackage(uri = CompiledPackage.eNS_URI, fingerprint = "fp1:fc1a27fd9fa5e8154363f6f6be948e2038ef3b59c911b319079812195e3f703a", genModel = "/model/compiledunit.genmodel", genModelSourceLocations = {"model/compiledunit.genmodel","org.eclipse.fennec.m2x.unit/model/compiledunit.genmodel"}, ecore = "/model/compiledunit.ecore", ecoreSourceLocations = "/model/compiledunit.ecore")
 public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -162,13 +162,22 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	int COMPILED_UNIT__EMBEDDED = 7;
 
 	/**
+	 * The feature id for the '<em><b>Packages</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPILED_UNIT__PACKAGES = 8;
+
+	/**
 	 * The number of structural features of the '<em>Unit</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_FEATURE_COUNT = 8;
+	int COMPILED_UNIT_FEATURE_COUNT = 9;
 
 	/**
 	 * The number of operations of the '<em>Unit</em>' class.
@@ -235,13 +244,22 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	int COMPILED_UNIT_MANIFEST__UNIT_FINGERPRINT = 4;
 
 	/**
+	 * The feature id for the '<em><b>Source Fingerprint</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT = 5;
+
+	/**
 	 * The feature id for the '<em><b>Dependency Mode</b></em>' attribute.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE = 5;
+	int COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE = 6;
 
 	/**
 	 * The feature id for the '<em><b>Package Entry</b></em>' containment reference list.
@@ -250,7 +268,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY = 6;
+	int COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY = 7;
 
 	/**
 	 * The feature id for the '<em><b>Dependency Entry</b></em>' containment reference list.
@@ -259,7 +277,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__DEPENDENCY_ENTRY = 7;
+	int COMPILED_UNIT_MANIFEST__DEPENDENCY_ENTRY = 8;
 
 	/**
 	 * The feature id for the '<em><b>Blackbox Requirement</b></em>' containment reference list.
@@ -268,7 +286,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__BLACKBOX_REQUIREMENT = 8;
+	int COMPILED_UNIT_MANIFEST__BLACKBOX_REQUIREMENT = 9;
 
 	/**
 	 * The feature id for the '<em><b>Resolved Closure</b></em>' containment reference list.
@@ -277,7 +295,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__RESOLVED_CLOSURE = 9;
+	int COMPILED_UNIT_MANIFEST__RESOLVED_CLOSURE = 10;
 
 	/**
 	 * The number of structural features of the '<em>Unit Manifest</em>' class.
@@ -286,7 +304,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST_FEATURE_COUNT = 10;
+	int COMPILED_UNIT_MANIFEST_FEATURE_COUNT = 11;
 
 	/**
 	 * The number of operations of the '<em>Unit Manifest</em>' class.
@@ -298,6 +316,79 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	int COMPILED_UNIT_MANIFEST_OPERATION_COUNT = 0;
 
 	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.compiled.impl.SourceUnitImpl <em>Source Unit</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2x.model.compiled.impl.SourceUnitImpl
+	 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getSourceUnit()
+	 * @generated
+	 */
+	int SOURCE_UNIT = 2;
+
+	/**
+	 * The feature id for the '<em><b>Language</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int SOURCE_UNIT__LANGUAGE = 0;
+
+	/**
+	 * The feature id for the '<em><b>Qualified Name</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int SOURCE_UNIT__QUALIFIED_NAME = 1;
+
+	/**
+	 * The feature id for the '<em><b>Uri</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int SOURCE_UNIT__URI = 2;
+
+	/**
+	 * The feature id for the '<em><b>Source</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int SOURCE_UNIT__SOURCE = 3;
+
+	/**
+	 * The feature id for the '<em><b>Fingerprint</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int SOURCE_UNIT__FINGERPRINT = 4;
+
+	/**
+	 * The number of structural features of the '<em>Source Unit</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int SOURCE_UNIT_FEATURE_COUNT = 5;
+
+	/**
+	 * The number of operations of the '<em>Source Unit</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int SOURCE_UNIT_OPERATION_COUNT = 0;
+
+	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.compiled.impl.PackageEntryImpl <em>Package Entry</em>}' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -305,7 +396,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getPackageEntry()
 	 * @generated
 	 */
-	int PACKAGE_ENTRY = 2;
+	int PACKAGE_ENTRY = 3;
 
 	/**
 	 * The feature id for the '<em><b>Ns URI</b></em>' attribute.
@@ -369,7 +460,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getDependencyEntry()
 	 * @generated
 	 */
-	int DEPENDENCY_ENTRY = 3;
+	int DEPENDENCY_ENTRY = 4;
 
 	/**
 	 * The feature id for the '<em><b>Qualified Name</b></em>' attribute.
@@ -424,7 +515,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getBlackboxRequirement()
 	 * @generated
 	 */
-	int BLACKBOX_REQUIREMENT = 4;
+	int BLACKBOX_REQUIREMENT = 5;
 
 	/**
 	 * The feature id for the '<em><b>Name</b></em>' attribute.
@@ -479,7 +570,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getResolvedDependency()
 	 * @generated
 	 */
-	int RESOLVED_DEPENDENCY = 5;
+	int RESOLVED_DEPENDENCY = 6;
 
 	/**
 	 * The feature id for the '<em><b>Qualified Name</b></em>' attribute.
@@ -534,7 +625,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getDependencyMode()
 	 * @generated
 	 */
-	int DEPENDENCY_MODE = 6;
+	int DEPENDENCY_MODE = 7;
 
 	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.compiled.PackageRole <em>Package Role</em>}' enum.
@@ -544,7 +635,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getPackageRole()
 	 * @generated
 	 */
-	int PACKAGE_ROLE = 7;
+	int PACKAGE_ROLE = 8;
 
 
 	/**
@@ -646,6 +737,17 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getCompiledUnit_Embedded();
 
 	/**
+	 * Returns the meta object for the containment reference list '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnit#getPackages <em>Packages</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the containment reference list '<em>Packages</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.CompiledUnit#getPackages()
+	 * @see #getCompiledUnit()
+	 * @generated
+	 */
+	EReference getCompiledUnit_Packages();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest <em>Unit Manifest</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -711,6 +813,17 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	EAttribute getCompiledUnitManifest_UnitFingerprint();
 
 	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getSourceFingerprint <em>Source Fingerprint</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Source Fingerprint</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getSourceFingerprint()
+	 * @see #getCompiledUnitManifest()
+	 * @generated
+	 */
+	EAttribute getCompiledUnitManifest_SourceFingerprint();
+
+	/**
 	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getDependencyMode <em>Dependency Mode</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -764,6 +877,71 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EReference getCompiledUnitManifest_ResolvedClosure();
+
+	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.compiled.SourceUnit <em>Source Unit</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>Source Unit</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.SourceUnit
+	 * @generated
+	 */
+	EClass getSourceUnit();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.compiled.SourceUnit#getLanguage <em>Language</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Language</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.SourceUnit#getLanguage()
+	 * @see #getSourceUnit()
+	 * @generated
+	 */
+	EAttribute getSourceUnit_Language();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.compiled.SourceUnit#getQualifiedName <em>Qualified Name</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Qualified Name</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.SourceUnit#getQualifiedName()
+	 * @see #getSourceUnit()
+	 * @generated
+	 */
+	EAttribute getSourceUnit_QualifiedName();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.compiled.SourceUnit#getUri <em>Uri</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Uri</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.SourceUnit#getUri()
+	 * @see #getSourceUnit()
+	 * @generated
+	 */
+	EAttribute getSourceUnit_Uri();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.compiled.SourceUnit#getSource <em>Source</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Source</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.SourceUnit#getSource()
+	 * @see #getSourceUnit()
+	 * @generated
+	 */
+	EAttribute getSourceUnit_Source();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.compiled.SourceUnit#getFingerprint <em>Fingerprint</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Fingerprint</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.SourceUnit#getFingerprint()
+	 * @see #getSourceUnit()
+	 * @generated
+	 */
+	EAttribute getSourceUnit_Fingerprint();
 
 	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.compiled.PackageEntry <em>Package Entry</em>}'.
@@ -1066,6 +1244,14 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference COMPILED_UNIT__EMBEDDED = eINSTANCE.getCompiledUnit_Embedded();
 
 		/**
+		 * The meta object literal for the '<em><b>Packages</b></em>' containment reference list feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference COMPILED_UNIT__PACKAGES = eINSTANCE.getCompiledUnit_Packages();
+
+		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl <em>Unit Manifest</em>}' class.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
@@ -1116,6 +1302,14 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 		EAttribute COMPILED_UNIT_MANIFEST__UNIT_FINGERPRINT = eINSTANCE.getCompiledUnitManifest_UnitFingerprint();
 
 		/**
+		 * The meta object literal for the '<em><b>Source Fingerprint</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT = eINSTANCE.getCompiledUnitManifest_SourceFingerprint();
+
+		/**
 		 * The meta object literal for the '<em><b>Dependency Mode</b></em>' attribute feature.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
@@ -1154,6 +1348,56 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference COMPILED_UNIT_MANIFEST__RESOLVED_CLOSURE = eINSTANCE.getCompiledUnitManifest_ResolvedClosure();
+
+		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.compiled.impl.SourceUnitImpl <em>Source Unit</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2x.model.compiled.impl.SourceUnitImpl
+		 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getSourceUnit()
+		 * @generated
+		 */
+		EClass SOURCE_UNIT = eINSTANCE.getSourceUnit();
+
+		/**
+		 * The meta object literal for the '<em><b>Language</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute SOURCE_UNIT__LANGUAGE = eINSTANCE.getSourceUnit_Language();
+
+		/**
+		 * The meta object literal for the '<em><b>Qualified Name</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute SOURCE_UNIT__QUALIFIED_NAME = eINSTANCE.getSourceUnit_QualifiedName();
+
+		/**
+		 * The meta object literal for the '<em><b>Uri</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute SOURCE_UNIT__URI = eINSTANCE.getSourceUnit_Uri();
+
+		/**
+		 * The meta object literal for the '<em><b>Source</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute SOURCE_UNIT__SOURCE = eINSTANCE.getSourceUnit_Source();
+
+		/**
+		 * The meta object literal for the '<em><b>Fingerprint</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute SOURCE_UNIT__FINGERPRINT = eINSTANCE.getSourceUnit_Fingerprint();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.compiled.impl.PackageEntryImpl <em>Package Entry</em>}' class.

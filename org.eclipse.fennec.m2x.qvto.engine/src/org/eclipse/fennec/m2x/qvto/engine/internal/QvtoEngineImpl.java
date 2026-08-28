@@ -55,6 +55,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
 /**
@@ -95,6 +96,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	private final int maxUnitResolvers;
 	private final boolean discoverUnitResolvers;
 	private final int maxBlackboxLibraries;
+	private final UnitPackager packager;
 
 	/** Loaded transformation for RelationImplementationProvider (D39, Phase 4b). */
 	private volatile OperationalTransformation loadedTransformation;
@@ -105,7 +107,22 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	 * @param config the engine configuration
 	 */
 	public QvtoEngineImpl(QvtoConfiguration config) {
+		this(config, UnitPackager.withDefaults());
+	}
+
+	/**
+	 * Creates a new engine from the given configuration, compiling with the given packager.
+	 *
+	 * <p>The packager is where the package fingerprints of a compiled unit come from. Under OSGi
+	 * the component hands in one built on the {@code FingerprintService} it was given; a plain JVM
+	 * uses {@link UnitPackager#withDefaults()}.
+	 *
+	 * @param config the engine configuration
+	 * @param packager the packager compiled units are built with
+	 */
+	public QvtoEngineImpl(QvtoConfiguration config, UnitPackager packager) {
 		Objects.requireNonNull(config, "config must not be null");
+		this.packager = Objects.requireNonNull(packager, "packager must not be null");
 		this.parserSupport = new QvtoParserSupport();
 		this.packageRegistry = config.packageRegistry();
 		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
@@ -146,25 +163,65 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 
 	@Override
 	public CompiledUnit compile(String source, String unitName) throws QvtoParseException {
-		OperationalTransformation transformation = parse(source, unitName);
-		try {
-			return UnitPackager.compile(LANGUAGE, unitName, transformation);
-		} catch (IllegalStateException | IllegalArgumentException e) {
-			// A unit that is not self-contained is not storable; better said here, with the unit
-			// name, than on the first save() somewhere else with a dangling reference (#137).
-			throw new QvtoParseException("Cannot compile '" + unitName + "': " + e.getMessage(), e);
-		}
+		return compile(source, unitName, UnitCompileOptions.defaults());
 	}
 
 	@Override
 	public CompiledUnit compile(URI transformationUri) throws QvtoParseException {
+		return compile(transformationUri, UnitCompileOptions.defaults());
+	}
+
+	@Override
+	public CompiledUnit compile(String source, String unitName, UnitCompileOptions options)
+			throws QvtoParseException {
+		Objects.requireNonNull(source, "source must not be null");
+		Objects.requireNonNull(unitName, "unitName must not be null");
+		Objects.requireNonNull(options, "options must not be null");
+		// Compile asks the same sources under the same D29 limits as the link phase of execute
+		QvtoUnitCompiler compiler = new QvtoUnitCompiler(parserSupport, packageRegistry,
+				effectiveResolvers(), effectiveBlackboxRegistry(), effectiveBlackboxAllowList(),
+				effectiveUnitAllowList(), maxBlackboxLibraries, packager, options);
+		return compiler.compile(source, unitName);
+	}
+
+	@Override
+	public CompiledUnit compile(URI transformationUri, UnitCompileOptions options)
+			throws QvtoParseException {
 		Objects.requireNonNull(transformationUri, "transformationUri must not be null");
 		try (InputStream in = resourceSet.getURIConverter().createInputStream(transformationUri)) {
 			String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-			return compile(source, transformationUri.toString());
+			return compile(source, transformationUri.toString(), options);
 		} catch (IOException e) {
 			throw new QvtoParseException("Failed to read transformation: " + transformationUri, e);
 		}
+	}
+
+	/**
+	 * The unit resolvers a link or a compile may consult: the configured ones, then the
+	 * discovered ones, capped — and none at all unless resolution was switched on (D29). The enable
+	 * flag decides whether resolvers are reachable at all, the limit how far one import may
+	 * travel — every resolver is code asked to produce a unit for a name the transformation
+	 * chose. Computed per call rather than at construction, so it still holds once the set of
+	 * resolvers can change between executions.
+	 */
+	private List<QvtoUnitResolver> effectiveResolvers() {
+		return unitResolverEnabled
+				? Stream.concat(unitResolvers.stream(), discoveredResolvers())
+						.limit(maxUnitResolvers)
+						.toList()
+				: List.of();
+	}
+
+	private QvtoBlackboxRegistry effectiveBlackboxRegistry() {
+		return blackboxEnabled ? blackboxRegistry : null;
+	}
+
+	private Set<String> effectiveBlackboxAllowList() {
+		return blackboxEnabled ? allowedBlackboxModules : Set.of();
+	}
+
+	private Set<String> effectiveUnitAllowList() {
+		return unitResolverEnabled ? allowedUnitModules : Set.of();
 	}
 
 	/**
@@ -195,20 +252,10 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		Objects.requireNonNull(options, "options must not be null");
 
 		// §8.1.13: Link phase — resolve stub imports via unit resolvers and blackbox registry
-		// D29: Enforce enable flags — only pass resolvers/registry when enabled
-		// D29: the enable flag decides whether resolvers are reachable at all, the limit
-		// how far one import may travel — every resolver is code asked to produce a unit
-		// for a name the transformation chose. Applied here rather than at construction,
-		// so it still holds once the set of resolvers can change between executions.
-		List<QvtoUnitResolver> effectiveResolvers = unitResolverEnabled
-				? Stream.concat(unitResolvers.stream(), discoveredResolvers())
-						.limit(maxUnitResolvers)
-						.toList()
-				: List.of();
-		QvtoBlackboxRegistry effectiveRegistry = blackboxEnabled ? blackboxRegistry : null;
-		Set<String> effectiveBbAllow = blackboxEnabled ? allowedBlackboxModules : Set.of();
-		Set<String> effectiveUrAllow = unitResolverEnabled ? allowedUnitModules : Set.of();
-
+		List<QvtoUnitResolver> effectiveResolvers = effectiveResolvers();
+		QvtoBlackboxRegistry effectiveRegistry = effectiveBlackboxRegistry();
+		Set<String> effectiveBbAllow = effectiveBlackboxAllowList();
+		Set<String> effectiveUrAllow = effectiveUnitAllowList();
 		// Always run the linker — it validates that all imports can be resolved.
 		// When enable flags are false, no resolvers/registry are available,
 		// so unresolved imports will correctly fail with "Cannot resolve import".

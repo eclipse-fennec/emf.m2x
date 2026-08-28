@@ -27,6 +27,7 @@ import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
@@ -75,6 +76,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 	private final ResourceSet resourceSet;
 	private final OclEngine oclEngine;
 	private final QvtdConfiguration config;
+	private final UnitPackager packager;
 	private final List<RelationImplementationProvider> implementationProviders = new CopyOnWriteArrayList<>();
 
 	/**
@@ -83,8 +85,23 @@ public class QvtdEngineImpl implements QvtdEngine {
 	 * @param config the engine configuration
 	 */
 	public QvtdEngineImpl(QvtdConfiguration config) {
+		this(config, UnitPackager.withDefaults());
+	}
+
+	/**
+	 * Creates a new engine from the given configuration, compiling with the given packager.
+	 *
+	 * <p>The packager is where the package fingerprints of a compiled unit come from. Under OSGi
+	 * the component hands in one built on the {@code FingerprintService} it was given; a plain JVM
+	 * uses {@link UnitPackager#withDefaults()}.
+	 *
+	 * @param config the engine configuration
+	 * @param packager the packager compiled units are built with
+	 */
+	public QvtdEngineImpl(QvtdConfiguration config, UnitPackager packager) {
 		Objects.requireNonNull(config, "config must not be null");
 		this.config = config;
+		this.packager = Objects.requireNonNull(packager, "packager must not be null");
 		this.parserSupport = new QvtrParserSupport();
 		this.resourceSet = config.resourceSet() != null ? config.resourceSet() : new ResourceSetImpl();
 		// The engine evaluates with the OCL engine it was given — its cache, its
@@ -124,28 +141,52 @@ public class QvtdEngineImpl implements QvtdEngine {
 
 	@Override
 	public CompiledUnit compile(String source, String unitName) throws QvtdParseException {
-		RelationalTransformation transformation = parse(source, unitName);
-		try {
-			return UnitPackager.compile(LANGUAGE, unitName, transformation);
-		} catch (IllegalStateException | IllegalArgumentException e) {
-			// A unit that is not self-contained is not storable; better said here, with the unit
-			// name, than on the first save() somewhere else with a dangling reference (#137).
-			throw new QvtdParseException("Cannot compile '" + unitName + "': " + e.getMessage(), e);
-		}
+		return compile(source, unitName, UnitCompileOptions.defaults());
 	}
 
 	@Override
 	public CompiledUnit compile(URI transformationUri) throws QvtdParseException {
+		return compile(transformationUri, UnitCompileOptions.defaults());
+	}
+
+	@Override
+	public CompiledUnit compile(String source, String unitName, UnitCompileOptions options)
+			throws QvtdParseException {
+		Objects.requireNonNull(source, "source must not be null");
+		Objects.requireNonNull(unitName, "unitName must not be null");
+		Objects.requireNonNull(options, "options must not be null");
+		// Compile asks the same resolvers under the same D29 limits as the link phase of execute
+		return new QvtdUnitCompiler(parserSupport, config.packageRegistry(), effectiveResolvers(),
+				effectiveUnitAllowList(), packager, options).compile(source, unitName);
+	}
+
+	@Override
+	public CompiledUnit compile(URI transformationUri, UnitCompileOptions options)
+			throws QvtdParseException {
 		Objects.requireNonNull(transformationUri, "transformationUri must not be null");
 		try (InputStream in = resourceSet.getURIConverter().createInputStream(transformationUri)) {
 			String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-			return compile(source, transformationUri.toString());
+			return compile(source, transformationUri.toString(), options);
 		} catch (IOException e) {
 			throw new QvtdParseException("Failed to read transformation: " + transformationUri, e);
 		}
 	}
 
-	// --- Execution ---
+	/**
+	 * The unit resolvers a link or a compile may consult: the configured ones, then the
+	 * discovered ones, capped — and none at all unless resolution was switched on (D29).
+	 */
+	private List<QvtdUnitResolver> effectiveResolvers() {
+		return config.unitResolverEnabled()
+				? Stream.concat(config.unitResolvers().stream(), discoveredResolvers())
+						.limit(config.maxUnitResolvers())
+						.toList()
+				: List.of();
+	}
+
+	private Set<String> effectiveUnitAllowList() {
+		return config.unitResolverEnabled() ? config.allowedUnitModules() : Set.of();
+	}
 
 	@Override
 	public QvtdExecutionResult execute(RelationalTransformation transformation,
@@ -158,14 +199,8 @@ public class QvtdEngineImpl implements QvtdEngine {
 			// enable flag decides whether resolvers are reachable at all, the limit how far
 			// one import may travel, and the allow-list which names may be asked for —
 			// checked inside the linker, before a resolver is consulted.
-			List<QvtdUnitResolver> effectiveResolvers = config.unitResolverEnabled()
-					? Stream.concat(config.unitResolvers().stream(), discoveredResolvers())
-							.limit(config.maxUnitResolvers())
-							.toList()
-					: List.of();
-			new QvtdLinker(parserSupport, config.packageRegistry(), effectiveResolvers,
-					config.unitResolverEnabled() ? config.allowedUnitModules() : Set.of())
-					.link(transformation);
+			new QvtdLinker(parserSupport, config.packageRegistry(), effectiveResolvers(),
+					effectiveUnitAllowList()).link(transformation);
 
 			QvtrEvalEnvironment env = new QvtrEvalEnvironment();
 			QvtrExtentManager extentManager = new QvtrExtentManager(transformation, context);

@@ -26,6 +26,7 @@
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnit/unit"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnit/satellite"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnit/embedded"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnit/packages"/>
     </genClasses>
     <genClasses ecoreClass="compiledunit.ecore#//CompiledUnitManifest">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/formatVersion"/>
@@ -33,11 +34,19 @@
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/language"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/qualifiedName"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/unitFingerprint"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/sourceFingerprint"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/dependencyMode"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/packageEntry"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/dependencyEntry"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/blackboxRequirement"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/resolvedClosure"/>
+    </genClasses>
+    <genClasses ecoreClass="compiledunit.ecore#//SourceUnit">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//SourceUnit/language"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//SourceUnit/qualifiedName"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//SourceUnit/uri"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//SourceUnit/source"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//SourceUnit/fingerprint"/>
     </genClasses>
     <genClasses ecoreClass="compiledunit.ecore#//PackageEntry">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//PackageEntry/nsURI"/>
