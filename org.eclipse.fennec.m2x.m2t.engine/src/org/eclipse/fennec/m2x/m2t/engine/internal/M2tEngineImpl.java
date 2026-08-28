@@ -335,7 +335,7 @@ public class M2tEngineImpl implements M2tEngine {
 			}
 			try {
 				return switch (unit.get()) {
-					case M2tUnit.CompiledUnit compiled -> parseResultCache.get(compiled.module());
+					case M2tUnit.CompiledUnit compiled -> resultFor(compiled.module());
 					case M2tUnit.SourceUnit source -> {
 						parse(source.source(), name);
 						yield parseResultCache.get(moduleByName(name));
@@ -350,6 +350,21 @@ public class M2tEngineImpl implements M2tEngine {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The parse result of a module this engine may never have parsed: what it parsed, else
+	 * what the module carries as link information (compiled under pin or rebind, #139), else a
+	 * leaf — a module that arrives fully bound, from an embedded unit or as a library without
+	 * an {@code extends}, has nothing left to resolve.
+	 */
+	private M2tParseResult resultFor(Module module) {
+		M2tParseResult known = parseResultCache.get(module);
+		if (known != null) {
+			return known;
+		}
+		return M2tLinkInfo.recover(module)
+				.orElseGet(() -> new M2tParseResult(module, List.of(), List.of(), Map.of(), Map.of()));
 	}
 
 	private Module moduleByName(String name) {

@@ -547,6 +547,25 @@ pulled such a package into the satellite container. The fingerprint canonicalize
 rule and writes them by URI. XMI still needs a resource to write an href, so a store gives such a
 package the resource EMF gives a generated one: `createResource(nsURI)`.
 
+**Store.** `DefaultUnitStore` (package `unit.store`) implements the `UnitStore` contract over a
+`UnitStoreBackend` — bytes by key, keys by name — with `InMemoryUnitStoreBackend` as the one that
+needs nothing; a file system, a bundle or emf.osgi's `ArtifactStore` with an index beside it are
+other backends. The store owns the serialization: a compiled unit goes in as the XMI of a *copy* of
+its document (`Unit.Packaged` only — a bare AST has no manifest to be stored by, `compile()` first)
+under `UnitKey.pinned(language, name, COMPILED, manifest.unitFingerprint)`, a source as a
+`SourceUnit` document under its source fingerprint. Both come back as independent copies loaded into
+a fresh resource set: `PackagedUnit` or `StoredSource`. On the way in, a referenced metamodel without
+a resource gets `createResource(nsURI)`, as EMF gives a generated one. On the way out the store's
+registry answers for the user's metamodels, the global registry for the languages' own, and a
+package copy the document carries serves every nsURI neither knows — the fragment is walked from
+the copy itself, because EMF would otherwise look for `//Book` in the document's resource. A
+reference that still resolves to nothing is a `UnitStoreException`, never a proxy handed on. An
+unpinned key loads the newest version; a pinned key whose fingerprint the store does not hold is an
+error naming the versions it has, never "not found". `QvtoStoreUnitResolver` (and its QVT-R and M2T
+twins in the engine bundles) resolve from a store — compiled unit first, source second — and turn a
+`UnitStoreException` into an `IllegalStateException` rather than an empty answer, so a broken store
+cannot let a stale copy elsewhere step in (§7 of the concept, #141 refines the rules).
+
 The three compilers are one shape in three languages: `QvtoUnitCompiler` (this section),
 `QvtdUnitCompiler` (QVT-R: binding is a merge of rules, see the QVT-R architecture) and
 `M2tUnitCompiler` (MOFM2T: `extends`/`imports`; the names to bind are kept on the module under
