@@ -16,6 +16,8 @@ package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,6 +26,7 @@ import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.eclipse.emf.common.notify.impl.AdapterImpl;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
@@ -801,10 +804,88 @@ public class AbstractExpressionBuilder {
 				}
 				return;
 			}
+			// Silent by default, and deliberately so: a property this type does not declare may
+			// still be one the evaluator finds — a Complete OCL def: registered by an earlier
+			// parse, a library property such as oclLocale, a feature of the runtime type where
+			// the static one is EObject (a template over a dynamic model). What the parser always
+			// does is mark what it could not resolve, so that everything downstream can tell it
+			// from a resolved feature. A caller that parses whole documents and wants the typo
+			// reported switches strict resolution on (#153).
+			if (strictPropertyResolution && !definedProperties.contains(propName)) {
+				addError("Unknown property (" + eClass.getName() + "::" + propName + ")");
+			}
 		}
-		EAttribute synth = EcoreFactory.eINSTANCE.createEAttribute();
-		synth.setName(propName);
-		exp.setReferredProperty(synth);
+		exp.setReferredProperty(unresolvedProperty(propName));
+	}
+
+	/**
+	 * Source of the annotation that marks a property the parser could not resolve, because the
+	 * type of the source was not known when the expression was built. The placeholder lets the
+	 * evaluator look the property up by name at runtime — what a template over a dynamic model
+	 * needs — and the annotation lets everything else (the fingerprint, a validator, a reader
+	 * of a stored unit) tell it from a resolved feature (#153).
+	 */
+	public static final String UNRESOLVED_PROPERTY_ANNOTATION = "http://www.eclipse.org/fennec/m2x/ocl/unresolved";
+
+	/** Whether a property the source type does not declare is an error — off by default (#153). */
+	private boolean strictPropertyResolution;
+
+	/**
+	 * The property names a {@code def:} of the document adds. They belong to their context
+	 * classifier for every expression of that document, including one written before the
+	 * {@code def:} — which is why a document collects them before it builds a single expression.
+	 */
+	private final Set<String> definedProperties = new HashSet<>();
+
+	/**
+	 * Reports a navigation to a property the source type does not declare, instead of leaving a
+	 * marked placeholder for the evaluator to resolve reflectively.
+	 *
+	 * <p>Off by default, because a property the parser cannot see may be there at evaluation
+	 * time: a {@code def:} registered by an earlier parse call, a library property such as
+	 * {@code oclLocale}, or a feature of the runtime type where the static one is
+	 * {@code EObject}. A caller that hands the parser everything at once — an editor, a
+	 * validator — turns it on and gets the typo reported at its position.
+	 *
+	 * @param strict {@code true} to report unknown properties
+	 */
+	public void setStrictPropertyResolution(boolean strict) {
+		this.strictPropertyResolution = strict;
+	}
+
+	/**
+	 * Declares the property names a {@code def:} of the same document adds, so that strict
+	 * resolution does not report them.
+	 *
+	 * @param names the defined property names
+	 */
+	public void declareDefinedProperties(Collection<String> names) {
+		definedProperties.addAll(Objects.requireNonNull(names, "names must not be null"));
+	}
+
+	/**
+	 * A placeholder for a property whose owner type is not known at parse time — marked as such.
+	 *
+	 * @param propName the property name as written
+	 * @return the marked placeholder
+	 */
+	public static EAttribute unresolvedProperty(String propName) {
+		EAttribute placeholder = EcoreFactory.eINSTANCE.createEAttribute();
+		placeholder.setName(propName);
+		EAnnotation mark = EcoreFactory.eINSTANCE.createEAnnotation();
+		mark.setSource(UNRESOLVED_PROPERTY_ANNOTATION);
+		placeholder.getEAnnotations().add(mark);
+		return placeholder;
+	}
+
+	/**
+	 * Whether a feature is a parser placeholder for a property that could not be resolved.
+	 *
+	 * @param feature the feature
+	 * @return {@code true} for a placeholder
+	 */
+	public static boolean isUnresolvedProperty(EStructuralFeature feature) {
+		return feature != null && feature.getEAnnotation(UNRESOLVED_PROPERTY_ANNOTATION) != null;
 	}
 
 	/**

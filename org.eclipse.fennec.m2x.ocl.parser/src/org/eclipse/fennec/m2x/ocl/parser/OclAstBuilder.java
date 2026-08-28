@@ -70,6 +70,11 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		this(contextType, null);
 	}
 
+	OclAstBuilder(EClassifier contextType, EPackage.Registry packageRegistry, boolean strictPropertyResolution) {
+		this(contextType, packageRegistry);
+		support.setStrictPropertyResolution(strictPropertyResolution);
+	}
+
 	OclAstBuilder(EClassifier contextType, EPackage.Registry packageRegistry) {
 		this.support = new AbstractExpressionBuilder(contextType, packageRegistry);
 	}
