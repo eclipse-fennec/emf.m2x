@@ -88,9 +88,6 @@ import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
  */
 public class M2tEngineImpl implements M2tEngine {
 
-	/** Language tag of this engine's units, as used in store keys and manifests. */
-	private static final String LANGUAGE = "m2t";
-
 	private final OclEngine oclEngine;
 	private final M2tConfiguration config;
 	/**

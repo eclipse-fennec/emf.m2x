@@ -33,6 +33,7 @@ import org.eclipse.emf.common.util.ECollections;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
@@ -272,7 +273,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	@Override
 	public Object caseEnumLiteralExp(EnumLiteralExp exp) {
-		return exp.getReferredLiteral();
+		// The value a model holds for an enum attribute: the EEnumLiteral itself for a dynamic
+		// package, the generated Java enum constant for a generated one — EEnumLiteral.getInstance()
+		// is the canonical bridge and answers both. Returning the literal object instead made
+		// `status = Status::DEPRECATED` false against every generated model (#133).
+		EEnumLiteral literal = exp.getReferredLiteral();
+		return literal == null ? null : literal.getInstance();
 	}
 
 	@Override

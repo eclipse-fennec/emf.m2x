@@ -66,9 +66,6 @@ import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
  */
 public class QvtdEngineImpl implements QvtdEngine {
 
-	/** Language tag of this engine's units, as used in store keys and manifests. */
-	private static final String LANGUAGE = "qvtr";
-
 	private final QvtrParserSupport parserSupport;
 	/**
 	 * Resolves {@code parse(URI)} through its {@link ResourceSet#getURIConverter()

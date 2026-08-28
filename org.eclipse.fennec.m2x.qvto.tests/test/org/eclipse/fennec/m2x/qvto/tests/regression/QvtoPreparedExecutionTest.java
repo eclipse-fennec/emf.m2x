@@ -56,7 +56,6 @@ import org.eclipse.fennec.m2x.qvto.engine.QvtoStoreUnitResolver;
 import org.eclipse.fennec.m2x.unit.api.PreparedContext;
 import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
-import org.eclipse.fennec.m2x.unit.api.UnitKind;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;

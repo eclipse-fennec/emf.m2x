@@ -16,6 +16,8 @@ package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.util.Objects;
 
+import org.eclipse.emf.ecore.EEnumLiteral;
+
 /**
  * OCL equality for use in collection data structures ({@link OclSet},
  * {@link OclOrderedSet}).
@@ -53,7 +55,14 @@ public final class OclEqualityUtil {
 		if (left instanceof Number ln && right instanceof Number rn) {
 			return Double.compare(ln.doubleValue(), rn.doubleValue()) == 0;
 		}
-		return Objects.equals(left, right);
+		// An enum literal and the value a generated model holds for it are one value (#133):
+		// EEnumLiteral.getInstance() is the Java enum constant for a generated package and the
+		// literal itself for a dynamic one, so comparing instances covers both worlds
+		return Objects.equals(enumValue(left), enumValue(right));
+	}
+
+	private static Object enumValue(Object value) {
+		return value instanceof EEnumLiteral literal ? literal.getInstance() : value;
 	}
 
 	/**
@@ -81,6 +90,8 @@ public final class OclEqualityUtil {
 		if (value instanceof Number number) {
 			return Double.valueOf(number.doubleValue());
 		}
-		return value;
+		// The same bridge as in oclEquals, so that an enum literal and its generated constant
+		// land in the same bucket (#133)
+		return enumValue(value);
 	}
 }
