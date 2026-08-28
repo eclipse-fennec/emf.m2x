@@ -34,6 +34,8 @@ import java.util.ArrayDeque;
 import java.util.Set;
 import java.util.WeakHashMap;
 
+import org.eclipse.emf.common.util.BasicDiagnostic;
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -46,6 +48,7 @@ import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
 import org.eclipse.fennec.m2x.m2t.api.M2tGenerationStrategy;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
+import org.eclipse.fennec.m2x.m2t.api.UnresolvedReferenceMode;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
@@ -104,6 +107,14 @@ public class M2tEngineImpl implements M2tEngine {
 	/** Tracks which modules have been linked to avoid re-linking. */
 	private final Set<Module> linkedModules =
 			Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
+
+	/**
+	 * What each linked module's link could not resolve. Kept beside {@link #linkedModules}
+	 * because {@code execute} has to act on it even when the caller linked explicitly some
+	 * time earlier (#144).
+	 */
+	private final Map<Module, List<String>> unresolvedReferences =
+			Collections.synchronizedMap(new WeakHashMap<>());
 
 	/** Tracks which modules have been whitespace-normalized. */
 	private final Set<Module> normalizedModules =
@@ -187,8 +198,10 @@ public class M2tEngineImpl implements M2tEngine {
 		results.addAll(resolveMissingUnits(results, warnings));
 		M2tModuleLinker linker = new M2tModuleLinker();
 		warnings.addAll(linker.link(results));
+		Map<Module, List<String>> unresolved = linker.unresolvedReferences();
 		for (Module m : modules) {
 			linkedModules.add(m);
+			unresolvedReferences.put(m, unresolved.getOrDefault(m, List.of()));
 		}
 		return warnings;
 	}
@@ -306,6 +319,16 @@ public class M2tEngineImpl implements M2tEngine {
 			link(module);
 		}
 
+		// A reference naming something that is not there ends the generation, as it does in
+		// QVT-O and QVT-R. Generating anyway is the quieter and worse outcome: a missing
+		// extends silently changes which templates are visible, so the document is not absent
+		// but wrong (#144). WARN restores the older, lenient behaviour.
+		List<String> unresolved = unresolvedReferences.getOrDefault(module, List.of());
+		if (!unresolved.isEmpty()
+				&& config.unresolvedReferenceMode() == UnresolvedReferenceMode.FAIL) {
+			return unresolvedReferenceFailure(unresolved);
+		}
+
 		// Apply MOFM2T §8.4 whitespace normalization after linking (needs resolved invocations)
 		WhitespaceMode wsMode = config.whitespaceMode();
 		if (wsMode != WhitespaceMode.NONE && normalizedModules.add(module)) {
@@ -371,6 +394,22 @@ public class M2tEngineImpl implements M2tEngine {
 		}
 
 		return new M2tResult(evaluator.getDiagnostics(), generatedFiles, fileUniqueIds);
+	}
+
+	/** Diagnostic source of the linking errors this engine raises itself. */
+	private static final String UNRESOLVED_SOURCE_ID = "m2t.engine";
+
+	/**
+	 * The result of a generation that never ran because the module set was incomplete: one
+	 * error diagnostic per unresolved reference, and no files.
+	 */
+	private M2tResult unresolvedReferenceFailure(List<String> unresolved) {
+		List<Diagnostic> diagnostics = new ArrayList<>();
+		for (String message : unresolved) {
+			diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, UNRESOLVED_SOURCE_ID, 0,
+					message, null));
+		}
+		return new M2tResult(List.copyOf(diagnostics), Map.of(), Map.of());
 	}
 
 	/**

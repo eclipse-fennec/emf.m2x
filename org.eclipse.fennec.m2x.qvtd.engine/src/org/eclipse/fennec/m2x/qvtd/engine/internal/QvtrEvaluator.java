@@ -216,10 +216,12 @@ public class QvtrEvaluator {
 		checkDeadline();
 		env.pushScope();
 		try {
-			// 1. Evaluate when-clause to get pre-bindings
-			Map<String, Object> whenBindings = evaluateWhenClause(relation);
+			// 1. Evaluate the when-clause's relation calls to get pre-bindings. The remaining
+			// predicates are evaluated per candidate binding below, because they may read what
+			// the domains bind (§7.10.2, #145).
+			Map<String, Object> whenBindings = evaluateWhenPreBindings(relation);
 			if (whenBindings == null) {
-				return; // When-clause not satisfied (§7.2.1)
+				return; // A relation call in the when-clause found nothing (§7.2.1)
 			}
 
 			// 2. Classify domains into source, target, and primitive
@@ -259,6 +261,9 @@ public class QvtrEvaluator {
 				if (hasOptionalNullBinding(sourceDomains, sourceBinding)) {
 					continue;
 				}
+				if (!whenConditionHolds(relation, sourceBinding)) {
+					continue;
+				}
 
 				queryEvaluator.preComputeWhereBindings(relation, sourceBinding);
 
@@ -289,7 +294,7 @@ public class QvtrEvaluator {
 		relationCallDepth++;
 		env.pushScope();
 		try {
-			Map<String, Object> whenBindings = evaluateWhenClause(relation);
+			Map<String, Object> whenBindings = evaluateWhenPreBindings(relation);
 			if (whenBindings == null) {
 				return;
 			}
@@ -327,6 +332,9 @@ public class QvtrEvaluator {
 					traceManager.record(relation, binding);
 					continue;
 				}
+				if (!whenConditionHolds(relation, binding)) {
+					continue;
+				}
 				queryEvaluator.preComputeWhereBindings(relation, binding);
 				if (targetDomain != null) {
 					enforcer.enforceTargetDomain(relation, targetDomain, binding);
@@ -343,11 +351,20 @@ public class QvtrEvaluator {
 	// ── When-clause evaluation ───────────────────────────────────────
 
 	/**
-	 * Evaluates the when-clause of a relation (§7.2.1).
-	 * Returns pre-bound variables from the when predicates, or {@code null}
-	 * if the when-clause is not satisfied.
+	 * Evaluates the relation-call predicates of a when-clause and returns what they bind
+	 * (§7.2.1), or {@code null} if one of them is not satisfied.
+	 *
+	 * <p>These run before the domains are matched, because that is what they are for: a
+	 * {@code when \{ PackageToSchema(p, s); \}} looks the earlier relation up in the trace and
+	 * binds {@code p} and {@code s}, which then restrict what the domain patterns match
+	 * (§7.2.3). A relation call that finds nothing rejects the relation as a whole — there is
+	 * no binding under which it could hold.
+	 *
+	 * <p>The remaining predicates are <em>not</em> evaluated here. They may read variables the
+	 * domains bind, which do not exist yet at this point; {@link #whenConditionHolds} evaluates
+	 * them per candidate binding.
 	 */
-	private Map<String, Object> evaluateWhenClause(Relation relation) {
+	private Map<String, Object> evaluateWhenPreBindings(Relation relation) {
 		Map<String, Object> bindings = new HashMap<>();
 		Pattern when = relation.getWhen();
 		if (when == null) {
@@ -356,23 +373,47 @@ public class QvtrEvaluator {
 
 		for (Predicate predicate : when.getPredicate()) {
 			OclExpression expr = predicate.getConditionExpression();
-			if (expr == null) {
-				continue;
-			}
-
-			if (expr instanceof RelationCallExp relCall) {
-				if (!evaluateWhenRelationCall(relCall, bindings)) {
-					return null;
-				}
-				continue;
-			}
-
-			Object result = evaluateOcl(expr, bindings);
-			if (!Boolean.TRUE.equals(result)) {
+			if (expr instanceof RelationCallExp relCall
+					&& !evaluateWhenRelationCall(relCall, bindings)) {
 				return null;
 			}
 		}
 		return bindings;
+	}
+
+	/**
+	 * Returns whether the when-condition holds for one candidate binding (§7.10.1, §7.10.2).
+	 *
+	 * <p>The spec evaluates the when-condition over a <em>joint</em> binding: "For each valid
+	 * binding of variables of the when clause and variables of domains other than the target
+	 * domain k that satisfy the when condition and source domain patterns and conditions", and
+	 * it states outright that "the intersection of a domain variable set and when variable set
+	 * need not be null". So a predicate such as {@code when \{ p.name <> null; \}} or
+	 * {@code when \{ pn.size() > 1; \}} reads variables the domains bind, and can only be
+	 * evaluated once a candidate binding exists.
+	 *
+	 * <p>Evaluating it before the match — which is what happened until #145 — left those
+	 * predicates with an empty binding and reported {@code Unresolved variable}, failing
+	 * transformations the spec's own {@code UmlToRdb} example is written in the style of.
+	 *
+	 * <p>Relation calls are skipped here: {@link #evaluateWhenPreBindings} has already answered
+	 * them, and re-running a trace lookup per binding would answer the same thing again.
+	 */
+	private boolean whenConditionHolds(Relation relation, Map<String, Object> binding) {
+		Pattern when = relation.getWhen();
+		if (when == null) {
+			return true;
+		}
+		for (Predicate predicate : when.getPredicate()) {
+			OclExpression expr = predicate.getConditionExpression();
+			if (expr == null || expr instanceof RelationCallExp) {
+				continue;
+			}
+			if (!Boolean.TRUE.equals(evaluateOcl(expr, binding))) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -531,6 +572,11 @@ public class QvtrEvaluator {
 		}
 
 		for (Map<String, Object> binding : bindings) {
+			// The when-condition filters here too: checking asks for a target binding only
+			// "for each valid binding ... that satisfies the when condition" (§7.10.1).
+			if (!whenConditionHolds(relation, binding)) {
+				continue;
+			}
 			evaluateWhereClause(relation, binding);
 		}
 	}

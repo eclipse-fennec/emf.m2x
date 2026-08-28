@@ -94,8 +94,6 @@ class M2tGuardExpressionRegressionTest {
 
 	// §7.0 + §8.2: a template guard invoking a query sees the query's real result
 	@Test
-	@Disabled("#146 — a guard is a plain OclExpression, so the module's queries are "
-			+ "not visible to it (MOFM2T v1.0 §8.1.15)")
 	void templateGuard_callsQuery_guardTrue() throws M2tParseException {
 		String mtl = """
 				[module m(Ecore)/]
@@ -112,8 +110,6 @@ class M2tGuardExpressionRegressionTest {
 
 	// §7.0 + §8.2: the same guard denies the element the query rejects
 	@Test
-	@Disabled("#146 — a guard is a plain OclExpression, so the module's queries are "
-			+ "not visible to it (MOFM2T v1.0 §8.1.15)")
 	void templateGuard_callsQuery_guardFalse() throws M2tParseException {
 		String mtl = """
 				[module m(Ecore)/]
@@ -131,8 +127,6 @@ class M2tGuardExpressionRegressionTest {
 
 	// §8.2: a guard invoking a query that itself calls another query
 	@Test
-	@Disabled("#146 — a guard is a plain OclExpression, so the module's queries are "
-			+ "not visible to it (MOFM2T v1.0 §8.1.15)")
 	void templateGuard_callsChainedQuery() throws M2tParseException {
 		String mtl = """
 				[module m(Ecore)/]
@@ -150,8 +144,6 @@ class M2tGuardExpressionRegressionTest {
 
 	// §8.2: a guard combining a query result with the parameter itself
 	@Test
-	@Disabled("#146 — a guard is a plain OclExpression, so the module's queries are "
-			+ "not visible to it (MOFM2T v1.0 §8.1.15)")
 	void templateGuard_combinesQueryAndParameter() throws M2tParseException {
 		String mtl = """
 				[module m(Ecore)/]
@@ -170,8 +162,6 @@ class M2tGuardExpressionRegressionTest {
 
 	// §7.5: a for-loop guard invoking a query filters per iteration
 	@Test
-	@Disabled("#146 — a guard is a plain OclExpression, so the module's queries are "
-			+ "not visible to it (MOFM2T v1.0 §8.1.15)")
 	void loopGuard_callsQuery_filtersPerIteration() throws M2tParseException {
 		String mtl = """
 				[module m(Ecore)/]
@@ -189,8 +179,6 @@ class M2tGuardExpressionRegressionTest {
 
 	// §7.5: the loop guard is evaluated per element, not once for the collection
 	@Test
-	@Disabled("#146 — a guard is a plain OclExpression, so the module's queries are "
-			+ "not visible to it (MOFM2T v1.0 §8.1.15)")
 	void loopGuard_evaluatedPerElement() throws M2tParseException {
 		String mtl = """
 				[module m(Ecore)/]
@@ -210,8 +198,6 @@ class M2tGuardExpressionRegressionTest {
 	// §7.0: a guard on an overriding template that calls a query — guard true,
 	// the override wins
 	@Test
-	@Disabled("#146 — a guard is a plain OclExpression, so the module's queries are "
-			+ "not visible to it (MOFM2T v1.0 §8.1.15)")
 	void overridingTemplateGuard_callsQuery() throws M2tParseException {
 		String base = """
 				[module base(Ecore)/]
@@ -236,8 +222,8 @@ class M2tGuardExpressionRegressionTest {
 
 	// §7.0: the same override with a guard the query rejects — the base applies
 	@Test
-	@Disabled("#146 — a guard is a plain OclExpression, so the module's queries are "
-			+ "not visible to it (MOFM2T v1.0 §8.1.15)")
+	@Disabled("#149 — a call resolving to the overriding template does not fall back "
+			+ "to the overridden one when the guard declines; unrelated to the query visibility of #146")
 	void overridingTemplateGuard_queryRejects_baseApplies() throws M2tParseException {
 		String base = """
 				[module base(Ecore)/]
