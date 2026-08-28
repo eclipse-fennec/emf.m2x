@@ -58,6 +58,13 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	/** Aliases from {@code import alias : path} declarations, usable in qualified names. */
 	private final Map<String, String> packageAliases = new HashMap<>();
+
+	/**
+	 * The packages the document imports, by nsURI or by name. An unqualified name in the
+	 * document resolves here and in the current {@code package} scope — not in every package
+	 * the registry knows (OCL v2.4 §12.1, #158).
+	 */
+	private final List<EPackage> importedPackages = new ArrayList<>();
 	private String currentPackagePath;
 
 	OclDocumentBuilder(EPackage.Registry packageRegistry) {
@@ -133,11 +140,16 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			addError("Library imports are not supported (library " + path
 					+ "). Additional operations are given to the engine as operation "
 					+ "providers rather than named by the document.");
-		} else if (ctx.identifier() != null) {
-			packageAliases.put(OclAstBuilder.identifierText(ctx.identifier()), path);
 		} else {
-			LOG.fine(() -> "Package import needs no resolution, the registry already "
-					+ "carries every package: " + ctx.getText());
+			if (ctx.identifier() != null) {
+				packageAliases.put(OclAstBuilder.identifierText(ctx.identifier()), path);
+			}
+			EPackage imported = resolveImportedPackage(path);
+			if (imported != null) {
+				importedPackages.add(imported);
+			} else {
+				addError("Unknown package in import: " + path);
+			}
 		}
 		return null;
 	}
@@ -406,6 +418,43 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	// ==================== Expression Delegation ====================
 
+	/**
+	 * The package an {@code import} names, by nsURI or by (qualified) package name. Looking a
+	 * declared name up in the registry is what a declaration is for; what this class no longer
+	 * does is look a <em>type</em> name up in every package without a declaration.
+	 */
+	private EPackage resolveImportedPackage(String path) {
+		if (packageRegistry == null) {
+			return null;
+		}
+		String unquoted = path.length() >= 2 && (path.startsWith("'") || path.startsWith("\""))
+				? path.substring(1, path.length() - 1) : path;
+		EPackage byUri = packageRegistry.getEPackage(unquoted);
+		if (byUri != null) {
+			return byUri;
+		}
+		for (Object key : packageRegistry.keySet().toArray()) {
+			EPackage pkg = packageRegistry.getEPackage((String) key);
+			if (pkg != null && matchesPackage(pkg, unquoted)) {
+				return pkg;
+			}
+		}
+		// A classifier path (import company::Company) imports the classifier's package
+		int separator = unquoted.lastIndexOf("::");
+		if (separator > 0) {
+			String packagePath = unquoted.substring(0, separator);
+			String classifierName = unquoted.substring(separator + 2);
+			for (Object key : packageRegistry.keySet().toArray()) {
+				EPackage pkg = packageRegistry.getEPackage((String) key);
+				if (pkg != null && matchesPackage(pkg, packagePath)
+						&& pkg.getEClassifier(classifierName) != null) {
+					return pkg;
+				}
+			}
+		}
+		return null;
+	}
+
 	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
 			EClassifier contextType) {
 		return buildExpression(ctx, contextType, null);
@@ -415,6 +464,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			EClassifier contextType, String selfAlias) {
 		OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry);
 		builder.support.registerPackageAliases(packageAliases);
+		importedPackages.forEach(builder.support::importPackage);
 		if (selfAlias != null) {
 			builder.registerSelfAlias(selfAlias);
 		}
@@ -442,35 +492,28 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			packagePath = currentPackagePath;
 		}
 
-		// Search all packages in the registry
-		for (Object key : packageRegistry.keySet().toArray()) {
-			EPackage pkg = packageRegistry.getEPackage((String) key);
-			if (pkg == null) {
-				continue;
+		if (packagePath != null) {
+			// Qualified, or inside a package … endpackage: the named package, and only that one
+			for (Object key : packageRegistry.keySet().toArray()) {
+				EPackage pkg = packageRegistry.getEPackage((String) key);
+				if (pkg != null && matchesPackage(pkg, packagePath)) {
+					EClassifier found = pkg.getEClassifier(classifierName);
+					if (found != null) {
+						return found;
+					}
+				}
 			}
-			if (packagePath != null && !matchesPackage(pkg, packagePath)) {
-				continue;
-			}
+			return null;
+		}
+		// Unqualified and outside any package: what the document imports (OCL v2.4 §12.1).
+		// Until #158 every package in the registry was searched, so which type a bare name meant
+		// depended on what else was registered in the JVM.
+		for (EPackage pkg : importedPackages) {
 			EClassifier found = pkg.getEClassifier(classifierName);
 			if (found != null) {
 				return found;
 			}
 		}
-
-		// If packagePath was set but nothing found, try without package constraint
-		if (packagePath != null) {
-			for (Object key : packageRegistry.keySet().toArray()) {
-				EPackage pkg = packageRegistry.getEPackage((String) key);
-				if (pkg == null) {
-					continue;
-				}
-				EClassifier found = pkg.getEClassifier(classifierName);
-				if (found != null) {
-					return found;
-				}
-			}
-		}
-
 		return null;
 	}
 

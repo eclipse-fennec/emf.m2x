@@ -454,6 +454,20 @@ What `compile()` does not yet do, because a later step of #135 owns it: compute 
 (#138), bind dependencies under embed/pin/rebind (#139), record package entries and blackbox
 requirements (#139). Those manifest slots stay empty.
 
+### 4.y Type names resolve in what the unit declares
+
+A simple type name in a QVT-O unit resolves in the packages the unit **declares** — `modeltype M
+uses '…'`, `metamodel` declarations, and the unit's own intermediate classes (QVT v1.3 §8.1.3,
+§8.1.5, §8.1.10) — and nowhere else. `QvtoUnitBuilder.declaredPackages` collects them as the
+declarations are visited and shares the set with every `QvtoExpressionBuilder` it creates.
+
+Until #158 a name that resolved in no declared package fell back to a scan of every package in the
+registry, so `transformation t() { var c := object EClass {}; }` parsed without any `modeltype` —
+and what a bare name meant depended on what else the JVM had registered. It is an error now, as it
+is in Eclipse QVT-O (*Unresolved type*); the transformation declares `modeltype ECORE uses
+'http://www.eclipse.org/emf/2002/Ecore';`. Qualified names (`ECORE::EClass`) and the `uses`
+clause itself still go through the registry — a declaration is what the registry is for.
+
 ## 5. Parser Architecture (`qvto.parser`)
 
 **Bundle:** `org.eclipse.fennec.m2x.qvto.parser`

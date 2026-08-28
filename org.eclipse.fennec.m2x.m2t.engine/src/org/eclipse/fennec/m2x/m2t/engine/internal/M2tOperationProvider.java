@@ -27,6 +27,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * Hands the OCL engine the queries a module can call (MOFM2T v1.0 §8.1.15).
@@ -67,7 +68,7 @@ class M2tOperationProvider implements OclOperationProvider {
 
 	@Override
 	public List<OclOperation> getOperations() {
-		AnyType any = OclFactory.eINSTANCE.createAnyType();
+		AnyType any = OclStandardLibrary.INSTANCE.oclAny();
 		List<OclOperation> operations = new ArrayList<>();
 		for (Query query : M2tModuleLinker.visibleQueries(module).values()) {
 			operations.add(toOperation(query, any));

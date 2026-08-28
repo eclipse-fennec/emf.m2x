@@ -66,6 +66,7 @@ import org.eclipse.fennec.m2x.model.qvttemplate.QvttemplateFactory;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.ocl.parser.OclEnvironment;
 
 /**
  * Visitor that transforms ANTLR4 parse tree nodes into QVT-R EMF AST nodes.
@@ -92,6 +93,9 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	private final EPackage.Registry packageRegistry;
 	private QvtrExpressionBuilder expressionBuilder;
+
+	/** The expression builder's environment before any relation scope — self and nothing else. */
+	private OclEnvironment baseEnvironment;
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 
 	/**
@@ -293,6 +297,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		// Create expression builder with EObject as context type
 		expressionBuilder = new QvtrExpressionBuilder(
 				EcorePackage.Literals.EOBJECT, packageRegistry);
+		baseEnvironment = expressionBuilder.env();
 
 		// Process model declarations (typed models)
 		for (QvtRParser.ModelDeclContext modelCtx : ctx.modelDecl()) {
@@ -381,6 +386,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			EPackage pkg = resolvePackage(metamodelName);
 			if (pkg != null) {
 				tm.getUsedPackage().add(pkg);
+				// What the transformation declares is what its expressions may name (#158)
+				expressionBuilder.support.importPackage(pkg);
 			}
 		}
 		return tm;
@@ -498,7 +505,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 		OclExpression initExp = null;
 		if (ctx.expression() != null) {
-			initExp = expressionBuilder.buildExpression(ctx.expression());
+			initExp = buildOcl(ctx.expression());
 		}
 
 		List<Variable> vars = new ArrayList<>();
@@ -590,7 +597,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 				ann.setSource("qvtr.implementedby.args");
 				List<OclExpression> argExprs = new ArrayList<>();
 				for (QvtRParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
-					argExprs.add(expressionBuilder.buildExpression(argCtx));
+					argExprs.add(buildOcl(argCtx));
 				}
 				// Store arg count and attach expressions via EAnnotation references
 				ann.getDetails().put("count", String.valueOf(argExprs.size()));
@@ -647,7 +654,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 		// Optional where-guard: template '{' expression '}'
 		if (ctx.expression() != null) {
-			result.setWhere(expressionBuilder.buildExpression(ctx.expression()));
+			result.setWhere(buildOcl(ctx.expression()));
 		}
 
 		return result;
@@ -725,7 +732,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			// identifier = template (nested ObjectTemplateExp / CollectionTemplateExp)
 			item.setValue(visitTemplate(ctx.template()));
 		} else {
-			item.setValue(expressionBuilder.buildExpression(ctx.expression()));
+			item.setValue(buildOcl(ctx.expression()));
 		}
 
 		return item;
@@ -762,11 +769,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 					TemplateExp nestedTemplate = visitTemplate(itemCtx.template());
 					cte.getMember().add(nestedTemplate);
 				} else if (itemCtx.identifier() != null) {
-					// Variable reference
+					// Variable reference: the declared variable of that name, not a new one per
+					// mention — four Variable(pn) for one pn were satellites with no declaration
+					// behind them (#154)
 					VariableExp varExp = OCL.createVariableExp();
-					Variable refVar = OCL.createVariable();
-					refVar.setName(identifierText(itemCtx.identifier()));
-					varExp.setReferredVariable(refVar);
+					varExp.setReferredVariable(relationVariable(identifierText(itemCtx.identifier())));
 					cte.getMember().add(varExp);
 				} else {
 					// '_' wildcard → anonymous variable
@@ -825,7 +832,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * identifier matches a known relation name.
 	 */
 	private OclExpression buildExpressionOrRelationCall(QvtRParser.ExpressionContext ctx) {
-		OclExpression expr = expressionBuilder.buildExpression(ctx);
+		OclExpression expr = buildOcl(ctx);
 
 		// Post-process: if the expression is an OperationCallExp whose name matches
 		// a known relation, convert it to a RelationCallExp
@@ -865,7 +872,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			assignment.setVariable(placeholder);
 		}
 
-		assignment.setValueExp(expressionBuilder.buildExpression(ctx.expression()));
+		assignment.setValueExp(buildOcl(ctx.expression()));
 		return assignment;
 	}
 
@@ -900,7 +907,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 		// Query body expression (if not abstract/blackbox)
 		if (ctx.expression() != null) {
-			function.setQueryExpression(expressionBuilder.buildExpression(ctx.expression()));
+			function.setQueryExpression(buildOcl(ctx.expression()));
 		}
 
 		return function;
@@ -1011,13 +1018,64 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	}
 
 	/**
+	 * Builds an OCL expression with the current relation's variables in scope.
+	 *
+	 * <p>Without this, {@code pn} in {@code name = pn} or {@code IsExported(pn)} was unknown to
+	 * the OCL parser, which then created a fresh "external" Variable at every mention — four
+	 * Variable(pn) for one declared pn, none of them the declaration (#154). The scope is
+	 * re-established per expression because the relation's variable list grows while its
+	 * domains are visited: a root variable bound by a domain is in scope for the domains and
+	 * clauses after it.
+	 */
+	private OclExpression buildOcl(QvtRParser.ExpressionContext ctx) {
+		OclEnvironment scope = currentRelation == null
+				? baseEnvironment
+				: baseEnvironment.nested(currentRelation.getVariable());
+		expressionBuilder.setEnv(scope);
+		try {
+			return expressionBuilder.buildExpression(ctx);
+		} finally {
+			expressionBuilder.setEnv(baseEnvironment);
+		}
+	}
+
+	/**
+	 * The relation's variable of that name — declared in the relation, bound by a domain, or
+	 * introduced by an earlier mention — and a fresh one registered with the relation otherwise,
+	 * so that the next mention finds it. One Variable per name within a relation (#154).
+	 */
+	private Variable relationVariable(String name) {
+		if (currentRelation != null) {
+			for (Variable declared : currentRelation.getVariable()) {
+				if (name.equals(declared.getName())) {
+					return declared;
+				}
+			}
+		}
+		Variable variable = OCL.createVariable();
+		variable.setName(name);
+		if (currentRelation != null) {
+			currentRelation.getVariable().add(variable);
+		}
+		return variable;
+	}
+
+	/**
 	 * Creates a ClassifierType wrapping an EClassifier.
 	 */
 	private ClassifierType createClassifierType(EClassifier cls) {
-		ClassifierType ct = OCL.createClassifierType();
-		ct.setReferredClassifier(cls);
-		return ct;
+		if (cls == null) {
+			return OCL.createClassifierType();
+		}
+		// One wrapper per classifier within this builder (#154); the wrapper itself is #156
+		return classifierTypes.computeIfAbsent(cls, c -> {
+			ClassifierType ct = OCL.createClassifierType();
+			ct.setReferredClassifier(c);
+			return ct;
+		});
 	}
+
+	private final Map<EClassifier, ClassifierType> classifierTypes = new HashMap<>();
 
 	/**
 	 * Extracts an EClassifier from an OclType for use in EMF structural features.

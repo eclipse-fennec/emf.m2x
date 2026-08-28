@@ -49,6 +49,13 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.tests.AbstractQvtoEngineTest;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
 import org.junit.jupiter.api.Test;
+import java.util.ArrayList;
+import java.util.HashMap;
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
+import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * A compiled QVT-O unit is one self-contained document (#137, acceptance criteria).
@@ -115,23 +122,28 @@ class QvtoAstSelfContainmentTest extends AbstractQvtoEngineTest {
 	// that compile() is where self-containment is bought.
 	@Test
 	void parse_isNotSelfContained() throws Exception {
-		assertFalse(SatelliteCollector.find(parse(MINIMAL)).isEmpty(),
-				"even a minimal transformation references the type Integer, which parse() leaves uncontained");
+		assertFalse(SatelliteCollector.find(parse(WITH_MAPPING)).isEmpty(),
+				"a transformation with a mapping references variables and types parse() leaves uncontained");
 	}
 
+	// Since #154 the predefined types come from the standard library, an EPackage in the
+	// registry: Integer is an external reference like EString, not a satellite. A minimal
+	// transformation therefore has no satellite at all.
 	@Test
 	void compile_minimalUnit_isSelfContained() throws Exception {
 		CompiledUnit compiled = engine.compile(MINIMAL, "test");
 		assertEquals(List.of(), SatelliteCollector.find(compiled));
-		assertEquals(1, compiled.getSatellite().size(), "the type Integer, and nothing else");
+		assertEquals(List.of(), compiled.getSatellite(),
+				"Integer comes from the standard library and needs no container");
 	}
 
 	@Test
 	void compile_unitWithMapping_isSelfContained() throws Exception {
 		CompiledUnit compiled = engine.compile(WITH_MAPPING, "test");
 		assertEquals(List.of(), SatelliteCollector.find(compiled));
-		assertTrue(compiled.getSatellite().size() >= 12,
-				"the parser's satellites are in the container, found " + compiled.getSatellite().size());
+		// Measured 13 before #154 and 11 after (Integer from the library, one wrapper per
+		// classifier). The count is not asserted — #153 and #156 lower it further.
+		assertFalse(compiled.getSatellite().isEmpty(), "the parser's satellites are in the container");
 	}
 
 	@Test
@@ -159,6 +171,53 @@ class QvtoAstSelfContainmentTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "created:1");
 		assertLogged(result, "count:0");
 		assertEquals(logs(parsed), logs(result), "the document around the graph changes nothing");
+	}
+
+	// ==== One type per identity (#154) ====
+
+	// SourceElement is referenced from the mapping's context and from objectsOfType; the unit
+	// builder recreates its expression builder eleven times, and a per-builder cache left two
+	// wrappers for one class. One unit, one wrapper per classifier.
+	@Test
+	void oneClassifierTypePerClassifier() throws Exception {
+		OperationalTransformation t = parse(WITH_MAPPING);
+		Map<EClassifier, List<ClassifierType>> wrappers = new HashMap<>();
+		Set<ClassifierType> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+		t.eAllContents().forEachRemaining(o -> {
+			for (EReference reference : o.eClass().getEAllReferences()) {
+				if (reference.isContainment() || !o.eIsSet(reference)) {
+					continue;
+				}
+				Object value = o.eGet(reference);
+				for (Object target : value instanceof List<?> list ? list : List.of(value)) {
+					if (target instanceof ClassifierType ct && ct.getReferredClassifier() != null
+							&& seen.add(ct)) {
+						wrappers.computeIfAbsent(ct.getReferredClassifier(), k -> new ArrayList<>()).add(ct);
+					}
+				}
+			}
+		});
+		assertFalse(wrappers.isEmpty());
+		wrappers.forEach((classifier, list) -> assertEquals(1, list.size(),
+				"one wrapper for " + classifier.getName() + ", found " + list.size()));
+	}
+
+	// The predefined types are the standard library's instances — Integer in a module property
+	// and Integer in an intermediate class are the same object.
+	@Test
+	void predefinedTypes_areTheLibraryInstances() throws Exception {
+		OperationalTransformation t = parse(WITH_MAPPING);
+		List<PrimitiveType> integers = new ArrayList<>();
+		t.eAllContents().forEachRemaining(o -> {
+			if (o instanceof Variable v && v.getType() instanceof PrimitiveType pt
+					&& "Integer".equals(pt.getName())) {
+				integers.add(pt);
+			}
+		});
+		assertFalse(integers.isEmpty());
+		for (PrimitiveType integer : integers) {
+			assertSame(OclStandardLibrary.INSTANCE.integer(), integer);
+		}
 	}
 
 	// ==== Round trip: save, load in a fresh resource set, execute ====

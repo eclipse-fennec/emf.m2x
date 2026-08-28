@@ -5,8 +5,10 @@ names, so a single execution writes as many files as the book has entries.
 
 Both metamodels are named by their namespace URI above. They live as .ecore files in
 model/ and are registered under those URIs by the fennecM2T generator before this module
-is parsed, which is what makes the type names below resolvable — Person comes from one
-metamodel, Address and its subtypes from the other, ContactKind from a subpackage of it.
+is parsed. The declaration above is what makes the type names below resolvable: a module
+names its metamodels, and a simple name resolves in those and nowhere else. Person comes
+from one metamodel, Address and its subtypes from the other, ContactKind from a subpackage
+of it — a declared metamodel brings the packages it contains.
 [/comment]
 [template public main(book : AddressBook)]
 [for (person : Person | book.entries)]

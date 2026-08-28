@@ -26,6 +26,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * MOFM2T v1.0 §8.3 Standard Library — additional String operations.
@@ -52,18 +53,10 @@ import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
  */
 public class M2tStandardLibrary implements OclOperationProvider {
 
-	private static final PrimitiveType STRING_TYPE;
-	private static final PrimitiveType INTEGER_TYPE;
-	private static final PrimitiveType BOOLEAN_TYPE;
-
-	static {
-		STRING_TYPE = OclFactory.eINSTANCE.createPrimitiveType();
-		STRING_TYPE.setName("String");
-		INTEGER_TYPE = OclFactory.eINSTANCE.createPrimitiveType();
-		INTEGER_TYPE.setName("Integer");
-		BOOLEAN_TYPE = OclFactory.eINSTANCE.createPrimitiveType();
-		BOOLEAN_TYPE.setName("Boolean");
-	}
+	// The predefined types, from the one standard library rather than a private copy (#154)
+	private static final PrimitiveType STRING_TYPE = OclStandardLibrary.INSTANCE.string();
+	private static final PrimitiveType INTEGER_TYPE = OclStandardLibrary.INSTANCE.integer();
+	private static final PrimitiveType BOOLEAN_TYPE = OclStandardLibrary.INSTANCE.booleanType();
 
 	/**
 	 * Stateful tokenizer cache for strtok(). Keyed by source string.

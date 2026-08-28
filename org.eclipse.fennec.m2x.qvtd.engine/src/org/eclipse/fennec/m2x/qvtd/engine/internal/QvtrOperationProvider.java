@@ -33,6 +33,7 @@ import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * Hands the OCL engine what a QVT-R transformation defines: its queries (§7.11.4) and, where a
@@ -74,7 +75,7 @@ class QvtrOperationProvider implements OclOperationProvider {
 	@Override
 	public List<OclOperation> getOperations() {
 		List<OclOperation> operations = new ArrayList<>();
-		AnyType any = OclFactory.eINSTANCE.createAnyType();
+		AnyType any = OclStandardLibrary.INSTANCE.oclAny();
 		for (EClassifier classifier : transformation.getEClassifiers()) {
 			if (!"_queries".equals(classifier.getName()) || !(classifier instanceof EClass queries)) {
 				continue;

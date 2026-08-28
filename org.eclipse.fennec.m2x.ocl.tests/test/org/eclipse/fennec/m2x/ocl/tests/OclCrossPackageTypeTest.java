@@ -112,7 +112,10 @@ class OclCrossPackageTypeTest {
 
 	@Test
 	void parseDocument_invariant_samePackage() throws OclParseException {
+		// The document names the packages it uses (#158): a bare 'Order' resolved before only
+		// because every registered package was searched
 		String doc = """
+				import order
 				context Order
 				inv positiveQuantity: self.quantity > 0
 				""";
@@ -127,6 +130,7 @@ class OclCrossPackageTypeTest {
 	void parseDocument_invariant_crossPackageNavigation() throws OclParseException {
 		// Order.item navigates to Product (cross-package reference)
 		String doc = """
+				import order
 				context Order
 				inv itemNotNull: not self.item.oclIsUndefined()
 				""";
@@ -151,7 +155,11 @@ class OclCrossPackageTypeTest {
 	@Test
 	void parseDocument_resolvesClassifierFromOtherPackage() throws OclParseException {
 		// oclIsKindOf(Product) where Product is in a different package from Order
+		// Product is in another package than Order; the document imports both — cross-package
+		// resolution is by declaration, not by scanning the registry (#158)
 		String doc = """
+				import order
+				import product
 				context Order
 				inv hasProduct: self.item.oclIsKindOf(Product)
 				""";
@@ -178,6 +186,8 @@ class OclCrossPackageTypeTest {
 	void parseDocument_multiplePackageContexts() throws OclParseException {
 		// Constraints on both packages in one document
 		String doc = """
+				import product
+				import order
 				context Product
 				inv positivePrice: self.price > 0.0
 

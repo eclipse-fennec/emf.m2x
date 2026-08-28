@@ -381,6 +381,7 @@ class QvtoMappingParseTest extends AbstractQvtoParserTest {
 	@Test
 	void mappingDecl_bodyless() throws QvtoParseException {
 		OperationalTransformation t = parse("""
+				modeltype SRC uses 'http://test/source/1.0';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation T() {
 				    abstract mapping createElem() : SourceElement;
 				}
@@ -393,6 +394,7 @@ class QvtoMappingParseTest extends AbstractQvtoParserTest {
 	@Test
 	void mappingDecl_blackbox_bodyless() throws QvtoParseException {
 		OperationalTransformation t = parse("""
+				modeltype SRC uses 'http://test/source/1.0';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation T() {
 				    blackbox mapping createElem() : SourceElement;
 				}

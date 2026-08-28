@@ -131,8 +131,11 @@ class OclCompleteDocumentTest {
 
 	@Test
 	void topLevelContextWithoutPackage() throws OclParseException {
+		// OCL v2.4 §12.2: a context outside a package declaration names its classifier so that
+		// it resolves in the root environment — qualified. A bare 'Person' resolved before #158
+		// only because every registered package was searched.
 		String doc = """
-				context Person
+				context company::Person
 				  inv ageCheck: self.age >= 0
 				""";
 		List<Constraint> constraints = engine.parseDocument(doc);
@@ -204,14 +207,14 @@ class OclCompleteDocumentTest {
 		try {
 			// Without global registry, unresolved
 			List<Constraint> withoutRs = engine.parseDocument(
-					"context Person inv : self.age >= 0");
+					"context company::Person inv : self.age >= 0");
 			assertEquals(0, withoutRs.size());
 
 			// With local ResourceSet registry, resolved
 			ResourceSet rs = new ResourceSetImpl();
 			rs.getPackageRegistry().put(nsURI, companyPackage);
 			List<Constraint> withRs = engine.parseDocument(
-					"context Person inv : self.age >= 0", rs);
+					"context company::Person inv : self.age >= 0", rs);
 			assertEquals(1, withRs.size());
 			assertEquals("Person", withRs.get(0).getContextClassifier().getName());
 		} finally {
@@ -365,8 +368,9 @@ class OclCompleteDocumentTest {
 
 	@Test
 	void operationContext_topLevelWithoutPackage() throws OclParseException {
+		// OCL v2.4 §12.2: qualified, as for any context outside a package declaration (#158)
 		String doc = """
-				context Person::getAge() : Integer
+				context company::Person::getAge() : Integer
 				  body : self.age
 				""";
 		List<Constraint> constraints = engine.parseDocument(doc);

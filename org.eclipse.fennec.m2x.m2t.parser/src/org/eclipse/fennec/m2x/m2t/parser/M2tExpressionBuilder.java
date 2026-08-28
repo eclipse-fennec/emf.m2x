@@ -84,11 +84,11 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 	// ==================== Environment Convenience ====================
 
-	private OclEnvironment env() {
+	OclEnvironment env() {
 		return support.getEnvironment();
 	}
 
-	private void setEnv(OclEnvironment env) {
+	void setEnv(OclEnvironment env) {
 		support.setEnvironment(env);
 	}
 

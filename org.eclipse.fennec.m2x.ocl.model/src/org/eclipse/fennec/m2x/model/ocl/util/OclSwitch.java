@@ -14,6 +14,10 @@
  */
 package org.eclipse.fennec.m2x.model.ocl.util;
 
+import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EDataType;
+import org.eclipse.emf.ecore.EModelElement;
+import org.eclipse.emf.ecore.ENamedElement;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 
@@ -81,13 +85,20 @@ public class OclSwitch<T> extends Switch<T> {
 			case OclPackage.OCL_TYPE: {
 				OclType oclType = (OclType)theEObject;
 				T result = caseOclType(oclType);
+				if (result == null) result = caseEClassifier(oclType);
+				if (result == null) result = caseENamedElement(oclType);
+				if (result == null) result = caseEModelElement(oclType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
 			case OclPackage.PRIMITIVE_TYPE: {
 				PrimitiveType primitiveType = (PrimitiveType)theEObject;
 				T result = casePrimitiveType(primitiveType);
+				if (result == null) result = caseEDataType(primitiveType);
 				if (result == null) result = caseOclType(primitiveType);
+				if (result == null) result = caseEClassifier(primitiveType);
+				if (result == null) result = caseENamedElement(primitiveType);
+				if (result == null) result = caseEModelElement(primitiveType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -95,6 +106,9 @@ public class OclSwitch<T> extends Switch<T> {
 				AnyType anyType = (AnyType)theEObject;
 				T result = caseAnyType(anyType);
 				if (result == null) result = caseOclType(anyType);
+				if (result == null) result = caseEClassifier(anyType);
+				if (result == null) result = caseENamedElement(anyType);
+				if (result == null) result = caseEModelElement(anyType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -102,6 +116,9 @@ public class OclSwitch<T> extends Switch<T> {
 				VoidType voidType = (VoidType)theEObject;
 				T result = caseVoidType(voidType);
 				if (result == null) result = caseOclType(voidType);
+				if (result == null) result = caseEClassifier(voidType);
+				if (result == null) result = caseENamedElement(voidType);
+				if (result == null) result = caseEModelElement(voidType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -109,6 +126,9 @@ public class OclSwitch<T> extends Switch<T> {
 				InvalidType invalidType = (InvalidType)theEObject;
 				T result = caseInvalidType(invalidType);
 				if (result == null) result = caseOclType(invalidType);
+				if (result == null) result = caseEClassifier(invalidType);
+				if (result == null) result = caseENamedElement(invalidType);
+				if (result == null) result = caseEModelElement(invalidType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -116,6 +136,9 @@ public class OclSwitch<T> extends Switch<T> {
 				CollectionType collectionType = (CollectionType)theEObject;
 				T result = caseCollectionType(collectionType);
 				if (result == null) result = caseOclType(collectionType);
+				if (result == null) result = caseEClassifier(collectionType);
+				if (result == null) result = caseENamedElement(collectionType);
+				if (result == null) result = caseEModelElement(collectionType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -124,6 +147,9 @@ public class OclSwitch<T> extends Switch<T> {
 				T result = caseSetType(setType);
 				if (result == null) result = caseCollectionType(setType);
 				if (result == null) result = caseOclType(setType);
+				if (result == null) result = caseEClassifier(setType);
+				if (result == null) result = caseENamedElement(setType);
+				if (result == null) result = caseEModelElement(setType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -132,6 +158,9 @@ public class OclSwitch<T> extends Switch<T> {
 				T result = caseOrderedSetType(orderedSetType);
 				if (result == null) result = caseCollectionType(orderedSetType);
 				if (result == null) result = caseOclType(orderedSetType);
+				if (result == null) result = caseEClassifier(orderedSetType);
+				if (result == null) result = caseENamedElement(orderedSetType);
+				if (result == null) result = caseEModelElement(orderedSetType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -140,6 +169,9 @@ public class OclSwitch<T> extends Switch<T> {
 				T result = caseBagType(bagType);
 				if (result == null) result = caseCollectionType(bagType);
 				if (result == null) result = caseOclType(bagType);
+				if (result == null) result = caseEClassifier(bagType);
+				if (result == null) result = caseENamedElement(bagType);
+				if (result == null) result = caseEModelElement(bagType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -148,6 +180,9 @@ public class OclSwitch<T> extends Switch<T> {
 				T result = caseSequenceType(sequenceType);
 				if (result == null) result = caseCollectionType(sequenceType);
 				if (result == null) result = caseOclType(sequenceType);
+				if (result == null) result = caseEClassifier(sequenceType);
+				if (result == null) result = caseENamedElement(sequenceType);
+				if (result == null) result = caseEModelElement(sequenceType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -155,6 +190,9 @@ public class OclSwitch<T> extends Switch<T> {
 				MapType mapType = (MapType)theEObject;
 				T result = caseMapType(mapType);
 				if (result == null) result = caseOclType(mapType);
+				if (result == null) result = caseEClassifier(mapType);
+				if (result == null) result = caseENamedElement(mapType);
+				if (result == null) result = caseEModelElement(mapType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -162,6 +200,9 @@ public class OclSwitch<T> extends Switch<T> {
 				TupleType tupleType = (TupleType)theEObject;
 				T result = caseTupleType(tupleType);
 				if (result == null) result = caseOclType(tupleType);
+				if (result == null) result = caseEClassifier(tupleType);
+				if (result == null) result = caseENamedElement(tupleType);
+				if (result == null) result = caseEModelElement(tupleType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -169,6 +210,9 @@ public class OclSwitch<T> extends Switch<T> {
 				MessageType messageType = (MessageType)theEObject;
 				T result = caseMessageType(messageType);
 				if (result == null) result = caseOclType(messageType);
+				if (result == null) result = caseEClassifier(messageType);
+				if (result == null) result = caseENamedElement(messageType);
+				if (result == null) result = caseEModelElement(messageType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -176,6 +220,9 @@ public class OclSwitch<T> extends Switch<T> {
 				ClassifierType classifierType = (ClassifierType)theEObject;
 				T result = caseClassifierType(classifierType);
 				if (result == null) result = caseOclType(classifierType);
+				if (result == null) result = caseEClassifier(classifierType);
+				if (result == null) result = caseENamedElement(classifierType);
+				if (result == null) result = caseEModelElement(classifierType);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -1230,6 +1277,66 @@ public class OclSwitch<T> extends Switch<T> {
 	 * @generated
 	 */
 	public T caseStateExp(StateExp object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>EModel Element</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>EModel Element</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseEModelElement(EModelElement object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>ENamed Element</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>ENamed Element</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseENamedElement(ENamedElement object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>EClassifier</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>EClassifier</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseEClassifier(EClassifier object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>EData Type</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>EData Type</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseEDataType(EDataType object) {
 		return null;
 	}
 

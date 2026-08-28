@@ -49,6 +49,10 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
 import org.junit.jupiter.api.Test;
+import java.util.ArrayList;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 
 /**
  * A compiled QVT-R unit is one self-contained document: it saves, loads in a fresh resource
@@ -91,8 +95,9 @@ class QvtdCompiledUnitTest extends AbstractQvtdEngineTest {
 	void compile_isSelfContained() throws Exception {
 		CompiledUnit compiled = engine.compile(TRANSFORMATION, "T");
 		assertEquals(List.of(), SatelliteCollector.find(compiled));
-		assertTrue(compiled.getSatellite().size() >= 10,
-				"the parser's satellites are in the container, found " + compiled.getSatellite().size());
+		// Measured 12 before #154 and fewer after (String from the library, pn resolved to its
+		// declaration). The count is not asserted — #153 and #156 lower it further.
+		assertFalse(compiled.getSatellite().isEmpty(), "the parser's satellites are in the container");
 	}
 
 	@Test
@@ -110,6 +115,30 @@ class QvtdCompiledUnitTest extends AbstractQvtdEngineTest {
 		RelationalTransformation transformation = (RelationalTransformation) compiled.getUnit();
 		assertSame(compiled, transformation.eContainer());
 		assertEquals(1, enforce(transformation, "HR"), "the schema is created");
+	}
+
+	// ==== One Variable per declaration (#154) ====
+
+	// pn is declared once and mentioned four times — in two domains, the when and the where
+	// clause. Every mention refers to the declaration, which the relation owns; before #154 each
+	// mention created its own Variable, none of them the declared one.
+	@Test
+	void everyMentionOfPn_refersToTheDeclaredVariable() throws Exception {
+		RelationalTransformation t = parse(TRANSFORMATION);
+		Relation relation = (Relation) t.getRule().get(0);
+		Variable declared = relation.getVariable().stream()
+				.filter(v -> "pn".equals(v.getName())).findFirst().orElseThrow();
+		List<Variable> referred = new ArrayList<>();
+		t.eAllContents().forEachRemaining(o -> {
+			if (o instanceof VariableExp exp && exp.getReferredVariable() != null
+					&& "pn".equals(exp.getReferredVariable().getName())) {
+				referred.add(exp.getReferredVariable());
+			}
+		});
+		assertTrue(referred.size() >= 3, "pn is mentioned at least three times, found " + referred.size());
+		for (Variable variable : referred) {
+			assertSame(declared, variable, "a mention of pn is the declared pn");
+		}
 	}
 
 	// ==== Round trip ====

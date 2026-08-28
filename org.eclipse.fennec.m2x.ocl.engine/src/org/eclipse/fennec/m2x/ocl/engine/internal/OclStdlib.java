@@ -40,6 +40,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * OCL Standard Library operation dispatch.
@@ -165,28 +166,20 @@ class OclStdlib {
 		};
 	}
 
-	// Cached primitive type singletons so oclType() = oclType() holds
-	private static final Map<String, PrimitiveType> PRIMITIVE_TYPE_CACHE;
-	static {
-		PRIMITIVE_TYPE_CACHE = new LinkedHashMap<>();
-		for (String name : List.of("Integer", "Real", "String", "Boolean", "UnlimitedNatural",
-				"OclVoid", "OclInvalid")) {
-			PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
-			pt.setName(name);
-			PRIMITIVE_TYPE_CACHE.put(name, pt);
-		}
-	}
+	// The predefined types come from the standard library, so oclType() = oclType() holds and
+	// the value the evaluator reports is the very object the parser referenced (#154).
+	private static final OclStandardLibrary LIBRARY = OclStandardLibrary.INSTANCE;
 
 	private static Object oclType(Object source) {
 		// OCL v2.5 §11.2.1: null.oclType() = OclVoid, invalid.oclType() = OclInvalid
-		if (source == null) return PRIMITIVE_TYPE_CACHE.get("OclVoid");
-		if (source == OclInvalid.INSTANCE) return PRIMITIVE_TYPE_CACHE.get("OclInvalid");
-		if (source instanceof OclUnlimitedNatural) return PRIMITIVE_TYPE_CACHE.get("UnlimitedNatural");
+		if (source == null) return LIBRARY.oclVoid();
+		if (source == OclInvalid.INSTANCE) return LIBRARY.oclInvalid();
+		if (source instanceof OclUnlimitedNatural) return LIBRARY.unlimitedNatural();
 		if (source instanceof EObject eo) return eo.eClass();
-		if (source instanceof Long || source instanceof Integer) return PRIMITIVE_TYPE_CACHE.get("Integer");
-		if (source instanceof Double || source instanceof Float) return PRIMITIVE_TYPE_CACHE.get("Real");
-		if (source instanceof String) return PRIMITIVE_TYPE_CACHE.get("String");
-		if (source instanceof Boolean) return PRIMITIVE_TYPE_CACHE.get("Boolean");
+		if (source instanceof Long || source instanceof Integer) return LIBRARY.integer();
+		if (source instanceof Double || source instanceof Float) return LIBRARY.real();
+		if (source instanceof String) return LIBRARY.string();
+		if (source instanceof Boolean) return LIBRARY.booleanType();
 		if (source instanceof OclOrderedSet<?>) return createCollectionType(CollectionKind.ORDERED_SET);
 		if (source instanceof OclBag<?>) return createCollectionType(CollectionKind.BAG);
 		if (source instanceof Set<?>) return createCollectionType(CollectionKind.SET);
@@ -519,15 +512,18 @@ class OclStdlib {
 	}
 
 	private static EClassifier extractClassifier(Object typeArg) {
-		if (typeArg instanceof EClassifier ec) {
-			return ec;
-		}
+		// The OCL types are EClassifiers themselves since #154, so the wrapper has to be
+		// unwrapped before the general case: asked as an EClassifier, a ClassifierType would
+		// answer for itself instead of for the class it refers to.
 		if (typeArg instanceof ClassifierType ct) {
 			return ct.getReferredClassifier();
 		}
 		if (typeArg instanceof OclType) {
-			// Primitive types — cannot extract EClassifier
+			// Primitive and other predefined types — no metamodel classifier behind them
 			return null;
+		}
+		if (typeArg instanceof EClassifier ec) {
+			return ec;
 		}
 		return null;
 	}

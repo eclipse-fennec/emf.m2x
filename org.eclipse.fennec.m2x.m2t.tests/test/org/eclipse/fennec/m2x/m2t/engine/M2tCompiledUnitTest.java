@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.m2t.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,6 +49,10 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import java.util.ArrayList;
+import org.eclipse.fennec.m2x.model.m2t.Template;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 
 /**
  * A compiled MOFM2T module is one self-contained document: it saves, loads in a fresh resource
@@ -95,9 +100,11 @@ class M2tCompiledUnitTest {
 	void compile_yieldsASelfContainedDocument() throws Exception {
 		CompiledUnit compiled = engine.compile(MODULE, "m");
 		assertEquals(List.of(), SatelliteCollector.find(compiled));
-		assertTrue(compiled.getSatellite().size() >= 10,
-				"the parser's satellites are in the container, found "
-						+ compiled.getSatellite().size());
+		// What is left after #154 (types from the standard library, parameters in scope): the
+		// two ClassifierType wrappers (#156) and the synthetic EAttributes of #153. Measured:
+		// 15 before #154, 8 after. The count is not asserted — it falls with every follow-up.
+		assertFalse(compiled.getSatellite().isEmpty(),
+				"the parser's satellites are in the container");
 	}
 
 	@Test
@@ -123,6 +130,41 @@ class M2tCompiledUnitTest {
 		Module module = (Module) compiled.getUnit();
 		assertSame(compiled, module.eContainer());
 		assertEquals("hireEMPLOYEE", generate(module));
+	}
+
+	// ==== One Variable per declaration (#154) ====
+
+	// c is the template's parameter and is mentioned in the guard, the for, the let and the
+	// body. Every mention refers to that parameter; before #154 the parameter was unknown to
+	// the OCL parser, which created a fresh Variable(c) at each mention.
+	@Test
+	void everyMentionOfC_refersToTheTemplateParameter() throws Exception {
+		Module module = engine.parse(MODULE, "m");
+		Template main = (Template) module.getOwnedModuleElement().stream()
+				.filter(e -> "main".equals(e.getName())).findFirst().orElseThrow();
+		Variable parameter = main.getParameter().get(0);
+		List<Variable> referred = new ArrayList<>();
+		main.eAllContents().forEachRemaining(o -> {
+			if (o instanceof VariableExp exp && exp.getReferredVariable() != null
+					&& "c".equals(exp.getReferredVariable().getName())) {
+				referred.add(exp.getReferredVariable());
+			}
+		});
+		assertTrue(referred.size() >= 3, "c is mentioned at least three times, found " + referred.size());
+		for (Variable variable : referred) {
+			assertSame(parameter, variable, "a mention of c is the parameter c");
+		}
+	}
+
+	// Two inline expressions get two different, deterministic names — not one derived from an
+	// identity hash, which changed with every JVM run.
+	@Test
+	void inlineVariables_haveDeterministicNames() throws Exception {
+		Module first = engine.parse(MODULE, "m");
+		Module second = engine.parse(MODULE, "m");
+		assertEquals(inlineNames(first), inlineNames(second));
+		assertTrue(inlineNames(first).stream().allMatch(n -> n.matches("__inline__\\d+")),
+				"names are counter-based: " + inlineNames(first));
 	}
 
 	// ==== Round trips ====
@@ -152,6 +194,16 @@ class M2tCompiledUnitTest {
 	}
 
 	// ---- Helpers ----
+
+	private static List<String> inlineNames(Module module) {
+		List<String> names = new ArrayList<>();
+		module.eAllContents().forEachRemaining(o -> {
+			if (o instanceof Variable v && v.getName() != null && v.getName().startsWith("__inline__")) {
+				names.add(v.getName());
+			}
+		});
+		return names;
+	}
 
 	private String generate(Module module) {
 		M2tResult result = engine.execute(module, M2tContext.of(input));

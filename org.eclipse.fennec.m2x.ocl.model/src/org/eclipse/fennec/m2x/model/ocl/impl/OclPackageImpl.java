@@ -532,16 +532,6 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
-	public EAttribute getOclType_Name() {
-		return (EAttribute)oclTypeEClass.getEStructuralFeatures().get(0);
-	}
-
-	/**
-	 * <!-- begin-user-doc -->
-	 * <!-- end-user-doc -->
-	 * @generated
-	 */
-	@Override
 	public EClass getPrimitiveType() {
 		return primitiveTypeEClass;
 	}
@@ -1736,7 +1726,6 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 
 		// Create classes and their features
 		oclTypeEClass = createEClass(OCL_TYPE);
-		createEAttribute(oclTypeEClass, OCL_TYPE__NAME);
 
 		primitiveTypeEClass = createEClass(PRIMITIVE_TYPE);
 
@@ -1936,6 +1925,8 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		// Set bounds for type parameters
 
 		// Add supertypes to classes
+		oclTypeEClass.getESuperTypes().add(ecorePackage.getEClassifier());
+		primitiveTypeEClass.getESuperTypes().add(ecorePackage.getEDataType());
 		primitiveTypeEClass.getESuperTypes().add(this.getOclType());
 		anyTypeEClass.getESuperTypes().add(this.getOclType());
 		voidTypeEClass.getESuperTypes().add(this.getOclType());
@@ -1982,7 +1973,6 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 
 		// Initialize classes, features, and operations; add parameters
 		initEClass(oclTypeEClass, OclType.class, "OclType", IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
-		initEAttribute(getOclType_Name(), ecorePackage.getEString(), "name", null, 0, 1, OclType.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(primitiveTypeEClass, PrimitiveType.class, "PrimitiveType", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 
