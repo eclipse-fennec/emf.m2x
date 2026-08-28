@@ -60,5 +60,24 @@ public interface QvtdBlackboxLibrary {
 	 * @param args the operation arguments
 	 * @return the operation result, or {@code null}
 	 */
+	/**
+	 * Returns the names of the operations this library serves.
+	 *
+	 * <p>Without this the engine could only find out by calling: it invoked every registered
+	 * library in turn and read an exception as "not mine", which made a library that genuinely
+	 * failed — a broken implementation, a {@code SecurityException} from a sandbox — look like a
+	 * library that simply does not offer the operation, and let the relation proceed as if no
+	 * implementation existed (#180). With the names declared, exactly one library is called and
+	 * its failure is a diagnostic.
+	 *
+	 * <p>It is also what lets the allow-list and the library ceiling of {@code QvtdConfiguration}
+	 * be applied before anything is invoked, and what {@code UnitBinder.validate} checks a
+	 * compiled unit's blackbox requirements against at prepare time.
+	 *
+	 * @return the operation names, never {@code null}
+	 * @since 1.0
+	 */
+	List<String> getOperationNames();
+
 	Object invoke(String operationName, Object self, Object[] args);
 }

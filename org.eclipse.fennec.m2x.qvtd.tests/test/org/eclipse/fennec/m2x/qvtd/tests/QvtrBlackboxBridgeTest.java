@@ -157,6 +157,11 @@ class QvtrBlackboxBridgeTest {
 			@Override
 			public List<String> getUsedPackageURIs() { return List.of(); }
 			@Override
+			public List<String> getOperationNames() {
+				return List.of(opName);
+			}
+
+			@Override
 			public Object invoke(String operationName, Object self, Object[] args) {
 				if (opName.equals(operationName)) {
 					return invoker.invoke(args);

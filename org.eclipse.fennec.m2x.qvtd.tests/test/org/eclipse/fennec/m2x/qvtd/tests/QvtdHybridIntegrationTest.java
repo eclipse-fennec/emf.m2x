@@ -187,6 +187,11 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 				@Override
 				public List<String> getUsedPackageURIs() { return List.of(); }
 				@Override
+				public List<String> getOperationNames() {
+					return List.of("createTableOp");
+				}
+
+				@Override
 				public Object invoke(String operationName, Object self, Object[] args) {
 					if ("createTableOp".equals(operationName) && args.length == 1) {
 						EObject table = createTable((String) args[0]);

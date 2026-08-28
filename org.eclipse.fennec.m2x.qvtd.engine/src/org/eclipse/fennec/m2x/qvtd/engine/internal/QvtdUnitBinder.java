@@ -128,14 +128,20 @@ final class QvtdUnitBinder implements UnitBinder {
 
 	@Override
 	public void verifyBlackboxes(CompiledUnit unit) throws UnitPrepareException {
-		if (unit.getManifest().getBlackboxRequirement().isEmpty()) {
-			return;
-		}
-		if (!blackboxEnabled || blackboxRegistry == null || blackboxRegistry.getLibraries().isEmpty()) {
-			BlackboxRequirement first = unit.getManifest().getBlackboxRequirement().get(0);
-			throw new UnitPrepareException("'" + unit.getManifest().getQualifiedName()
-					+ "' requires the blackbox query '" + first.getName()
-					+ "', and the runtime has no blackbox library to serve it");
+		String unitName = unit.getManifest().getQualifiedName();
+		for (BlackboxRequirement requirement : unit.getManifest().getBlackboxRequirement()) {
+			if (!blackboxEnabled || blackboxRegistry == null) {
+				throw new UnitPrepareException("'" + unitName + "' requires the blackbox query '"
+						+ requirement.getName() + "', and blackboxes are not enabled here");
+			}
+			// Since #180 a library declares what it serves, so the requirement can be checked by
+			// name instead of by "some library is registered"
+			boolean served = blackboxRegistry.getLibraries().stream()
+					.anyMatch(library -> library.getOperationNames().contains(requirement.getName()));
+			if (!served) {
+				throw new UnitPrepareException("'" + unitName + "' requires the blackbox query '"
+						+ requirement.getName() + "', which no registered library serves");
+			}
 		}
 	}
 }

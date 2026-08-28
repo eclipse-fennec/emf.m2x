@@ -14,10 +14,12 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
@@ -28,6 +30,7 @@ import org.eclipse.fennec.m2x.model.qvtbase.Function;
 import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationImplementation;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
@@ -53,6 +56,10 @@ public class QvtrBlackboxBridge {
 	private final QvtdExecutionContext context;
 	private final List<Diagnostic> diagnostics;
 	private final QvtrOclCallback oclCallback;
+	/** Diagnostic source id, as used by the rest of the QVT-R engine. */
+	private static final String SOURCE = "org.eclipse.fennec.m2x.qvtd.engine";
+	/** The blackbox modules this run has reached into, for the D29 ceiling. */
+	private final Set<String> usedLibraries = new HashSet<>();
 
 	public QvtrBlackboxBridge(QvtdBlackboxRegistry blackboxRegistry, QvtdConfiguration config,
 			List<RelationImplementationProvider> implementationProviders,
@@ -104,7 +111,8 @@ public class QvtrBlackboxBridge {
 				if (blackboxRegistry == null || !config.blackboxEnabled()) {
 					continue;
 				}
-				if (!isBlackboxAllowed(opName)) {
+				QvtdBlackboxLibrary library = libraryFor(opName);
+				if (library == null) {
 					continue;
 				}
 
@@ -121,19 +129,19 @@ public class QvtrBlackboxBridge {
 					}
 				}
 
-				// Invoke through blackbox registry
-				for (var library : blackboxRegistry.getLibraries()) {
-					try {
-						Object result = library.invoke(opName, null, argValues);
-						if (result instanceof EObject created) {
-							if (created.eContainer() == null) {
-								extentManager.getExtent(targetModel).add(created);
-							}
-						}
-						return true;
-					} catch (Exception e) {
-						// Library doesn't support this operation — try next
+				// One library, chosen by what it declares — a failure of that library is a
+				// failure of the transformation, not a reason to ask the next one (#180)
+				try {
+					Object result = library.invoke(opName, null, argValues);
+					if (result instanceof EObject created && created.eContainer() == null) {
+						extentManager.getExtent(targetModel).add(created);
 					}
+					return true;
+				} catch (RuntimeException failure) {
+					diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE, 0,
+							"Blackbox operation '" + opName + "' of library '" + library.getModuleName()
+									+ "' failed: " + failure, new Object[] { failure }));
+					return true; // invoked, and it failed — reported, not retried elsewhere
 				}
 			}
 		}
@@ -158,27 +166,72 @@ public class QvtrBlackboxBridge {
 			argValues[i] = oclCallback.evaluate(args.get(i), callerBindings);
 		}
 
-		// Search all registered libraries for the operation
+		// The library that declares the query, gated by the allow-list and the ceiling — before
+		// #180 this loop invoked every registered library and swallowed every exception, so the
+		// allow-list did not apply to queries at all
 		String queryName = query.getName();
-		for (var library : blackboxRegistry.getLibraries()) {
-			try {
-				Object result = library.invoke(queryName, null, argValues);
-				if (result != null) {
-					return result;
-				}
-			} catch (Exception e) {
-				// Library doesn't support this operation — try next
+		QvtdBlackboxLibrary library = libraryFor(queryName);
+		if (library == null) {
+			return null;
+		}
+		try {
+			return library.invoke(queryName, null, argValues);
+		} catch (RuntimeException failure) {
+			diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE, 0,
+					"Blackbox query '" + queryName + "' of library '" + library.getModuleName()
+							+ "' failed: " + failure, new Object[] { failure }));
+			return null;
+		}
+	}
+
+	/**
+	 * The library that serves an operation: one that declares the name, whose module the
+	 * allow-list permits, and that fits under the library ceiling (§M-R5, D29).
+	 *
+	 * <p>Everything the configuration says is decided here, before anything is invoked. The
+	 * allow-list names <em>modules</em> — {@code QvtdConfiguration.allowedBlackboxModules} — and
+	 * is compared against {@link QvtdBlackboxLibrary#getModuleName()}; before #180 it was compared
+	 * against the operation name, so it could only ever match by coincidence, and queries did not
+	 * consult it at all.
+	 *
+	 * @param operationName the operation to serve
+	 * @return the library, or {@code null} if none may serve it
+	 */
+	QvtdBlackboxLibrary libraryFor(String operationName) {
+		if (blackboxRegistry == null || !config.blackboxEnabled()) {
+			return null;
+		}
+		for (QvtdBlackboxLibrary library : blackboxRegistry.getLibraries()) {
+			if (!library.getOperationNames().contains(operationName)) {
+				continue;
 			}
+			if (!isBlackboxAllowed(library.getModuleName())) {
+				continue;
+			}
+			// D29: a ceiling on how many distinct libraries one run may reach into, counted over
+			// the run rather than per call, so a chain of queries cannot walk past it one at a time
+			String moduleName = library.getModuleName();
+			if (!usedLibraries.contains(moduleName) && usedLibraries.size() >= config.maxBlackboxLibraries()) {
+				diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE, 0,
+						"Blackbox library '" + moduleName + "' is past the limit of "
+								+ config.maxBlackboxLibraries() + " libraries per run", null));
+				return null;
+			}
+			usedLibraries.add(moduleName);
+			return library;
 		}
 		return null;
 	}
 
 	/**
-	 * Checks if a blackbox operation is allowed by the configuration's
-	 * allow-list (M-R5).
+	 * Whether the allow-list permits a blackbox <em>module</em> (M-R5). An empty list restricts
+	 * nothing; a non-empty one names the modules that may be reached.
+	 *
+	 * @param moduleName the library's module name
+	 * @return {@code true} if the module may be used
 	 */
-	public boolean isBlackboxAllowed(String operationName) {
+	public boolean isBlackboxAllowed(String moduleName) {
 		Set<String> allowed = config.allowedBlackboxModules();
-		return allowed.isEmpty() || allowed.contains(operationName);
+		return allowed.isEmpty() || allowed.contains(moduleName);
 	}
 }
