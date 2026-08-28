@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.model.ocl;
 
+import org.eclipse.emf.ecore.EDataType;
+
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -31,5 +33,5 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-public interface PrimitiveType extends OclType {
+public interface PrimitiveType extends EDataType, OclType {
 } // PrimitiveType

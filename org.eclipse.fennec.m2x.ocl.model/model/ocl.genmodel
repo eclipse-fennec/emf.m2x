@@ -24,9 +24,7 @@
       <genEnumLiterals ecoreEnumLiteral="ocl.ecore#//ConstraintKind/derive"/>
       <genEnumLiterals ecoreEnumLiteral="ocl.ecore#//ConstraintKind/def"/>
     </genEnums>
-    <genClasses image="false" ecoreClass="ocl.ecore#//OclType">
-      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//OclType/name"/>
-    </genClasses>
+    <genClasses image="false" ecoreClass="ocl.ecore#//OclType"/>
     <genClasses ecoreClass="ocl.ecore#//PrimitiveType"/>
     <genClasses ecoreClass="ocl.ecore#//AnyType"/>
     <genClasses ecoreClass="ocl.ecore#//VoidType"/>

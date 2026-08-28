@@ -16,6 +16,8 @@ package org.eclipse.fennec.m2x.model.ocl.impl;
 
 import org.eclipse.emf.ecore.EClass;
 
+import org.eclipse.emf.ecore.impl.EDataTypeImpl;
+
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 
@@ -26,7 +28,7 @@ import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
  *
  * @generated
  */
-public class PrimitiveTypeImpl extends OclTypeImpl implements PrimitiveType {
+public class PrimitiveTypeImpl extends EDataTypeImpl implements PrimitiveType {
 	/**
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->

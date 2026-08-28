@@ -19,6 +19,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.Set;
+import java.util.LinkedHashSet;
 
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
@@ -111,6 +113,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 	/** Module-local type names from {@code typedef}, shared with the expression builder. */
 	private final Map<String, EClassifier> localTypes = new HashMap<>();
+	/** One ClassifierType per referenced classifier for the whole unit (#154). */
+	private final Map<EClassifier, ClassifierType> classifierTypes = new HashMap<>();
+	/** The packages declared with modeltype; the scope of unqualified type names (#158). */
+	private final Set<EPackage> declaredPackages = new LinkedHashSet<>();
 	private QvtoEnvironment environment;
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
@@ -121,7 +127,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
 		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry,
-				importedModuleStubs, localTypes, diagnostics);
+				importedModuleStubs, localTypes, diagnostics, classifierTypes, declaredPackages);
 	}
 
 	// ==================== Entry Point ====================
@@ -406,6 +412,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			EPackage resolvedPkg = resolvePackageRef(refCtx);
 			if (resolvedPkg != null) {
 				modelType.getMetamodel().add(resolvedPkg);
+				declaredPackages.add(resolvedPkg);
 			} else {
 				// §8.2.1.6: ModelType.metamodel is [1..*] — a model type without a
 				// metamodel is not a well-formed AST, so this cannot pass silently (#66)
@@ -929,6 +936,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			metaPkg.setNsURI(parentPkg.getNsURI() + "/" + pkgName);
 			parentPkg.getESubpackages().add(metaPkg);
 		}
+		declaredPackages.add(metaPkg);
 		for (QvtOParser.MetamodelElementContext elemCtx : ctx.metamodelElement()) {
 			String name = null;
 			boolean isDataType = false;
@@ -1196,6 +1204,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (packageRegistry != null) {
 			packageRegistry.put(metaPkg.getNsURI(), metaPkg);
 		}
+		// A metamodel declared in the unit is in the unit's scope (QVT v1.3 §8.1.5, #158)
+		declaredPackages.add(metaPkg);
 
 		// Process each metamodel element
 		for (QvtOParser.MetamodelElementContext elemCtx : ctx.metamodelElement()) {
@@ -1634,6 +1644,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (intermediatePackageUri != null && packageRegistry != null) {
 			EPackage existing = packageRegistry.getEPackage(intermediatePackageUri);
 			if (existing != null) {
+				declaredPackages.add(existing);
 				return existing;
 			}
 		}
@@ -1647,6 +1658,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (packageRegistry != null) {
 			packageRegistry.put(intermediatePackageUri, pkg);
 		}
+		// The unit's own namespace: its intermediate classes resolve like any declared package
+		// (QVT v1.3 §8.1.10), not through a scan of the registry (#158)
+		declaredPackages.add(pkg);
 		// Register as sub-package of the module for discoverability
 		module.getESubpackages().add(pkg);
 		return pkg;
@@ -2108,7 +2122,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private void updateExpressionBuilder() {
 		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry,
-				this.importedModuleStubs, this.localTypes, this.diagnostics);
+				this.importedModuleStubs, this.localTypes, this.diagnostics, this.classifierTypes,
+				this.declaredPackages);
 	}
 
 	private String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {

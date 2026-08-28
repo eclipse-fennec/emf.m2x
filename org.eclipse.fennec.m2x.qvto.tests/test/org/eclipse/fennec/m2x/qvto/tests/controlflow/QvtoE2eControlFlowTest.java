@@ -311,6 +311,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	@Test
 	void return_fromMapping_returnsResult() throws Exception {
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    mapping createElem() : r : EClass {
 				        r.name := 'returned';
@@ -1064,6 +1065,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void xcollect_propertyShorthand_collectsNames() throws Exception {
 		// §8.2.2.7: list->prop = list->xcollect(i | i.prop) — null values removed
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    main() {
 				        var c1 := object EClass { name := 'Alpha'; };
@@ -1085,6 +1087,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void xcollect_nullValuesRemoved() throws Exception {
 		// §8.2.2.7: xcollect removes null values from the result
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    main() {
 				        var c1 := object EClass { name := 'A'; };
@@ -1144,6 +1147,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void xselect_typeFilter() throws Exception {
 		// §8.2.2.7: list[Type] = list->xselect(oclIsKindOf(Type)) with type re-casting
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    main() {
 				        var c1 := object EClass { name := 'Cls'; };
@@ -1164,6 +1168,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void xcollect_withMapShorthand() throws Exception {
 		// §8.2.2.7: list->map f() = list->xcollect(i | i.map f())
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    mapping EClass::toUpper() : EClass {
 				        name := self.name.toUpperCase();
@@ -1185,6 +1190,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void xcollectselect_combined() throws Exception {
 		// §8.2.2.7: list->prop[cond] — collect property then filter
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    main() {
 				        var c1 := object EClass { name := 'Alpha'; };
@@ -1207,6 +1213,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void xcollect_flattenNestedCollections() throws Exception {
 		// §8.2.2.7: xcollect flattens nested collections from BODY
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    main() {
 				        var p1 := object EPackage { name := 'p1'; };
@@ -1231,6 +1238,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void xselectOne_returnsFirstMatch() throws Exception {
 		// §8.2.2.7: list![condition] → first matching element
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    main() {
 				        var c1 := object EClass { name := 'Alpha'; };
@@ -1250,6 +1258,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void xselectOne_noMatch_returnsNull() throws Exception {
 		// §8.2.2.7: xselectOne with no match → null
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    main() {
 				        var c1 := object EClass { name := 'Alpha'; };
@@ -1406,6 +1415,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 	void return_fromMapping_earlyExit() throws Exception {
 		// §8.2.2.16: return inside mapping exits the mapping body
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    mapping EClass::rename() : EClass {
 				        if (self.name = 'skip') then { return; } endif;
@@ -1486,6 +1496,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 		// §8.2.2.19: log(message, element) — implicit repr() on element
 		// Eclipse assert_log.qvto: log('msg', model)
 		QvtoExecutionResult result = execute("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';   // QVT v1.3 §8.1.3: types come through declared model types (#158)
 				transformation test() {
 				    main() {
 				        var c := object EClass { name := 'Foo'; };

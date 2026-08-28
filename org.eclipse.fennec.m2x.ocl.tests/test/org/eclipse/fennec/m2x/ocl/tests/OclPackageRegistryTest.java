@@ -58,6 +58,11 @@ import org.junit.jupiter.api.Nested;
  * answers {@code true} for a {@code Novel} instance, while an unresolved name either
  * degrades to the context type {@code Book} (exact-type comparison fails) or resolves to
  * nothing at all — {@code false} either way.
+  *
+ * <p>Since #158 a type of a <em>foreign</em> package is named with its package —
+ * {@code media::Novel} — as OCL v2.4 §9.3 has it: a simple name resolves in the context type's
+ * namespace and what the unit declares, not in every package a registry knows. The qualified
+ * name is what these tests route through the supplied registry.
  */
 class OclPackageRegistryTest {
 
@@ -101,7 +106,7 @@ class OclPackageRegistryTest {
 			OclParserSupport parser = new OclParserSupport(registry);
 			OclEngine engine = OclEngines.create(parser);
 
-			OclExpression expression = parser.parse("self.oclIsTypeOf(Novel)", bookClass);
+			OclExpression expression = parser.parse("self.oclIsTypeOf(media::Novel)", bookClass);
 
 			assertEquals(Boolean.TRUE, engine.evaluate(expression, OclContext.of(newNovel())),
 					"Novel lives in the other package and only resolves through the registry");
@@ -128,7 +133,7 @@ class OclPackageRegistryTest {
 			OclParserSupport parser = new OclParserSupport(resourceSet);
 			OclEngine engine = OclEngines.create(parser);
 
-			OclExpression expression = parser.parse("self.oclIsTypeOf(Novel)", bookClass);
+			OclExpression expression = parser.parse("self.oclIsTypeOf(media::Novel)", bookClass);
 
 			assertEquals(Boolean.TRUE, engine.evaluate(expression, OclContext.of(newNovel())));
 		}
@@ -141,7 +146,7 @@ class OclPackageRegistryTest {
 			OclParserSupport parser = new OclParserSupport();
 			OclEngine engine = OclEngines.create(parser);
 
-			OclExpression expression = parser.parse("self.oclIsTypeOf(Novel)", bookClass);
+			OclExpression expression = parser.parse("self.oclIsTypeOf(media::Novel)", bookClass);
 
 			assertEquals(Boolean.TRUE, engine.evaluate(expression, OclContext.of(newNovel())));
 		}
@@ -250,7 +255,7 @@ class OclPackageRegistryTest {
 			OclEngine engine = OclEngines.create(parser);
 
 			var constraints = engine.parseDocument("""
-					context Novel
+					context media::Novel
 					  inv titleSet: self.title.size() > 0
 					""");
 

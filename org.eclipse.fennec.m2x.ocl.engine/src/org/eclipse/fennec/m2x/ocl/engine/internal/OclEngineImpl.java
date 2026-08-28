@@ -60,6 +60,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * Plain Java implementation of the {@link OclEngine} facade.
@@ -213,7 +214,7 @@ public class OclEngineImpl implements OclDelegateSupport {
 		};
 
 		// Use AnyType as return type placeholder — actual type is determined at runtime
-		AnyType returnType = OclFactory.eINSTANCE.createAnyType();
+		AnyType returnType = OclStandardLibrary.INSTANCE.oclAny();
 
 		OclOperation op = new OclOperation(opName, ownerType, List.of(), returnType, impl);
 		defProviders.add(() -> List.of(op));

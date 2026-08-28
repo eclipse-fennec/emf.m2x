@@ -85,6 +85,29 @@ Pure model project — EMF-generated code lives in `src/` (no `src-gen/`).
   `oclIsKindOf`) for stdlib dispatch. Parser always sets it.
 - **v2.5 additions:** `MapType`, `MapLiteralExp`, `MapLiteralPart`, `isSafe: Boolean` on `CallExp`.
 - **Blueprint:** Based on `EssentialOCL.emof` from the OCL spec.
+- **Types are classifiers (#154):** `OclType` extends `EClassifier`, `PrimitiveType` extends
+  `EDataType` — as in OCL v2.4 §8.2 (types are Classifiers) and in the Eclipse OCL Ecore binding.
+  That is what lets the standard library be an ordinary `EPackage` (below), and what will let
+  `ClassifierType` disappear (#156): an expression's type can point at the `EClassifier` directly.
+
+### 3.2 The Standard Library (`OclStandardLibrary`, `ocl.api`)
+
+One instance of every predefined type — `Integer`, `Real`, `String`, `Boolean`,
+`UnlimitedNatural`, `OclAny`, `OclVoid`, `OclInvalid` — in an `EPackage` with the nsURI
+`http://www.eclipse.org/fennec/m2x/ocl/stdlib/1.0`, registered in `EPackage.Registry.INSTANCE`
+on first use. The counterpart of Eclipse OCL's `oclstdlib.ecore`.
+
+Types are like classes, not like values: there is one `Integer` in the language however many
+numbers a transformation contains. Until #154 the parser created a fresh `PrimitiveType` at every
+use site, and so did the evaluator, the MOFM2T standard library and the QVT-O operation provider —
+four sets of `Integer`, none contained anywhere, every one a satellite in a compiled unit. Now a
+reference to `Integer` is an external reference like one to `EString`: it serializes as
+`…/ocl/stdlib/1.0#//Integer`, resolves from any resource set, and enters a fingerprint as
+`nsURI#name` (#138). `PrimitiveType.instanceClass` says what the evaluator hands around
+(`Integer` → `Long`, `Real` → `Double`).
+
+The library initializes the OCL metamodel with itself, so both are in the global registry before
+any name is resolved; in an Eclipse IDE that registration comes from `plugin.xml` instead (#157).
 
 ---
 
@@ -345,20 +368,48 @@ Parser resolves types during AST construction for hot-path performance.
 - All errors collected in a single pass (ANTLR4 auto-recovery)
 - ANTLR4 `RecognitionException` subtypes mapped to `OclParseException`
 
-### 5.7 Classifier Resolution — the Package Registry (D42)
+### 5.7 Classifier Resolution — Scope, not Registry (D42, #158)
 
-Classifier names in an expression (`self.oclIsTypeOf(Novel)`) and in a Complete OCL document (`context Novel`) are resolved at parse time against an `EPackage.Registry`. `OclParserSupport` owns that registry:
+Classifier names in an expression (`self.oclIsTypeOf(Novel)`) and in a Complete OCL document
+(`context Novel`) are resolved at parse time. Two things take part: a **scope** and a **registry**.
 
-| Constructor | Registry | For |
+The scope is what a simple name resolves in — the context type's own package, and the packages the
+unit **declares**:
+
+| Language | Declaration | Reaches the scope through |
 |---|---|---|
-| `new OclParserSupport()` | `EPackage.Registry.INSTANCE` | plain Java, where the static registry is the correct answer |
-| `new OclParserSupport(registry)` | the given one | OSGi, or any caller holding its own packages — including two versions of one nsURI |
+| OCL expression | the context type | its package |
+| Complete OCL | `import path` (nsURI, package name or classifier path); `package … endpackage` | `OclDocumentBuilder` → `importPackage` |
+| QVT-O | `modeltype M uses '…'`; `metamodel` declarations; the unit's intermediate classes | `QvtoUnitBuilder.declaredPackages` |
+| QVT-R | the typed models of the transformation signature | `TypedModel.usedPackage` → `importPackage` |
+| MOFM2T | `[module m(A, B)]` | `Module.input` → `importPackage` |
 
-This is the **single** place where the static-registry fallback is applied; nothing below it reads `EPackage.Registry.INSTANCE` (D42). `parseDocument(String, ResourceSet)` remains available and uses the resource set's own registry for that one call.
+The registry — `EPackage.Registry.INSTANCE` for `new OclParserSupport()`, the given one for
+`new OclParserSupport(registry)`, the resource set's own for `parseDocument(String, ResourceSet)` —
+is consulted for **declarations and qualified names only**: `import 'http://…'`, `modeltype M uses
+'name'`, `company::Person`. Looking a declared name up is what a declaration is for.
 
-Resolution order for a simple name is: the context type's own package first, then the registry. A qualified name that resolves in neither is recorded as a diagnostic by `AbstractExpressionBuilder` and turned into an `OclParseException` by `OclParserSupport` once the whole unit has been visited — every unresolved name at once, the same contract syntax errors have. The message follows what the name turned out to be, as in Eclipse OCL: *Unknown enumeration literal* when the path names an enumeration, *Unknown type* otherwise.
+Until #158 a simple name that resolved in no scope fell back to a scan of **every package in the
+registry**. Which type a bare name meant then depended on what else was registered in the JVM —
+including the AST metamodels of the four languages, so that `let t : OclType = …` resolved to the
+OCL metamodel's own `EClass` `OclType`, and only when that metamodel happened to be registered
+before the parse. OCL v2.4 §9.3 resolves a simple name in the context namespace and what is imported
+into it; §11.2.1 gives `oclType()` the result type `Classifier`, not `OclType`. The scan is gone;
+the expression above is an error, and a document, a transformation or a module names the packages
+it uses.
 
-An unqualified name that matches no property and no classifier stays an external variable reference (`resolveImplicitProperty`), which `OclContext` binds at evaluation time — **except in a type position**, where `resolveOperation` rejects it (`rejectUnknownTypeArgument`). The argument of `oclIsKindOf`, `oclIsTypeOf` and `oclAsType` is a type by definition (§13.2: a `TypeExp` refers to an *existing* type), so a name that names no type has no second reading; `: Type` annotations were already rejected, since they resolve through `resolveClassifier`. Eclipse OCL rejects an unresolvable name in every position (`AbstractOCLAnalyzer.simpleUndefinedName`); this narrows only where no other reading exists, so that context variables keep working. A name that *is* bound stays accepted — whether a bound value may serve as a type belongs to evaluation (#70).
+A qualified name that resolves nowhere is recorded as a diagnostic by `AbstractExpressionBuilder`
+and turned into an `OclParseException` by `OclParserSupport` once the whole unit has been visited —
+every unresolved name at once, the same contract syntax errors have. The message follows what the
+name turned out to be, as in Eclipse OCL: *Unknown enumeration literal* when the path names an
+enumeration, *Unknown type* otherwise.
+
+An unqualified name that matches no property and no classifier stays an external variable reference
+(`resolveImplicitProperty`), which `OclContext` binds at evaluation time — **except in a type
+position**, where `resolveOperation` rejects it (`rejectUnknownTypeArgument`). The argument of
+`oclIsKindOf`, `oclIsTypeOf` and `oclAsType` is a type by definition (§13.2: a `TypeExp` refers to
+an *existing* type), so a name that names no type has no second reading. A name that *is* bound
+stays accepted — whether a bound value may serve as a type belongs to evaluation (#70).
 
 ---
 

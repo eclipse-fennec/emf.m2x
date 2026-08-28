@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.model.ocl;
 
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 
 import org.osgi.annotation.versioning.ProviderType;
@@ -24,42 +25,14 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Abstract base class for all OCL types. Each type carries a name used in diagnostics and pretty-printing.
+ * An OCL type is an EClassifier, as in OCL v2.4 Section 8.2 (types are Classifiers) and in the Eclipse OCL Ecore binding. That is what lets the standard library be an ordinary EPackage in the EPackage.Registry, resolvable from any resource set, and lets a compiled unit reference Integer the way it references EString. Abstract base class for all OCL types. Each type carries a name used in diagnostics and pretty-printing.
  * <!-- end-model-doc -->
  *
- * <p>
- * The following features are supported:
- * </p>
- * <ul>
- *   <li>{@link org.eclipse.fennec.m2x.model.ocl.OclType#getName <em>Name</em>}</li>
- * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getOclType()
  * @model abstract="true"
  * @generated
  */
 @ProviderType
-public interface OclType extends EObject {
-	/**
-	 * Returns the value of the '<em><b>Name</b></em>' attribute.
-	 * <!-- begin-user-doc -->
-	 * <!-- end-user-doc -->
-	 * @return the value of the '<em>Name</em>' attribute.
-	 * @see #setName(String)
-	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getOclType_Name()
-	 * @model
-	 * @generated
-	 */
-	String getName();
-
-	/**
-	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.OclType#getName <em>Name</em>}' attribute.
-	 * <!-- begin-user-doc -->
-	 * <!-- end-user-doc -->
-	 * @param value the new value of the '<em>Name</em>' attribute.
-	 * @see #getName()
-	 * @generated
-	 */
-	void setName(String value);
-
+public interface OclType extends EObject, EClassifier {
 } // OclType

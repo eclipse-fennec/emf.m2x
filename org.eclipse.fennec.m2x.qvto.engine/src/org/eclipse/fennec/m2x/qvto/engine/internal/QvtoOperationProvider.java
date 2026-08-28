@@ -46,6 +46,7 @@ import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * Bridge that exposes QVT-O helpers and queries as {@link OclOperationProvider}
@@ -61,7 +62,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
  */
 public class QvtoOperationProvider implements OclOperationProvider {
 
-	private static final AnyType ANY_TYPE = OclFactory.eINSTANCE.createAnyType();
+	private static final AnyType ANY_TYPE = OclStandardLibrary.INSTANCE.oclAny();
 
 	private final OperationalTransformation transformation;
 	private final QvtoEvaluator evaluator;
@@ -656,10 +657,15 @@ public class QvtoOperationProvider implements OclOperationProvider {
 			return ct;
 		}
 		if (classifier instanceof EDataType dt) {
-			PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
-			// Map Ecore primitive names to OCL names (EString→String, EInt→Integer, etc.)
-			pt.setName(mapEcoreToOclPrimitiveName(dt.getName()));
-			return pt;
+			// Map Ecore primitive names to OCL names (EString→String, EInt→Integer, etc.) and
+			// answer with the library's instance; an unknown name still gets a fresh type.
+			String oclName = mapEcoreToOclPrimitiveName(dt.getName());
+			return OclStandardLibrary.INSTANCE.primitive(oclName).map(OclType.class::cast)
+					.orElseGet(() -> {
+						PrimitiveType pt = OclFactory.eINSTANCE.createPrimitiveType();
+						pt.setName(oclName);
+						return pt;
+					});
 		}
 		return ANY_TYPE;
 	}

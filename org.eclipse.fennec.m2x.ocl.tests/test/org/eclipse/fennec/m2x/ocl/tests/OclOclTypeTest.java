@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
@@ -26,6 +28,9 @@ import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.eclipse.fennec.m2x.model.ocl.VoidType;
+import org.eclipse.fennec.m2x.model.ocl.InvalidType;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * Tests for oclType() returning the correct type descriptor:
@@ -99,18 +104,23 @@ class OclOclTypeTest extends AbstractOclTest {
 
 	@Test
 	void oclType_null_returnsOclVoid() throws OclParseException {
-		// OCL v2.5 §11.2.1: null.oclType() = OclVoid
+		// OCL v2.5 §11.2.1: null.oclType() = OclVoid — and OclVoid is its own type, VoidType,
+		// not a PrimitiveType (OCL v2.4 §8.2: PrimitiveType covers Integer, Real, String,
+		// Boolean and UnlimitedNatural). Since #154 the value is the standard library's instance.
 		Object result = eval("null.oclType()", person);
-		assertInstanceOf(PrimitiveType.class, result);
-		assertEquals("OclVoid", ((PrimitiveType) result).getName());
+		assertInstanceOf(VoidType.class, result);
+		assertEquals("OclVoid", ((VoidType) result).getName());
+		assertSame(OclStandardLibrary.INSTANCE.oclVoid(), result);
 	}
 
 	@Test
 	void oclType_invalid_returnsOclInvalid() throws OclParseException {
-		// OCL v2.5 §11.2.1: invalid.oclType() = OclInvalid
+		// OCL v2.5 §11.2.1: invalid.oclType() = OclInvalid — an InvalidType (OCL v2.4 §8.2),
+		// the standard library's instance since #154
 		Object result = eval("invalid.oclType()", person);
-		assertInstanceOf(PrimitiveType.class, result);
-		assertEquals("OclInvalid", ((PrimitiveType) result).getName());
+		assertInstanceOf(InvalidType.class, result);
+		assertEquals("OclInvalid", ((InvalidType) result).getName());
+		assertSame(OclStandardLibrary.INSTANCE.oclInvalid(), result);
 	}
 
 	// --- oclType on property results ---
@@ -146,14 +156,15 @@ class OclOclTypeTest extends AbstractOclTest {
 	// --- oclType in expressions ---
 
 	@Test
-	void oclType_inLetExpression() throws OclParseException {
-		Object result = eval(
-				"let t : OclType = self.oclType() in t.oclIsKindOf(Person)", person);
-		// oclType returns EClass, oclIsKindOf(Person) on an EClass should be...
-		// Actually this tests that oclType result can be bound in let
-		// Just verify it doesn't throw — the type is EClass not Person instance
-		// so oclIsKindOf would be false
-		assertEquals(false, result);
+	void oclType_inLetExpression() {
+		// OCL v2.4 §11.2.1: oclType() : Classifier. There is no type named OclType in the
+		// language, so declaring a let variable of that type is a resolution error. Until #158 the
+		// name resolved anyway: to the OCL metamodel's own EClass OclType, found by scanning
+		// every package in the global registry, and only when that metamodel happened to be
+		// registered before the parse.
+		OclParseException error = assertThrows(OclParseException.class,
+				() -> eval("let t : OclType = self.oclType() in t.oclIsKindOf(Person)", person));
+		assertTrue(error.getMessage().contains("Unknown type (OclType)"), error.getMessage());
 	}
 
 	@Test

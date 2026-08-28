@@ -96,6 +96,8 @@ import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveInExp;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import java.util.HashMap;
 
 /**
  * Visitor that transforms ANTLR4 parse tree nodes into EMF OCL + Imperative OCL AST nodes.
@@ -139,7 +141,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
 		this(environment, packageRegistry, Map.of(), new java.util.HashMap<>(),
-				new java.util.ArrayList<>());
+				new java.util.ArrayList<>(), new HashMap<>(), new java.util.LinkedHashSet<>());
 	}
 
 	/**
@@ -187,16 +189,22 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
 			Map<String, Module> importedModuleStubs) {
 		this(environment, packageRegistry, importedModuleStubs, new java.util.HashMap<>(),
-				new java.util.ArrayList<>());
+				new java.util.ArrayList<>(), new HashMap<>(), new java.util.LinkedHashSet<>());
 	}
 
 	/**
 	 * @param localTypes module-local type names ({@code typedef}), shared with the unit
 	 *        builder so that they survive this builder being recreated mid-unit
+	 * @param classifierTypes the one wrapper per referenced classifier, shared for the same
+	 *        reason: the unit builder recreates this builder eleven times per unit, and a cache
+	 *        that died with each of them left two wrappers for one {@code SourceElement} (#154)
 	 */
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
 			Map<String, Module> importedModuleStubs, Map<String, EClassifier> localTypes,
-			List<Resource.Diagnostic> diagnostics) {
+			List<Resource.Diagnostic> diagnostics, Map<EClassifier, ClassifierType> classifierTypes,
+			Set<EPackage> declaredPackages) {
+		this.declaredPackages = Objects.requireNonNull(declaredPackages, "declaredPackages must not be null");
+		this.classifierTypes = Objects.requireNonNull(classifierTypes, "classifierTypes must not be null");
 		this.localTypes = Objects.requireNonNull(localTypes, "localTypes must not be null");
 		this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics must not be null");
 		this.environment = Objects.requireNonNull(environment,
@@ -1599,19 +1607,31 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private OclType createPrimitiveType(String name) {
-		var type = OCL.createPrimitiveType();
-		type.setName(name);
-		return type;
+		// One Integer for the whole language, from the standard library (#154)
+		return OclStandardLibrary.INSTANCE.type(name).orElseGet(() -> {
+			var type = OCL.createPrimitiveType();
+			type.setName(name);
+			return type;
+		});
 	}
 
 	ClassifierType createClassifierType(EClassifier classifier) {
-		ClassifierType type = OCL.createClassifierType();
-		type.setReferredClassifier(classifier);
-		if (classifier != null) {
-			type.setName(classifier.getName());
+		if (classifier == null) {
+			return OCL.createClassifierType();
 		}
-		return type;
+		// One wrapper per classifier within this builder (#154); the wrapper itself is #156
+		return classifierTypes.computeIfAbsent(classifier, c -> {
+			ClassifierType type = OCL.createClassifierType();
+			type.setReferredClassifier(c);
+			type.setName(c.getName());
+			return type;
+		});
 	}
+
+	private final Map<EClassifier, ClassifierType> classifierTypes;
+
+	/** The packages the unit declared with modeltype — the scope of unqualified type names. */
+	private final Set<EPackage> declaredPackages;
 
 	private OclType resolveCollectionType(QvtOParser.CollectionTypeContext ctx) {
 		CollectionKind kind = resolveCollectionKind(ctx.collectionKind().getText());
@@ -1684,7 +1704,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			if (local != null) {
 				return local;
 			}
-			EClassifier fromRegistry = findInRegistry(name);
+			EClassifier fromRegistry = findInDeclaredPackages(name);
 			if (fromRegistry != null) {
 				return fromRegistry;
 			}
@@ -1736,20 +1756,41 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return diagnostics;
 	}
 
-	private EClassifier findInRegistry(String name) {
-		if (packageRegistry == null) {
-			return null;
-		}
-		for (Object key : packageRegistry.keySet().toArray()) {
-			EPackage pkg = packageRegistry.getEPackage((String) key);
-			if (pkg != null) {
-				EClassifier found = pkg.getEClassifier(name);
-				if (found != null) {
-					return found;
-				}
+	/**
+	 * A classifier of that simple name in a package the unit declared with {@code modeltype}
+	 * (QVT v1.3 §8.1.3). Not in every package the registry knows: until #158 that scan made
+	 * a bare type name depend on what else was registered in the JVM.
+	 */
+	private EClassifier findInDeclaredPackages(String name) {
+		for (EPackage pkg : declaredScope()) {
+			EClassifier found = pkg.getEClassifier(name);
+			if (found != null) {
+				return found;
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The declared packages and the packages they contain: a modeltype's nsURI names the root
+	 * of an Ecore tree, and a nested package's classifiers are part of that metamodel.
+	 */
+	private List<EPackage> declaredScope() {
+		List<EPackage> scope = new ArrayList<>();
+		for (EPackage declared : declaredPackages) {
+			addWithSubpackages(declared, scope);
+		}
+		return scope;
+	}
+
+	private static void addWithSubpackages(EPackage ePackage, List<EPackage> scope) {
+		if (scope.contains(ePackage)) {
+			return;
+		}
+		scope.add(ePackage);
+		for (EPackage nested : ePackage.getESubpackages()) {
+			addWithSubpackages(nested, scope);
+		}
 	}
 
 	private void resolveProperty(PropertyCallExp exp, String propName) {
@@ -2240,7 +2281,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	private OclExpression resolveImplicitProperty(String name) {
 		// Try to resolve as a classifier (type reference) first
-		EClassifier classifier = findInRegistry(name);
+		EClassifier classifier = findInDeclaredPackages(name);
 		if (classifier != null) {
 			TypeExp typeExp = OCL.createTypeExp();
 			typeExp.setReferredType(createClassifierType(classifier));
@@ -2255,15 +2296,10 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private EnumLiteralExp tryResolveEnumLiteral(List<String> segments) {
 		String enumName = segments.get(0);
 		String literalName = segments.get(1);
-		if (packageRegistry != null) {
-			for (Object key : packageRegistry.keySet().toArray()) {
-				EPackage pkg = packageRegistry.getEPackage((String) key);
-				if (pkg != null) {
-					EnumLiteralExp result = findEnumLiteralInPackage(pkg, enumName, literalName);
-					if (result != null) {
-						return result;
-					}
-				}
+		for (EPackage pkg : declaredScope()) {
+			EnumLiteralExp result = findEnumLiteralInPackage(pkg, enumName, literalName);
+			if (result != null) {
+				return result;
 			}
 		}
 		return null;

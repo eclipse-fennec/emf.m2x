@@ -48,6 +48,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.ocl.parser.OclEnvironment;
 
 /**
  * Visitor that transforms an ANTLR4 M2T parse tree (CST) into an EMF M2T AST.
@@ -59,6 +60,9 @@ import org.eclipse.fennec.m2x.model.ocl.Variable;
  * @since 1.0
  */
 class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
+
+	/** Numbers the synthetic variables that wrap inline expressions, per module. */
+	private int inlineCounter;
 
 	private static final M2tFactory FACTORY = M2tFactory.eINSTANCE;
 
@@ -131,11 +135,14 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			for (M2tParser.PathNameContext metamodelPath : ctx.metamodelList().pathName()) {
 				List<String> segments = M2tExpressionBuilder.pathNameSegments(metamodelPath);
 				String metamodelUri = String.join("::", segments);
-				// Resolve from the registry this build was given (D42)
-				EPackage pkg = packageRegistry == null ? null
-						: packageRegistry.getEPackage(metamodelUri);
+				// Resolve from the registry this build was given (D42): by nsURI — written as an
+				// escaped identifier, _'http://…' — or by package name. The module header is the
+				// declaration; looking a declared name up is what the registry is for (#158).
+				EPackage pkg = resolveDeclaredMetamodel(metamodelUri);
 				if (pkg != null) {
 					module.getInput().add(pkg);
+					// What the module declares is what its expressions may name (#158)
+					exprBuilder.support.importPackage(pkg);
 				}
 			}
 		}
@@ -163,6 +170,30 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			visit(ctx.macroDef());
 		}
 		// commentBlock is discarded
+		return null;
+	}
+
+	private EPackage resolveDeclaredMetamodel(String declared) {
+		if (packageRegistry == null) {
+			return null;
+		}
+		String key = declared;
+		if (key.startsWith("_'") && key.endsWith("'") && key.length() > 3) {
+			key = key.substring(2, key.length() - 1);
+		} else if (key.startsWith("'") && key.endsWith("'") && key.length() > 2) {
+			key = key.substring(1, key.length() - 1);
+		}
+		EPackage byUri = packageRegistry.getEPackage(key);
+		if (byUri != null) {
+			return byUri;
+		}
+		for (Object registryKey : packageRegistry.keySet().toArray()) {
+			EPackage candidate = packageRegistry.getEPackage((String) registryKey);
+			if (candidate != null
+					&& (key.equals(candidate.getNsURI()) || key.equals(candidate.getName()))) {
+				return candidate;
+			}
+		}
 		return null;
 	}
 
@@ -198,6 +229,11 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 				// (main = public template with first param typed to a metamodel input type)
 			}
 		}
+		// The parameters are in scope for guard, post, init and body: an unknown name made the
+		// OCL parser create a fresh Variable at every mention, so c in [c.name/] referred to a
+		// different object each time and never to the parameter (#154)
+		OclEnvironment outerScope = exprBuilder.env();
+		exprBuilder.setEnv(outerScope.nested(template.getParameter()));
 
 		// Overrides declarations — collect names for linking
 		if (sig.overridesDecl() != null) {
@@ -225,10 +261,14 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		}
 
 		// Body
-		if (ctx.body() != null) {
-			for (TemplateExpression bodyExpr : buildBody(ctx.body())) {
-				template.getBody().add(bodyExpr);
+		try {
+			if (ctx.body() != null) {
+				for (TemplateExpression bodyExpr : buildBody(ctx.body())) {
+					template.getBody().add(bodyExpr);
+				}
 			}
+		} finally {
+			exprBuilder.setEnv(outerScope);
 		}
 
 		module.getOwnedModuleElement().add(template);
@@ -265,8 +305,14 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		// Return type
 		query.setReturnType(exprBuilder.resolveTypeExpression(ctx.typeExpression()));
 
-		// Expression body
-		query.setExpression(exprBuilder.buildExpression(ctx.expression()));
+		// Expression body, with the parameters in scope (#154)
+		OclEnvironment outerScope = exprBuilder.env();
+		exprBuilder.setEnv(outerScope.nested(query.getParameter()));
+		try {
+			query.setExpression(exprBuilder.buildExpression(ctx.expression()));
+		} finally {
+			exprBuilder.setEnv(outerScope);
+		}
 
 		module.getOwnedModuleElement().add(query);
 		return query;
@@ -288,11 +334,17 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			}
 		}
 
-		// Body
-		if (ctx.body() != null) {
-			for (TemplateExpression bodyExpr : buildBody(ctx.body())) {
-				macro.getBody().add(bodyExpr);
+		// Body, with the parameters in scope (#154)
+		OclEnvironment outerScope = exprBuilder.env();
+		exprBuilder.setEnv(outerScope.nested(macro.getParameter()));
+		try {
+			if (ctx.body() != null) {
+				for (TemplateExpression bodyExpr : buildBody(ctx.body())) {
+					macro.getBody().add(bodyExpr);
+				}
 			}
+		} finally {
+			exprBuilder.setEnv(outerScope);
 		}
 
 		module.getOwnedModuleElement().add(macro);
@@ -376,7 +428,9 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		// Wrap in a LetBlock: the evaluator outputs let variable values
 		LetBlock wrapper = FACTORY.createLetBlock();
 		Variable var = OclFactory.eINSTANCE.createVariable();
-		var.setName("__inline__" + System.identityHashCode(ctx));
+		// A name from a counter, not from identityHashCode: the latter differs per JVM run and
+		// would make the same module fingerprint differently each time it is compiled (#154, #138)
+		var.setName("__inline__" + (++inlineCounter));
 		var.setOwnedInit(expr);
 		wrapper.setLetVariable(var);
 		// Store the original expression as a marker so the evaluator can output its value
