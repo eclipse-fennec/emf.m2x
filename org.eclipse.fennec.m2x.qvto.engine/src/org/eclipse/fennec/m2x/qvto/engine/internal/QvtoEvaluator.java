@@ -57,7 +57,6 @@ import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
@@ -78,13 +77,14 @@ import org.eclipse.fennec.m2x.model.qvtoperational.ResolveInExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.util.QvtOperationalSwitch;
 import org.eclipse.fennec.m2x.model.trace.Trace;
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
-import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.BreakException;
@@ -92,7 +92,6 @@ import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.Cont
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.FatalAssertionException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.RaiseException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.ReturnException;
-import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 /**
  * Imperative AST interpreter for QVT-O transformations.

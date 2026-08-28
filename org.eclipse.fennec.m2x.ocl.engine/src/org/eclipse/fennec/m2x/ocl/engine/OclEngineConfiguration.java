@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine;
 
+import org.eclipse.fennec.m2x.ocl.engine.internal.OclEngineComponent;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 

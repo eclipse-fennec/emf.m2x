@@ -14,8 +14,6 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
-import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefKey;
-import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefEntry;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -47,7 +45,6 @@ import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
-import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
@@ -60,6 +57,8 @@ import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefEntry;
+import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefKey;
 
 /**
  * Plain Java implementation of the {@link OclEngine} facade.

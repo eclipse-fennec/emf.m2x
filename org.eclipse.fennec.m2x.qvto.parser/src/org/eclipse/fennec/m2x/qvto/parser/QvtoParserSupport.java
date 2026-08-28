@@ -14,19 +14,19 @@
  */
 package org.eclipse.fennec.m2x.qvto.parser;
 
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
-import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
-import org.eclipse.emf.ecore.EObject;
-import java.util.Map;
-import java.util.IdentityHashMap;
+import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 
 /**
  * Entry point for QVT-O parsing. Parses QVT-O transformation source text into

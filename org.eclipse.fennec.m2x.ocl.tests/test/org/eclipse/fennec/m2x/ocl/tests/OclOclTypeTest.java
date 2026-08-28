@@ -15,22 +15,22 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
+import org.eclipse.fennec.m2x.model.ocl.InvalidType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2x.model.ocl.VoidType;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.eclipse.fennec.m2x.model.ocl.VoidType;
-import org.eclipse.fennec.m2x.model.ocl.InvalidType;
-import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * Tests for oclType() returning the correct type descriptor:

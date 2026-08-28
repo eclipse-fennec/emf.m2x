@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -63,11 +65,8 @@ import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
-import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.ArrayList;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 
 /**
  * Shared OCL expression building logic for use by both OCL and M2T parsers.
