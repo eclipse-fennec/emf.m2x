@@ -48,9 +48,6 @@
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//MessageType/referredOperation"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//MessageType/referredSignal"/>
     </genClasses>
-    <genClasses ecoreClass="ocl.ecore#//ClassifierType">
-      <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//ClassifierType/referredClassifier"/>
-    </genClasses>
     <genClasses image="false" ecoreClass="ocl.ecore#//OclExpression">
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//OclExpression/type"/>
     </genClasses>

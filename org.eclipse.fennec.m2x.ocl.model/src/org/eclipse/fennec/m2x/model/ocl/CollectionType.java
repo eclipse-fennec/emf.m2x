@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.model.ocl;
 
+import org.eclipse.emf.ecore.EClassifier;
+
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -44,12 +46,12 @@ public interface CollectionType extends OclType {
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @return the value of the '<em>Element Type</em>' reference.
-	 * @see #setElementType(OclType)
+	 * @see #setElementType(EClassifier)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getCollectionType_ElementType()
 	 * @model
 	 * @generated
 	 */
-	OclType getElementType();
+	EClassifier getElementType();
 
 	/**
 	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.CollectionType#getElementType <em>Element Type</em>}' reference.
@@ -59,7 +61,7 @@ public interface CollectionType extends OclType {
 	 * @see #getElementType()
 	 * @generated
 	 */
-	void setElementType(OclType value);
+	void setElementType(EClassifier value);
 
 	/**
 	 * Returns the value of the '<em><b>Kind</b></em>' attribute.

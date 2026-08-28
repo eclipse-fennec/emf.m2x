@@ -145,15 +145,6 @@ public interface OclFactory extends EFactory {
 	MessageType createMessageType();
 
 	/**
-	 * Returns a new object of class '<em>Classifier Type</em>'.
-	 * <!-- begin-user-doc -->
-	 * <!-- end-user-doc -->
-	 * @return a new object of class '<em>Classifier Type</em>'.
-	 * @generated
-	 */
-	ClassifierType createClassifierType();
-
-	/**
 	 * Returns a new object of class '<em>Property Call Exp</em>'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->

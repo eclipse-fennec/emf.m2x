@@ -17,13 +17,13 @@ package org.eclipse.fennec.m2x.model.ocl.impl;
 import org.eclipse.emf.common.notify.Notification;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.InternalEObject;
 
 import org.eclipse.emf.ecore.impl.ENotificationImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 
 /**
  * <!-- begin-user-doc -->
@@ -48,7 +48,7 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	 * @generated
 	 * @ordered
 	 */
-	protected OclType keyType;
+	protected EClassifier keyType;
 
 	/**
 	 * The cached value of the '{@link #getValueType() <em>Value Type</em>}' reference.
@@ -58,7 +58,7 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	 * @generated
 	 * @ordered
 	 */
-	protected OclType valueType;
+	protected EClassifier valueType;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -85,10 +85,10 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	 * @generated
 	 */
 	@Override
-	public OclType getKeyType() {
+	public EClassifier getKeyType() {
 		if (keyType != null && keyType.eIsProxy()) {
 			InternalEObject oldKeyType = (InternalEObject)keyType;
-			keyType = (OclType)eResolveProxy(oldKeyType);
+			keyType = (EClassifier)eResolveProxy(oldKeyType);
 			if (keyType != oldKeyType) {
 				if (eNotificationRequired())
 					eNotify(new ENotificationImpl(this, Notification.RESOLVE, OclPackage.MAP_TYPE__KEY_TYPE, oldKeyType, keyType));
@@ -102,7 +102,7 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetKeyType() {
+	public EClassifier basicGetKeyType() {
 		return keyType;
 	}
 
@@ -112,8 +112,8 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	 * @generated
 	 */
 	@Override
-	public void setKeyType(OclType newKeyType) {
-		OclType oldKeyType = keyType;
+	public void setKeyType(EClassifier newKeyType) {
+		EClassifier oldKeyType = keyType;
 		keyType = newKeyType;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.MAP_TYPE__KEY_TYPE, oldKeyType, keyType));
@@ -125,10 +125,10 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	 * @generated
 	 */
 	@Override
-	public OclType getValueType() {
+	public EClassifier getValueType() {
 		if (valueType != null && valueType.eIsProxy()) {
 			InternalEObject oldValueType = (InternalEObject)valueType;
-			valueType = (OclType)eResolveProxy(oldValueType);
+			valueType = (EClassifier)eResolveProxy(oldValueType);
 			if (valueType != oldValueType) {
 				if (eNotificationRequired())
 					eNotify(new ENotificationImpl(this, Notification.RESOLVE, OclPackage.MAP_TYPE__VALUE_TYPE, oldValueType, valueType));
@@ -142,7 +142,7 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetValueType() {
+	public EClassifier basicGetValueType() {
 		return valueType;
 	}
 
@@ -152,8 +152,8 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	 * @generated
 	 */
 	@Override
-	public void setValueType(OclType newValueType) {
-		OclType oldValueType = valueType;
+	public void setValueType(EClassifier newValueType) {
+		EClassifier oldValueType = valueType;
 		valueType = newValueType;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.MAP_TYPE__VALUE_TYPE, oldValueType, valueType));
@@ -186,10 +186,10 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	public void eSet(int featureID, Object newValue) {
 		switch (featureID) {
 			case OclPackage.MAP_TYPE__KEY_TYPE:
-				setKeyType((OclType)newValue);
+				setKeyType((EClassifier)newValue);
 				return;
 			case OclPackage.MAP_TYPE__VALUE_TYPE:
-				setValueType((OclType)newValue);
+				setValueType((EClassifier)newValue);
 				return;
 		}
 		super.eSet(featureID, newValue);
@@ -204,10 +204,10 @@ public class MapTypeImpl extends OclTypeImpl implements MapType {
 	public void eUnset(int featureID) {
 		switch (featureID) {
 			case OclPackage.MAP_TYPE__KEY_TYPE:
-				setKeyType((OclType)null);
+				setKeyType((EClassifier)null);
 				return;
 			case OclPackage.MAP_TYPE__VALUE_TYPE:
-				setValueType((OclType)null);
+				setValueType((EClassifier)null);
 				return;
 		}
 		super.eUnset(featureID);

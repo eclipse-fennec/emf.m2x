@@ -37,7 +37,6 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
@@ -484,8 +483,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 			}
 		}
 
-		// allInstances() — Type.allInstances() returns Set of all instances
-		if ("allInstances".equals(opName) && source instanceof OclType) {
+		// allInstances() — Type.allInstances() returns Set of all instances. Whether the source is
+		// a type is decided by the expression, not by the value: since #156 a type literal
+		// evaluates to the EClass itself, and an EClass is also an EObject a model may contain.
+		if ("allInstances".equals(opName) && exp.getOwnedSource() instanceof TypeExp) {
 			return wrapNull(evaluateAllInstances(source));
 		}
 
@@ -1213,11 +1214,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		if (ctx == null || ctx.extent() == null) {
 			return addError("allInstances() requires a model extent in the evaluation context");
 		}
-		EClassifier classifier = null;
-		if (typeObj instanceof ClassifierType ct) {
-			classifier = ct.getReferredClassifier();
-		}
-		if (classifier instanceof EClass eClass) {
+		if (typeObj instanceof EClass eClass) {
 			Collection<EObject> instances = ctx.extent().getAllInstances(eClass);
 			if (instances.size() > options.maxCollectionSize()) {
 				return addError("allInstances() result size " + instances.size()
@@ -1265,7 +1262,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 				if (source == null) {
 					return op.implementation().apply(source, args);
 				}
-				OclType ownerType = op.ownerType();
+				EClassifier ownerType = op.ownerType();
 				// Exact primitive type match
 				if (ownerType instanceof PrimitiveType pt) {
 					String typeName = pt.getName();
@@ -1314,7 +1311,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		return OclStdlib.NOT_FOUND;
 	}
 
-	private static boolean isCompatibleOwner(OclType ownerType, Object source) {
+	private static boolean isCompatibleOwner(EClassifier ownerType, Object source) {
 		if (ownerType instanceof AnyType) {
 			return true;
 		}
@@ -1338,9 +1335,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 			}
 			return false;
 		}
-		if (ownerType instanceof ClassifierType ct) {
-			EClassifier ec = ct.getReferredClassifier();
-			return ec != null && ec.isInstance(source);
+		if (!(ownerType instanceof OclType) && ownerType instanceof EClassifier ec) {
+			// A metamodel classifier: the operation is defined on its instances (#156)
+			return ec.isInstance(source);
 		}
 		if (ownerType instanceof CollectionType) {
 			return source instanceof Collection<?>;

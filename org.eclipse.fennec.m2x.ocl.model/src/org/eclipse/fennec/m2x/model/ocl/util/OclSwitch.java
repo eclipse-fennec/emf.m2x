@@ -216,16 +216,6 @@ public class OclSwitch<T> extends Switch<T> {
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
-			case OclPackage.CLASSIFIER_TYPE: {
-				ClassifierType classifierType = (ClassifierType)theEObject;
-				T result = caseClassifierType(classifierType);
-				if (result == null) result = caseOclType(classifierType);
-				if (result == null) result = caseEClassifier(classifierType);
-				if (result == null) result = caseENamedElement(classifierType);
-				if (result == null) result = caseEModelElement(classifierType);
-				if (result == null) result = defaultCase(theEObject);
-				return result;
-			}
 			case OclPackage.OCL_EXPRESSION: {
 				OclExpression oclExpression = (OclExpression)theEObject;
 				T result = caseOclExpression(oclExpression);
@@ -707,21 +697,6 @@ public class OclSwitch<T> extends Switch<T> {
 	 * @generated
 	 */
 	public T caseMessageType(MessageType object) {
-		return null;
-	}
-
-	/**
-	 * Returns the result of interpreting the object as an instance of '<em>Classifier Type</em>'.
-	 * <!-- begin-user-doc -->
-	 * This implementation returns null;
-	 * returning a non-null result will terminate the switch.
-	 * <!-- end-user-doc -->
-	 * @param object the target of the switch.
-	 * @return the result of interpreting the object as an instance of '<em>Classifier Type</em>'.
-	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
-	 * @generated
-	 */
-	public T caseClassifierType(ClassifierType object) {
 		return null;
 	}
 

@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -90,9 +91,9 @@ class QvtrOperationProvider implements OclOperationProvider {
 	}
 
 	private OclOperation toOperation(Function query, AnyType any) {
-		List<org.eclipse.fennec.m2x.model.ocl.OclType> parameterTypes =
-				new ArrayList<>(java.util.Collections.nCopies(query.getEParameters().size(),
-						(org.eclipse.fennec.m2x.model.ocl.OclType) any));
+		List<EClassifier> parameterTypes =
+				new ArrayList<>(Collections.nCopies(query.getEParameters().size(),
+						(EClassifier) any));
 		return new OclOperation(query.getName(), any, parameterTypes, any,
 				(self, args) -> invoke(query, args));
 	}

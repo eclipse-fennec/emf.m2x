@@ -52,10 +52,12 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.HashMap;
 import org.eclipse.emf.ecore.EClassifier;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 
 /**
  * A compiled QVT-O unit is one self-contained document (#137, acceptance criteria).
@@ -74,6 +76,9 @@ import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
  *           1 {@code PrimitiveType}, 1 default expression, 1 {@code EFactory}</td>
  *       <td>fails</td></tr>
  * </table>
+ *
+ * <p>After #154 and #156 the same transformation keeps 7: the predefined types come from the
+ * standard library and type references point at the metamodel classifier directly.
  *
  * <p>{@code compile()} gives those objects a home beside the script. What these tests
  * deliberately do <em>not</em> demand: references into the metamodels stay external. A
@@ -175,31 +180,30 @@ class QvtoAstSelfContainmentTest extends AbstractQvtoEngineTest {
 
 	// ==== One type per identity (#154) ====
 
-	// SourceElement is referenced from the mapping's context and from objectsOfType; the unit
-	// builder recreates its expression builder eleven times, and a per-builder cache left two
-	// wrappers for one class. One unit, one wrapper per classifier.
+	// An expression's type is the metamodel classifier itself — no wrapper in between (#156).
+	// Every EClass-typed variable and expression in the unit points at the very EClass of the
+	// source or target package.
 	@Test
-	void oneClassifierTypePerClassifier() throws Exception {
+	void classifierTypes_areTheMetamodelClassifiersThemselves() throws Exception {
 		OperationalTransformation t = parse(WITH_MAPPING);
-		Map<EClassifier, List<ClassifierType>> wrappers = new HashMap<>();
-		Set<ClassifierType> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+		List<EClass> found = new ArrayList<>();
 		t.eAllContents().forEachRemaining(o -> {
-			for (EReference reference : o.eClass().getEAllReferences()) {
-				if (reference.isContainment() || !o.eIsSet(reference)) {
-					continue;
-				}
-				Object value = o.eGet(reference);
-				for (Object target : value instanceof List<?> list ? list : List.of(value)) {
-					if (target instanceof ClassifierType ct && ct.getReferredClassifier() != null
-							&& seen.add(ct)) {
-						wrappers.computeIfAbsent(ct.getReferredClassifier(), k -> new ArrayList<>()).add(ct);
-					}
-				}
+			EClassifier type = o instanceof Variable v ? v.getType()
+					: o instanceof OclExpression e ? e.getType() : null;
+			if (type instanceof EClass eClass) {
+				found.add(eClass);
 			}
 		});
-		assertFalse(wrappers.isEmpty());
-		wrappers.forEach((classifier, list) -> assertEquals(1, list.size(),
-				"one wrapper for " + classifier.getName() + ", found " + list.size()));
+		assertFalse(found.isEmpty());
+		for (EClass eClass : found) {
+			EPackage owner = eClass.getEPackage();
+			assertTrue(owner == sourcePackage || owner == targetPackage
+					|| owner.getNsURI().startsWith("http://www.eclipse.org/fennec/m2x/qvto/intermediate/"),
+					"the type is a classifier of a declared package, not a copy: " + eClass.getName());
+			if (owner == sourcePackage || owner == targetPackage) {
+				assertSame(owner.getEClassifier(eClass.getName()), eClass);
+			}
+		}
 	}
 
 	// The predefined types are the standard library's instances — Integer in a module property

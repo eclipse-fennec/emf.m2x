@@ -136,10 +136,6 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 				return createMessageTypeAdapter();
 			}
 			@Override
-			public Adapter caseClassifierType(ClassifierType object) {
-				return createClassifierTypeAdapter();
-			}
-			@Override
 			public Adapter caseOclExpression(OclExpression object) {
 				return createOclExpressionAdapter();
 			}
@@ -502,20 +498,6 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createMessageTypeAdapter() {
-		return null;
-	}
-
-	/**
-	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2x.model.ocl.ClassifierType <em>Classifier Type</em>}'.
-	 * <!-- begin-user-doc -->
-	 * This default implementation returns null so that we can easily ignore cases;
-	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
-	 * <!-- end-user-doc -->
-	 * @return the new adapter.
-	 * @see org.eclipse.fennec.m2x.model.ocl.ClassifierType
-	 * @generated
-	 */
-	public Adapter createClassifierTypeAdapter() {
 		return null;
 	}
 

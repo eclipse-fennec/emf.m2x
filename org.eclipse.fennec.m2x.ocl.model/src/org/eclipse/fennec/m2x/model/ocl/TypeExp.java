@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.model.ocl;
 
+import org.eclipse.emf.ecore.EClassifier;
+
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -46,12 +48,12 @@ public interface TypeExp extends OclExpression {
 	 * The OCL type this expression refers to.
 	 * <!-- end-model-doc -->
 	 * @return the value of the '<em>Referred Type</em>' reference.
-	 * @see #setReferredType(OclType)
+	 * @see #setReferredType(EClassifier)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getTypeExp_ReferredType()
 	 * @model
 	 * @generated
 	 */
-	OclType getReferredType();
+	EClassifier getReferredType();
 
 	/**
 	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.TypeExp#getReferredType <em>Referred Type</em>}' reference.
@@ -61,6 +63,6 @@ public interface TypeExp extends OclExpression {
 	 * @see #getReferredType()
 	 * @generated
 	 */
-	void setReferredType(OclType value);
+	void setReferredType(EClassifier value);
 
 } // TypeExp

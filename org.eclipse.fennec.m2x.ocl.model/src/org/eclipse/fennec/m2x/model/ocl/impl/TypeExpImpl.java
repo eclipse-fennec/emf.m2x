@@ -17,12 +17,12 @@ package org.eclipse.fennec.m2x.model.ocl.impl;
 import org.eclipse.emf.common.notify.Notification;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.InternalEObject;
 
 import org.eclipse.emf.ecore.impl.ENotificationImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 
 /**
@@ -47,7 +47,7 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	 * @generated
 	 * @ordered
 	 */
-	protected OclType referredType;
+	protected EClassifier referredType;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -74,10 +74,10 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	 * @generated
 	 */
 	@Override
-	public OclType getReferredType() {
+	public EClassifier getReferredType() {
 		if (referredType != null && referredType.eIsProxy()) {
 			InternalEObject oldReferredType = (InternalEObject)referredType;
-			referredType = (OclType)eResolveProxy(oldReferredType);
+			referredType = (EClassifier)eResolveProxy(oldReferredType);
 			if (referredType != oldReferredType) {
 				if (eNotificationRequired())
 					eNotify(new ENotificationImpl(this, Notification.RESOLVE, OclPackage.TYPE_EXP__REFERRED_TYPE, oldReferredType, referredType));
@@ -91,7 +91,7 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetReferredType() {
+	public EClassifier basicGetReferredType() {
 		return referredType;
 	}
 
@@ -101,8 +101,8 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	 * @generated
 	 */
 	@Override
-	public void setReferredType(OclType newReferredType) {
-		OclType oldReferredType = referredType;
+	public void setReferredType(EClassifier newReferredType) {
+		EClassifier oldReferredType = referredType;
 		referredType = newReferredType;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.TYPE_EXP__REFERRED_TYPE, oldReferredType, referredType));
@@ -132,7 +132,7 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	public void eSet(int featureID, Object newValue) {
 		switch (featureID) {
 			case OclPackage.TYPE_EXP__REFERRED_TYPE:
-				setReferredType((OclType)newValue);
+				setReferredType((EClassifier)newValue);
 				return;
 		}
 		super.eSet(featureID, newValue);
@@ -147,7 +147,7 @@ public class TypeExpImpl extends OclExpressionImpl implements TypeExp {
 	public void eUnset(int featureID) {
 		switch (featureID) {
 			case OclPackage.TYPE_EXP__REFERRED_TYPE:
-				setReferredType((OclType)null);
+				setReferredType((EClassifier)null);
 				return;
 		}
 		super.eUnset(featureID);

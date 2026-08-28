@@ -47,7 +47,6 @@ import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.MacroInvocation;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
 import org.eclipse.fennec.m2x.model.m2t.ProtectedAreaBlock;
 import org.eclipse.fennec.m2x.model.m2t.Query;
@@ -60,6 +59,7 @@ import org.eclipse.fennec.m2x.model.m2t.TraceBlock;
 import org.eclipse.fennec.m2x.model.m2t.util.M2tSwitch;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
@@ -965,13 +965,11 @@ public class M2tEvaluator {
 	}
 
 	/**
-	 * Resolves an OclType to an EClassifier for type checking.
+	 * The metamodel classifier behind a parameter type, for type checking: the type itself unless
+	 * it is one of the OCL types (#156).
 	 */
-	private EClassifier resolveEClassifier(org.eclipse.fennec.m2x.model.ocl.OclType type) {
-		if (type instanceof ClassifierType ct) {
-			return ct.getReferredClassifier();
-		}
-		return null;
+	private EClassifier resolveEClassifier(EClassifier type) {
+		return type != null && !(type instanceof OclType) ? type : null;
 	}
 
 	/**

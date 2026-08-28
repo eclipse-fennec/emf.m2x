@@ -213,7 +213,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	public TupleLiteralExp visitTupleLiteral(OclParser.TupleLiteralContext ctx) {
 		List<TupleLiteralPart> parts = new ArrayList<>();
 		for (OclParser.TupleLiteralPartContext partCtx : ctx.tupleLiteralPart()) {
-			OclType type = partCtx.typeExpression() != null
+			EClassifier type = partCtx.typeExpression() != null
 					? resolveTypeExpression(partCtx.typeExpression()) : null;
 			parts.add(support.buildTupleLiteralPart(
 					identifierText(partCtx.identifier()),
@@ -360,12 +360,12 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		String iterName = identifierText(ctx.identifier());
 		OclEnvironment savedEnv = env();
 
-		OclType elementType = support.inferElementType(source);
+		EClassifier elementType = support.inferElementType(source);
 
 		OclParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
 		List<Variable> iterVars = new ArrayList<>();
 		for (int i = 0; i < varsCtx.identifier().size(); i++) {
-			OclType varType = (i < varsCtx.typeExpression().size()
+			EClassifier varType = (i < varsCtx.typeExpression().size()
 					&& varsCtx.typeExpression(i) != null)
 					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType;
 			Variable iterVar = support.createVariable(
@@ -387,14 +387,14 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		OclEnvironment savedEnv = env();
 
 		// Iterator variable
-		OclType iterType = ctx.iterType != null
+		EClassifier iterType = ctx.iterType != null
 				? resolveTypeExpression(ctx.iterType)
 				: support.inferElementType(source);
 		Variable iterVar = support.createVariable(
 				identifierText(ctx.identifier(1)), iterType, null);
 
 		// Accumulator variable
-		OclType accType = ctx.accType != null
+		EClassifier accType = ctx.accType != null
 				? resolveTypeExpression(ctx.accType) : null;
 		Variable accVar = support.createVariable(
 				identifierText(ctx.identifier(2)), accType,
@@ -463,7 +463,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		LetExp current = null;
 
 		for (OclParser.LetBindingContext bindCtx : bindings) {
-			OclType type = bindCtx.typeExpression() != null
+			EClassifier type = bindCtx.typeExpression() != null
 					? resolveTypeExpression(bindCtx.typeExpression()) : null;
 			Variable var = support.createVariable(
 					identifierText(bindCtx.identifier()),
@@ -549,7 +549,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 	// ==================== Type Resolution (parser-context-specific) ====================
 
-	OclType resolveTypeExpression(OclParser.TypeExpressionContext ctx) {
+	EClassifier resolveTypeExpression(OclParser.TypeExpressionContext ctx) {
 		support.positionAt(ctx);   // reached by a direct call, not through visit()
 		if (ctx.primitiveType() != null) {
 			return support.createPrimitiveType(ctx.primitiveType().getText());
@@ -571,19 +571,19 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 	private OclType resolveCollectionType(OclParser.CollectionTypeContext ctx) {
 		String kindText = ctx.collectionKind().getText();
-		OclType elementType = resolveTypeExpression(ctx.typeExpression());
+		EClassifier elementType = resolveTypeExpression(ctx.typeExpression());
 		return support.buildCollectionType(kindText, elementType);
 	}
 
 	private OclType resolveMapType(OclParser.MapTypeContext ctx) {
-		OclType keyType = resolveTypeExpression(ctx.typeExpression(0));
-		OclType valueType = resolveTypeExpression(ctx.typeExpression(1));
+		EClassifier keyType = resolveTypeExpression(ctx.typeExpression(0));
+		EClassifier valueType = resolveTypeExpression(ctx.typeExpression(1));
 		return support.buildMapType(keyType, valueType);
 	}
 
 	private OclType resolveTupleType(OclParser.TupleTypeContext ctx) {
 		List<String> partNames = new ArrayList<>();
-		List<OclType> partTypes = new ArrayList<>();
+		List<EClassifier> partTypes = new ArrayList<>();
 		for (OclParser.TupleTypePartContext partCtx : ctx.tupleTypePart()) {
 			partNames.add(identifierText(partCtx.identifier()));
 			partTypes.add(resolveTypeExpression(partCtx.typeExpression()));

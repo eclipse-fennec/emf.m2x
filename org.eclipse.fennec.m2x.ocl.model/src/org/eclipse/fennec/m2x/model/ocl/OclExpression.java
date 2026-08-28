@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.model.ocl;
 
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 
 import org.osgi.annotation.versioning.ProviderType;
@@ -48,12 +49,12 @@ public interface OclExpression extends EObject {
 	 * The resolved type of this expression, assigned during type checking.
 	 * <!-- end-model-doc -->
 	 * @return the value of the '<em>Type</em>' reference.
-	 * @see #setType(OclType)
+	 * @see #setType(EClassifier)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getOclExpression_Type()
 	 * @model
 	 * @generated
 	 */
-	OclType getType();
+	EClassifier getType();
 
 	/**
 	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.OclExpression#getType <em>Type</em>}' reference.
@@ -63,6 +64,6 @@ public interface OclExpression extends EObject {
 	 * @see #getType()
 	 * @generated
 	 */
-	void setType(OclType value);
+	void setType(EClassifier value);
 
 } // OclExpression

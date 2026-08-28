@@ -81,7 +81,6 @@ public class OclFactoryImpl extends EFactoryImpl implements OclFactory {
 			case OclPackage.MAP_TYPE: return createMapType();
 			case OclPackage.TUPLE_TYPE: return createTupleType();
 			case OclPackage.MESSAGE_TYPE: return createMessageType();
-			case OclPackage.CLASSIFIER_TYPE: return createClassifierType();
 			case OclPackage.PROPERTY_CALL_EXP: return createPropertyCallExp();
 			case OclPackage.ASSOCIATION_CLASS_CALL_EXP: return createAssociationClassCallExp();
 			case OclPackage.OPERATION_CALL_EXP: return createOperationCallExp();
@@ -280,17 +279,6 @@ public class OclFactoryImpl extends EFactoryImpl implements OclFactory {
 	public MessageType createMessageType() {
 		MessageTypeImpl messageType = new MessageTypeImpl();
 		return messageType;
-	}
-
-	/**
-	 * <!-- begin-user-doc -->
-	 * <!-- end-user-doc -->
-	 * @generated
-	 */
-	@Override
-	public ClassifierType createClassifierType() {
-		ClassifierTypeImpl classifierType = new ClassifierTypeImpl();
-		return classifierType;
 	}
 
 	/**

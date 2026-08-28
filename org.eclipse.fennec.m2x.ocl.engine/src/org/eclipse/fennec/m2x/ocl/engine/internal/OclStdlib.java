@@ -31,7 +31,6 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.MapType;
@@ -455,7 +454,7 @@ class OclStdlib {
 			return OclInvalid.INSTANCE;
 		}
 		// Check element type conformance (if element type is specified)
-		OclType elementType = targetType.getElementType();
+		EClassifier elementType = targetType.getElementType();
 		if (elementType != null && !allElementsConform(coll, elementType)) {
 			return OclInvalid.INSTANCE;
 		}
@@ -480,7 +479,7 @@ class OclStdlib {
 	/**
 	 * Checks whether all elements in the collection conform to the given element type.
 	 */
-	private static boolean allElementsConform(Collection<?> coll, OclType elementType) {
+	private static boolean allElementsConform(Collection<?> coll, EClassifier elementType) {
 		// AnyType: all elements conform
 		if (elementType instanceof AnyType) {
 			return true;
@@ -498,7 +497,7 @@ class OclStdlib {
 			}
 			return true;
 		}
-		// ClassifierType check via EClassifier.isInstance()
+		// Metamodel classifier check via EClassifier.isInstance()
 		EClassifier classifier = extractClassifier(elementType);
 		if (classifier == null) {
 			return true; // Cannot verify — assume conformant
@@ -512,12 +511,8 @@ class OclStdlib {
 	}
 
 	private static EClassifier extractClassifier(Object typeArg) {
-		// The OCL types are EClassifiers themselves since #154, so the wrapper has to be
-		// unwrapped before the general case: asked as an EClassifier, a ClassifierType would
-		// answer for itself instead of for the class it refers to.
-		if (typeArg instanceof ClassifierType ct) {
-			return ct.getReferredClassifier();
-		}
+		// The OCL types are EClassifiers themselves since #154; a metamodel classifier is any
+		// EClassifier that is not one of them (#156)
 		if (typeArg instanceof OclType) {
 			// Primitive and other predefined types — no metamodel classifier behind them
 			return null;

@@ -37,7 +37,6 @@ import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.AfterEach;
@@ -229,9 +228,8 @@ class M2tPackageRegistryTest {
 				.skip(index)
 				.findFirst()
 				.map(template -> template.getParameter().get(0).getType())
-				.filter(ClassifierType.class::isInstance)
-				.map(ClassifierType.class::cast)
-				.map(type -> (EClass) type.getReferredClassifier())
+				.filter(EClass.class::isInstance)
+				.map(EClass.class::cast)
 				.orElse(null);
 	}
 }

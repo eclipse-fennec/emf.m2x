@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.model.ocl.impl;
 import org.eclipse.emf.common.notify.Notification;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.InternalEObject;
 
 import org.eclipse.emf.ecore.impl.ENotificationImpl;
@@ -24,7 +25,6 @@ import org.eclipse.emf.ecore.impl.MinimalEObjectImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 
 /**
  * <!-- begin-user-doc -->
@@ -48,7 +48,7 @@ public abstract class OclExpressionImpl extends MinimalEObjectImpl.Container imp
 	 * @generated
 	 * @ordered
 	 */
-	protected OclType type;
+	protected EClassifier type;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -75,10 +75,10 @@ public abstract class OclExpressionImpl extends MinimalEObjectImpl.Container imp
 	 * @generated
 	 */
 	@Override
-	public OclType getType() {
+	public EClassifier getType() {
 		if (type != null && type.eIsProxy()) {
 			InternalEObject oldType = (InternalEObject)type;
-			type = (OclType)eResolveProxy(oldType);
+			type = (EClassifier)eResolveProxy(oldType);
 			if (type != oldType) {
 				if (eNotificationRequired())
 					eNotify(new ENotificationImpl(this, Notification.RESOLVE, OclPackage.OCL_EXPRESSION__TYPE, oldType, type));
@@ -92,7 +92,7 @@ public abstract class OclExpressionImpl extends MinimalEObjectImpl.Container imp
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetType() {
+	public EClassifier basicGetType() {
 		return type;
 	}
 
@@ -102,8 +102,8 @@ public abstract class OclExpressionImpl extends MinimalEObjectImpl.Container imp
 	 * @generated
 	 */
 	@Override
-	public void setType(OclType newType) {
-		OclType oldType = type;
+	public void setType(EClassifier newType) {
+		EClassifier oldType = type;
 		type = newType;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.OCL_EXPRESSION__TYPE, oldType, type));
@@ -133,7 +133,7 @@ public abstract class OclExpressionImpl extends MinimalEObjectImpl.Container imp
 	public void eSet(int featureID, Object newValue) {
 		switch (featureID) {
 			case OclPackage.OCL_EXPRESSION__TYPE:
-				setType((OclType)newValue);
+				setType((EClassifier)newValue);
 				return;
 		}
 		super.eSet(featureID, newValue);
@@ -148,7 +148,7 @@ public abstract class OclExpressionImpl extends MinimalEObjectImpl.Container imp
 	public void eUnset(int featureID) {
 		switch (featureID) {
 			case OclPackage.OCL_EXPRESSION__TYPE:
-				setType((OclType)null);
+				setType((EClassifier)null);
 				return;
 		}
 		super.eUnset(featureID);

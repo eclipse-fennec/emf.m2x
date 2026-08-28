@@ -25,7 +25,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * An OCL type is an EClassifier, as in OCL v2.4 Section 8.2 (types are Classifiers) and in the Eclipse OCL Ecore binding. That is what lets the standard library be an ordinary EPackage in the EPackage.Registry, resolvable from any resource set, and lets a compiled unit reference Integer the way it references EString. Abstract base class for all OCL types. Each type carries a name used in diagnostics and pretty-printing.
+ * The OCL-specific types — primitive, collection, tuple, map, message, OclAny/OclVoid/OclInvalid — as EClassifiers (OCL v2.4 Section 8.2: types are Classifiers; the Eclipse OCL Ecore binding does the same). An expression, variable or type expression is typed EClassifier and refers to a metamodel EClass or EDataType directly, without a wrapper (#156). That is what lets the standard library be an ordinary EPackage in the EPackage.Registry, resolvable from any resource set, and lets a compiled unit reference Integer the way it references EString. Abstract base class for all OCL types. Each type carries a name used in diagnostics and pretty-printing.
  * <!-- end-model-doc -->
  *
  *

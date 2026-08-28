@@ -95,8 +95,8 @@ class OclStandardLibraryTest {
 		OclParserSupport support = new OclParserSupport();
 		OclExpression first = support.parse("let x : Integer = 1 in x", EcorePackage.Literals.EOBJECT);
 		OclExpression second = support.parse("let y : Integer = 2 in y", EcorePackage.Literals.EOBJECT);
-		OclType typeOfX = letVariableType(first);
-		OclType typeOfY = letVariableType(second);
+		EClassifier typeOfX = letVariableType(first);
+		EClassifier typeOfY = letVariableType(second);
 		assertSame(LIBRARY.integer(), typeOfX);
 		assertSame(typeOfX, typeOfY, "one Integer for the whole language");
 	}
@@ -123,7 +123,7 @@ class OclStandardLibraryTest {
 
 	// ---- Helpers ----
 
-	private static OclType letVariableType(OclExpression expression) {
+	private static EClassifier letVariableType(OclExpression expression) {
 		return ((LetExp) expression).getOwnedVariable().getType();
 	}
 }

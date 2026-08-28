@@ -654,13 +654,13 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 	private Variable buildParameter(M2tParser.ArgDeclContext ctx) {
 		String name = M2tExpressionBuilder.identifierText(ctx.identifier());
-		OclType type = exprBuilder.resolveTypeExpression(ctx.typeExpression());
+		EClassifier type = exprBuilder.resolveTypeExpression(ctx.typeExpression());
 		return exprBuilder.support.createVariable(name, type, null);
 	}
 
 	private Variable buildVariableDeclaration(M2tParser.VariableDeclarationContext ctx) {
 		String name = M2tExpressionBuilder.identifierText(ctx.identifier());
-		OclType type = exprBuilder.resolveTypeExpression(ctx.typeExpression());
+		EClassifier type = exprBuilder.resolveTypeExpression(ctx.typeExpression());
 		OclExpression init = ctx.expression() != null
 				? exprBuilder.buildExpression(ctx.expression()) : null;
 		return exprBuilder.support.createVariable(name, type, init);

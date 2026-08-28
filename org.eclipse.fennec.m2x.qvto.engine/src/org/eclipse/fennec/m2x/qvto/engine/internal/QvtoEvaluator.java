@@ -54,7 +54,6 @@ import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.util.ImperativeOclSwitch;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
@@ -373,7 +372,7 @@ public class QvtoEvaluator {
 					if (!op.name().equals(opName)) {
 						continue;
 					}
-					OclType ownerType = op.ownerType();
+					EClassifier ownerType = op.ownerType();
 					if (ownerType instanceof AnyType) {
 						fallback = op;
 					} else {
@@ -1008,7 +1007,7 @@ public class QvtoEvaluator {
 	 * §8.2.2.10: "zero for a numeric type, the empty string for a string,
 	 * and null for all other elements"
 	 */
-	private static Object defaultValueForType(OclType type) {
+	private static Object defaultValueForType(EClassifier type) {
 		if (type == null) {
 			return null;
 		}
@@ -2136,14 +2135,11 @@ public class QvtoEvaluator {
 
 		/** Resolves candidates for a single source object (or null for all records). */
 		private List<EObject> resolveForSource(ResolveExp exp, Object sourceObj) {
-			// Target type — may be EClass directly or wrapped in ClassifierType
+			// Target type — the EClass itself (#156)
 			EClass targetType = null;
 			Variable target = exp.getTarget();
 			if (target != null) {
 				if (target.getType() instanceof EClass tc) {
-					targetType = tc;
-				} else if (target.getType() instanceof ClassifierType ct
-						&& ct.getReferredClassifier() instanceof EClass tc) {
 					targetType = tc;
 				}
 			}

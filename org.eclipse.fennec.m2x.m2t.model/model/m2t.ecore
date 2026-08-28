@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="m2t" nsURI="http://www.eclipse.org/fennec/m2x/m2t/1.0"
-    nsPrefix="m2t">
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="m2t" nsURI="http://www.eclipse.org/fennec/m2x/m2t/1.0" nsPrefix="m2t">
   <eAnnotations source="Version">
     <details key="value" value="1.0"/>
   </eAnnotations>
@@ -12,7 +11,6 @@
     <details key="resource" value="XMI"/>
     <details key="copyrightText" value="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"/>
   </eAnnotations>
-  <!-- ==================== Enumerations ==================== -->
   <eClassifiers xsi:type="ecore:EEnum" name="OpenModeKind">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="File open mode for FileBlock: overwrite or append (MOFM2T 1.0 Section 8.1, AppendModeKind in normative XMI)."/>
@@ -28,7 +26,6 @@
     <eLiterals name="private" value="1"/>
     <eLiterals name="protected" value="2"/>
   </eClassifiers>
-  <!-- ==================== Module ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="Module" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EPackage">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A MOFM2T module: container for templates, queries, and macros (MOFM2T 1.0 Section 8.1). Extends EPackage to serve as namespace. The module's input models are declared as TypedModels (metamodel references)."/>
@@ -54,7 +51,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <!-- ==================== ModuleElement (abstract) ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="ModuleElement" abstract="true">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base class for all elements owned by a Module: templates, queries, and macros (MOFM2T 1.0 Section 8.1). Does not extend ENamedElement to avoid raw-type EList issues when combined with Block (OclExpression hierarchy)."/>
@@ -65,17 +61,15 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="module" eType="#//Module"
         eOpposite="#//Module/ownedModuleElement"/>
   </eClassifiers>
-  <!-- ==================== Block (abstract) ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="Block" abstract="true" eSuperTypes="#//TemplateExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract container of template expressions with optional init section (MOFM2T 1.0 Section 8.1)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="body" upperBound="-1"
-        eType="#//TemplateExpression" containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="body" upperBound="-1" eType="#//TemplateExpression"
+        containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="init" eType="#//InitSection"
         containment="true"/>
   </eClassifiers>
-  <!-- ==================== InitSection ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="InitSection">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Initialization section declaring local variables for a block (MOFM2T 1.0 Section 8.1)."/>
@@ -84,14 +78,12 @@
         eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
         containment="true"/>
   </eClassifiers>
-  <!-- ==================== TemplateExpression (abstract) ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="TemplateExpression" abstract="true"
       eSuperTypes="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base class for all template expressions that produce text output (MOFM2T 1.0 Section 8.1). Extends OclExpression to allow integration with OCL evaluation."/>
     </eAnnotations>
   </eClassifiers>
-  <!-- ==================== Template ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="Template" eSuperTypes="#//Block #//ModuleElement">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A named template that generates text from model elements (MOFM2T 1.0 Section 8.1). Templates can have parameters, a guard condition, and override other templates."/>
@@ -115,7 +107,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <!-- ==================== Query ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="Query" eSuperTypes="#//ModuleElement">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A named query that evaluates an OCL expression and returns a value (MOFM2T 1.0 Section 8.1)."/>
@@ -126,13 +117,12 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="expression" lowerBound="1"
         eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="returnType" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclType">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="returnType" eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClassifier">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The declared return type of this query. Named 'returnType' to avoid conflict with OclExpression.type."/>
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <!-- ==================== Macro ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="Macro" eSuperTypes="#//Block #//ModuleElement">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A macro definition with parameters, where the last parameter of type Body receives a template block (MOFM2T 1.0 Section 8.1)."/>
@@ -140,37 +130,30 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="parameter" upperBound="-1"
         eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="returnType" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclType">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="returnType" eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClassifier">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The declared return type of this macro. Named 'returnType' to avoid conflict with OclExpression.type."/>
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <!-- ==================== ForBlock ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="ForBlock" eSuperTypes="#//Block">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Iterates over a collection, generating body text for each element (MOFM2T 1.0 Section 8.1)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="loopVariable"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="loopVariable" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="iterSet" lowerBound="1"
         eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="guard"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="guard" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="before"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="before" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="each"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="each" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="after"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="after" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
   </eClassifiers>
-  <!-- ==================== IfBlock ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="IfBlock" eSuperTypes="#//Block">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Conditional text generation with optional elseIf chain and else block (MOFM2T 1.0 Section 8.1)."/>
@@ -183,20 +166,17 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="else" eType="#//Block"
         containment="true"/>
   </eClassifiers>
-  <!-- ==================== LetBlock ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="LetBlock" eSuperTypes="#//Block">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Variable binding block with optional elseLet chain and else block (MOFM2T 1.0 Section 8.1)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="letVariable"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="letVariable" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="elseLet" upperBound="-1"
         eType="#//LetBlock" containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="else" eType="#//Block"
         containment="true"/>
   </eClassifiers>
-  <!-- ==================== FileBlock ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="FileBlock" eSuperTypes="#//Block">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Directs generated text output to a file (MOFM2T 1.0 Section 8.1)."/>
@@ -206,22 +186,19 @@
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="openMode" eType="#//OpenModeKind"
         defaultValueLiteral="overwrite"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="uniqId"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="uniqId" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="Optional unique identifier expression for protected area matching across file renames."/>
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="charset"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="charset" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="Optional charset expression (Acceleo extension, not in base MOFM2T spec)."/>
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <!-- ==================== ProtectedAreaBlock ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="ProtectedAreaBlock" eSuperTypes="#//Block">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A protected area whose content is preserved across re-generation (MOFM2T 1.0 Section 8.1)."/>
@@ -230,7 +207,6 @@
         eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
   </eClassifiers>
-  <!-- ==================== TraceBlock ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="TraceBlock" eSuperTypes="#//Block">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Associates generated text with a model element for traceability (MOFM2T 1.0 Section 8.1)."/>
@@ -239,15 +215,12 @@
         eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
   </eClassifiers>
-  <!-- ==================== TextExpression ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="TextExpression" eSuperTypes="#//TemplateExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A literal text segment within a template body (MOFM2T 1.0 Section 8.1)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="value" lowerBound="1"
-        eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="value" lowerBound="1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
   </eClassifiers>
-  <!-- ==================== TemplateInvocation ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="TemplateInvocation" eSuperTypes="#//TemplateExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Invocation of a template with arguments and optional separators (MOFM2T 1.0 Section 8.1)."/>
@@ -257,14 +230,11 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="argument" upperBound="-1"
         eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="before"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="before" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="each"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="each" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="after"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="after" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="super" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -272,7 +242,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <!-- ==================== QueryInvocation ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="QueryInvocation" eSuperTypes="#//TemplateExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Invocation of a query with arguments (MOFM2T 1.0 Section 8.1)."/>
@@ -283,7 +252,6 @@
         eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
         containment="true"/>
   </eClassifiers>
-  <!-- ==================== MacroInvocation ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="MacroInvocation" eSuperTypes="#//TemplateExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Invocation of a macro with arguments (MOFM2T 1.0 Section 8.1)."/>

@@ -36,7 +36,6 @@ import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
@@ -501,7 +500,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	@Override
 	public List<Variable> visitVarDeclaration(QvtRParser.VarDeclarationContext ctx) {
-		OclType type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+		EClassifier type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 
 		OclExpression initExp = null;
 		if (ctx.expression() != null) {
@@ -625,7 +624,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		String varName = identifierText(ctx.identifier());
 		domain.setName(varName);
 
-		OclType type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+		EClassifier type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 
 		Variable rootVar = OCL.createVariable();
 		rootVar.setName(varName);
@@ -676,7 +675,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			Variable bindVar = OCL.createVariable();
 			bindVar.setName(identifierText(ctx.identifier()));
 			if (cls != null) {
-				bindVar.setType(createClassifierType(cls));
+				bindVar.setType(cls);
 			}
 			ote.setBindsTo(bindVar);
 		}
@@ -745,7 +744,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 		// Collection kind and element type
 		String collKind = ctx.collectionKind().getText();
-		OclType elementType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+		EClassifier elementType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 		OclType collType = expressionBuilder.support.buildCollectionType(collKind, elementType);
 		cte.setReferredCollectionType(getClassifierForType(collType));
 
@@ -890,7 +889,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			for (QvtRParser.ParamDeclContext paramCtx : ctx.paramDecl()) {
 				FunctionParameter param = BASE.createFunctionParameter();
 				param.setName(identifierText(paramCtx.identifier()));
-				OclType paramType =
+				EClassifier paramType =
 						expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
 				if (paramType != null) {
 					param.setEType(getClassifierForType(paramType));
@@ -900,7 +899,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		}
 
 		// Return type
-		OclType returnType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+		EClassifier returnType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 		if (returnType != null) {
 			function.setEType(getClassifierForType(returnType));
 		}
@@ -1061,30 +1060,13 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	}
 
 	/**
-	 * Creates a ClassifierType wrapping an EClassifier.
+	 * The classifier for an EMF structural feature: the type itself if it is a metamodel
+	 * classifier (#156), EObject for a collection, map or tuple type.
 	 */
-	private ClassifierType createClassifierType(EClassifier cls) {
-		if (cls == null) {
-			return OCL.createClassifierType();
+	private EClassifier getClassifierForType(EClassifier type) {
+		if (type != null && !(type instanceof OclType)) {
+			return type;
 		}
-		// One wrapper per classifier within this builder (#154); the wrapper itself is #156
-		return classifierTypes.computeIfAbsent(cls, c -> {
-			ClassifierType ct = OCL.createClassifierType();
-			ct.setReferredClassifier(c);
-			return ct;
-		});
-	}
-
-	private final Map<EClassifier, ClassifierType> classifierTypes = new HashMap<>();
-
-	/**
-	 * Extracts an EClassifier from an OclType for use in EMF structural features.
-	 */
-	private EClassifier getClassifierForType(OclType type) {
-		if (type instanceof ClassifierType ct) {
-			return ct.getReferredClassifier();
-		}
-		// For collection/map/tuple types, return EObject as fallback
 		return EcorePackage.Literals.EOBJECT;
 	}
 
