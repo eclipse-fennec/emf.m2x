@@ -91,7 +91,7 @@ The repository root is a Gradle + BND workspace:
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
 
-The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,179 tests and 47 OSGi tests, 0 failures, as of 2026-08-28**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
+The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,183 tests and 47 OSGi tests, 0 failures, as of 2026-08-28**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
 ## Branches & releases
 

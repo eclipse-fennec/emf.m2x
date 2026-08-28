@@ -186,6 +186,14 @@ read or validation) — that is expected, not an error.
 
 ---
 
+### The OCL packages in the registry
+
+The bundle also declares the OCL metamodel (`http://www.eclipse.org/fennec/m2x/ocl/1.0`) and the
+OCL standard library (`http://www.eclipse.org/fennec/m2x/ocl/stdlib/1.0`) as EPackages. Both appear
+in *Window → Preferences → … → Package Registry* views that list `EPackage.Registry.INSTANCE`, and a
+resource that references a standard-library type — a compiled unit, once those ship — loads with
+its types resolved.
+
 ## 7. Troubleshooting
 
 **"Cannot complete the install … requires 'org.eclipse.emf.ecore…' could not be

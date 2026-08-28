@@ -714,6 +714,19 @@ Example in Ecore:
 </eStructuralFeatures>
 ```
 
+### 8.2.1 EPackages declared to the IDE (#157)
+
+`plugin.xml` also declares two `EPackage`s through `org.eclipse.emf.ecore.generated_package`: the OCL
+metamodel (`OclPackage`, `http://www.eclipse.org/fennec/m2x/ocl/1.0`) and the standard library
+(`OclStandardLibrary.eINSTANCE`, `http://www.eclipse.org/fennec/m2x/ocl/stdlib/1.0`). In a plain JVM
+and under OSGi both reach `EPackage.Registry.INSTANCE` when their classes initialize, before anything
+could reference them; an Eclipse IDE fills its registry from `plugin.xml` and reads a resource before
+running any of our code, so without the declaration a stored unit referencing
+`…/ocl/stdlib/1.0#//Integer` resolves to nothing. `OclIdePackages.DECLARED` lists the same two in
+code, and `OclIdeGeneratedPackagesTest` keeps file and list in step by doing what the registry
+reader does: load the declared class, take its static `eINSTANCE`, compare the nsURI. The
+languages' own metamodels follow when their bundles ship in a feature.
+
 ### 8.3 Implementation Classes
 
 | Class | Extends/Implements | Package |
