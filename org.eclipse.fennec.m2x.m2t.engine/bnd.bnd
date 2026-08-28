@@ -4,6 +4,7 @@ Bundle-Description: MOFM2T v1.0 template evaluator and text generation engine
 -library: enableEMF
 
 -buildpath: \
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.eclipse.fennec.m2x.m2t.api;version=snapshot,\
 	org.eclipse.fennec.m2x.m2t.model;version=snapshot,\
 	org.eclipse.fennec.m2x.m2t.parser;version=snapshot,\

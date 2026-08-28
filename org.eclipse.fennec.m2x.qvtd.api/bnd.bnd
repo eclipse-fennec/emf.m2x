@@ -4,6 +4,7 @@ Bundle-Description: Public API interfaces for the Fennec QVT-R (Relations) trans
 -library: enableEMF
 
 -buildpath: \
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.eclipse.fennec.m2x.qvt.model;version=snapshot,\

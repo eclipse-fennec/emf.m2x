@@ -17,7 +17,9 @@ package org.eclipse.fennec.m2x.m2t.api;
 import java.util.Objects;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.m2t.Module;
+import org.eclipse.fennec.m2x.unit.api.Unit;
 
 /**
  * A MOFM2T compilation unit, either as source text or as a pre-compiled
@@ -26,7 +28,7 @@ import org.eclipse.fennec.m2x.model.m2t.Module;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-public sealed interface M2tUnit permits M2tUnit.SourceUnit, M2tUnit.CompiledUnit {
+public sealed interface M2tUnit extends Unit permits M2tUnit.SourceUnit, M2tUnit.CompiledUnit {
 
 	/**
 	 * Returns the fully qualified unit name.
@@ -40,7 +42,7 @@ public sealed interface M2tUnit permits M2tUnit.SourceUnit, M2tUnit.CompiledUnit
 	 * @param uri the source URI
 	 * @param source the source text
 	 */
-	record SourceUnit(String qualifiedName, URI uri, String source) implements M2tUnit {
+	record SourceUnit(String qualifiedName, URI uri, String source) implements M2tUnit, Unit.Source {
 		public SourceUnit {
 			Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
 			Objects.requireNonNull(uri, "uri must not be null");
@@ -54,10 +56,15 @@ public sealed interface M2tUnit permits M2tUnit.SourceUnit, M2tUnit.CompiledUnit
 	 * @param qualifiedName the fully qualified unit name
 	 * @param module the pre-compiled module
 	 */
-	record CompiledUnit(String qualifiedName, Module module) implements M2tUnit {
+	record CompiledUnit(String qualifiedName, Module module) implements M2tUnit, Unit.Compiled {
 		public CompiledUnit {
 			Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
 			Objects.requireNonNull(module, "module must not be null");
+		}
+
+		@Override
+		public EObject root() {
+			return module;
 		}
 	}
 }

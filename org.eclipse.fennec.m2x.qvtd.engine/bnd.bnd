@@ -4,6 +4,7 @@ Bundle-Description: QVT-Relations v1.3 execution engine
 -library: enableEMF
 
 -buildpath: \
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\

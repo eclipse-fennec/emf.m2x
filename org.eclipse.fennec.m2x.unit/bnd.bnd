@@ -1,0 +1,19 @@
+Bundle-Name: Fennec M2X Unit
+Bundle-Description: Language-neutral contracts for compiled units: unit abstraction, store, fingerprint, prepared context, and the compiled-unit manifest metamodel
+
+-library: enableEMF
+
+# Generate the compiled-unit manifest model on demand
+#-generate:\
+#	model/compiledunit.genmodel;\
+#		generate=fennecEMF;\
+#		genmodel=model/compiledunit.genmodel;\
+#		output=src
+
+-includeresource.model: model=model
+
+src=${^src}
+
+-buildpath: \
+	org.osgi.service.condition;version=latest
+

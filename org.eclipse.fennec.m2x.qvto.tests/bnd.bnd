@@ -11,6 +11,7 @@ src=${^src}
 -includeresource.model: model=model
 
 -buildpath: \
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.osgi.test.junit5.cm;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.qvto.parser;version=snapshot,\
