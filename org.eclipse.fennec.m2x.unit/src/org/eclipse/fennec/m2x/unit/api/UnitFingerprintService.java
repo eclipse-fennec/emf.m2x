@@ -16,6 +16,8 @@ package org.eclipse.fennec.m2x.unit.api;
 
 import java.util.Set;
 
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -83,4 +85,14 @@ public interface UnitFingerprintService {
 	 * @throws IllegalArgumentException if the scheme is not supported
 	 */
 	String fingerprintInScheme(Unit unit, String scheme);
+
+	/**
+	 * Computes the fingerprint of a compiled unit in the current scheme: its script, with the
+	 * fingerprints of its dependencies folded in Merkle-style. This is the value the manifest
+	 * carries as {@code unitFingerprint}.
+	 *
+	 * @param compiled the compiled unit
+	 * @return the value in the form {@code <scheme>:<digest>}, never {@code null}
+	 */
+	String fingerprint(CompiledUnit compiled);
 }
