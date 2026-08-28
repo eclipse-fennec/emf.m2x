@@ -52,6 +52,7 @@ public class OclParserSupport implements OclExpressionParser {
 
 	private final EPackage.Registry packageRegistry;
 	private boolean strictPropertyResolution;
+	private int maxInputLength = DEFAULT_MAX_INPUT_LENGTH;
 
 	/**
 	 * Creates a parser that resolves classifier names against the global
@@ -133,20 +134,23 @@ public class OclParserSupport implements OclExpressionParser {
 	}
 
 	public OclExpression parse(String expression, EClassifier contextType) throws OclParseException {
-		OclParser parser = createParser(expression);
-		OclErrorListener errorListener = configureErrorHandling(parser);
-
-		OclParser.ExpressionEntryContext tree = parser.expressionEntry();
-
-		checkErrors(errorListener, expression);
-
+		requireWithinLimit(expression);
 		try {
+			OclParser parser = createParser(expression);
+			OclErrorListener errorListener = configureErrorHandling(parser);
+
+			OclParser.ExpressionEntryContext tree = parser.expressionEntry();
+
+			checkErrors(errorListener, expression);
+
 			OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry, strictPropertyResolution);
 			OclExpression result = builder.visitExpressionEntry(tree);
 			checkResolutionErrors(builder.support.getDiagnostics());
 			return result;
-		} catch (IllegalArgumentException e) {
-			throw new OclParseException(e.getMessage());
+		} catch (OclParseException alreadyReported) {
+			throw alreadyReported;
+		} catch (RuntimeException | StackOverflowError failure) {
+			throw asParseException(failure);
 		}
 	}
 
@@ -180,18 +184,76 @@ public class OclParserSupport implements OclExpressionParser {
 
 	private List<Constraint> parseDocument(String oclDocument, EPackage.Registry registry)
 			throws OclParseException {
-		OclParser parser = createParser(oclDocument);
-		OclErrorListener errorListener = configureErrorHandling(parser);
+		requireWithinLimit(oclDocument);
+		try {
+			OclParser parser = createParser(oclDocument);
+			OclErrorListener errorListener = configureErrorHandling(parser);
 
-		OclParser.CompleteOclDocumentEntryContext tree = parser.completeOclDocumentEntry();
+			OclParser.CompleteOclDocumentEntryContext tree = parser.completeOclDocumentEntry();
 
-		checkErrors(errorListener, oclDocument);
+			checkErrors(errorListener, oclDocument);
 
-		OclDocumentBuilder builder = new OclDocumentBuilder(registry);
-		builder.setStrictPropertyResolution(strictPropertyResolution);
-		List<Constraint> result = builder.buildDocument(tree);
-		checkResolutionErrors(builder.getDiagnostics());
-		return result;
+			OclDocumentBuilder builder = new OclDocumentBuilder(registry);
+			builder.setStrictPropertyResolution(strictPropertyResolution);
+			List<Constraint> result = builder.buildDocument(tree);
+			checkResolutionErrors(builder.getDiagnostics());
+			return result;
+		} catch (OclParseException alreadyReported) {
+			throw alreadyReported;
+		} catch (RuntimeException | StackOverflowError failure) {
+			throw asParseException(failure);
+		}
+	}
+
+	/**
+	 * The longest input this parser accepts, in characters. Default {@value #DEFAULT_MAX_INPUT_LENGTH}.
+	 *
+	 * <p>The evaluator's {@code maxDepth} protects evaluation; nothing protected parsing. ANTLR
+	 * and the AST visitor are both recursive, so deeply nested input — {@code ((((…))))} — ends in
+	 * a {@code StackOverflowError} before any evaluation limit applies (#181). A length bound is
+	 * the cheap half of the answer: it cannot tell nesting from length, but it is what keeps a
+	 * remote or generated expression from reaching the recursion at all. The other half is below:
+	 * whatever still escapes the recursion arrives as an {@code OclParseException}.
+	 *
+	 * @param maxInputLength the maximum number of characters, positive
+	 * @return this parser, for chaining
+	 * @since 1.0
+	 */
+	public OclParserSupport maxInputLength(int maxInputLength) {
+		if (maxInputLength <= 0) {
+			throw new IllegalArgumentException("maxInputLength must be positive");
+		}
+		this.maxInputLength = maxInputLength;
+		return this;
+	}
+
+	/** Default for {@link #maxInputLength(int)}: 1 MB of text, far above any hand-written unit. */
+	public static final int DEFAULT_MAX_INPUT_LENGTH = 1_000_000;
+
+	private void requireWithinLimit(String input) throws OclParseException {
+		Objects.requireNonNull(input, "input must not be null");
+		if (input.length() > maxInputLength) {
+			throw new OclParseException("OCL input is longer than " + maxInputLength
+					+ " characters (" + input.length() + ")");
+		}
+	}
+
+	/**
+	 * Everything the parser and the AST builder can throw, as one kind of failure.
+	 *
+	 * <p>A caller of {@code parse} expects an {@code OclParseException}. It used to get whatever
+	 * the visitor produced — {@code NoSuchElementException} from an {@code orElseThrow},
+	 * {@code ClassCastException} from a visitor cast, {@code StackOverflowError} from the
+	 * recursion — which is what a fuzzer finds first (#181).
+	 */
+	private static OclParseException asParseException(Throwable failure) {
+		if (failure instanceof StackOverflowError) {
+			return new OclParseException("OCL input is nested too deeply to parse");
+		}
+		String message = failure.getMessage();
+		return new OclParseException(message == null || message.isBlank()
+				? "Cannot parse the OCL input: " + failure.getClass().getSimpleName()
+				: message, failure instanceof Exception e ? e : null);
 	}
 
 	private OclParser createParser(String input) {

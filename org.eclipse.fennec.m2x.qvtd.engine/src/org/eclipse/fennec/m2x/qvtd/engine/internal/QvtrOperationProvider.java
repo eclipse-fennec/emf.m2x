@@ -57,6 +57,7 @@ class QvtrOperationProvider implements OclOperationProvider {
 	private final RelationalTransformation transformation;
 	private final QvtrBlackboxBridge blackboxBridge;
 	private final BiFunction<OclExpression, Map<String, Object>, Object> evaluator;
+	private final QvtrQueryEvaluator.QueryDepth depth;
 
 	/**
 	 * @param transformation the transformation whose queries become operations
@@ -67,10 +68,12 @@ class QvtrOperationProvider implements OclOperationProvider {
 	 */
 	QvtrOperationProvider(RelationalTransformation transformation,
 			QvtrBlackboxBridge blackboxBridge,
-			BiFunction<OclExpression, Map<String, Object>, Object> evaluator) {
+			BiFunction<OclExpression, Map<String, Object>, Object> evaluator,
+			QvtrQueryEvaluator.QueryDepth depth) {
 		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
 		this.blackboxBridge = blackboxBridge;
 		this.evaluator = Objects.requireNonNull(evaluator, "evaluator must not be null");
+		this.depth = Objects.requireNonNull(depth, "depth must not be null");
 	}
 
 	@Override
@@ -106,7 +109,14 @@ class QvtrOperationProvider implements OclOperationProvider {
 			for (int i = 0; i < Math.min(parameters.size(), args.length); i++) {
 				bindings.put(parameters.get(i).getName(), args[i]);
 			}
-			return evaluator.apply(body, bindings);
+			// A query reached through OCL is the other way into a query body, and it recurses the
+			// same way (#181) — the counter is shared with the query evaluator of this run
+			depth.enter(query.getName());
+			try {
+				return evaluator.apply(body, bindings);
+			} finally {
+				depth.leave();
+			}
 		}
 		// Body-less query: the bridge answers, behind its own gates and allow-list (§7.8). It
 		// wants the call expression to evaluate arguments itself, so the already-evaluated values
