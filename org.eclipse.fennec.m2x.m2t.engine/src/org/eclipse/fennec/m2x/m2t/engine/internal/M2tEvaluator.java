@@ -885,34 +885,58 @@ public class M2tEvaluator {
 	}
 
 	/**
-	 * Resolves override for a target template: checks if any overriding template
-	 * is applicable for the given arguments (parameter type compatibility + guard).
-	 * Returns the overriding template if found, otherwise the original target.
+	 * The template an invocation actually runs: the applicable one of the family the call names.
 	 *
-	 * <p>MOFM2T §8.1.3: Override parameters must be type-compatible (same or narrower).
+	 * <p>A template and the templates that override it are <b>one invocation target</b>. The
+	 * guard decides which of them runs, not whether anything runs, and the module the call is
+	 * written in must not change the answer — otherwise the same expression means two different
+	 * things in two modules (#149). So the family is collected from the root of the override
+	 * chain, the most derived candidate is asked first, and the first whose parameter types fit
+	 * and whose guard holds is the one. Where no candidate applies the target is returned and
+	 * {@code invokeTemplate} lets its guard decline it, which produces no output — as it did.
+	 *
+	 * <p>That is the behaviour of the MOFM2T-conformant reference: Acceleo 3.7 collects the
+	 * overriding templates and the namesakes of a call
+	 * ({@code AcceleoEvaluationEnvironment#getAllCandidates}), evaluates the guards over that
+	 * whole list ({@code AcceleoEvaluationVisitor#evaluateGuards}) and takes the most specific of
+	 * what remains — the candidate list does not depend on the calling module either.
+	 *
+	 * <p>MOFM2T §8.1.3: override parameters must be type-compatible (same or narrower).
 	 */
 	private Template resolveOverride(Template target, List<Object> evalArgs) {
-		Set<Template> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-		return resolveOverride(target, evalArgs, visited);
-	}
-
-	private Template resolveOverride(Template target, List<Object> evalArgs,
-			Set<Template> visited) {
-		if (!visited.add(target)) {
-			return target; // cycle detected — stop resolution
-		}
-		List<Template> overrides = overrideIndex.get(target);
-		if (overrides == null || overrides.isEmpty()) {
-			return target;
-		}
-
-		for (Template override : overrides) {
-			if (isOverrideApplicable(override, evalArgs)) {
-				return resolveOverride(override, evalArgs, visited);
+		for (Template candidate : overrideFamily(target)) {
+			if (isOverrideApplicable(candidate, evalArgs)) {
+				return candidate;
 			}
 		}
-
 		return target;
+	}
+
+	/**
+	 * The template and everything that overrides it, most derived first: up to the root of the
+	 * chain, then down again over every overriding template.
+	 */
+	private List<Template> overrideFamily(Template target) {
+		Set<Template> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+		Template root = target;
+		while (visited.add(root) && !root.getOverrides().isEmpty()) {
+			root = root.getOverrides().get(0);
+		}
+		List<Template> family = new ArrayList<>();
+		collectFamily(root, family, Collections.newSetFromMap(new IdentityHashMap<>()));
+		// Most derived first: an override is asked before what it overrides
+		Collections.reverse(family);
+		return family;
+	}
+
+	private void collectFamily(Template template, List<Template> family, Set<Template> visited) {
+		if (!visited.add(template)) {
+			return; // a cycle in the override chain stops here
+		}
+		family.add(template);
+		for (Template override : overrideIndex.getOrDefault(template, List.of())) {
+			collectFamily(override, family, visited);
+		}
 	}
 
 	/**

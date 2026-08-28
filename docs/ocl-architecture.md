@@ -416,6 +416,39 @@ stays accepted — whether a bound value may serve as a type belongs to evaluati
 
 ---
 
+### 5.8 Property Resolution — resolved, marked, or reported on request (#153)
+
+`AbstractExpressionBuilder.resolveProperty` binds a navigation to the feature of the source's type.
+Where the type is not known at parse time it leaves a **marked placeholder**: an `EAttribute` with
+the name as written and an annotation `…/ocl/unresolved`. The evaluator looks such a property up by
+name on the runtime object, which is what a template over a dynamic model needs; the annotation is
+what lets the fingerprint, a validator or a reader of a stored unit tell a placeholder from a
+resolved feature (`AbstractExpressionBuilder.isUnresolvedProperty`).
+
+A missing property is **not** reported by default, and the test suite says why: a Complete OCL
+`def:` registered by an earlier parse call, a library property such as `oclLocale`, and a feature of
+the runtime type where the static one is `EObject` are all properties the parser cannot see and the
+evaluator finds. `OclParserSupport.strictPropertyResolution(true)` is what a caller that hands over
+the whole document — an editor, a validator, a build check — turns on to get `Unknown property
+(Person::nam)` at its position. Within one document a `def:` is seen wherever it stands: the names
+are collected before a single expression is built, so an invariant may use a `def:` that follows it.
+
+QVT-R binds its property template items to the referred class of the object template
+(§7.11.2.4) once that class is known, and reports a class without such a property at the item's
+position; before #153 the placeholder was never replaced and travelled into the compiled unit as a
+satellite. M2T resolves through the nested parameter scope since #154/#158. Both are pinned by tests
+that count the placeholders left in a parsed unit.
+
+### 5.9 Enum literals are the model's values (#133)
+
+`EnumLiteralExp` evaluates to `EEnumLiteral.getInstance()` — the generated Java constant for a
+generated package, the literal itself for a dynamic one. That is what `eGet` returns for an
+enum-typed attribute in either world, so `status = Status::DEPRECATED` compares equal; returning the
+`EEnumLiteral` made it false against every generated model. `OclEqualityUtil` bridges the two
+representations in `oclEquals` and in `lookupKey`, so a literal and its constant also land in the
+same bucket of a unique collection. A path-qualified literal (`pkg::Enum::LITERAL`, OCL v2.4 §7.5.3)
+resolves; a literal the enumeration does not have is a parse error naming it.
+
 ## 6. Engine Architecture (`ocl.engine`)
 
 **Bundle:** `org.eclipse.fennec.m2x.ocl.engine`

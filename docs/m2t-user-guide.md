@@ -1011,9 +1011,15 @@ Override templates can have guards. When the guard is `false`, the engine falls 
 - Abstract class input: `Abstract: AbstractClass`
 - Concrete class input: `Original` (fallback to base)
 
-The fallback applies when the call resolves to the overridden template, as it does above. A call
-written inside the overriding module resolves to the overriding template directly and does not fall
-back today — see [#149](https://github.com/eclipse-fennec/emf.m2x/issues/149).
+The fallback does not depend on where the call is written (#149). A template and the templates
+that override it are **one invocation target**: the guard decides which of them runs, not whether
+anything runs. So `[e.render()/]` in the base module and the same call in the child module answer
+the same — the engine collects the family from the root of the override chain, asks the most
+derived candidate first, and runs the first whose parameter types fit and whose guard holds. Where
+no candidate applies, nothing is generated. That is the behaviour of the MOFM2T-conformant
+reference: Acceleo 3.7 builds the candidate list from a call's overriding templates and namesakes,
+evaluates the guards over the whole list, and takes the most specific of what remains — its
+candidate list does not depend on the calling module either.
 
 ### 9.3 Parameter Type Narrowing
 

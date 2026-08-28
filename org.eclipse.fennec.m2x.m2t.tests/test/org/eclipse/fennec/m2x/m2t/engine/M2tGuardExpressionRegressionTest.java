@@ -34,7 +34,6 @@ import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -222,8 +221,6 @@ class M2tGuardExpressionRegressionTest {
 
 	// §7.0: the same override with a guard the query rejects — the base applies
 	@Test
-	@Disabled("#149 — a call resolving to the overriding template does not fall back "
-			+ "to the overridden one when the guard declines; unrelated to the query visibility of #146")
 	void overridingTemplateGuard_queryRejects_baseApplies() throws M2tParseException {
 		String base = """
 				[module base(Ecore)/]
