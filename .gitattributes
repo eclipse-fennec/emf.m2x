@@ -1,0 +1,20 @@
+# Generated sources are written by a tool whose line ending follows the platform it runs on:
+# EMF's generator falls back to System.getProperty("line.separator") (GenModelImpl#getLineDelimiter),
+# and the ANTLR tool behaves the same way. A regeneration on Windows would otherwise rewrite every
+# generated file with CRLF and produce a whole-file diff without a content change (#168).
+#
+# This is the place to fix it: a .genmodel cannot carry the setting — lineDelimiter is a runtime
+# property of the generator, not a feature of the GenModel metamodel, and writing it into the file
+# makes EMF refuse to load it ("Feature 'lineDelimiter' not found"). With eol=lf git stores and
+# checks out LF regardless of what the generator wrote, so a regeneration that only changed line
+# endings is not a change at all.
+**/src-gen/** text eol=lf
+
+# The model projects generate into src/ — the same tool, the same reason. Scoped to what a
+# generator writes, so that nothing else in the tree is renormalized by this file.
+**/src/**/*.java text eol=lf
+
+# Models and grammars: the inputs of those generators, edited by hand and by EMF alike.
+**/model/*.ecore text eol=lf
+**/model/*.genmodel text eol=lf
+**/grammar/*.g4 text eol=lf

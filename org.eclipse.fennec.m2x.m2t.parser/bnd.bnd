@@ -15,15 +15,19 @@ antlr4.tool.cp = \
 	${repo;org.abego.treelayout:org.abego.treelayout.core;1.0.3}:\
 	${repo;com.ibm.icu:icu4j;72.1}
 
-# Split grammar: run grammar/generate.sh manually to regenerate src-gen/.
-# Commented out because the shell script is Linux/Mac only.
--generate: \
-	grammar/M2tLexer.g4; \
-		output=src-gen; \
-		system='${project}/grammar/generate.sh \
-			${antlr4.tool.cp} \
-			src-gen/org/eclipse/fennec/m2x/m2t/parser \
-			${project}/grammar'
+# Split grammar: run grammar/generate.sh manually to regenerate src-gen/, then commit what it
+# produced. The instruction below stays commented out, as its own comment always said it was:
+# bnd empties the output directory before it runs the generation, and the generation is a shell
+# script that exists on Linux and macOS only — so on Windows an ordinary build deleted the
+# checked-in sources and put nothing in their place (#168). The same shape is used by the model
+# projects (see ocl.model/bnd.bnd).
+#-generate: \
+#	grammar/M2tLexer.g4; \
+#		output=src-gen; \
+#		system='${project}/grammar/generate.sh \
+#			${antlr4.tool.cp} \
+#			src-gen/org/eclipse/fennec/m2x/m2t/parser \
+#			${project}/grammar'
 
 # Include grammar file for downstream import
 -includeresource.grammar: grammar=grammar
