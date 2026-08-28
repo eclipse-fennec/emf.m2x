@@ -24,7 +24,7 @@ import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Query;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
@@ -84,8 +84,8 @@ class M2tOperationProvider implements OclOperationProvider {
 	 */
 	private OclOperation toOperation(Query query, AnyType any) {
 		int receiverFormArity = Math.max(0, query.getParameter().size() - 1);
-		List<OclType> parameterTypes = new ArrayList<>(
-				Collections.nCopies(receiverFormArity, (OclType) any));
+		List<EClassifier> parameterTypes = new ArrayList<>(
+				Collections.nCopies(receiverFormArity, (EClassifier) any));
 		return new OclOperation(query.getName(), any, parameterTypes, any,
 				(self, args) -> invoke(query, self, args));
 	}

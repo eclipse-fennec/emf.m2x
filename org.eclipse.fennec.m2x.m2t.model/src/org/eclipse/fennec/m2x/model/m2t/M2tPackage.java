@@ -45,7 +45,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = M2tPackage.eNS_URI, fingerprint = "fp1:f501f4fe8cd550795b07715bfcb5e2c1c57d77be38483899f3281fe3533da2c6", genModel = "/model/m2t.genmodel", genModelSourceLocations = {"model/m2t.genmodel","org.eclipse.fennec.m2x.m2t.model/model/m2t.genmodel"}, ecore = "/model/m2t.ecore", ecoreSourceLocations = "/model/m2t.ecore")
+@EPackage(uri = M2tPackage.eNS_URI, fingerprint = "fp1:f1b8897acf20bae8c6b154c2b2c1574f0aaf5c88e1b3159af23c248b3939525a", genModel = "/model/m2t.genmodel", genModelSourceLocations = {"model/m2t.genmodel","org.eclipse.fennec.m2x.m2t.model/model/m2t.genmodel"}, ecore = "/model/m2t.ecore", ecoreSourceLocations = "/model/m2t.ecore")
 public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.

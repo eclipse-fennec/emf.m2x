@@ -31,7 +31,6 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
@@ -584,7 +583,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					continue;
 				}
 				// §8.2.1.10: Use context type for dispatch
-				OclType ownerType = resolveOwnerType(impOp);
+				EClassifier ownerType = resolveOwnerType(impOp);
 
 				if (impOp.isIsBlackbox()) {
 					// Blackbox operation — delegate to library's invoke()
@@ -645,16 +644,14 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	 * §8.2.1.10: Resolves the owner type for an imperative operation from its context parameter.
 	 * Returns ANY_TYPE for non-contextual operations.
 	 */
-	private OclType resolveOwnerType(ImperativeOperation impOp) {
+	private EClassifier resolveOwnerType(ImperativeOperation impOp) {
 		var ctxParam = impOp.getContext();
 		if (ctxParam == null || ctxParam.getEType() == null) {
 			return ANY_TYPE;
 		}
 		EClassifier classifier = ctxParam.getEType();
 		if (classifier instanceof EClass ec) {
-			ClassifierType ct = OclFactory.eINSTANCE.createClassifierType();
-			ct.setReferredClassifier(ec);
-			return ct;
+			return ec;
 		}
 		if (classifier instanceof EDataType dt) {
 			// Map Ecore primitive names to OCL names (EString→String, EInt→Integer, etc.) and
@@ -697,9 +694,6 @@ public class QvtoOperationProvider implements OclOperationProvider {
 
 	private static EClass resolveEClassArg(Object arg) {
 		if (arg instanceof EClass ec) {
-			return ec;
-		}
-		if (arg instanceof ClassifierType ct && ct.getReferredClassifier() instanceof EClass ec) {
 			return ec;
 		}
 		return null;

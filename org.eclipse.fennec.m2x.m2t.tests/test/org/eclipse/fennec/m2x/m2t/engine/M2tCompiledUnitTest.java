@@ -100,9 +100,10 @@ class M2tCompiledUnitTest {
 	void compile_yieldsASelfContainedDocument() throws Exception {
 		CompiledUnit compiled = engine.compile(MODULE, "m");
 		assertEquals(List.of(), SatelliteCollector.find(compiled));
-		// What is left after #154 (types from the standard library, parameters in scope): the
-		// two ClassifierType wrappers (#156) and the synthetic EAttributes of #153. Measured:
-		// 15 before #154, 8 after. The count is not asserted — it falls with every follow-up.
+		// What is left after #154 and #156 (types from the standard library, no wrapper, parameters
+		// in scope): the loop and let variables, two per-use collection types and the synthetic
+		// EAttribute of #153. Measured: 15 before #154, 8 after, 5 after #156. The count is not
+		// asserted — it falls with every follow-up.
 		assertFalse(compiled.getSatellite().isEmpty(),
 				"the parser's satellites are in the container");
 	}

@@ -44,7 +44,6 @@ import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
@@ -198,8 +197,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 
 	private void registerDefOperation(EClassifier ctx, String opName,
 			OclExpression body, List<String> paramNames) {
-		ClassifierType ownerType = OclFactory.eINSTANCE.createClassifierType();
-		ownerType.setReferredClassifier(ctx);
+		// The operation is defined on the context classifier itself (#156)
+		EClassifier ownerType = ctx;
 
 		BiFunction<Object, Object[], Object> impl = (self, args) -> {
 			if (!(self instanceof EObject eo)) {

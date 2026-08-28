@@ -18,6 +18,7 @@ import org.eclipse.emf.common.notify.Notification;
 import org.eclipse.emf.common.notify.NotificationChain;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.InternalEObject;
 
 import org.eclipse.emf.ecore.impl.ENotificationImpl;
@@ -25,7 +26,6 @@ import org.eclipse.emf.ecore.impl.MinimalEObjectImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 
 /**
@@ -72,7 +72,7 @@ public class VariableImpl extends MinimalEObjectImpl.Container implements Variab
 	 * @generated
 	 * @ordered
 	 */
-	protected OclType type;
+	protected EClassifier type;
 
 	/**
 	 * The cached value of the '{@link #getOwnedInit() <em>Owned Init</em>}' containment reference.
@@ -132,10 +132,10 @@ public class VariableImpl extends MinimalEObjectImpl.Container implements Variab
 	 * @generated
 	 */
 	@Override
-	public OclType getType() {
+	public EClassifier getType() {
 		if (type != null && type.eIsProxy()) {
 			InternalEObject oldType = (InternalEObject)type;
-			type = (OclType)eResolveProxy(oldType);
+			type = (EClassifier)eResolveProxy(oldType);
 			if (type != oldType) {
 				if (eNotificationRequired())
 					eNotify(new ENotificationImpl(this, Notification.RESOLVE, OclPackage.VARIABLE__TYPE, oldType, type));
@@ -149,7 +149,7 @@ public class VariableImpl extends MinimalEObjectImpl.Container implements Variab
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetType() {
+	public EClassifier basicGetType() {
 		return type;
 	}
 
@@ -159,8 +159,8 @@ public class VariableImpl extends MinimalEObjectImpl.Container implements Variab
 	 * @generated
 	 */
 	@Override
-	public void setType(OclType newType) {
-		OclType oldType = type;
+	public void setType(EClassifier newType) {
+		EClassifier oldType = type;
 		type = newType;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.VARIABLE__TYPE, oldType, type));
@@ -256,7 +256,7 @@ public class VariableImpl extends MinimalEObjectImpl.Container implements Variab
 				setName((String)newValue);
 				return;
 			case OclPackage.VARIABLE__TYPE:
-				setType((OclType)newValue);
+				setType((EClassifier)newValue);
 				return;
 			case OclPackage.VARIABLE__OWNED_INIT:
 				setOwnedInit((OclExpression)newValue);
@@ -277,7 +277,7 @@ public class VariableImpl extends MinimalEObjectImpl.Container implements Variab
 				setName(NAME_EDEFAULT);
 				return;
 			case OclPackage.VARIABLE__TYPE:
-				setType((OclType)null);
+				setType((EClassifier)null);
 				return;
 			case OclPackage.VARIABLE__OWNED_INIT:
 				setOwnedInit((OclExpression)null);

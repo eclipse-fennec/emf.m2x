@@ -225,7 +225,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 	public TupleLiteralExp visitTupleLiteral(QvtRParser.TupleLiteralContext ctx) {
 		List<TupleLiteralPart> parts = new ArrayList<>();
 		for (QvtRParser.TupleLiteralPartContext partCtx : ctx.tupleLiteralPart()) {
-			OclType type = partCtx.typeExpression() != null
+			EClassifier type = partCtx.typeExpression() != null
 					? resolveTypeExpression(partCtx.typeExpression()) : null;
 			parts.add(support.buildTupleLiteralPart(
 					identifierText(partCtx.identifier()),
@@ -370,11 +370,11 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 		String iterName = identifierText(ctx.identifier());
 		OclEnvironment savedEnv = env();
 
-		OclType elementType = support.inferElementType(source);
+		EClassifier elementType = support.inferElementType(source);
 		QvtRParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
 		List<Variable> iterVars = new ArrayList<>();
 		for (int i = 0; i < varsCtx.identifier().size(); i++) {
-			OclType varType = (i < varsCtx.typeExpression().size()
+			EClassifier varType = (i < varsCtx.typeExpression().size()
 					&& varsCtx.typeExpression(i) != null)
 					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType;
 			Variable iterVar = support.createVariable(
@@ -394,13 +394,13 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 			QvtRParser.IterateCallContext ctx, boolean isSafe) {
 		OclEnvironment savedEnv = env();
 
-		OclType iterType = ctx.typeExpression().size() > 0
+		EClassifier iterType = ctx.typeExpression().size() > 0
 				? resolveTypeExpression(ctx.typeExpression(0))
 				: support.inferElementType(source);
 		Variable iterVar = support.createVariable(
 				identifierText(ctx.identifier(1)), iterType, null);
 
-		OclType accType = ctx.typeExpression().size() > 1
+		EClassifier accType = ctx.typeExpression().size() > 1
 				? resolveTypeExpression(ctx.typeExpression(1)) : null;
 		Variable accVar = support.createVariable(
 				identifierText(ctx.identifier(2)), accType,
@@ -469,7 +469,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 		LetExp current = null;
 
 		for (QvtRParser.LetBindingContext bindCtx : bindings) {
-			OclType type = bindCtx.typeExpression() != null
+			EClassifier type = bindCtx.typeExpression() != null
 					? resolveTypeExpression(bindCtx.typeExpression()) : null;
 			Variable var = support.createVariable(
 					identifierText(bindCtx.identifier()),
@@ -550,7 +550,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 
 	// ==================== Type Resolution ====================
 
-	OclType resolveTypeExpression(QvtRParser.TypeExpressionContext ctx) {
+	EClassifier resolveTypeExpression(QvtRParser.TypeExpressionContext ctx) {
 		if (ctx.primitiveType() != null) {
 			return support.createPrimitiveType(ctx.primitiveType().getText());
 		}
@@ -583,7 +583,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 
 	private OclType resolveTupleType(QvtRParser.TupleTypeContext ctx) {
 		List<String> names = new ArrayList<>();
-		List<OclType> types = new ArrayList<>();
+		List<EClassifier> types = new ArrayList<>();
 		for (QvtRParser.TupleTypePartContext partCtx : ctx.tupleTypePart()) {
 			names.add(identifierText(partCtx.identifier()));
 			types.add(resolveTypeExpression(partCtx.typeExpression()));

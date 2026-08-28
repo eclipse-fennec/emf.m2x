@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.model.ocl;
 
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 
 import org.osgi.annotation.versioning.ProviderType;
@@ -68,12 +69,12 @@ public interface TuplePart extends EObject {
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @return the value of the '<em>Type</em>' reference.
-	 * @see #setType(OclType)
+	 * @see #setType(EClassifier)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getTuplePart_Type()
 	 * @model
 	 * @generated
 	 */
-	OclType getType();
+	EClassifier getType();
 
 	/**
 	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.TuplePart#getType <em>Type</em>}' reference.
@@ -83,6 +84,6 @@ public interface TuplePart extends EObject {
 	 * @see #getType()
 	 * @generated
 	 */
-	void setType(OclType value);
+	void setType(EClassifier value);
 
 } // TuplePart

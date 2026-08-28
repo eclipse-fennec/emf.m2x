@@ -55,7 +55,6 @@ import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
@@ -141,7 +140,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
 		this(environment, packageRegistry, Map.of(), new java.util.HashMap<>(),
-				new java.util.ArrayList<>(), new HashMap<>(), new java.util.LinkedHashSet<>());
+				new java.util.ArrayList<>(), new java.util.LinkedHashSet<>());
 	}
 
 	/**
@@ -189,22 +188,17 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
 			Map<String, Module> importedModuleStubs) {
 		this(environment, packageRegistry, importedModuleStubs, new java.util.HashMap<>(),
-				new java.util.ArrayList<>(), new HashMap<>(), new java.util.LinkedHashSet<>());
+				new java.util.ArrayList<>(), new java.util.LinkedHashSet<>());
 	}
 
 	/**
 	 * @param localTypes module-local type names ({@code typedef}), shared with the unit
 	 *        builder so that they survive this builder being recreated mid-unit
-	 * @param classifierTypes the one wrapper per referenced classifier, shared for the same
-	 *        reason: the unit builder recreates this builder eleven times per unit, and a cache
-	 *        that died with each of them left two wrappers for one {@code SourceElement} (#154)
 	 */
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
 			Map<String, Module> importedModuleStubs, Map<String, EClassifier> localTypes,
-			List<Resource.Diagnostic> diagnostics, Map<EClassifier, ClassifierType> classifierTypes,
-			Set<EPackage> declaredPackages) {
+			List<Resource.Diagnostic> diagnostics, Set<EPackage> declaredPackages) {
 		this.declaredPackages = Objects.requireNonNull(declaredPackages, "declaredPackages must not be null");
-		this.classifierTypes = Objects.requireNonNull(classifierTypes, "classifierTypes must not be null");
 		this.localTypes = Objects.requireNonNull(localTypes, "localTypes must not be null");
 		this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics must not be null");
 		this.environment = Objects.requireNonNull(environment,
@@ -687,7 +681,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName(iterName);
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
@@ -730,7 +724,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName(iterName);
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
@@ -760,7 +754,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				EClassifier classifier = resolveClassifier(segments);
 				if (classifier != null) {
 					TypeExp typeExp = OCL.createTypeExp();
-					typeExp.setReferredType(createClassifierType(classifier));
+					typeExp.setReferredType(classifier);
 					return typeExp;
 				}
 			}
@@ -1195,7 +1189,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			Variable iterVar = OCL.createVariable();
 			iterVar.setName(varName);
 			if (iterCtx.typeExpression() != null) {
-				OclType varType = resolveTypeExpression(iterCtx.typeExpression());
+				EClassifier varType = resolveTypeExpression(iterCtx.typeExpression());
 				if (varType != null) {
 					iterVar.setType(varType);
 				}
@@ -1278,8 +1272,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		// Type → instantiatedClass (if resolvable as EClass)
 		if (ctx.typeExpression() != null) {
-			OclType type = resolveTypeExpression(ctx.typeExpression());
-			if (type instanceof ClassifierType ct && ct.getReferredClassifier() instanceof EClass ec) {
+			EClassifier type = resolveTypeExpression(ctx.typeExpression());
+			if (type instanceof EClass ec) {
 				objectExp.setInstantiatedClass(ec);
 				objectExp.setType(type);
 				refVar.setType(type);
@@ -1576,7 +1570,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	// ==================== Type Resolution ====================
 
-	OclType resolveTypeExpression(QvtOParser.TypeExpressionContext ctx) {
+	EClassifier resolveTypeExpression(QvtOParser.TypeExpressionContext ctx) {
 		// Every "Unknown type" comes through here, from eight call sites that each hold the
 		// context — the choke point where the position is worth setting (#110).
 		if (ctx != null && ctx.getStart() != null) {
@@ -1601,7 +1595,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			return resolveDictType(ctx.dictType());
 		}
 		if (ctx.pathName() != null) {
-			return createClassifierType(resolveClassifier(pathNameSegments(ctx.pathName())));
+			return resolveClassifier(pathNameSegments(ctx.pathName()));
 		}
 		return null;
 	}
@@ -1615,27 +1609,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		});
 	}
 
-	ClassifierType createClassifierType(EClassifier classifier) {
-		if (classifier == null) {
-			return OCL.createClassifierType();
-		}
-		// One wrapper per classifier within this builder (#154); the wrapper itself is #156
-		return classifierTypes.computeIfAbsent(classifier, c -> {
-			ClassifierType type = OCL.createClassifierType();
-			type.setReferredClassifier(c);
-			type.setName(c.getName());
-			return type;
-		});
-	}
-
-	private final Map<EClassifier, ClassifierType> classifierTypes;
-
 	/** The packages the unit declared with modeltype — the scope of unqualified type names. */
 	private final Set<EPackage> declaredPackages;
 
 	private OclType resolveCollectionType(QvtOParser.CollectionTypeContext ctx) {
 		CollectionKind kind = resolveCollectionKind(ctx.collectionKind().getText());
-		OclType elementType = resolveTypeExpression(ctx.typeExpression());
+		EClassifier elementType = resolveTypeExpression(ctx.typeExpression());
 		CollectionType type = switch (kind) {
 			case SET -> OCL.createSetType();
 			case ORDERED_SET -> OCL.createOrderedSetType();
@@ -1804,7 +1783,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 					if (feature.isMany()) {
 						exp.setType(createCollectionTypeForFeature(feature));
 					} else {
-						exp.setType(createClassifierType(featureType));
+						exp.setType(featureType);
 					}
 				}
 				return;
@@ -1842,29 +1821,22 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (source == null) {
 			return null;
 		}
-		OclType type = source.getType();
-		if (type instanceof CollectionType colType
-				&& colType.getElementType() instanceof ClassifierType ct) {
-			return ct.getReferredClassifier();
+		EClassifier type = source.getType();
+		if (type instanceof CollectionType colType) {
+			return colType.getElementType();
 		}
-		if (type instanceof ClassifierType ct) {
-			return ct.getReferredClassifier();
-		}
-		return null;
+		return type;
 	}
 
-	private OclType inferElementType(OclExpression source) {
+	private EClassifier inferElementType(OclExpression source) {
 		if (source == null) {
 			return null;
 		}
-		OclType type = source.getType();
+		EClassifier type = source.getType();
 		if (type instanceof CollectionType colType && colType.getElementType() != null) {
 			return copyType(colType.getElementType());
 		}
-		if (type instanceof ClassifierType ct && ct.getReferredClassifier() != null) {
-			return createClassifierType(ct.getReferredClassifier());
-		}
-		return null;
+		return type;
 	}
 
 	// ==================== Internal Helpers ====================
@@ -2012,7 +1984,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName("_xcol_it");
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
@@ -2039,7 +2011,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName("_xmap_it");
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
@@ -2077,14 +2049,14 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (objCtx.objectIterator() != null) {
 			QvtOParser.ObjectIteratorContext iterCtx = objCtx.objectIterator();
 			iterVar.setName(qvtoIdentifierText(iterCtx.qvtoIdentifier()));
-			OclType iterType = resolveTypeExpression(iterCtx.typeExpression());
+			EClassifier iterType = resolveTypeExpression(iterCtx.typeExpression());
 			if (iterType != null) {
 				iterVar.setType(iterType);
 			}
 		} else {
 			// No explicit iterator — generate synthetic name, infer type from source
 			iterVar.setName("_xobj_it");
-			OclType elementType = inferElementType(source);
+			EClassifier elementType = inferElementType(source);
 			if (elementType != null) {
 				iterVar.setType(elementType);
 			}
@@ -2116,7 +2088,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			QvtOParser.SwitchIteratorContext iterCtx = switchCtx.switchIterator();
 			iterVar.setName(qvtoIdentifierText(iterCtx.qvtoIdentifier()));
 			if (iterCtx.typeExpression() != null) {
-				OclType iterType = resolveTypeExpression(iterCtx.typeExpression());
+				EClassifier iterType = resolveTypeExpression(iterCtx.typeExpression());
 				if (iterType != null) {
 					iterVar.setType(iterType);
 				}
@@ -2124,7 +2096,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		} else {
 			// No explicit iterator — generate synthetic name
 			iterVar.setName("_xswitch_it");
-			OclType elementType = inferElementType(source);
+			EClassifier elementType = inferElementType(source);
 			if (elementType != null) {
 				iterVar.setType(elementType);
 			}
@@ -2149,7 +2121,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		exp.setName(qvtoIdentifierText(ctx.qvtoIdentifier()));
 
 		QvtoEnvironment savedEnv = this.environment;
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 
 		QvtOParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
 		List<Variable> iterVars = new ArrayList<>();
@@ -2185,7 +2157,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (ctx.iterType != null) {
 			iterVar.setType(resolveTypeExpression(ctx.iterType));
 		} else {
-			OclType elementType = inferElementType(source);
+			EClassifier elementType = inferElementType(source);
 			if (elementType != null) {
 				iterVar.setType(elementType);
 			}
@@ -2257,7 +2229,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName("_hash_it");
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
@@ -2284,7 +2256,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		EClassifier classifier = findInDeclaredPackages(name);
 		if (classifier != null) {
 			TypeExp typeExp = OCL.createTypeExp();
-			typeExp.setReferredType(createClassifierType(classifier));
+			typeExp.setReferredType(classifier);
 			return typeExp;
 		}
 		// Fall back to unresolved variable reference
@@ -2323,13 +2295,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private OclExpression resolveQualifiedName(List<String> segments) {
 		EClassifier resolved = resolveClassifier(segments);
 		TypeExp exp = OCL.createTypeExp();
-		exp.setReferredType(createClassifierType(resolved));
+		exp.setReferredType(resolved);
 		return exp;
 	}
 
 	private CollectionType createCollectionTypeForFeature(EStructuralFeature feature) {
 		CollectionType colType = OCL.createCollectionType();
-		colType.setElementType(createClassifierType(feature.getEType()));
+		colType.setElementType(feature.getEType());
 		if (feature instanceof EReference ref) {
 			if (ref.isOrdered()) {
 				colType.setKind(ref.isUnique() ? CollectionKind.ORDERED_SET : CollectionKind.SEQUENCE);
@@ -2342,10 +2314,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return colType;
 	}
 
-	private OclType copyType(OclType type) {
-		if (type instanceof ClassifierType ct) {
-			return createClassifierType(ct.getReferredClassifier());
-		}
+	private EClassifier copyType(EClassifier type) {
 		if (type instanceof CollectionType colType) {
 			CollectionType copy = OCL.createCollectionType();
 			if (colType.getElementType() != null) {
@@ -2354,7 +2323,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			copy.setKind(colType.getKind());
 			return copy;
 		}
-		return null;
+		return type;
 	}
 
 	private BlockExp buildBlock(QvtOParser.BlockContext ctx) {
@@ -2450,7 +2419,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * §8.2.1.10: Resolve the context type from a scoped name (e.g., String::wrap, Integer::doubled,
 	 * SourceElement::toTarget). Returns null if no context prefix present.
 	 */
-	OclType resolveContextType(QvtOParser.ScopedNameContext ctx) {
+	EClassifier resolveContextType(QvtOParser.ScopedNameContext ctx) {
 		if (ctx.primitiveType() != null) {
 			return createPrimitiveType(ctx.primitiveType().getText());
 		}
@@ -2465,7 +2434,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			for (int i = 0; i < ids.size() - 1; i++) {
 				segments.add(qvtoIdentifierText(ids.get(i)));
 			}
-			return createClassifierType(resolveClassifier(segments));
+			return resolveClassifier(segments);
 		}
 		return null;
 	}

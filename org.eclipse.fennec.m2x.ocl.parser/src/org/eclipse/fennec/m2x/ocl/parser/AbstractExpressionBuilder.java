@@ -35,7 +35,6 @@ import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
@@ -128,7 +127,7 @@ public class AbstractExpressionBuilder {
 		this.packageRegistry = packageRegistry;
 		Variable selfVar = FACTORY.createVariable();
 		selfVar.setName("self");
-		selfVar.setType(createClassifierType(contextType));
+		selfVar.setType(contextType);
 		this.environment = OclEnvironment.root(selfVar);
 	}
 
@@ -406,7 +405,7 @@ public class AbstractExpressionBuilder {
 		return exp;
 	}
 
-	public TupleLiteralPart buildTupleLiteralPart(String name, OclType type,
+	public TupleLiteralPart buildTupleLiteralPart(String name, EClassifier type,
 			OclExpression init) {
 		TupleLiteralPart part = FACTORY.createTupleLiteralPart();
 		part.setName(name);
@@ -481,7 +480,7 @@ public class AbstractExpressionBuilder {
 		collectExp.getOwnedIterators().add(iterVar);
 		collectExp.setOwnedBody(bodyExp);
 
-		OclType bodyType = bodyExp.getType();
+		EClassifier bodyType = bodyExp.getType();
 		if (bodyType != null) {
 			CollectionType resultType = FACTORY.createCollectionType();
 			resultType.setElementType(copyType(bodyType));
@@ -522,7 +521,7 @@ public class AbstractExpressionBuilder {
 		exp.getOwnedIterators().addAll(iterVars);
 		exp.setOwnedBody(body);
 
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 		if (elementType != null) {
 			switch (iterName) {
 				case "select", "reject", "sortedBy", "closure":
@@ -600,7 +599,7 @@ public class AbstractExpressionBuilder {
 		exp.setIsSafe(isSafe);
 		ArrowCallMarker.mark(exp);
 
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 		Variable iterVar = FACTORY.createVariable();
 		iterVar.setName("_implicit");
 		if (elementType != null) {
@@ -629,7 +628,7 @@ public class AbstractExpressionBuilder {
 	 * @return the implicit iterator variable
 	 */
 	public Variable pushImplicitIteratorEnv(OclExpression source) {
-		OclType elementType = inferElementType(source);
+		EClassifier elementType = inferElementType(source);
 		Variable iterVar = FACTORY.createVariable();
 		iterVar.setName("_implicit");
 		if (elementType != null) {
@@ -670,7 +669,7 @@ public class AbstractExpressionBuilder {
 	/**
 	 * Creates a variable with optional type, suitable for let bindings or iterator vars.
 	 */
-	public Variable createVariable(String name, OclType type, OclExpression init) {
+	public Variable createVariable(String name, EClassifier type, OclExpression init) {
 		Variable var = FACTORY.createVariable();
 		var.setName(name);
 		if (type != null) {
@@ -687,7 +686,7 @@ public class AbstractExpressionBuilder {
 	/**
 	 * Builds a TypeExp wrapping the given type.
 	 */
-	public TypeExp buildTypeExp(OclType type) {
+	public TypeExp buildTypeExp(EClassifier type) {
 		TypeExp exp = FACTORY.createTypeExp();
 		exp.setReferredType(type);
 		return exp;
@@ -709,21 +708,6 @@ public class AbstractExpressionBuilder {
 	}
 
 	/**
-	 * One wrapper per referenced classifier within this builder. The wrapper itself stays until
-	 * #156 removes it; what #154 removes is the second, third and fourth copy of it.
-	 */
-	public ClassifierType createClassifierType(EClassifier classifier) {
-		return classifierTypes.computeIfAbsent(classifier, c -> {
-			ClassifierType type = FACTORY.createClassifierType();
-			type.setReferredClassifier(c);
-			type.setName(c.getName());
-			return type;
-		});
-	}
-
-	private final Map<EClassifier, ClassifierType> classifierTypes = new HashMap<>();
-
-	/**
 	 * Initialized with the first builder, before any name is resolved. Until #154 the OCL
 	 * metamodel reached the global registry as a side effect of the evaluator's first primitive
 	 * type, so whether a registry scan saw it depended on what had been evaluated before.
@@ -732,7 +716,7 @@ public class AbstractExpressionBuilder {
 
 	public CollectionType createCollectionTypeForFeature(EStructuralFeature feature) {
 		CollectionType colType = FACTORY.createCollectionType();
-		colType.setElementType(createClassifierType(feature.getEType()));
+		colType.setElementType(feature.getEType());
 		if (feature instanceof EReference ref) {
 			if (ref.isOrdered()) {
 				colType.setKind(ref.isUnique() ? CollectionKind.ORDERED_SET : CollectionKind.SEQUENCE);
@@ -745,7 +729,7 @@ public class AbstractExpressionBuilder {
 		return colType;
 	}
 
-	public OclType buildCollectionType(String kindText, OclType elementType) {
+	public OclType buildCollectionType(String kindText, EClassifier elementType) {
 		CollectionKind kind = resolveCollectionKind(kindText);
 		CollectionType type = switch (kind) {
 			case SET -> FACTORY.createSetType();
@@ -759,14 +743,14 @@ public class AbstractExpressionBuilder {
 		return type;
 	}
 
-	public OclType buildMapType(OclType keyType, OclType valueType) {
+	public OclType buildMapType(EClassifier keyType, EClassifier valueType) {
 		var type = FACTORY.createMapType();
 		type.setKeyType(keyType);
 		type.setValueType(valueType);
 		return type;
 	}
 
-	public OclType buildTupleType(List<String> partNames, List<OclType> partTypes) {
+	public OclType buildTupleType(List<String> partNames, List<EClassifier> partTypes) {
 		var type = FACTORY.createTupleType();
 		for (int i = 0; i < partNames.size(); i++) {
 			var part = FACTORY.createTuplePart();
@@ -777,8 +761,8 @@ public class AbstractExpressionBuilder {
 		return type;
 	}
 
-	public OclType buildTypeFromPath(List<String> segments) {
-		return createClassifierType(resolveClassifier(segments));
+	public EClassifier buildTypeFromPath(List<String> segments) {
+		return resolveClassifier(segments);
 	}
 
 	// ==================== Name Resolution ====================
@@ -794,7 +778,7 @@ public class AbstractExpressionBuilder {
 					if (feature.isMany()) {
 						exp.setType(createCollectionTypeForFeature(feature));
 					} else {
-						exp.setType(createClassifierType(featureType));
+						exp.setType(featureType);
 					}
 				}
 				return;
@@ -930,7 +914,7 @@ public class AbstractExpressionBuilder {
 					if (feature.isMany()) {
 						exp.setType(createCollectionTypeForFeature(feature));
 					} else {
-						exp.setType(createClassifierType(featureType));
+						exp.setType(featureType);
 					}
 				}
 				return exp;
@@ -948,7 +932,7 @@ public class AbstractExpressionBuilder {
 					if (feature.isMany()) {
 						exp.setType(createCollectionTypeForFeature(feature));
 					} else {
-						exp.setType(createClassifierType(featureType));
+						exp.setType(featureType);
 					}
 				}
 				return exp;
@@ -958,7 +942,7 @@ public class AbstractExpressionBuilder {
 			for (EClassifier classifier : contextClass.getEPackage().getEClassifiers()) {
 				if (classifier.getName().equals(name)) {
 					TypeExp typeExp = FACTORY.createTypeExp();
-					typeExp.setReferredType(createClassifierType(classifier));
+					typeExp.setReferredType(classifier);
 					return typeExp;
 				}
 			}
@@ -966,7 +950,7 @@ public class AbstractExpressionBuilder {
 		EClassifier inScope = findInScope(name);
 		if (inScope != null) {
 			TypeExp typeExp = FACTORY.createTypeExp();
-			typeExp.setReferredType(createClassifierType(inScope));
+			typeExp.setReferredType(inScope);
 			return typeExp;
 		}
 		Variable extVar = FACTORY.createVariable();
@@ -996,16 +980,18 @@ public class AbstractExpressionBuilder {
 	public OclExpression resolveQualifiedName(List<String> segments) {
 		EClassifier resolved = resolveClassifier(segments);
 		TypeExp exp = FACTORY.createTypeExp();
-		exp.setReferredType(createClassifierType(resolved));
+		exp.setReferredType(resolved);
 		return exp;
 	}
 
 	// ==================== Type Utilities ====================
 
-	public OclType copyType(OclType type) {
-		if (type instanceof ClassifierType ct) {
-			return createClassifierType(ct.getReferredClassifier());
-		}
+	/**
+	 * A type for a second owner. Only a collection type is a per-use object that has to be copied;
+	 * a metamodel classifier and a standard-library type are shared and are returned as they are
+	 * — one {@code Integer}, one {@code Person} (#154, #156).
+	 */
+	public EClassifier copyType(EClassifier type) {
 		if (type instanceof CollectionType colType) {
 			CollectionType copy = FACTORY.createCollectionType();
 			if (colType.getElementType() != null) {
@@ -1014,41 +1000,37 @@ public class AbstractExpressionBuilder {
 			copy.setKind(colType.getKind());
 			return copy;
 		}
-		return null;
+		return type;
 	}
 
-	public OclType inferElementType(OclExpression source) {
+	public EClassifier inferElementType(OclExpression source) {
 		if (source == null) {
 			return null;
 		}
-		OclType type = source.getType();
+		EClassifier type = source.getType();
 		if (type instanceof CollectionType colType && colType.getElementType() != null) {
 			return copyType(colType.getElementType());
 		}
-		if (type instanceof ClassifierType ct && ct.getReferredClassifier() != null) {
-			return createClassifierType(ct.getReferredClassifier());
-		}
-		return null;
+		return type;
 	}
 
+	/**
+	 * The classifier a call on {@code source} is resolved against: the element type of a
+	 * collection, otherwise the type itself. Since #156 that is the {@code EClassifier} directly.
+	 */
 	public EClassifier getSourceClassifier(OclExpression source) {
 		if (source == null) {
 			return contextType;
 		}
-		OclType type = source.getType();
-		if (type instanceof CollectionType colType
-				&& colType.getElementType() instanceof ClassifierType ct) {
-			return ct.getReferredClassifier();
+		EClassifier type = source.getType();
+		if (type instanceof CollectionType colType) {
+			return colType.getElementType();
 		}
-		if (type instanceof ClassifierType ct) {
-			return ct.getReferredClassifier();
-		}
-		return null;
+		return type;
 	}
 
-	public EStructuralFeature resolveFeatureOnType(OclType type, String featureName) {
-		if (type instanceof ClassifierType ct
-				&& ct.getReferredClassifier() instanceof EClass eClass) {
+	public EStructuralFeature resolveFeatureOnType(EClassifier type, String featureName) {
+		if (type instanceof EClass eClass) {
 			return eClass.getEStructuralFeature(featureName);
 		}
 		return null;

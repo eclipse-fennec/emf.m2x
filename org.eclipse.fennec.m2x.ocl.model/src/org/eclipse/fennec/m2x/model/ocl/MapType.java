@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.model.ocl;
 
+import org.eclipse.emf.ecore.EClassifier;
+
 import org.osgi.annotation.versioning.ProviderType;
 
 /**
@@ -44,12 +46,12 @@ public interface MapType extends OclType {
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @return the value of the '<em>Key Type</em>' reference.
-	 * @see #setKeyType(OclType)
+	 * @see #setKeyType(EClassifier)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getMapType_KeyType()
 	 * @model
 	 * @generated
 	 */
-	OclType getKeyType();
+	EClassifier getKeyType();
 
 	/**
 	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getKeyType <em>Key Type</em>}' reference.
@@ -59,19 +61,19 @@ public interface MapType extends OclType {
 	 * @see #getKeyType()
 	 * @generated
 	 */
-	void setKeyType(OclType value);
+	void setKeyType(EClassifier value);
 
 	/**
 	 * Returns the value of the '<em><b>Value Type</b></em>' reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @return the value of the '<em>Value Type</em>' reference.
-	 * @see #setValueType(OclType)
+	 * @see #setValueType(EClassifier)
 	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getMapType_ValueType()
 	 * @model
 	 * @generated
 	 */
-	OclType getValueType();
+	EClassifier getValueType();
 
 	/**
 	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.MapType#getValueType <em>Value Type</em>}' reference.
@@ -81,6 +83,6 @@ public interface MapType extends OclType {
 	 * @see #getValueType()
 	 * @generated
 	 */
-	void setValueType(OclType value);
+	void setValueType(EClassifier value);
 
 } // MapType

@@ -18,18 +18,15 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
 
-import org.eclipse.fennec.m2x.model.ocl.OclType;
+import org.eclipse.emf.ecore.EClassifier;
 
 /**
  * Describes a custom OCL operation that can be registered via {@link OclOperationProvider}.
  *
- * <p>The {@code ownerType} is an {@link OclType} from the OCL metamodel:
- * <ul>
- *   <li>For operations on Ecore model types, use a {@code ClassifierType} wrapping the
- *       target {@code EClassifier}.</li>
- *   <li>For operations on OCL built-in types, use {@code AnyType}, {@code CollectionType},
- *       {@code PrimitiveType}, etc. directly.</li>
- * </ul>
+ * <p>The {@code ownerType} is an {@link EClassifier}: the {@code EClass} or {@code EDataType} of a
+ * model for an operation on model objects, or one of the OCL types — {@code AnyType},
+ * {@code CollectionType}, a standard-library {@code PrimitiveType} — which are classifiers
+ * themselves (#154). There is no wrapper in between (#156).
  *
  * @param name the operation name as it appears in OCL expressions
  * @param ownerType the type this operation is defined on
@@ -42,9 +39,9 @@ import org.eclipse.fennec.m2x.model.ocl.OclType;
  */
 public record OclOperation(
 		String name,
-		OclType ownerType,
-		List<OclType> parameterTypes,
-		OclType returnType,
+		EClassifier ownerType,
+		List<EClassifier> parameterTypes,
+		EClassifier returnType,
 		BiFunction<Object, Object[], Object> implementation) {
 
 	/**
@@ -68,7 +65,7 @@ public record OclOperation(
 	 * @param implementation the implementation function
 	 * @return the operation descriptor
 	 */
-	public static OclOperation of(String name, OclType ownerType, OclType returnType,
+	public static OclOperation of(String name, EClassifier ownerType, EClassifier returnType,
 			BiFunction<Object, Object[], Object> implementation) {
 		return new OclOperation(name, ownerType, List.of(), returnType, implementation);
 	}

@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.model.ocl.impl;
 import org.eclipse.emf.common.notify.Notification;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.InternalEObject;
 
 import org.eclipse.emf.ecore.impl.ENotificationImpl;
@@ -24,7 +25,6 @@ import org.eclipse.emf.ecore.impl.ENotificationImpl;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 
 /**
  * <!-- begin-user-doc -->
@@ -49,7 +49,7 @@ public class CollectionTypeImpl extends OclTypeImpl implements CollectionType {
 	 * @generated
 	 * @ordered
 	 */
-	protected OclType elementType;
+	protected EClassifier elementType;
 
 	/**
 	 * The default value of the '{@link #getKind() <em>Kind</em>}' attribute.
@@ -96,10 +96,10 @@ public class CollectionTypeImpl extends OclTypeImpl implements CollectionType {
 	 * @generated
 	 */
 	@Override
-	public OclType getElementType() {
+	public EClassifier getElementType() {
 		if (elementType != null && elementType.eIsProxy()) {
 			InternalEObject oldElementType = (InternalEObject)elementType;
-			elementType = (OclType)eResolveProxy(oldElementType);
+			elementType = (EClassifier)eResolveProxy(oldElementType);
 			if (elementType != oldElementType) {
 				if (eNotificationRequired())
 					eNotify(new ENotificationImpl(this, Notification.RESOLVE, OclPackage.COLLECTION_TYPE__ELEMENT_TYPE, oldElementType, elementType));
@@ -113,7 +113,7 @@ public class CollectionTypeImpl extends OclTypeImpl implements CollectionType {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetElementType() {
+	public EClassifier basicGetElementType() {
 		return elementType;
 	}
 
@@ -123,8 +123,8 @@ public class CollectionTypeImpl extends OclTypeImpl implements CollectionType {
 	 * @generated
 	 */
 	@Override
-	public void setElementType(OclType newElementType) {
-		OclType oldElementType = elementType;
+	public void setElementType(EClassifier newElementType) {
+		EClassifier oldElementType = elementType;
 		elementType = newElementType;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.COLLECTION_TYPE__ELEMENT_TYPE, oldElementType, elementType));
@@ -179,7 +179,7 @@ public class CollectionTypeImpl extends OclTypeImpl implements CollectionType {
 	public void eSet(int featureID, Object newValue) {
 		switch (featureID) {
 			case OclPackage.COLLECTION_TYPE__ELEMENT_TYPE:
-				setElementType((OclType)newValue);
+				setElementType((EClassifier)newValue);
 				return;
 			case OclPackage.COLLECTION_TYPE__KIND:
 				setKind((CollectionKind)newValue);
@@ -197,7 +197,7 @@ public class CollectionTypeImpl extends OclTypeImpl implements CollectionType {
 	public void eUnset(int featureID) {
 		switch (featureID) {
 			case OclPackage.COLLECTION_TYPE__ELEMENT_TYPE:
-				setElementType((OclType)null);
+				setElementType((EClassifier)null);
 				return;
 			case OclPackage.COLLECTION_TYPE__KIND:
 				setKind(KIND_EDEFAULT);

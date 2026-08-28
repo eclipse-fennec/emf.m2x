@@ -1275,11 +1275,11 @@ The whole configuration above runs as `M2tDocGenerationExampleTest` in `org.ecli
 
 | `ownerType` | callable on |
 |---|---|
-| `ClassifierType` around an `EClass` | instances of that class and its subclasses — `[b.docPath()/]` |
+| an `EClass` | instances of that class and its subclasses — `[b.docPath()/]` |
 | `PrimitiveType("String")` | attribute values — `[b.title.kebab()/]` |
 | `PrimitiveType("Integer")` / `("Real")` / `("Boolean")` | the matching Java type; an Integer widens to Real |
 | `AnyType` or `PrimitiveType("OclAny")` | anything — the catch-all |
-| `ClassifierType` around `EcorePackage.Literals.EOBJECT` | every model element |
+| `EcorePackage.Literals.EOBJECT` | every model element |
 
 One method that makes sense for two receiver types is registered twice, once per type. The implementation is an ordinary lambda, so anything Java can reach is reachable — a static utility, a file written to disk, an SVG rendered by hand.
 

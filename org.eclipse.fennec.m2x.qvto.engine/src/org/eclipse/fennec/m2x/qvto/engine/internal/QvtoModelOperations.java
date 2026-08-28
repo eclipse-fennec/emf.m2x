@@ -24,7 +24,6 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.util.EcoreUtil;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
@@ -301,9 +300,6 @@ class QvtoModelOperations {
 
 	static EClass resolveEClassArg(Object arg) {
 		if (arg instanceof EClass ec) {
-			return ec;
-		}
-		if (arg instanceof ClassifierType ct && ct.getReferredClassifier() instanceof EClass ec) {
 			return ec;
 		}
 		return null;

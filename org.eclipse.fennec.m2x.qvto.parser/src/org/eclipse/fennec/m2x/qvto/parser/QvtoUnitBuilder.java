@@ -39,7 +39,6 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
 import org.eclipse.fennec.m2x.model.imperativeocl.Typedef;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
@@ -113,8 +112,6 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 	/** Module-local type names from {@code typedef}, shared with the expression builder. */
 	private final Map<String, EClassifier> localTypes = new HashMap<>();
-	/** One ClassifierType per referenced classifier for the whole unit (#154). */
-	private final Map<EClassifier, ClassifierType> classifierTypes = new HashMap<>();
 	/** The packages declared with modeltype; the scope of unqualified type names (#158). */
 	private final Set<EPackage> declaredPackages = new LinkedHashSet<>();
 	private QvtoEnvironment environment;
@@ -128,7 +125,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
 		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry,
-				importedModuleStubs, localTypes, diagnostics, classifierTypes, declaredPackages);
+				importedModuleStubs, localTypes, diagnostics, declaredPackages);
 	}
 
 	// ==================== Entry Point ====================
@@ -507,7 +504,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		mapping.setName(mappingName);
 
 		// Context parameter — resolve type from scoped name
-		OclType contextType = expressionBuilder.resolveContextType(ctx.scopedName());
+		EClassifier contextType = expressionBuilder.resolveContextType(ctx.scopedName());
 		if (contextType != null) {
 			VarParameter ctxParam = QVTO.createVarParameter();
 			ctxParam.setName("self");
@@ -639,7 +636,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Return type
 		if (ctx.typeExpression() != null) {
-			OclType returnType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+			EClassifier returnType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 			setReturnType(helper, returnType);
 		}
 
@@ -687,13 +684,13 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			if (rCtx instanceof QvtOParser.NamedResultContext named) {
 				resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
 						named.qvtoIdentifier()));
-				OclType type = expressionBuilder.resolveTypeExpression(named.typeExpression());
+				EClassifier type = expressionBuilder.resolveTypeExpression(named.typeExpression());
 				if (type != null) {
 					setParameterType(resultParam, type);
 				}
 			} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
 				resultParam.setName("result");
-				OclType type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
+				EClassifier type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
 				if (type != null) {
 					setParameterType(resultParam, type);
 				}
@@ -810,7 +807,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				prop.setName(fullName);
 			}
 
-			OclType type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+			EClassifier type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 			if (type != null) {
 				setFeatureType(prop, type);
 			}
@@ -827,7 +824,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			EAttribute configProp = EcoreFactory.eINSTANCE.createEAttribute();
 			configProp.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 
-			OclType type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+			EClassifier type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 			if (type != null) {
 				configProp.setEType(EcorePackage.Literals.ESTRING); // Default to String
 			}
@@ -842,7 +839,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 			// Set type if explicitly declared (typed form)
 			if (ctx.typeExpression() != null) {
-				OclType type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+				EClassifier type = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 				if (type != null) {
 					moduleProp.setType(type);
 				}
@@ -987,9 +984,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Resolve intermediate class supertypes (extends clause)
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
-				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
-				if (resolved instanceof ClassifierType ct
-						&& ct.getReferredClassifier() instanceof EClass superClass) {
+				EClassifier resolved = expressionBuilder.resolveTypeExpression(typeCtx);
+				if (resolved instanceof EClass superClass) {
 					intermediateClass.getESuperTypes().add(superClass);
 				}
 			}
@@ -1035,9 +1031,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Resolve supertypes (extends clause)
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
-				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
-				if (resolved instanceof ClassifierType ct
-						&& ct.getReferredClassifier() instanceof EClass superClass) {
+				EClassifier resolved = expressionBuilder.resolveTypeExpression(typeCtx);
+				if (resolved instanceof EClass superClass) {
 					exceptionClass.getESuperTypes().add(superClass);
 				}
 			}
@@ -1237,9 +1232,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
-				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
-				if (resolved instanceof ClassifierType ct
-						&& ct.getReferredClassifier() instanceof EClass superClass) {
+				EClassifier resolved = expressionBuilder.resolveTypeExpression(typeCtx);
+				if (resolved instanceof EClass superClass) {
 					intermediateClass.getESuperTypes().add(superClass);
 				}
 			}
@@ -1279,9 +1273,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
-				OclType resolved = expressionBuilder.resolveTypeExpression(typeCtx);
-				if (resolved instanceof ClassifierType ct
-						&& ct.getReferredClassifier() instanceof EClass superClass) {
+				EClassifier resolved = expressionBuilder.resolveTypeExpression(typeCtx);
+				if (resolved instanceof EClass superClass) {
 					exceptionClass.getESuperTypes().add(superClass);
 				}
 			}
@@ -1408,9 +1401,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			ref.setContainment(isComposes);
 
 			// Resolve referenced type
-			OclType resolved = expressionBuilder.resolveTypeExpression(featureCtx.typeExpression());
-			if (resolved instanceof ClassifierType ct
-					&& ct.getReferredClassifier() instanceof EClass targetClass) {
+			EClassifier resolved = expressionBuilder.resolveTypeExpression(featureCtx.typeExpression());
+			if (resolved instanceof EClass targetClass) {
 				ref.setEType(targetClass);
 			} else {
 				ref.setEType(EcorePackage.Literals.EJAVA_OBJECT);
@@ -1503,9 +1495,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		op.setName(opName);
 
 		// Return type
-		OclType returnType = expressionBuilder.resolveTypeExpression(featureCtx.typeExpression());
-		if (returnType instanceof ClassifierType ct && ct.getReferredClassifier() != null) {
-			op.setEType(ct.getReferredClassifier());
+		EClassifier returnType = expressionBuilder.resolveTypeExpression(featureCtx.typeExpression());
+		if (returnType != null && !(returnType instanceof OclType)) {
+			op.setEType(returnType);
 		} else if (returnType instanceof PrimitiveType pt) {
 			EDataType dt = EcoreFactory.eINSTANCE.createEDataType();
 			dt.setName(pt.getName());
@@ -1521,11 +1513,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				eParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
 						paramCtx.qvtoIdentifier()));
 
-				OclType paramType = expressionBuilder.resolveTypeExpression(
+				EClassifier paramType = expressionBuilder.resolveTypeExpression(
 						paramCtx.typeExpression());
-				if (paramType instanceof ClassifierType ct
-						&& ct.getReferredClassifier() != null) {
-					eParam.setEType(ct.getReferredClassifier());
+				if (paramType != null && !(paramType instanceof OclType)) {
+					eParam.setEType(paramType);
 				} else if (paramType instanceof PrimitiveType pt) {
 					EDataType dt = EcoreFactory.eINSTANCE.createEDataType();
 					dt.setName(pt.getName());
@@ -1693,9 +1684,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		Typedef typedef = IMP.createTypedef();
 		typedef.setName(QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier()));
 
-		OclType baseType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
-		if (baseType instanceof ClassifierType ct) {
-			typedef.setBase(ct.getReferredClassifier());
+		EClassifier baseType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
+		if (baseType != null && !(baseType instanceof OclType)) {
+			typedef.setBase(baseType);
 		}
 		// A reference to the typedef name resolves to the type it stands for
 		localTypes.put(typedef.getName(), baseClassifier(baseType));
@@ -1755,7 +1746,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			for (QvtOParser.ParamContext paramCtx : sigCtx.inputParams.param()) {
 				MappingParameter param = QVTO.createMappingParameter();
 				param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
-				OclType type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
+				EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
 				if (type != null) {
 					setParameterType(param, type);
 				}
@@ -1770,13 +1761,13 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				if (rCtx instanceof QvtOParser.NamedResultContext named) {
 					resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
 							named.qvtoIdentifier()));
-					OclType type = expressionBuilder.resolveTypeExpression(named.typeExpression());
+					EClassifier type = expressionBuilder.resolveTypeExpression(named.typeExpression());
 					if (type != null) {
 						setParameterType(resultParam, type);
 					}
 				} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
 					resultParam.setName("result");
-					OclType type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
+					EClassifier type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
 					if (type != null) {
 						setParameterType(resultParam, type);
 					}
@@ -1795,7 +1786,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ParamContext paramCtx : sigCtx.paramList().param()) {
 			VarParameter param = QVTO.createVarParameter();
 			param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
-			OclType type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
+			EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
 			if (type != null) {
 				setParameterType(param, type);
 			}
@@ -1811,7 +1802,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			selfVar.setName("self");
 			EClassifier ctxType = operation.getContext().getEType();
 			if (ctxType != null) {
-				selfVar.setType(expressionBuilder.createClassifierType(ctxType));
+				selfVar.setType(ctxType);
 			}
 			this.environment = this.environment.nested(selfVar);
 		}
@@ -1821,7 +1812,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			Variable paramVar = OCL.createVariable();
 			paramVar.setName(param.getName());
 			if (param.getEType() != null) {
-				paramVar.setType(expressionBuilder.createClassifierType(param.getEType()));
+				paramVar.setType(param.getEType());
 			}
 			this.environment = this.environment.nested(paramVar);
 		}
@@ -1831,7 +1822,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			Variable resultVar = OCL.createVariable();
 			resultVar.setName(resultParam.getName());
 			if (resultParam.getEType() != null) {
-				resultVar.setType(expressionBuilder.createClassifierType(resultParam.getEType()));
+				resultVar.setType(resultParam.getEType());
 			}
 			this.environment = this.environment.nested(resultVar);
 		}
@@ -1840,8 +1831,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		Variable resultVar = OCL.createVariable();
 		resultVar.setName("result");
 		if (!operation.getResult().isEmpty() && operation.getResult().get(0).getEType() != null) {
-			resultVar.setType(expressionBuilder.createClassifierType(
-					operation.getResult().get(0).getEType()));
+			resultVar.setType(
+					operation.getResult().get(0).getEType());
 		}
 		this.environment = this.environment.nested(resultVar);
 
@@ -1860,7 +1851,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			VarParameter ctxParam = QVTO.createVarParameter();
 			ctxParam.setName("self");
 			// §8.2.1.10: Resolve context type so engine can dispatch by owner type
-			OclType contextType = expressionBuilder.resolveContextType(scopedNameCtx);
+			EClassifier contextType = expressionBuilder.resolveContextType(scopedNameCtx);
 			if (contextType != null) {
 				setParameterType(ctxParam, contextType);
 			}
@@ -1872,7 +1863,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private void setReturnType(
 			ImperativeOperation operation,
-			OclType type) {
+			EClassifier type) {
 		VarParameter resultParam = QVTO.createVarParameter();
 		resultParam.setName("result");
 		if (type != null) {
@@ -1881,10 +1872,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		operation.getResult().add(resultParam);
 	}
 
-	private void setParameterType(VarParameter param, OclType type) {
-		if (type instanceof ClassifierType ct
-				&& ct.getReferredClassifier() != null) {
-			param.setEType(ct.getReferredClassifier());
+	private void setParameterType(VarParameter param, EClassifier type) {
+		if (type != null && !(type instanceof OclType)) {
+			param.setEType(type);
 		} else if (type instanceof PrimitiveType pt) {
 			// §8.2.1.10: Store primitive context type as EDataType for engine dispatch
 			EDataType dt = EcoreFactory.eINSTANCE.createEDataType();
@@ -1893,10 +1883,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 	}
 
-	private void setFeatureType(ContextualProperty prop, OclType type) {
-		if (type instanceof ClassifierType ct
-				&& ct.getReferredClassifier() != null) {
-			prop.setEType(ct.getReferredClassifier());
+	private void setFeatureType(ContextualProperty prop, EClassifier type) {
+		if (type != null && !(type instanceof OclType)) {
+			prop.setEType(type);
 		}
 	}
 
@@ -2081,7 +2070,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 			String name = QvtoExpressionBuilder.qvtoIdentifierText(
 					elemCtx.typedefDecl().qvtoIdentifier());
-			OclType baseType = expressionBuilder.resolveTypeExpression(
+			EClassifier baseType = expressionBuilder.resolveTypeExpression(
 					elemCtx.typedefDecl().typeExpression());
 			EClassifier resolved = baseClassifier(baseType);
 			if (name != null && resolved != null) {
@@ -2093,9 +2082,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	/**
 	 * Returns the Ecore classifier a typedef base type stands for, or {@code null}.
 	 */
-	private static EClassifier baseClassifier(OclType baseType) {
-		if (baseType instanceof ClassifierType ct) {
-			return ct.getReferredClassifier();
+	private static EClassifier baseClassifier(EClassifier baseType) {
+		if (baseType != null && !(baseType instanceof OclType)) {
+			return baseType;
 		}
 		if (baseType instanceof PrimitiveType pt) {
 			return switch (pt.getName()) {
@@ -2111,7 +2100,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private void updateExpressionBuilder() {
 		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry,
-				this.importedModuleStubs, this.localTypes, this.diagnostics, this.classifierTypes,
+				this.importedModuleStubs, this.localTypes, this.diagnostics,
 				this.declaredPackages);
 	}
 

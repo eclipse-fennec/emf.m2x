@@ -228,7 +228,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 	public TupleLiteralExp visitTupleLiteral(M2tParser.TupleLiteralContext ctx) {
 		List<TupleLiteralPart> parts = new ArrayList<>();
 		for (M2tParser.TupleLiteralPartContext partCtx : ctx.tupleLiteralPart()) {
-			OclType type = partCtx.typeExpression() != null
+			EClassifier type = partCtx.typeExpression() != null
 					? resolveTypeExpression(partCtx.typeExpression()) : null;
 			parts.add(support.buildTupleLiteralPart(
 					identifierText(partCtx.identifier()),
@@ -373,11 +373,11 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 		String iterName = identifierText(ctx.identifier());
 		OclEnvironment savedEnv = env();
 
-		OclType elementType = support.inferElementType(source);
+		EClassifier elementType = support.inferElementType(source);
 		M2tParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
 		List<Variable> iterVars = new ArrayList<>();
 		for (int i = 0; i < varsCtx.identifier().size(); i++) {
-			OclType varType = (i < varsCtx.typeExpression().size()
+			EClassifier varType = (i < varsCtx.typeExpression().size()
 					&& varsCtx.typeExpression(i) != null)
 					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType;
 			Variable iterVar = support.createVariable(
@@ -397,13 +397,13 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 			M2tParser.IterateCallContext ctx, boolean isSafe) {
 		OclEnvironment savedEnv = env();
 
-		OclType iterType = ctx.typeExpression().size() > 0
+		EClassifier iterType = ctx.typeExpression().size() > 0
 				? resolveTypeExpression(ctx.typeExpression(0))
 				: support.inferElementType(source);
 		Variable iterVar = support.createVariable(
 				identifierText(ctx.identifier(1)), iterType, null);
 
-		OclType accType = ctx.typeExpression().size() > 1
+		EClassifier accType = ctx.typeExpression().size() > 1
 				? resolveTypeExpression(ctx.typeExpression(1)) : null;
 		Variable accVar = support.createVariable(
 				identifierText(ctx.identifier(2)), accType,
@@ -476,7 +476,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 		LetExp current = null;
 
 		for (M2tParser.LetBindingContext bindCtx : bindings) {
-			OclType type = bindCtx.typeExpression() != null
+			EClassifier type = bindCtx.typeExpression() != null
 					? resolveTypeExpression(bindCtx.typeExpression()) : null;
 			Variable var = support.createVariable(
 					identifierText(bindCtx.identifier()),
@@ -557,7 +557,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 	// ==================== Type Resolution ====================
 
-	OclType resolveTypeExpression(M2tParser.TypeExpressionContext ctx) {
+	EClassifier resolveTypeExpression(M2tParser.TypeExpressionContext ctx) {
 		// The module builder resolves parameter and query types through here, without visiting
 		// the node itself — so this is where the position has to be set (#110).
 		support.positionAt(ctx);
@@ -592,7 +592,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 	private OclType resolveTupleType(M2tParser.TupleTypeContext ctx) {
 		List<String> names = new ArrayList<>();
-		List<OclType> types = new ArrayList<>();
+		List<EClassifier> types = new ArrayList<>();
 		for (M2tParser.TupleTypePartContext partCtx : ctx.tupleTypePart()) {
 			names.add(identifierText(partCtx.identifier()));
 			types.add(resolveTypeExpression(partCtx.typeExpression()));

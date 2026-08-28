@@ -87,8 +87,11 @@ Pure model project — EMF-generated code lives in `src/` (no `src-gen/`).
 - **Blueprint:** Based on `EssentialOCL.emof` from the OCL spec.
 - **Types are classifiers (#154):** `OclType` extends `EClassifier`, `PrimitiveType` extends
   `EDataType` — as in OCL v2.4 §8.2 (types are Classifiers) and in the Eclipse OCL Ecore binding.
-  That is what lets the standard library be an ordinary `EPackage` (below), and what will let
-  `ClassifierType` disappear (#156): an expression's type can point at the `EClassifier` directly.
+  That is what lets the standard library be an ordinary `EPackage` (below), and what let the
+  `ClassifierType` wrapper go (#156): `OclExpression.type`, `Variable.type`, `TypeExp.referredType`
+  and the element types of collections, maps and tuples are typed `EClassifier` and point at the
+  metamodel's `EClass` or `EDataType` directly — as Eclipse OCL's `TypedElement.eType` does. An OCL
+  operation's owner is an `EClassifier` for the same reason (`OclOperation`).
 
 ### 3.2 The Standard Library (`OclStandardLibrary`, `ocl.api`)
 

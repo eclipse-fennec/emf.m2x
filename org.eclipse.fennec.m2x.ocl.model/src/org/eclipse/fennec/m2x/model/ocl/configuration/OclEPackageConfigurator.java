@@ -39,7 +39,7 @@ public class OclEPackageConfigurator implements EPackageConfigurator {
 	 * service property.
 	 * @generated
 	 */
-	public static final String FINGERPRINT = "fp1:d096f2e9cfce8603ad8dab1293b235a4d6d55ecfc39b2912703a89b15288e058";
+	public static final String FINGERPRINT = "fp1:5a70f551d4abab5627d219d2d5eec4759ea8a72867ac990f08ba82d57f3c6878";
 
 	private OclPackage ePackage;
 

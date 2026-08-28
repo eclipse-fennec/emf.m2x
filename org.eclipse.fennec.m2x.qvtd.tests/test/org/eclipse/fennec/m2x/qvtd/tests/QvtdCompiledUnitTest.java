@@ -61,8 +61,9 @@ import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
  *
  * <p>Measured before the compiled unit existed: the transformation below carried twelve objects
  * the tree referenced but nothing contained — six {@code Variable}s (the relation variable
- * {@code pn} four times over), three {@code ClassifierType}s, one {@code PrimitiveType}, two
- * synthetic {@code EAttribute}s — and {@code save()} failed on the first of them.
+ * {@code pn} four times over), three {@code ClassifierType} wrappers, one {@code PrimitiveType}, two
+ * synthetic {@code EAttribute}s — and {@code save()} failed on the first of them. After #154 and
+ * #156 four remain: two variables and the two synthetic attributes of #153.
  *
  * @author Data In Motion Consulting
  * @since 1.0

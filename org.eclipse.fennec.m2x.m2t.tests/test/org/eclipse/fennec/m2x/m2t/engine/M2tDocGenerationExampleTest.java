@@ -37,7 +37,6 @@ import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.model.m2t.Module;
-import org.eclipse.fennec.m2x.model.ocl.ClassifierType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
@@ -63,11 +62,11 @@ import org.junit.jupiter.api.io.TempDir;
  * {@code ownerType} wrong is the most common way for a provider to appear not to work:
  *
  * <ul>
- *   <li>a {@code ClassifierType} around an {@code EClass} — {@code b.docPath()}, callable on
+ *   <li>an {@code EClass} —n {@code EClass} — {@code b.docPath()}, callable on
  *       instances of that class and its subclasses</li>
  *   <li>a {@code PrimitiveType("String")} — {@code b.title.kebab()}, callable on attribute
  *       values</li>
- *   <li>a {@code ClassifierType} around {@code EObject} — {@code b.author.mdLinkFrom(b)},
+ *   <li>the {@code EClass} {@code EObject} — {@code b.author.mdLinkFrom(b)},
  *       callable on every model element</li>
  * </ul>
  *
@@ -284,10 +283,9 @@ class M2tDocGenerationExampleTest {
 	private OclOperationProvider docOperations() {
 		PrimitiveType string = OclFactory.eINSTANCE.createPrimitiveType();
 		string.setName("String");
-		ClassifierType bookType = OclFactory.eINSTANCE.createClassifierType();
-		bookType.setReferredClassifier(bookClass);
-		ClassifierType anyElement = OclFactory.eINSTANCE.createClassifierType();
-		anyElement.setReferredClassifier(EcorePackage.Literals.EOBJECT);
+		// Operations are defined on the classifiers themselves (#156)
+		EClass bookType = bookClass;
+		EClass anyElement = EcorePackage.Literals.EOBJECT;
 
 		return () -> List.of(
 				// on Book: where this element's document goes

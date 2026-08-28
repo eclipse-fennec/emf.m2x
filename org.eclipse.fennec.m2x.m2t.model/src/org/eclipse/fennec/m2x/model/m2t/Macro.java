@@ -16,7 +16,8 @@ package org.eclipse.fennec.m2x.model.m2t;
 
 import org.eclipse.emf.common.util.EList;
 
-import org.eclipse.fennec.m2x.model.ocl.OclType;
+import org.eclipse.emf.ecore.EClassifier;
+
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 
 import org.osgi.annotation.versioning.ProviderType;
@@ -64,12 +65,12 @@ public interface Macro extends Block, ModuleElement {
 	 * The declared return type of this macro. Named 'returnType' to avoid conflict with OclExpression.type.
 	 * <!-- end-model-doc -->
 	 * @return the value of the '<em>Return Type</em>' reference.
-	 * @see #setReturnType(OclType)
+	 * @see #setReturnType(EClassifier)
 	 * @see org.eclipse.fennec.m2x.model.m2t.M2tPackage#getMacro_ReturnType()
 	 * @model
 	 * @generated
 	 */
-	OclType getReturnType();
+	EClassifier getReturnType();
 
 	/**
 	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.m2t.Macro#getReturnType <em>Return Type</em>}' reference.
@@ -79,6 +80,6 @@ public interface Macro extends Block, ModuleElement {
 	 * @see #getReturnType()
 	 * @generated
 	 */
-	void setReturnType(OclType value);
+	void setReturnType(EClassifier value);
 
 } // Macro

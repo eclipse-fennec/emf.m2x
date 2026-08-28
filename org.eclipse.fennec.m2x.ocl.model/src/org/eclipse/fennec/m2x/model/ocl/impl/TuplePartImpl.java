@@ -17,13 +17,13 @@ package org.eclipse.fennec.m2x.model.ocl.impl;
 import org.eclipse.emf.common.notify.Notification;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.InternalEObject;
 
 import org.eclipse.emf.ecore.impl.ENotificationImpl;
 import org.eclipse.emf.ecore.impl.MinimalEObjectImpl;
 
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.TuplePart;
 
 /**
@@ -69,7 +69,7 @@ public class TuplePartImpl extends MinimalEObjectImpl.Container implements Tuple
 	 * @generated
 	 * @ordered
 	 */
-	protected OclType type;
+	protected EClassifier type;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -119,10 +119,10 @@ public class TuplePartImpl extends MinimalEObjectImpl.Container implements Tuple
 	 * @generated
 	 */
 	@Override
-	public OclType getType() {
+	public EClassifier getType() {
 		if (type != null && type.eIsProxy()) {
 			InternalEObject oldType = (InternalEObject)type;
-			type = (OclType)eResolveProxy(oldType);
+			type = (EClassifier)eResolveProxy(oldType);
 			if (type != oldType) {
 				if (eNotificationRequired())
 					eNotify(new ENotificationImpl(this, Notification.RESOLVE, OclPackage.TUPLE_PART__TYPE, oldType, type));
@@ -136,7 +136,7 @@ public class TuplePartImpl extends MinimalEObjectImpl.Container implements Tuple
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetType() {
+	public EClassifier basicGetType() {
 		return type;
 	}
 
@@ -146,8 +146,8 @@ public class TuplePartImpl extends MinimalEObjectImpl.Container implements Tuple
 	 * @generated
 	 */
 	@Override
-	public void setType(OclType newType) {
-		OclType oldType = type;
+	public void setType(EClassifier newType) {
+		EClassifier oldType = type;
 		type = newType;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.TUPLE_PART__TYPE, oldType, type));
@@ -182,7 +182,7 @@ public class TuplePartImpl extends MinimalEObjectImpl.Container implements Tuple
 				setName((String)newValue);
 				return;
 			case OclPackage.TUPLE_PART__TYPE:
-				setType((OclType)newValue);
+				setType((EClassifier)newValue);
 				return;
 		}
 		super.eSet(featureID, newValue);
@@ -200,7 +200,7 @@ public class TuplePartImpl extends MinimalEObjectImpl.Container implements Tuple
 				setName(NAME_EDEFAULT);
 				return;
 			case OclPackage.TUPLE_PART__TYPE:
-				setType((OclType)null);
+				setType((EClassifier)null);
 				return;
 		}
 		super.eUnset(featureID);

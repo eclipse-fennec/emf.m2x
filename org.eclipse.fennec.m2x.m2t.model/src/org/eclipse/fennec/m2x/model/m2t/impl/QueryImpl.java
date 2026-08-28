@@ -22,6 +22,7 @@ import org.eclipse.emf.common.notify.NotificationChain;
 import org.eclipse.emf.common.util.EList;
 
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.InternalEObject;
 
 import org.eclipse.emf.ecore.impl.ENotificationImpl;
@@ -33,7 +34,6 @@ import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
 import org.eclipse.fennec.m2x.model.m2t.Query;
 
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 
 /**
@@ -80,7 +80,7 @@ public class QueryImpl extends ModuleElementImpl implements Query {
 	 * @generated
 	 * @ordered
 	 */
-	protected OclType returnType;
+	protected EClassifier returnType;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -165,10 +165,10 @@ public class QueryImpl extends ModuleElementImpl implements Query {
 	 * @generated
 	 */
 	@Override
-	public OclType getReturnType() {
+	public EClassifier getReturnType() {
 		if (returnType != null && returnType.eIsProxy()) {
 			InternalEObject oldReturnType = (InternalEObject)returnType;
-			returnType = (OclType)eResolveProxy(oldReturnType);
+			returnType = (EClassifier)eResolveProxy(oldReturnType);
 			if (returnType != oldReturnType) {
 				if (eNotificationRequired())
 					eNotify(new ENotificationImpl(this, Notification.RESOLVE, M2tPackage.QUERY__RETURN_TYPE, oldReturnType, returnType));
@@ -182,7 +182,7 @@ public class QueryImpl extends ModuleElementImpl implements Query {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
-	public OclType basicGetReturnType() {
+	public EClassifier basicGetReturnType() {
 		return returnType;
 	}
 
@@ -192,8 +192,8 @@ public class QueryImpl extends ModuleElementImpl implements Query {
 	 * @generated
 	 */
 	@Override
-	public void setReturnType(OclType newReturnType) {
-		OclType oldReturnType = returnType;
+	public void setReturnType(EClassifier newReturnType) {
+		EClassifier oldReturnType = returnType;
 		returnType = newReturnType;
 		if (eNotificationRequired())
 			eNotify(new ENotificationImpl(this, Notification.SET, M2tPackage.QUERY__RETURN_TYPE, oldReturnType, returnType));
@@ -251,7 +251,7 @@ public class QueryImpl extends ModuleElementImpl implements Query {
 				setExpression((OclExpression)newValue);
 				return;
 			case M2tPackage.QUERY__RETURN_TYPE:
-				setReturnType((OclType)newValue);
+				setReturnType((EClassifier)newValue);
 				return;
 		}
 		super.eSet(featureID, newValue);
@@ -272,7 +272,7 @@ public class QueryImpl extends ModuleElementImpl implements Query {
 				setExpression((OclExpression)null);
 				return;
 			case M2tPackage.QUERY__RETURN_TYPE:
-				setReturnType((OclType)null);
+				setReturnType((EClassifier)null);
 				return;
 		}
 		super.eUnset(featureID);

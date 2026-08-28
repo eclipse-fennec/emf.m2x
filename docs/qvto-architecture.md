@@ -484,6 +484,12 @@ intermediate package's nsURI carried a per-parse counter (it was registered in t
 which #158 made unnecessary; the nsURI is `…/qvto/intermediate/<module>` now), and MOFM2T named its
 inline variables by `identityHashCode`.
 
+Two follow-ups shrank the satellite container after the numbers above were measured: the
+predefined types come from the standard library and type references point at the metamodel
+classifier directly, without a `ClassifierType` wrapper (#154, #156). The same sample has 7
+satellites now instead of 13 — the four variables, the two model types and the intermediate class's
+default expression; QVT-R's sample went from 12 to 4, MOFM2T's from 15 to 5.
+
 What `compile()` does not yet do, because a later step of #135 owns it: bind dependencies under
 embed/pin/rebind and record package entries and blackbox requirements (#139). The fingerprint
 already folds dependency entries in Merkle-style, so it will cover them once they are written.
