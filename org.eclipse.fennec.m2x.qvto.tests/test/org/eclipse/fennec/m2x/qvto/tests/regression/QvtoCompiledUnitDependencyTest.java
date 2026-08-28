@@ -416,7 +416,7 @@ class QvtoCompiledUnitDependencyTest {
 	}
 
 	/** A blackbox library with one operation: {@code trimAll(s : String) : String}. */
-	static final class TrimLibrary implements QvtoBlackboxLibrary {
+	public static final class TrimLibrary implements QvtoBlackboxLibrary {
 		@Override
 		public String getModuleName() {
 			return "mylib";

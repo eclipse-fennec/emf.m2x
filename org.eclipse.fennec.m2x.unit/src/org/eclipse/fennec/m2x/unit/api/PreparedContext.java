@@ -15,8 +15,11 @@
 package org.eclipse.fennec.m2x.unit.api;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
+import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.osgi.annotation.versioning.ProviderType;
@@ -81,4 +84,20 @@ public interface PreparedContext {
 	 * @return the units, never {@code null}
 	 */
 	Collection<Unit> units();
+
+	/**
+	 * Loads a model in this context and returns its roots.
+	 *
+	 * <p>An extent handed to an engine as already loaded objects carries the type identity of
+	 * wherever it was loaded; a model loaded here carries the context's — the same instances the
+	 * units were resolved against, so a unit's {@code objectsOfType(Book)} finds them and a unit's
+	 * output is the next unit's input without a foreign-type surprise (§6.1 of the concept).
+	 * Loaded once per URI; a second call returns the same roots.
+	 *
+	 * @param uri where the model is
+	 * @return the model's roots, never {@code null}
+	 * @throws UnitPrepareException if the model cannot be loaded or refers to something this
+	 *             context cannot resolve
+	 */
+	List<EObject> contents(URI uri) throws UnitPrepareException;
 }

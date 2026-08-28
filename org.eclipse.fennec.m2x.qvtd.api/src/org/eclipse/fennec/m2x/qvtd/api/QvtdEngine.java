@@ -20,6 +20,8 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.osgi.annotation.versioning.ProviderType;
 
@@ -151,6 +153,30 @@ public interface QvtdEngine {
 	 */
 	QvtdExecutionResult execute(RelationalTransformation transformation,
 			QvtdExecutionContext context);
+
+	/**
+	 * Executes a prepared unit — the Execute phase proper: nothing is linked, no resolver is
+	 * consulted, the unit runs as the prepare run bound it (#140).
+	 *
+	 * @param prepared the context a {@code UnitPreparer} produced, with this engine's
+	 *            {@link #unitBinder()} among its binders
+	 * @param qualifiedName the unit to run, one the context holds
+	 * @param context the execution context
+	 * @return the result, never {@code null}
+	 * @throws IllegalArgumentException if the context does not hold the unit, or holds it with an
+	 *             import still unbound
+	 * @since 1.0
+	 */
+	QvtdExecutionResult execute(PreparedContext prepared, String qualifiedName, QvtdExecutionContext context);
+
+	/**
+	 * Returns the binder a {@code UnitPreparer} needs to bind QVT-R units with this engine's
+	 * blackbox registry.
+	 *
+	 * @return the binder, never {@code null}
+	 * @since 1.0
+	 */
+	UnitBinder unitBinder();
 
 	/**
 	 * Registers a {@link RelationImplementationProvider} for hybrid QVT-O ↔ QVT-R

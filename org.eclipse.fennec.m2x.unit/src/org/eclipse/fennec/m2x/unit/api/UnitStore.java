@@ -67,6 +67,21 @@ public interface UnitStore {
 	Optional<Unit> load(UnitKey key) throws UnitStoreException;
 
 	/**
+	 * Loads the unit the key addresses into the given resource set.
+	 *
+	 * <p>The caller owns the resource set, and its package registry decides which instance the
+	 * unit's metamodel references resolve to — this is what prepare uses to load a whole pipeline
+	 * into one context. {@link #load(UnitKey)} is this method with a fresh resource set.
+	 *
+	 * @param key what to load
+	 * @param target the resource set to load into
+	 * @return the unit, or empty if the store does not have it
+	 * @throws UnitStoreException if the store could not answer the question, or the unit refers
+	 *             to something that resolves to nothing in the target
+	 */
+	Optional<Unit> load(UnitKey key, UnitResourceSet target) throws UnitStoreException;
+
+	/**
 	 * Returns whether the store holds the unit the key addresses.
 	 *
 	 * @param key what to look for

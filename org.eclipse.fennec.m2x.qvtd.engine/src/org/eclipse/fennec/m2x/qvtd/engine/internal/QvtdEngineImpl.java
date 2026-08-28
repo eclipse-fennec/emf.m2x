@@ -27,6 +27,9 @@ import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.emf.ecore.resource.ResourceSet;
@@ -201,16 +204,7 @@ public class QvtdEngineImpl implements QvtdEngine {
 			// checked inside the linker, before a resolver is consulted.
 			new QvtdLinker(parserSupport, config.packageRegistry(), effectiveResolvers(),
 					effectiveUnitAllowList()).link(transformation);
-
-			QvtrEvalEnvironment env = new QvtrEvalEnvironment();
-			QvtrExtentManager extentManager = new QvtrExtentManager(transformation, context);
-			QvtrEvaluator evaluator = new QvtrEvaluator(
-					oclEngine, env, transformation, extentManager, context,
-					config, config.blackboxRegistry(), List.copyOf(implementationProviders));
-			evaluator.setPositionLookup(parserSupport::positionOf);
-
-			List<Diagnostic> diagnostics = evaluator.execute();
-			return new QvtdExecutionResult(diagnostics, !context.checkOnly());
+			return run(transformation, context);
 		} catch (QvtdExecutionException e) {
 			throw e;
 		} catch (Exception e) {
@@ -220,6 +214,53 @@ public class QvtdEngineImpl implements QvtdEngine {
 							0, "Execution error: " + e.getMessage(), null)),
 					false);
 		}
+	}
+
+	@Override
+	public QvtdExecutionResult execute(PreparedContext prepared, String qualifiedName, QvtdExecutionContext context) {
+		Objects.requireNonNull(prepared, "prepared must not be null");
+		Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
+		Objects.requireNonNull(context, "context must not be null");
+		Unit unit = prepared.unit(qualifiedName).orElseThrow(() -> new IllegalArgumentException(
+				"the prepared context holds no unit '" + qualifiedName + "'"));
+		if (!(unit instanceof Unit.Packaged packaged)
+				|| !(packaged.document().getUnit() instanceof RelationalTransformation transformation)) {
+			throw new IllegalArgumentException("'" + qualifiedName + "' is not a compiled QVT-R unit");
+		}
+		// Execute proper: no linker. An import still declared means the unit was not bound.
+		List<String> unbound = QvtdUnitCompiler.importedNames(transformation);
+		if (!unbound.isEmpty()) {
+			throw new IllegalArgumentException("'" + qualifiedName + "' still imports " + unbound
+					+ " unbound; the context was not prepared with this engine's binder");
+		}
+		try {
+			return run(transformation, context);
+		} catch (QvtdExecutionException e) {
+			throw e;
+		} catch (Exception e) {
+			return new QvtdExecutionResult(
+					List.of(new BasicDiagnostic(
+							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvtd.engine",
+							0, "Execution error: " + e.getMessage(), null)),
+					false);
+		}
+	}
+
+	@Override
+	public UnitBinder unitBinder() {
+		return new QvtdUnitBinder(config.blackboxRegistry(), config.blackboxEnabled());
+	}
+
+	/** The evaluation itself, shared by the linking and the prepared path. */
+	private QvtdExecutionResult run(RelationalTransformation transformation, QvtdExecutionContext context) {
+		QvtrEvalEnvironment env = new QvtrEvalEnvironment();
+		QvtrExtentManager extentManager = new QvtrExtentManager(transformation, context);
+		QvtrEvaluator evaluator = new QvtrEvaluator(
+				oclEngine, env, transformation, extentManager, context,
+				config, config.blackboxRegistry(), List.copyOf(implementationProviders));
+		evaluator.setPositionLookup(parserSupport::positionOf);
+		List<Diagnostic> diagnostics = evaluator.execute();
+		return new QvtdExecutionResult(diagnostics, !context.checkOnly());
 	}
 
 	@Override

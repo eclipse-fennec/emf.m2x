@@ -55,6 +55,9 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
@@ -272,11 +275,50 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 					null);
 		}
 
+		return run(transformation, context, options, effectiveRegistry, packageRegistry);
+	}
+
+	@Override
+	public QvtoExecutionResult execute(PreparedContext prepared, String qualifiedName, QvtoExecutionContext context) {
+		return execute(prepared, qualifiedName, context, QvtoEvaluationOptions.defaults());
+	}
+
+	@Override
+	public QvtoExecutionResult execute(PreparedContext prepared, String qualifiedName, QvtoExecutionContext context,
+			QvtoEvaluationOptions options) {
+		Objects.requireNonNull(prepared, "prepared must not be null");
+		Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
+		Objects.requireNonNull(context, "context must not be null");
+		Objects.requireNonNull(options, "options must not be null");
+		Unit unit = prepared.unit(qualifiedName).orElseThrow(() -> new IllegalArgumentException(
+				"the prepared context holds no unit '" + qualifiedName + "'"));
+		if (!(unit instanceof Unit.Packaged packaged)
+				|| !(packaged.document().getUnit() instanceof OperationalTransformation transformation)) {
+			throw new IllegalArgumentException("'" + qualifiedName + "' is not a compiled QVT-O unit");
+		}
+		// Execute proper: nothing is linked here. A stub left over means the unit was not bound,
+		// and that is the caller's mistake to hear about, not something to resolve on the quiet.
+		QvtoUnitBinder.unboundImport(transformation).ifPresent(name -> {
+			throw new IllegalArgumentException("'" + qualifiedName + "' still imports '" + name
+					+ "' unbound; the context was not prepared with this engine's binder");
+		});
+		return run(transformation, context, options, effectiveBlackboxRegistry(), prepared.packageRegistry());
+	}
+
+	@Override
+	public UnitBinder unitBinder() {
+		return new QvtoUnitBinder(parserSupport, packageRegistry, effectiveBlackboxRegistry(),
+				effectiveBlackboxAllowList(), maxBlackboxLibraries);
+	}
+
+	/** The evaluation itself, shared by the linking and the prepared path. */
+	private QvtoExecutionResult run(OperationalTransformation transformation, QvtoExecutionContext context,
+			QvtoEvaluationOptions options, QvtoBlackboxRegistry effectiveRegistry, EPackage.Registry registry) {
 		QvtoEvalEnvironment env = QvtoEvalEnvironment.forTransformation(context.configProperties());
 		QvtoExtentManager extentManager = new QvtoExtentManager(transformation, context);
 
 		QvtoEvaluator evaluator = new QvtoEvaluator(
-				oclEngine, env, options, transformation, extentManager, this, packageRegistry);
+				oclEngine, env, options, transformation, extentManager, this, registry);
 		evaluator.setConfigProperties(context.configProperties());
 
 		// D29: Pass QVT-O operations as additionalProviders — always active, no mutable registration

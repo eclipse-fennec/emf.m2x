@@ -20,6 +20,8 @@ import java.util.List;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.osgi.annotation.versioning.ProviderType;
 
@@ -153,6 +155,29 @@ public interface M2tEngine {
 	 * @return the execution result with diagnostics and generated files
 	 */
 	M2tResult execute(Module module, M2tContext context);
+
+	/**
+	 * Generates from a prepared unit — the Execute phase proper: nothing is linked, no resolver is
+	 * consulted, the module runs as the prepare run bound it (#140).
+	 *
+	 * @param prepared the context a {@code UnitPreparer} produced, with this engine's
+	 *            {@link #unitBinder()} among its binders
+	 * @param qualifiedName the unit to run, one the context holds
+	 * @param context the input elements and target directory
+	 * @return the result, never {@code null}
+	 * @throws IllegalArgumentException if the context does not hold the unit, or holds it with
+	 *             link information still pending
+	 * @since 1.0
+	 */
+	M2tResult execute(PreparedContext prepared, String qualifiedName, M2tContext context);
+
+	/**
+	 * Returns the binder a {@code UnitPreparer} needs to bind MOFM2T units.
+	 *
+	 * @return the binder, never {@code null}
+	 * @since 1.0
+	 */
+	UnitBinder unitBinder();
 
 	// --- Linking ---
 

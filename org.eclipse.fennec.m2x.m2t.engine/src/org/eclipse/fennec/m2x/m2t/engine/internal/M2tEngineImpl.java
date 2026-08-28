@@ -63,6 +63,9 @@ import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
@@ -390,6 +393,31 @@ public class M2tEngineImpl implements M2tEngine {
 		return Stream.concat(config.unitResolvers().stream(), discovered)
 				.limit(config.maxUnitResolvers())
 				.toList();
+	}
+
+	@Override
+	public M2tResult execute(PreparedContext prepared, String qualifiedName, M2tContext context) {
+		Objects.requireNonNull(prepared, "prepared must not be null");
+		Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
+		Objects.requireNonNull(context, "context must not be null");
+		Unit unit = prepared.unit(qualifiedName).orElseThrow(() -> new IllegalArgumentException(
+				"the prepared context holds no unit '" + qualifiedName + "'"));
+		if (!(unit instanceof Unit.Packaged packaged) || !(packaged.document().getUnit() instanceof Module module)) {
+			throw new IllegalArgumentException("'" + qualifiedName + "' is not a compiled MOFM2T unit");
+		}
+		// Execute proper: no link. Link information still on the module means it was not bound.
+		if (M2tLinkInfo.recover(module).isPresent()) {
+			throw new IllegalArgumentException("'" + qualifiedName
+					+ "' still carries link information; the context was not prepared with this engine's binder");
+		}
+		linkedModules.add(module);
+		unresolvedReferences.put(module, List.of());
+		return execute(module, context);
+	}
+
+	@Override
+	public UnitBinder unitBinder() {
+		return new M2tUnitBinder();
 	}
 
 	@Override

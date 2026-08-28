@@ -17,33 +17,27 @@ package org.eclipse.fennec.m2x.unit.store;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
 import org.eclipse.emf.common.util.URI;
-import org.eclipse.emf.ecore.EFactory;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.emf.ecore.InternalEObject;
-import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceImpl;
-import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.emf.ecore.xmi.XMLResource;
-import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
 import org.eclipse.fennec.m2x.model.compiled.CompiledFactory;
-import org.eclipse.fennec.m2x.model.compiled.CompiledPackage;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.SourceUnit;
 import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitFingerprintService;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitKind;
+import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
 import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
@@ -160,7 +154,13 @@ public final class DefaultUnitStore implements UnitStore {
 
 	@Override
 	public Optional<Unit> load(UnitKey key) throws UnitStoreException {
+		return load(key, new UnitResourceSet(packages));
+	}
+
+	@Override
+	public Optional<Unit> load(UnitKey key, UnitResourceSet target) throws UnitStoreException {
 		Objects.requireNonNull(key, "key must not be null");
+		Objects.requireNonNull(target, "target must not be null");
 		UnitKey pinned;
 		if (key.fingerprint().isPresent()) {
 			pinned = key;
@@ -182,7 +182,7 @@ public final class DefaultUnitStore implements UnitStore {
 		if (bytes.isEmpty()) {
 			return Optional.empty();
 		}
-		EObject root = deserialize(bytes.get(), pinned);
+		EObject root = deserialize(bytes.get(), pinned, target);
 		return Optional.of(switch (root) {
 			case CompiledUnit document -> new PackagedUnit(document);
 			case SourceUnit source -> new StoredSource(source.getQualifiedName(),
@@ -224,7 +224,7 @@ public final class DefaultUnitStore implements UnitStore {
 
 	private byte[] serialize(EObject document, UnitKey key) throws UnitStoreException {
 		giveResourcelessMetamodelsAResource(document);
-		ResourceSet resourceSet = freshResourceSet();
+		ResourceSet resourceSet = new UnitResourceSet(packages);
 		Resource resource = resourceSet.createResource(uriOf(key));
 		resource.getContents().add(document);
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -236,8 +236,7 @@ public final class DefaultUnitStore implements UnitStore {
 		return out.toByteArray();
 	}
 
-	private EObject deserialize(byte[] bytes, UnitKey key) throws UnitStoreException {
-		UnitResourceSet resourceSet = freshResourceSet();
+	private EObject deserialize(byte[] bytes, UnitKey key, UnitResourceSet resourceSet) throws UnitStoreException {
 		Resource resource = resourceSet.createResource(uriOf(key));
 		try {
 			resource.load(new ByteArrayInputStream(bytes), null);
@@ -251,46 +250,17 @@ public final class DefaultUnitStore implements UnitStore {
 		if (root instanceof CompiledUnit document) {
 			// A copy carried by the unit serves where the registry has nothing for the nsURI
 			for (EPackage copy : document.getPackages()) {
-				if (copy.getNsURI() != null && resourceSet.getPackageRegistry().getEPackage(copy.getNsURI()) == null) {
-					resourceSet.serveFromCopy(copy);
-				}
+				resourceSet.serveFromCopy(copy);
 			}
 		}
-		EcoreUtil.resolveAll(resourceSet);
-		Map<EObject, ?> unresolved = EcoreUtil.UnresolvedProxyCrossReferencer.find(resourceSet);
+		EcoreUtil.resolveAll(resource);
+		Map<EObject, ?> unresolved = EcoreUtil.UnresolvedProxyCrossReferencer.find(resource);
 		if (!unresolved.isEmpty()) {
 			EObject first = unresolved.keySet().iterator().next();
 			throw new UnitStoreException("the unit '" + key.qualifiedName() + "' refers to " + unresolved.size()
 					+ " object(s) that resolve to nothing here, first: " + EcoreUtil.getURI(first));
 		}
 		return root;
-	}
-
-	private UnitResourceSet freshResourceSet() {
-		UnitResourceSet resourceSet = new UnitResourceSet();
-		resourceSet.getResourceFactoryRegistry().getExtensionToFactoryMap()
-				.put(Resource.Factory.Registry.DEFAULT_EXTENSION, new XMIResourceFactoryImpl());
-		// The store's registry answers for the user's metamodels; the languages' own metamodels —
-		// the classes a document is an instance of — are generated and live in the global registry,
-		// so that one is the last resort behind it
-		EPackage.Registry registry = new EPackageRegistryImpl(packages) {
-			private static final long serialVersionUID = 1L;
-
-			@Override
-			protected EPackage delegatedGetEPackage(String nsURI) {
-				EPackage ePackage = super.delegatedGetEPackage(nsURI);
-				return ePackage != null ? ePackage : EPackage.Registry.INSTANCE.getEPackage(nsURI);
-			}
-
-			@Override
-			protected EFactory delegatedGetEFactory(String nsURI) {
-				EFactory eFactory = super.delegatedGetEFactory(nsURI);
-				return eFactory != null ? eFactory : EPackage.Registry.INSTANCE.getEFactory(nsURI);
-			}
-		};
-		registry.put(CompiledPackage.eNS_URI, CompiledPackage.eINSTANCE);
-		resourceSet.setPackageRegistry(registry);
-		return resourceSet;
 	}
 
 	/**
@@ -307,40 +277,6 @@ public final class DefaultUnitStore implements UnitStore {
 					new ResourceImpl(URI.createURI(root.getNsURI())).getContents().add(root);
 				}
 			}
-		}
-	}
-
-	/**
-	 * A resource set that can resolve a metamodel reference against a package copy the document
-	 * carries. Going through the registry would not do: EMF resolves {@code nsURI#//Book} by
-	 * asking the registered package for its resource and that resource for the fragment — and
-	 * the copy's resource is the document's, whose root is the {@code CompiledUnit}, not the
-	 * package. So the fragment is walked from the copy itself, the way Ecore's own fragment
-	 * convention ({@code //Classifier/feature}) reads.
-	 */
-	private static final class UnitResourceSet extends ResourceSetImpl {
-		private final Map<String, EPackage> copies = new HashMap<>();
-
-		void serveFromCopy(EPackage copy) {
-			copies.put(copy.getNsURI(), copy);
-		}
-
-		@Override
-		public EObject getEObject(URI uri, boolean loadOnDemand) {
-			EPackage copy = copies.get(uri.trimFragment().toString());
-			if (copy != null && uri.fragment() != null && uri.fragment().startsWith("//")) {
-				EObject current = copy;
-				for (String segment : uri.fragment().substring(2).split("/")) {
-					if (current == null) {
-						break;
-					}
-					current = ((InternalEObject) current).eObjectForURIFragmentSegment(segment);
-				}
-				if (current != null) {
-					return current;
-				}
-			}
-			return super.getEObject(uri, loadOnDemand);
 		}
 	}
 

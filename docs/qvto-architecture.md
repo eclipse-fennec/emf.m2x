@@ -566,6 +566,48 @@ twins in the engine bundles) resolve from a store — compiled unit first, sourc
 `UnitStoreException` into an `IllegalStateException` rather than an empty answer, so a broken store
 cannot let a stale copy elsewhere step in (§7 of the concept, #141 refines the rules).
 
+### 4.v Prepare: one context, nothing left to resolve (#140)
+
+Execute never asks a resolver. What makes that true is Prepare (`UnitPreparer`, package
+`unit.prepare`): from a store, it loads the requested units and — following their manifests — the
+whole dependency closure into **one** `UnitResourceSet`, verifies what they were built against, has
+the language bind them, and hands the engine a `PreparedContext`. Per unit:
+
+- **Load.** `pin` loads exactly the pinned fingerprint — a version the store no longer has is a hard
+  failure naming what it has instead (decision E4). `rebind` takes the newest version and writes what
+  was bound into the unit's `resolvedClosure` (name, fingerprint, `store`), because under rebind the
+  unit fingerprint says nothing about the dependencies. `embed` has nothing to load. Two units
+  pinning different versions of one name are a conflict, not a silent choice.
+- **Verify.** Every `PackageEntry` against the runtime registry: an instance with the same
+  fingerprint is what the unit's references resolve to — generated code wins, blackboxes keep working
+  with generated types; a missing instance is served from the copy the unit carries; a *differing*
+  fingerprint is a hard failure naming the nsURI and both values. The same nsURI recorded with two
+  fingerprints by two units of one run is a failure too. The resolution happens as the resource set
+  resolves the document — runtime registry, then global, then copy — and the check comes after; the
+  order is sound because no decision changes: equal → the runtime instance the document already
+  resolved to, different → failure and the context is discarded, absent → the copy.
+- **Bind.** The language's `UnitBinder` — `QvtoEngine.unitBinder()` and its QVT-R/M2T twins, so the
+  binder carries the engine's blackbox registry and D29 limits — points every stub at the loaded
+  dependency (QVT-O: `ModuleImport.importedModule`, blackbox stubs at the registry's synthetic
+  library, placed in the unit's satellites; QVT-R: merge and strike the import; MOFM2T: link from the
+  `m2t.link.*` information and strip it) and checks the blackbox requirements (QVT-O: library present
+  and signature fingerprint equal; QVT-R: a registry to serve it at all — its blackbox API declares no
+  operations, which is stated rather than hidden).
+
+`QvtoEngine.execute(PreparedContext, qualifiedName, context)` is the Execute phase proper: no linker
+is built, the evaluator runs with the context's registry, and a stub left over is an
+`IllegalArgumentException` — the context was not prepared with this engine's binder — not something
+to resolve on the quiet. `PreparedContext.contents(URI)` loads a model in the same resource set, so it
+carries the context's types (§6.1 of the concept: an extent handed in as already loaded objects
+carries the types of wherever it was loaded); the output of one unit is the input of the next without
+a foreign-type surprise, and a `Book` created by a unit is an instance of the runtime's `Book`.
+
+`UnitResourceSet` (`unit.api`) is where type identity is decided, once, at load time. Its registry
+answers in three tiers — the registry it was given, the global one (the languages' own metamodels
+are generated), the copies loaded documents carry — and it resolves package-rooted references
+(`nsURI#/`, `nsURI#//Book`) by walking the fragment from the package that answers, because EMF's own
+route goes through the package's resource and a package built in memory has none.
+
 The three compilers are one shape in three languages: `QvtoUnitCompiler` (this section),
 `QvtdUnitCompiler` (QVT-R: binding is a merge of rules, see the QVT-R architecture) and
 `M2tUnitCompiler` (MOFM2T: `extends`/`imports`; the names to bind are kept on the module under

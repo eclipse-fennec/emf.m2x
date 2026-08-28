@@ -19,6 +19,8 @@ import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.osgi.annotation.versioning.ProviderType;
 
@@ -161,6 +163,44 @@ public interface QvtoEngine {
 	 */
 	QvtoExecutionResult execute(OperationalTransformation transformation,
 			QvtoExecutionContext context, QvtoEvaluationOptions options);
+
+	/**
+	 * Executes a prepared unit — the Execute phase proper: nothing is linked, no resolver and no
+	 * registry is consulted, the unit runs as the prepare run bound it (#140).
+	 *
+	 * @param prepared the context a {@code UnitPreparer} produced, with this engine's
+	 *            {@link #unitBinder()} among its binders
+	 * @param qualifiedName the unit to run, one the context holds
+	 * @param context the model extents and configuration properties
+	 * @return the result, never {@code null}
+	 * @throws IllegalArgumentException if the context does not hold the unit, or holds it with an
+	 *             import still unbound
+	 * @since 1.0
+	 */
+	QvtoExecutionResult execute(PreparedContext prepared, String qualifiedName, QvtoExecutionContext context);
+
+	/**
+	 * Executes a prepared unit with evaluation options — see
+	 * {@link #execute(PreparedContext, String, QvtoExecutionContext)}.
+	 *
+	 * @param prepared the prepared context
+	 * @param qualifiedName the unit to run
+	 * @param context the model extents and configuration properties
+	 * @param options the evaluation options
+	 * @return the result, never {@code null}
+	 * @since 1.0
+	 */
+	QvtoExecutionResult execute(PreparedContext prepared, String qualifiedName, QvtoExecutionContext context,
+			QvtoEvaluationOptions options);
+
+	/**
+	 * Returns the binder a {@code UnitPreparer} needs to bind QVT-O units with this engine's
+	 * blackbox registry and limits (D29).
+	 *
+	 * @return the binder, never {@code null}
+	 * @since 1.0
+	 */
+	UnitBinder unitBinder();
 
 
 	/**
