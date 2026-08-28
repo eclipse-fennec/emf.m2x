@@ -17,7 +17,9 @@ package org.eclipse.fennec.m2x.qvtd.api;
 import java.util.Objects;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.unit.api.Unit;
 
 /**
  * A QVT-R compilation unit, either as source text or as a pre-compiled
@@ -26,7 +28,7 @@ import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-public sealed interface QvtdUnit permits QvtdUnit.SourceUnit, QvtdUnit.CompiledUnit {
+public sealed interface QvtdUnit extends Unit permits QvtdUnit.SourceUnit, QvtdUnit.CompiledUnit {
 
 	/**
 	 * Returns the fully qualified unit name.
@@ -40,7 +42,7 @@ public sealed interface QvtdUnit permits QvtdUnit.SourceUnit, QvtdUnit.CompiledU
 	 * @param uri the source URI
 	 * @param source the source text
 	 */
-	record SourceUnit(String qualifiedName, URI uri, String source) implements QvtdUnit {
+	record SourceUnit(String qualifiedName, URI uri, String source) implements QvtdUnit, Unit.Source {
 		public SourceUnit {
 			Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
 			Objects.requireNonNull(uri, "uri must not be null");
@@ -54,10 +56,15 @@ public sealed interface QvtdUnit permits QvtdUnit.SourceUnit, QvtdUnit.CompiledU
 	 * @param qualifiedName the fully qualified unit name
 	 * @param transformation the pre-compiled transformation
 	 */
-	record CompiledUnit(String qualifiedName, RelationalTransformation transformation) implements QvtdUnit {
+	record CompiledUnit(String qualifiedName, RelationalTransformation transformation) implements QvtdUnit, Unit.Compiled {
 		public CompiledUnit {
 			Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
 			Objects.requireNonNull(transformation, "transformation must not be null");
+		}
+
+		@Override
+		public EObject root() {
+			return transformation;
 		}
 	}
 }

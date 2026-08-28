@@ -1,0 +1,178 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ecore:EPackage xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore" name="compiled" nsURI="http://www.eclipse.org/fennec/m2x/compiled/1.0"
+    nsPrefix="compiled">
+  <eAnnotations source="Version">
+    <details key="value" value="1.0"/>
+  </eAnnotations>
+  <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+    <details key="complianceLevel" value="21.0"/>
+    <details key="oSGiCompatible" value="true"/>
+    <details key="basePackage" value="org.eclipse.fennec.m2x.model"/>
+    <details key="resource" value="XMI"/>
+    <details key="documentation" value="Manifest of a compiled unit: what it was built from, what it was built against, and what it still needs. The nsURI is deliberately neutral — a stored unit survives moving this Ecore, but not a change of its nsURI."/>
+    <details key="copyrightText" value="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"/>
+  </eAnnotations>
+  <!-- ==================== Enumerations ==================== -->
+  <eClassifiers xsi:type="ecore:EEnum" name="DependencyMode">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="How a dependency was bound when the unit was compiled. embed: the dependency's AST was copied into the unit — absolutely reproducible, never picks up a fix. pin: a reference to exactly one fingerprint — reproducible while that version stays resolvable, fixes arrive on recompile. rebind: a reference by name, bound at prepare time — not reproducible, fixes arrive automatically, so prepare has to record what it actually bound."/>
+    </eAnnotations>
+    <eLiterals name="embed"/>
+    <eLiterals name="pin" value="1"/>
+    <eLiterals name="rebind" value="2"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EEnum" name="PackageRole">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="Why a package entry is in the manifest. referenced: the unit refers to types of this package and prepare has to supply it. embedded: the unit carries a copy, which applies where the runtime provides no instance of its own."/>
+    </eAnnotations>
+    <eLiterals name="referenced"/>
+    <eLiterals name="embedded" value="1"/>
+  </eClassifiers>
+  <!-- ==================== Manifest ==================== -->
+  <eClassifiers xsi:type="ecore:EClass" name="CompiledUnitManifest">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="Everything needed to decide whether a stored unit is still valid, and to say precisely what moved when it is not. The overall unitFingerprint answers the question with one comparison; the entries below are what turns a mismatch into a diagnostic that names the culprit instead of declaring the unit outdated."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="formatVersion" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Version of the manifest format itself, so a reader can tell what it is looking at before it interprets anything."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="producedBy" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Which engine version produced the unit."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="language" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Language tag of the unit: qvto, qvtr or m2t. Together with qualifiedName and the kind it forms the store key."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="qualifiedName" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Qualified name of the unit this manifest belongs to."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="unitFingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Fingerprint of the unit in the form &lt;scheme&gt;:&lt;digest&gt;, computed Merkle-style over the unit and the fingerprints of its dependencies. Under rebind it describes the unit alone, which is why resolvedClosure exists."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="dependencyMode" eType="#//DependencyMode">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="How dependencies were bound when this unit was compiled. It has to be readable on load, otherwise prepare cannot behave correctly."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="packageEntry" upperBound="-1"
+        eType="#//PackageEntry" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The EPackages the unit was compiled against, with the fingerprints prepare verifies them by."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="dependencyEntry" upperBound="-1"
+        eType="#//DependencyEntry" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The units this one depends on, each with the mode it was bound in."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="blackboxRequirement" upperBound="-1"
+        eType="#//BlackboxRequirement" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Blackbox declarations the unit needs. The implementations are not part of a compiled unit — only their declarations are, so a missing one surfaces at load time with a clear statement instead of mid-run."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="resolvedClosure" upperBound="-1"
+        eType="#//ResolvedDependency" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="What prepare actually bound. Recorded under rebind, where the unit fingerprint says nothing about the dependencies: without this record nobody can reconstruct what a given run computed."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <!-- ==================== Entries ==================== -->
+  <eClassifiers xsi:type="ecore:EClass" name="PackageEntry">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="One EPackage the unit was compiled against. Prepare looks the nsURI up in the runtime registry and compares fingerprints: on equality the runtime instance is adopted, so generated code stays in play; a matching nsURI with a differing fingerprint is a hard failure, naming both values."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="nsURI" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The package's namespace URI — the identity prepare looks up."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="fingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The package fingerprint in the form &lt;scheme&gt;:&lt;digest&gt;, computed by the FingerprintService of emf.osgi rather than by the m2x unit mechanism."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="scheme" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The canonicalization scheme the fingerprint was computed in, e.g. fp1. Values of different schemes are not comparable, so it has to travel with the value."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="role" eType="#//PackageRole">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Whether the unit only refers to this package or carries a copy of it."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="DependencyEntry">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="One unit this unit depends on. The mode is per dependency, because a single compile may embed one library and pin another."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="qualifiedName" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Qualified name of the required unit."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="mode" eType="#//DependencyMode">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="How this dependency was bound."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="fingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The dependency's unit fingerprint under embed and pin. Empty under rebind, where the binding is decided at prepare time and recorded in resolvedClosure."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="BlackboxRequirement">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="A blackbox operation the unit calls. Carried as a declaration so that load time can state which implementation is missing."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Qualified name of the required blackbox library or operation."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="signatureFingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Fingerprint of the expected signature, so that a provider with the right name but the wrong shape is caught at prepare time rather than at the call."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="provider" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The provider expected to supply the implementation, where the compile knew one."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="ResolvedDependency">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="One entry of the closure record prepare writes under rebind: which unit was bound, and in which version."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="qualifiedName" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Qualified name of the bound unit."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="fingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The unit fingerprint prepare actually bound."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="source" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Which resolver or store the unit came from, so that two sources disagreeing about the same name can be told apart afterwards."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
+</ecore:EPackage>

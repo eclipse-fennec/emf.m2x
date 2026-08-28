@@ -1,0 +1,21 @@
+Bundle-Name: Fennec M2X Unit Tests
+Bundle-Description: Contract tests for the language-neutral unit abstraction and the compiled-unit manifest metamodel
+
+-library: enableEMF
+
+src=${^src}
+
+# The three language APIs are here to assert that their sealed unit interfaces really
+# do extend the neutral base. They cannot sit on the unit bundle's own test path: it is
+# on their build path, and bnd rejects the cycle. The direction stays one-way (D39).
+-buildpath: \
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
+	org.eclipse.fennec.m2x.qvto.api;version=snapshot,\
+	org.eclipse.fennec.m2x.qvto.model;version=snapshot,\
+	org.eclipse.fennec.m2x.qvtd.api;version=snapshot,\
+	org.eclipse.fennec.m2x.qvtd.model;version=snapshot,\
+	org.eclipse.fennec.m2x.qvt.model;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.api;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.model;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot

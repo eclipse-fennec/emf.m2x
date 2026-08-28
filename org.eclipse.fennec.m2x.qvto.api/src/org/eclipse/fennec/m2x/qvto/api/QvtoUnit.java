@@ -15,9 +15,11 @@
 package org.eclipse.fennec.m2x.qvto.api;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EObject;
 import java.util.Objects;
 
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.unit.api.Unit;
 
 /**
  * A resolved QVT-O compilation unit, either as source text or a pre-compiled AST.
@@ -31,7 +33,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-public sealed interface QvtoUnit permits QvtoUnit.SourceUnit, QvtoUnit.CompiledUnit {
+public sealed interface QvtoUnit extends Unit permits QvtoUnit.SourceUnit, QvtoUnit.CompiledUnit {
 
 	/**
 	 * Returns the qualified name of this unit.
@@ -47,7 +49,7 @@ public sealed interface QvtoUnit permits QvtoUnit.SourceUnit, QvtoUnit.CompiledU
 	 * @param uri the location of the source
 	 * @param source the source text
 	 */
-	record SourceUnit(String qualifiedName, URI uri, String source) implements QvtoUnit {
+	record SourceUnit(String qualifiedName, URI uri, String source) implements QvtoUnit, Unit.Source {
 		public SourceUnit {
 			Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
 			Objects.requireNonNull(uri, "uri must not be null");
@@ -61,10 +63,15 @@ public sealed interface QvtoUnit permits QvtoUnit.SourceUnit, QvtoUnit.CompiledU
 	 * @param qualifiedName the qualified unit name
 	 * @param transformation the parsed transformation
 	 */
-	record CompiledUnit(String qualifiedName, OperationalTransformation transformation) implements QvtoUnit {
+	record CompiledUnit(String qualifiedName, OperationalTransformation transformation) implements QvtoUnit, Unit.Compiled {
 		public CompiledUnit {
 			Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
 			Objects.requireNonNull(transformation, "transformation must not be null");
+		}
+
+		@Override
+		public EObject root() {
+			return transformation;
 		}
 	}
 }
