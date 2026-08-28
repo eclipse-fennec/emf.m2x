@@ -1,7 +1,7 @@
 # Fennec M2M — Benchmark Results
 
-Date: 2026-08-09
-Platform: Linux 6.17.0-1030-oem, Java 21
+Date: 2026-08-09, re-run 2026-08-28 (§5)
+Platform: Linux 6.17.0-1030-oem / 6.17.0-1032-oem, Java 21
 Machine: mark-dell
 
 ## 1. OCL Benchmark (Fennec vs Eclipse OCL Classic)
@@ -135,6 +135,71 @@ The following optimizations were applied to achieve the above results:
 
 ---
 
+## 5. Re-run after the compiled-unit work (2026-08-28)
+
+Same machine, same tests, same parameters, after #154–#158 (OCL types as `EClassifier`s, no
+`ClassifierType` wrapper, scope instead of registry scan) and epic #135 (compiled units). The
+question was whether any of it moved the standard path, and what the new path costs and saves.
+
+### 5.1 The standard path — unchanged or slightly faster
+
+| Metric | 2026-08-09 | 2026-08-28 | Change |
+|---|---|---|---|
+| QVT-O parse (200 iter, plain) | 81.09 ms | 67.33 ms | **−17 %** |
+| QVT-O execute (200 × 100 elem, plain) | 167.67 ms | 159.38 ms | −5 % |
+| QVT-O parse+exec (plain) | 287.23 ms | 240.42 ms | **−16 %** |
+| QVT-O execute, Eclipse | 173.98 ms | 178.59 ms | +3 % (reference, run-to-run) |
+| OCL parse complex (1000 iter, plain) | 50.89 ms | 52.55 ms | +3 % |
+| OCL parse+eval complex (plain) | 70.30 ms | 59.35 ms | −16 % |
+| OCL eval complex (pre-parsed, plain) | 3.74 ms | 3.60 ms | −4 % |
+| OCL eval medium, Eclipse | 6.58 ms | 14.30 ms | run-to-run on the Eclipse side |
+
+Parsing got faster — the plausible cause is #158: type names resolve in the declared scope
+instead of a scan over the whole package registry. Execution is within noise of the previous run
+in both directions. Nothing regressed.
+
+### 5.2 The compiled-unit path — what it costs and what it saves
+
+Tests: `QvtoCompiledUnitBenchmarkTest`, `QvtdCompiledUnitBenchmarkTest`,
+`M2tCompiledUnitBenchmarkTest` (all `@Tag("benchmark")`). 200 iterations; QVT-O 100 elements,
+QVT-R 100 books, M2T one class with 50 operations. Validation on load is **on**.
+
+| | QVT-O | QVT-R | M2T |
+|---|---|---|---|
+| `parse()` × 200 | 72.22 ms | 9.87 ms | 17.90 ms |
+| `compile()` × 200 | 170.99 ms (2.4×) | 28.19 ms (2.9×) | 35.34 ms (2.0×) |
+| store + load, per round trip | 1.84 ms | 0.75 ms | 0.67 ms |
+| prepare (once, no dependencies) | 1.43 ms | 0.44 ms | 0.45 ms |
+| `execute(ast)` × 200 | 163.68 ms | 140.76 ms | 30.86 ms |
+| `execute(prepared)` × 200 | 174.25 ms (1.06×) | 147.36 ms (1.05×) | 20.75 ms (**0.67×**) |
+
+What the numbers say:
+
+- **`compile()` costs two to three times `parse()`.** That is the satellite walk, the package
+  entries with their `fp1` fingerprints, and the `m2x1` unit fingerprint. It is a one-time price
+  per unit, paid where a unit is produced, not where it runs.
+- **A store round trip is under 2 ms** for a transformation, under 1 ms for a template — XMI out
+  and in, plus the full `UnitValidator` (integrity, manifest, closure, Ecore structure, size).
+- **Repeated execution from a prepared context is at parity for QVT-O and QVT-R** (+5–6 %,
+  inside run-to-run variation). The link phase `execute(ast)` runs on every call is cheap for a
+  unit without imports, so there is nothing for prepare to save here; the saving prepare exists for
+  — no resolver in Execute, one metamodel decision per pipeline — is not a per-call cost. The
+  small plus comes from the context's registry chain (`UnitResourceSet`: given → global → copies)
+  standing between `objectsOfType` and the package.
+- **M2T is 20–33 % faster from the prepared context, in two runs.** This is not the prepared path
+  being clever; it is the parsed path carrying weight it should not: `M2tEngineImpl` keeps a
+  `globalPositions` map with strong identity keys for every AST node of every module it ever
+  parsed, and `release(module)` does not remove them. A loaded module has no entries there. The
+  effect is a finding for the engine (see the code-quality epic), not a property of compiled units.
+
+### 5.3 Reading
+
+The compiled-unit work did not slow the standard path — parse got faster, execute did not move.
+Compiled units are not a performance feature and were not built as one: they buy reproducibility,
+a storable form and a resolver-free Execute. Their run-time cost is a one-time compile at two to
+three times a parse and a sub-2-ms load; their run-time saving is zero for a unit without imports
+and grows with the import closure that Execute no longer has to resolve.
+
 ## 4. How to Reproduce
 
 No setup is needed. The Eclipse bundles that Fennec is measured against are fetched into the
@@ -150,6 +215,13 @@ cd /opt/git/m2m/workspace
 # Or one at a time
 ./gradlew org.eclipse.fennec.m2x.ocl.benchmark:benchmarkTest
 ./gradlew org.eclipse.fennec.m2x.qvto.benchmark:benchmarkTest
+
+# The compiled-unit path (§5.2) — the M2T and QVT-R ones live in the test bundles
+./gradlew org.eclipse.fennec.m2x.m2t.tests:benchmarkTest org.eclipse.fennec.m2x.qvtd.tests:benchmarkTest
+
+# Gradle treats an unchanged benchmark as up to date and will not run it again; force a
+# second measurement with --rerun
+./gradlew org.eclipse.fennec.m2x.m2t.tests:benchmarkTest --rerun
 ```
 
 The comparisons carry `@Tag("benchmark")` and no workflow runs them — their numbers are
