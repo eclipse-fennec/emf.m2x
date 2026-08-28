@@ -28,7 +28,6 @@ import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -58,8 +57,6 @@ class QvtdGuardExpressionRegressionTest extends AbstractQvtdEngineTest {
 
 	// §7.10.2: a when clause reading the variable bound by the checkonly domain
 	@Test
-	@Disabled("#145 — the when clause is evaluated before the source domains are matched, "
-			+ "so it cannot read domain-bound variables (QVT v1.3 §7.10.2)")
 	void whenClause_readsRelationVariable_matches() throws QvtdParseException {
 		QvtdModelExtent uml = QvtdModelExtent.of(createPackage("HR"));
 		QvtdModelExtent rdbms = emptyExtent();
@@ -72,8 +69,6 @@ class QvtdGuardExpressionRegressionTest extends AbstractQvtdEngineTest {
 
 	// §7.10.2: the same clause with a condition the bound value does not satisfy
 	@Test
-	@Disabled("#145 — the when clause is evaluated before the source domains are matched, "
-			+ "so it cannot read domain-bound variables (QVT v1.3 §7.10.2)")
 	void whenClause_readsRelationVariable_filtersOut() throws QvtdParseException {
 		QvtdModelExtent uml = QvtdModelExtent.of(createPackage("HR"));
 		QvtdModelExtent rdbms = emptyExtent();
@@ -86,8 +81,6 @@ class QvtdGuardExpressionRegressionTest extends AbstractQvtdEngineTest {
 
 	// §7.10.2: a when clause comparing the relation variable to a literal
 	@Test
-	@Disabled("#145 — the when clause is evaluated before the source domains are matched, "
-			+ "so it cannot read domain-bound variables (QVT v1.3 §7.10.2)")
 	void whenClause_comparesRelationVariable() throws QvtdParseException {
 		QvtdModelExtent uml = QvtdModelExtent.of(createPackage("HR"));
 		QvtdModelExtent rdbms = emptyExtent();
@@ -99,8 +92,6 @@ class QvtdGuardExpressionRegressionTest extends AbstractQvtdEngineTest {
 
 	// §7.10.2: a when clause navigating the domain variable
 	@Test
-	@Disabled("#145 — the when clause is evaluated before the source domains are matched, "
-			+ "so it cannot read domain-bound variables (QVT v1.3 §7.10.2)")
 	void whenClause_readsDomainVariableProperty() throws QvtdParseException {
 		QvtdModelExtent uml = QvtdModelExtent.of(createPackage("HR"));
 		QvtdModelExtent rdbms = emptyExtent();
@@ -113,8 +104,6 @@ class QvtdGuardExpressionRegressionTest extends AbstractQvtdEngineTest {
 
 	// §7.10.2: the domain variable navigated to a value that does not match
 	@Test
-	@Disabled("#145 — the when clause is evaluated before the source domains are matched, "
-			+ "so it cannot read domain-bound variables (QVT v1.3 §7.10.2)")
 	void whenClause_readsDomainVariableProperty_filtersOut() throws QvtdParseException {
 		QvtdModelExtent uml = QvtdModelExtent.of(createPackage("HR"));
 		QvtdModelExtent rdbms = emptyExtent();
@@ -128,8 +117,6 @@ class QvtdGuardExpressionRegressionTest extends AbstractQvtdEngineTest {
 
 	// §7.11.4: a query invoked from a when clause, returning true
 	@Test
-	@Disabled("#145 — the when clause is evaluated before the source domains are matched, "
-			+ "so it cannot read domain-bound variables (QVT v1.3 §7.10.2)")
 	void whenClause_callsQuery_matches() throws QvtdParseException {
 		QvtdModelExtent uml = QvtdModelExtent.of(createPackage("HR"));
 		QvtdModelExtent rdbms = emptyExtent();
@@ -160,8 +147,6 @@ class QvtdGuardExpressionRegressionTest extends AbstractQvtdEngineTest {
 
 	// §7.11.4: the same query returning false
 	@Test
-	@Disabled("#145 — the when clause is evaluated before the source domains are matched, "
-			+ "so it cannot read domain-bound variables (QVT v1.3 §7.10.2)")
 	void whenClause_callsQuery_filtersOut() throws QvtdParseException {
 		QvtdModelExtent uml = QvtdModelExtent.of(createPackage("HR"));
 		QvtdModelExtent rdbms = emptyExtent();
@@ -221,8 +206,6 @@ class QvtdGuardExpressionRegressionTest extends AbstractQvtdEngineTest {
 
 	// §7.10.2: the guard is evaluated per match and keeps seeing the right binding
 	@Test
-	@Disabled("#145 — the when clause is evaluated before the source domains are matched, "
-			+ "so it cannot read domain-bound variables (QVT v1.3 §7.10.2)")
 	void whenClause_evaluatedPerMatch() throws QvtdParseException {
 		EObject hr = createPackage("HR");
 		EObject x = createPackage("X");

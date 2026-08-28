@@ -675,6 +675,25 @@ t.raisedException()  -- returns the raised exception (if any)
 Intermediate properties declared as `static` are shared across transformation instances,
 enabling cross-transformation data flow.
 
+### 9.5 Unresolved Imports Are Not Dangling References
+
+Two failure modes look alike and are not related. Keeping them apart saves the next reader a
+measurement:
+
+| | What it is | What happens |
+|---|---|---|
+| **Unresolved import** | `import lib.Strings;` names a unit no resolver has | `QvtoParseException: Cannot resolve import: lib.Strings` (`QvtoLinker`). The same in QVT-R; M2T reports it as an error diagnostic since #144 |
+| **Dangling reference on save** | the parsed AST holds objects the parser created and no feature contains — type instances, `self`, `result`, synthetic classifiers | `resource.save()` fails with `DanglingHREFException`. Nothing to do with resolution |
+
+The second happens with a *fully resolved* transformation. Measured on a minimal one — no `import`,
+no `modeltype`, parses, links and executes — the AST still holds one uncontained target,
+`Variable.type → PrimitiveType(Integer)`, and the save fails on it. With modeltypes, a mapping and
+`self` there are fifteen.
+
+That is the reduced, still valid core of #127: only the parser-created satellites need a home. The
+type references themselves stay non-containment, because a shared unit lends its types rather than
+owning them — see #137 and the compiled-unit concept behind epic #135.
+
 ---
 
 ## 10. Syntax Reference

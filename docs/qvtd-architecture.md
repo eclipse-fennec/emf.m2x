@@ -97,15 +97,29 @@ Three EPackages following the spec structure:
 
 1. **`execute(transformation, context)`** → `QvtrEvaluator.execute()`
 2. For each **top relation** (skip abstract, skip overridden):
-   a. Evaluate **when-clause** → pre-bindings (RelationCallExp → trace lookup)
+   a. Evaluate the when-clause's **relation calls** → pre-bindings (RelationCallExp → trace lookup)
    b. **Classify domains**: source vs. target (based on `isEnforceable()` + target model)
    c. **Match source domains** → list of binding maps
    d. For each source binding:
       - Check **optional null** (`[?]`) → skip if root variable is null
+      - Evaluate the **remaining when-predicates** against this binding → skip the binding if one is false
       - **Pre-compute where bindings** (query calls, computed values)
       - **Enforce target domain** (or check-only verify)
       - Record **trace**
       - Evaluate **where-clause** (may invoke non-top relations)
+
+The when-clause is split across steps (a) and (d) on purpose. §7.10.2 evaluates the when-condition
+over a *joint* binding — "for each valid binding of variables of the when clause **and variables of
+domains other than the target domain k** that satisfy the when condition and source domain patterns"
+— and §7.10 states outright that "the intersection of a domain variable set and when variable set
+need not be null". So a predicate may read what the domains bind and can only be evaluated once a
+candidate binding exists. Relation calls are the exception: they *produce* bindings that then
+restrict what the patterns match (§7.2.3), so they run before the match and reject the relation as a
+whole when the trace holds nothing.
+
+Evaluating the whole when-clause up front, which is what happened until #145, left every non-call
+predicate with an empty binding and reported `Unresolved variable` — for transformations written in
+the style of the spec's own `UmlToRdb` example.
 
 ### 5.3 Domain Classification (§7.10)
 

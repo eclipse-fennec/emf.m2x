@@ -26,6 +26,7 @@ import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.function.BiFunction;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -89,6 +90,7 @@ public class M2tEvaluator {
 	private static final Object WRAPPED_NULL = new Object();
 
 	private final OclEngine oclEngine;
+	private final Module module;
 	private final OclEvaluationOptions oclOptions;
 	private final M2tEvalEnvironment env;
 	private final M2tWriterStack writers;
@@ -99,6 +101,7 @@ public class M2tEvaluator {
 	private final int maxCrossProductSize;
 	private final boolean protectedAreaEnabled;
 	private int templateDepth;
+	private int queryDepth;
 
 	/** Maps overridden template → list of overriding templates. */
 	private final Map<Template, List<Template>> overrideIndex = new IdentityHashMap<>();
@@ -158,6 +161,8 @@ public class M2tEvaluator {
 			int maxTemplateDepth, int maxForIterations, int maxCrossProductSize,
 			boolean protectedAreaEnabled) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
+		this.env = Objects.requireNonNull(env, "env must not be null");
+		this.module = Objects.requireNonNull(module, "module must not be null");
 		// MOFM2T §8.3 string operations ride along with every evaluation: the engine
 		// belongs to the caller, so M2T adds what it needs instead of building its own.
 		// LENIENT null handling is what a generator wants and what D14 asked for: navigating
@@ -167,8 +172,8 @@ public class M2tEvaluator {
 		this.oclOptions = oclEngine.getDefaultOptions()
 				.withCustomOperationsEnabled(true)
 				.withNullHandling(NullHandling.LENIENT)
-				.withAdditionalProviders(withStandardLibrary(oclEngine.getDefaultOptions()));
-		this.env = Objects.requireNonNull(env, "env must not be null");
+				.withAdditionalProviders(withStandardLibraryAndQueries(
+						oclEngine.getDefaultOptions(), module, this::invokeQueryValue));
 		this.writers = Objects.requireNonNull(writers, "writers must not be null");
 		this.indentationMap = Objects.requireNonNull(indentationMap, "indentationMap must not be null");
 		this.positions = positions == null ? Map.of() : positions;
@@ -177,7 +182,6 @@ public class M2tEvaluator {
 		this.maxForIterations = maxForIterations;
 		this.maxCrossProductSize = maxCrossProductSize;
 		this.protectedAreaEnabled = protectedAreaEnabled;
-		Objects.requireNonNull(module, "module must not be null");
 		buildOverrideIndex(allLinkedModules);
 	}
 
@@ -810,10 +814,50 @@ public class M2tEvaluator {
 	 * Returns the additional providers of the given options with the MOFM2T standard
 	 * library appended, so a caller's own providers survive.
 	 */
-	private static List<OclOperationProvider> withStandardLibrary(OclEvaluationOptions options) {
+	private static List<OclOperationProvider> withStandardLibraryAndQueries(
+			OclEvaluationOptions options, Module module,
+			BiFunction<Query, Object[], Object> queryInvoker) {
 		List<OclOperationProvider> providers = new ArrayList<>(options.additionalProviders());
 		providers.add(new M2tStandardLibrary());
+		// The module's own queries. Without them a guard — a plain OCL expression the linker's
+		// invocation rewrite never reaches — cannot call what the module defines (#146).
+		providers.add(new M2tOperationProvider(module, queryInvoker));
 		return List.copyOf(providers);
+	}
+
+	/**
+	 * Evaluates a query and returns its value, for an invocation that arrived through OCL.
+	 *
+	 * <p>The counterpart in the template body, {@code caseQueryInvocation}, writes the result to
+	 * the document; inside an expression the value is what is wanted. The parameters are bound
+	 * in a fresh scope, and {@code self} to the first argument, exactly as there — a query body
+	 * written against {@code self} behaves the same whichever way it was called.
+	 *
+	 * <p>The depth of nested query calls is capped like template invocation depth: a query that
+	 * calls itself is a mistake an author can make, and an evaluation with a diagnostics channel
+	 * should report it rather than exhaust the stack.
+	 */
+	private Object invokeQueryValue(Query query, Object[] arguments) {
+		if (queryDepth >= maxTemplateDepth) {
+			addError("Maximum query depth exceeded (" + maxTemplateDepth
+					+ ") — possible recursion in query '" + query.getName() + "'");
+			return null;
+		}
+		queryDepth++;
+		env.pushScope();
+		try {
+			List<Variable> parameters = query.getParameter();
+			for (int i = 0; i < parameters.size() && i < arguments.length; i++) {
+				env.define(parameters.get(i).getName(), arguments[i]);
+			}
+			if (arguments.length > 0) {
+				env.define("self", arguments[0]);
+			}
+			return evaluateOcl(query.getExpression());
+		} finally {
+			env.popScope();
+			queryDepth--;
+		}
 	}
 
 	/**

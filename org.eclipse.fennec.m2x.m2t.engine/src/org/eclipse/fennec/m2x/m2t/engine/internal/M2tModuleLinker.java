@@ -66,6 +66,7 @@ public class M2tModuleLinker {
 	private final Map<String, M2tParseResult> parseResults = new LinkedHashMap<>();
 	private final Map<String, Module> moduleIndex = new LinkedHashMap<>();
 	private final List<String> warnings = new ArrayList<>();
+	private final Map<Module, List<String>> unresolvedReferences = new LinkedHashMap<>();
 
 	/**
 	 * Links all provided parse results.
@@ -113,6 +114,37 @@ public class M2tModuleLinker {
 	}
 
 	/**
+	 * Records a reference that names something the linker could not find.
+	 *
+	 * <p>These are the messages {@link #unresolvedReferences()} reports separately, because
+	 * whether they are a warning or an error is the caller's decision (#144) — the linker
+	 * itself always links what it can and says what it could not.
+	 */
+	private void unresolved(Module owner, String message) {
+		warnings.add(message);
+		unresolvedReferences.computeIfAbsent(owner, key -> new ArrayList<>()).add(message);
+	}
+
+	/**
+	 * Returns the subset of {@link #link(List)}'s messages that report a reference naming
+	 * something that is not there: an {@code extends}, an {@code import}, an
+	 * {@code overrides} or an invocation.
+	 *
+	 * <p>They are the M2T counterpart of {@code Cannot resolve import} in QVT-O and QVT-R, and
+	 * under {@link org.eclipse.fennec.m2x.m2t.api.UnresolvedReferenceMode#FAIL} they end the
+	 * generation instead of merely being mentioned. They are attributed to the module the
+	 * reference is written in: one broken module in a link set must not stop a sound one from
+	 * generating.
+	 *
+	 * @return the unresolved references per module, never {@code null}
+	 */
+	Map<Module, List<String>> unresolvedReferences() {
+		Map<Module, List<String>> copy = new LinkedHashMap<>();
+		unresolvedReferences.forEach((module, messages) -> copy.put(module, List.copyOf(messages)));
+		return copy;
+	}
+
+	/**
 	 * Links a single module (intra-module linking only, no cross-module resolution).
 	 */
 	public List<String> linkSingle(M2tParseResult result) {
@@ -129,7 +161,7 @@ public class M2tModuleLinker {
 			if (target != null) {
 				module.getExtends().add(target);
 			} else {
-				warnings.add("Unresolved extends '" + extendsName
+				unresolved(module, "Unresolved extends '" + extendsName
 						+ "' in module '" + module.getName() + "'");
 			}
 		}
@@ -139,7 +171,7 @@ public class M2tModuleLinker {
 			if (target != null) {
 				module.getImports().add(target);
 			} else {
-				warnings.add("Unresolved import '" + importName
+				unresolved(module, "Unresolved import '" + importName
 						+ "' in module '" + module.getName() + "'");
 			}
 		}
@@ -157,7 +189,7 @@ public class M2tModuleLinker {
 				if (target != null) {
 					template.getOverrides().add(target);
 				} else {
-					warnings.add("Unresolved override '" + overrideName
+					unresolved(module, "Unresolved override '" + overrideName
 							+ "' in template '" + template.getName()
 							+ "' of module '" + module.getName() + "'");
 				}
@@ -176,7 +208,7 @@ public class M2tModuleLinker {
 
 			ModuleElement target = resolveModuleElement(name, module);
 			if (target == null) {
-				warnings.add("Unresolved invocation '" + name
+				unresolved(module, "Unresolved invocation '" + name
 						+ "' in module '" + module.getName() + "'");
 				continue;
 			}
@@ -281,7 +313,7 @@ public class M2tModuleLinker {
 						} else if (isStandaloneCall(opCall)) {
 							// Standalone call (no explicit source) that doesn't match
 							// any module element — likely an unresolved invocation
-							warnings.add("Unresolved invocation '" + opName
+							unresolved(contextModule, "Unresolved invocation '" + opName
 									+ "' in module '" + contextModule.getName() + "'");
 						}
 					}
@@ -361,7 +393,51 @@ public class M2tModuleLinker {
 	 * Search order: local module → extended modules (transitive) → imported modules.
 	 * Respects visibility: private = local only, protected = local + extends, public = all.
 	 */
-	private ModuleElement resolveModuleElement(String name, Module contextModule) {
+	/**
+	 * Returns every {@link Query} the given module can call, under the same visibility rules
+	 * an invocation follows: the module's own queries whatever their visibility, then the
+	 * transitively extended modules' public and protected ones, then the imported modules'
+	 * public ones. The first query of a name wins, as in
+	 * {@link #resolveModuleElement(String, Module)}.
+	 *
+	 * <p>This exists so that {@link M2tOperationProvider} can hand OCL the same set the linker
+	 * resolves an invocation against. A guard is a plain OCL expression, so the linker's
+	 * rewrite of an invocation node never reaches it and OCL has to be able to resolve the call
+	 * itself (#146) — with one rule, in one place, rather than two that drift apart.
+	 *
+	 * @param contextModule the module the call is written in
+	 * @return the callable queries by name, never {@code null}
+	 */
+	static Map<String, Query> visibleQueries(Module contextModule) {
+		Map<String, Query> queries = new LinkedHashMap<>();
+		collectQueries(contextModule, VisibilityScope.ALL, queries);
+		for (Module extended : collectTransitiveExtends(contextModule)) {
+			collectQueries(extended, VisibilityScope.EXTENDS, queries);
+		}
+		for (Module imported : contextModule.getImports()) {
+			collectQueries(imported, VisibilityScope.IMPORTS, queries);
+		}
+		return queries;
+	}
+
+	private static void collectQueries(Module module, VisibilityScope scope,
+			Map<String, Query> collected) {
+		for (ModuleElement element : module.getOwnedModuleElement()) {
+			if (!(element instanceof Query query) || query.getName() == null) {
+				continue;
+			}
+			VisibilityKind visibility = element.getVisibility();
+			if (scope == VisibilityScope.IMPORTS && visibility != VisibilityKind.PUBLIC) {
+				continue;
+			}
+			if (scope == VisibilityScope.EXTENDS && visibility == VisibilityKind.PRIVATE) {
+				continue;
+			}
+			collected.putIfAbsent(query.getName(), query);
+		}
+	}
+
+	private static ModuleElement resolveModuleElement(String name, Module contextModule) {
 		// 1. Local module (all visibilities)
 		ModuleElement local = findElement(name, contextModule, VisibilityScope.ALL);
 		if (local != null) {
@@ -390,7 +466,7 @@ public class M2tModuleLinker {
 	/**
 	 * Resolves a template by name (for override linking).
 	 */
-	private Template resolveTemplate(String name, Module contextModule) {
+	private static Template resolveTemplate(String name, Module contextModule) {
 		// Search extended modules (the typical case for overrides)
 		for (Module extended : collectTransitiveExtends(contextModule)) {
 			ModuleElement found = findElement(name, extended, VisibilityScope.EXTENDS);
@@ -419,7 +495,7 @@ public class M2tModuleLinker {
 	/**
 	 * Finds a named module element in a module respecting visibility scope.
 	 */
-	private ModuleElement findElement(String name, Module module, VisibilityScope scope) {
+	private static ModuleElement findElement(String name, Module module, VisibilityScope scope) {
 		for (ModuleElement element : module.getOwnedModuleElement()) {
 			if (name.equals(element.getName())) {
 				VisibilityKind vis = element.getVisibility();
@@ -439,7 +515,7 @@ public class M2tModuleLinker {
 	/**
 	 * Collects all transitively extended modules (breadth-first, no duplicates).
 	 */
-	private List<Module> collectTransitiveExtends(Module module) {
+	private static List<Module> collectTransitiveExtends(Module module) {
 		List<Module> result = new ArrayList<>();
 		Set<Module> visited = new LinkedHashSet<>();
 		List<Module> queue = new ArrayList<>(module.getExtends());

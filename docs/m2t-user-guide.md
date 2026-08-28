@@ -176,6 +176,7 @@ M2tEngine engine = M2tEngines.create(config);
 | `maxCrossProductSize(int)` | 1,000,000 | Maximum cross-product size for set-argument invocations |
 | `maxOutputSize(long)` | 10,000,000 | Maximum total output size in characters (~10 MB), `0` for unlimited |
 | `protectedAreaEnabled(boolean)` | `true` | Enable/disable protected area markers and merging (see [§10.5](#105-disabling-protected-areas)) |
+| `unresolvedReferenceMode(mode)` | `FAIL` | What an unresolvable `extends`, `import`, `overrides` or invocation does (see [§5.5](#55-references-that-cannot-be-resolved)) |
 
 ### 3.5 Which Metamodels the Engine Sees
 
@@ -611,6 +612,56 @@ Summary: [genSummary(c)/]
 
 Output: `Summary: Employee (2 fields)`
 
+A query is callable wherever an OCL expression is evaluated, not only in a template body — a
+template guard, a `for` guard, a `let` and an `if` all reach it:
+
+```mtl
+[module m(Ecore)/]
+[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
+[template public main(c : EClass) ? (c.hasOps())]
+[file ('out', false)]
+[c.name/] has operations
+[/file]
+[/template]
+```
+
+Both call forms work: `c.hasOps()`, where the receiver is the query's first parameter, and
+`hasOps(c)`. Visibility follows the same rules as an invocation: the module's own queries whatever
+their visibility, the public and protected ones of transitively extended modules, and the public ones
+of imported modules.
+
+### 5.5 References That Cannot Be Resolved
+
+A reference naming something that is not there — an `extends`, an `import`, an `overrides` or an
+invocation — ends the generation with an error diagnostic and produces no files:
+
+```mtl
+[module child(Ecore) extends missing/]
+[template public main(c : EClass)][file ('out', false)]body[/file][/template]
+```
+
+```
+ERROR  Unresolved extends 'missing' in module 'child'
+generatedFiles = {}
+```
+
+This is the same rule QVT-O and QVT-R follow with `Cannot resolve import`. Generating anyway is the
+quieter and worse outcome: a missing `extends` silently changes which templates are visible, so the
+document is not absent but wrong.
+
+The references are attributed to the module they are written in, so one broken module in a link set
+does not stop a sound one from generating.
+
+Where an incomplete module set is deliberate, the older, lenient behaviour stays reachable:
+
+```java
+M2tConfiguration config = M2tConfiguration.builder(oclConfig)
+        .unresolvedReferenceMode(UnresolvedReferenceMode.WARN)
+        .build();
+```
+
+`link(...)` reports the names in either mode; the mode decides only whether the generation proceeds.
+
 ---
 
 ## 6. Multiple Inputs
@@ -894,6 +945,9 @@ A guard is an OCL boolean expression that controls whether a template produces o
 
 When the guard evaluates to `false`, the template produces no output.
 
+A guard is an ordinary OCL expression and may call the module's queries, like any other expression
+in the module — see [§5.4](#54-calling-queries-from-templates).
+
 ### 9.2 Override Guards
 
 Override templates can have guards. When the guard is `false`, the engine falls back to the overridden template:
@@ -908,6 +962,10 @@ Override templates can have guards. When the guard is `false`, the engine falls 
 
 - Abstract class input: `Abstract: AbstractClass`
 - Concrete class input: `Original` (fallback to base)
+
+The fallback applies when the call resolves to the overridden template, as it does above. A call
+written inside the overriding module resolves to the overriding template directly and does not fall
+back today — see [#149](https://github.com/eclipse-fennec/emf.m2x/issues/149).
 
 ### 9.3 Parameter Type Narrowing
 

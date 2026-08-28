@@ -74,6 +74,8 @@ public final class M2tConfiguration {
 	private final Set<String> allowedUnitModules;
 	private final int maxUnitResolvers;
 
+	private final UnresolvedReferenceMode unresolvedReferenceMode;
+
 	private M2tConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
 		this.oclEngine = builder.oclEngine;
@@ -82,6 +84,7 @@ public final class M2tConfiguration {
 		this.generationStrategy = builder.generationStrategy;
 		this.defaultCharset = builder.defaultCharset;
 		this.whitespaceMode = builder.whitespaceMode;
+		this.unresolvedReferenceMode = builder.unresolvedReferenceMode;
 		this.maxDiagnostics = builder.maxDiagnostics;
 		this.maxTemplateDepth = builder.maxTemplateDepth;
 		this.maxForIterations = builder.maxForIterations;
@@ -168,6 +171,16 @@ public final class M2tConfiguration {
 	 */
 	public WhitespaceMode whitespaceMode() {
 		return whitespaceMode;
+	}
+
+	/**
+	 * Returns how the generation reacts to a reference the linker cannot resolve.
+	 * Defaults to {@link UnresolvedReferenceMode#FAIL}.
+	 *
+	 * @see UnresolvedReferenceMode
+	 */
+	public UnresolvedReferenceMode unresolvedReferenceMode() {
+		return unresolvedReferenceMode;
 	}
 
 	/**
@@ -317,6 +330,7 @@ public final class M2tConfiguration {
 		private M2tGenerationStrategy generationStrategy;
 		private Charset defaultCharset = StandardCharsets.UTF_8;
 		private WhitespaceMode whitespaceMode = WhitespaceMode.ACCELEO;
+		private UnresolvedReferenceMode unresolvedReferenceMode = UnresolvedReferenceMode.FAIL;
 		private int maxDiagnostics = DEFAULT_MAX_DIAGNOSTICS;
 		private int maxTemplateDepth = DEFAULT_MAX_TEMPLATE_DEPTH;
 		private int maxForIterations = DEFAULT_MAX_FOR_ITERATIONS;
@@ -413,6 +427,17 @@ public final class M2tConfiguration {
 		 */
 		public Builder whitespaceMode(WhitespaceMode mode) {
 			this.whitespaceMode = Objects.requireNonNull(mode, "mode must not be null");
+			return this;
+		}
+
+		/**
+		 * Sets how the generation reacts to a reference the linker cannot resolve.
+		 *
+		 * @param mode the mode (default: {@link UnresolvedReferenceMode#FAIL})
+		 * @return this builder
+		 */
+		public Builder unresolvedReferenceMode(UnresolvedReferenceMode mode) {
+			this.unresolvedReferenceMode = Objects.requireNonNull(mode, "mode must not be null");
 			return this;
 		}
 
