@@ -42,6 +42,7 @@ import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
 import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
+import org.eclipse.fennec.m2x.unit.validate.UnitValidator;
 
 /**
  * The unit store: sources and compiled units over a {@link UnitStoreBackend}.
@@ -76,6 +77,7 @@ public final class DefaultUnitStore implements UnitStore {
 	private final UnitStoreBackend backend;
 	private final EPackage.Registry packages;
 	private final UnitFingerprintService fingerprints;
+	private final UnitValidator validator;
 
 	/**
 	 * Creates a store over a backend, resolving metamodels through the global registry.
@@ -105,9 +107,39 @@ public final class DefaultUnitStore implements UnitStore {
 	 */
 	public DefaultUnitStore(UnitStoreBackend backend, EPackage.Registry packages,
 			UnitFingerprintService fingerprints) {
+		this(backend, packages, fingerprints, UnitValidator.defaults());
+	}
+
+	/**
+	 * Creates a store with every collaborator given, including the validator every loaded
+	 * compiled unit passes — or {@code null} for none.
+	 *
+	 * <p>Validation is on by default (#142): a unit from a store never passed the parser, and this is
+	 * where its shape is checked. Switching it off is for a backend that is trusted and hot — the
+	 * check costs a walk over the document and a fingerprint per load.
+	 *
+	 * @param backend what carries the content
+	 * @param packages where a loaded unit's metamodels are looked up
+	 * @param fingerprints where a source's fingerprint comes from
+	 * @param validator what every loaded compiled unit has to pass, or {@code null} to load unchecked
+	 */
+	public DefaultUnitStore(UnitStoreBackend backend, EPackage.Registry packages,
+			UnitFingerprintService fingerprints, UnitValidator validator) {
 		this.backend = Objects.requireNonNull(backend, "backend must not be null");
 		this.packages = Objects.requireNonNull(packages, "packages must not be null");
 		this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints must not be null");
+		this.validator = validator;
+	}
+
+	/**
+	 * A store that loads without validation — for a trusted, hot backend.
+	 *
+	 * @param backend what carries the content
+	 * @param packages where a loaded unit's metamodels are looked up
+	 * @return the store, never {@code null}
+	 */
+	public static DefaultUnitStore withoutValidation(UnitStoreBackend backend, EPackage.Registry packages) {
+		return new DefaultUnitStore(backend, packages, DefaultUnitFingerprintService.INSTANCE, null);
 	}
 
 	@Override
@@ -183,6 +215,13 @@ public final class DefaultUnitStore implements UnitStore {
 			return Optional.empty();
 		}
 		EObject root = deserialize(bytes.get(), pinned, target);
+		if (root instanceof CompiledUnit document && validator != null) {
+			List<String> findings = validator.validate(document);
+			if (!findings.isEmpty()) {
+				throw new UnitStoreException("the unit '" + pinned.qualifiedName() + "' is rejected: "
+						+ String.join("; ", findings));
+			}
+		}
 		return Optional.of(switch (root) {
 			case CompiledUnit document -> new PackagedUnit(document);
 			case SourceUnit source -> new StoredSource(source.getQualifiedName(),
@@ -272,8 +311,8 @@ public final class DefaultUnitStore implements UnitStore {
 	private static void giveResourcelessMetamodelsAResource(EObject document) {
 		for (EObject target : EcoreUtil.ExternalCrossReferencer.find(document).keySet()) {
 			if (target.eResource() == null && !target.eIsProxy() && SatelliteCollector.isMetamodelElement(target)) {
-				EPackage root = (EPackage) EcoreUtil.getRootContainer(target);
-				if (root.eResource() == null) {
+				EPackage root = SatelliteCollector.metamodelOf(target);
+				if (root.eResource() == null && root.eContainer() == null) {
 					new ResourceImpl(URI.createURI(root.getNsURI())).getContents().add(root);
 				}
 			}

@@ -464,9 +464,14 @@ The canonical form is a reflective walk with an **exclusion** list (`AstCanonica
 hand-written switch with an inclusion list: the metamodels grow, and a forgotten class would make
 two different units silently share a value. Per node: the class as `nsURI#Name`; every set,
 non-derived, non-transient feature sorted by name; attribute values as `EcoreUtil.convertToString`;
-many-valued features in order — operand and statement order is semantic. A reference to an object
-in another resource (a metamodel class, a standard-library type) enters as its URI, so a metamodel
-change does not cascade into every expression's value. A reference into the script is the target's
+many-valued features in order — operand and statement order is semantic. A reference to a metamodel
+element enters as `nsURI#//Classifier/feature` — the package's nsURI and the name path below it,
+**wherever the metamodel lives**: in a resource named by its nsURI (generated code), in an `.ecore`
+file whose path must not enter the value, in no resource at all (built in memory), or as a copy the
+document carries. That is what makes the value reproducible across a store round trip (#142 found
+`EcoreUtil.getURI` there, which is the file path for a loaded `.ecore` and `#//Book` for a package
+without resource — corrected under `m2x1`, the frozen sample being unaffected). A metamodel change
+does not cascade into every expression's value. A standard-library type enters as its URI. A reference into the script is the target's
 fragment path. A reference to a satellite — outside the script, in the compiled unit's container or
 uncontained in a freshly parsed graph — is the satellite **inline**: the value depends on what the
 satellite says, not on which object says it, so a parse, its compiled unit and that unit reloaded
@@ -607,6 +612,29 @@ answers in three tiers — the registry it was given, the global one (the langua
 are generated), the copies loaded documents carry — and it resolves package-rooted references
 (`nsURI#/`, `nsURI#//Book`) by walking the fragment from the package that answers, because EMF's own
 route goes through the package's resource and a package built in memory has none.
+
+### 4.t Structural validation on load (#142)
+
+A unit loaded from a store bypasses the parser and every check it enforces by construction. The
+evaluator's runtime limits still hold; the shape of the document does not check itself. `UnitValidator`
+(`unit.validate`) does, on every `DefaultUnitStore.load` — on by default,
+`DefaultUnitStore.withoutValidation(…)` for a trusted, hot backend — and rejects a unit with every
+finding named by its object path:
+
+| Check | What it catches |
+|---|---|
+| Integrity | `unitFingerprint` recomputed and compared — corruption and drift in the backend; **not** manipulation, whoever changes the unit recomputes the fingerprint |
+| Manifest | known format version, language and name, `pin` entries with fingerprint, embedded units of the same language, package copies with nsURI and entry |
+| Closure | every reference leaving the document points into a metamodel (`SatelliteCollector.metamodelOf`), no proxies; EMF's lazily created `EFactory` of a package in the document is a back-link, not a reference out |
+| Ecore structure | `Diagnostician` with the multiplicity and data-value rules of the languages' own features — Ecore's own rules are left out, because a QVT-O `Module` is an `EPackage` that has no nsURI to be well formed |
+| Size | depth ≤ 1 000, objects ≤ 1 000 000 by default — closing for the load path the parse-depth and input-size gaps the security analyses name |
+
+The language's half is `UnitBinder.validate`, run by `UnitPreparer` before binding: the root is a unit
+of the language, every `VariableExp` has its declaration in the document, QVT-R domains refer to declared
+typed models, MOFM2T invocations are bound or recorded for binding. **Authenticity is the backend's
+question**, not the format's: `UnitStoreBackend` stores and returns bytes, so a backend that signs on
+`put` and verifies on `get` closes it without any change to store or format — recorded in the four
+security analyses as an accepted risk with that recommendation (S-15, Q-10, R-13, T-11).
 
 ### 4.u Several sources for one import (#141)
 

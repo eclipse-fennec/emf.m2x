@@ -14,12 +14,24 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.compiled.BlackboxRequirement;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.qvtbase.Domain;
+import org.eclipse.fennec.m2x.model.qvtbase.Rule;
+import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
@@ -52,6 +64,46 @@ final class QvtdUnitBinder implements UnitBinder {
 	@Override
 	public String language() {
 		return QvtdUnitCompiler.LANGUAGE;
+	}
+
+	@Override
+	public void validate(CompiledUnit unit) throws UnitPrepareException {
+		Objects.requireNonNull(unit, "unit must not be null");
+		String name = unit.getManifest().getQualifiedName();
+		if (!(unit.getUnit() instanceof RelationalTransformation transformation)) {
+			throw new UnitPrepareException("'" + name + "' is declared a QVT-R unit but its script is a "
+					+ (unit.getUnit() == null ? "null" : unit.getUnit().eClass().getName()));
+		}
+		List<String> findings = new ArrayList<>();
+		Set<TypedModel> declared = new HashSet<>(transformation.getModelParameter());
+		for (Rule rule : transformation.getRule()) {
+			for (Domain domain : rule.getDomain()) {
+				// The parser binds every domain to one of the transformation's typed models; a
+				// domain of a model this transformation never declared is no parser's doing
+				if (domain.getTypedModel() == null) {
+					findings.add("the domain '" + domain.getName() + "' of relation '" + rule.getName() + "' names no typed model");
+				} else if (!declared.contains(domain.getTypedModel())) {
+					findings.add("the domain '" + domain.getName() + "' of relation '" + rule.getName()
+							+ "' refers to the typed model '" + domain.getTypedModel().getName()
+							+ "', which this transformation does not declare");
+				}
+			}
+		}
+		for (Iterator<EObject> it = unit.eAllContents(); it.hasNext();) {
+			EObject node = it.next();
+			if (node instanceof VariableExp use) {
+				Variable declaration = use.getReferredVariable();
+				if (declaration == null) {
+					findings.add("a variable use without declaration at " + EcoreUtil.getRelativeURIFragmentPath(unit, use));
+				} else if (!EcoreUtil.isAncestor(unit, declaration)) {
+					findings.add("the variable '" + declaration.getName() + "' used at "
+							+ EcoreUtil.getRelativeURIFragmentPath(unit, use) + " is declared outside the document");
+				}
+			}
+		}
+		if (!findings.isEmpty()) {
+			throw new UnitPrepareException("'" + name + "' is not a well-formed QVT-R unit: " + String.join("; ", findings));
+		}
 	}
 
 	@Override

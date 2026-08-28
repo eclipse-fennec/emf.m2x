@@ -193,10 +193,27 @@ public final class SatelliteCollector {
 	 * @return {@code true} if it is, or sits inside, a plain EPackage with an nsURI
 	 */
 	public static boolean isMetamodelElement(EObject object) {
-		EObject root = EcoreUtil.getRootContainer(object);
-		return root instanceof EPackage ePackage
-				&& root.eClass() == EcorePackage.Literals.EPACKAGE
-				&& ePackage.getNsURI() != null;
+		return metamodelOf(object) != null;
+	}
+
+	/**
+	 * The metamodel an object belongs to: the outermost plain {@link EPackage} reached from the
+	 * object through Ecore containers only. Not the absolute root — a package copy a compiled
+	 * unit carries sits below the {@code CompiledUnit}, and is a metamodel all the same; the
+	 * intermediate package of a QVT-O module sits below the module, which is no Ecore container,
+	 * and is the module's own.
+	 *
+	 * @param object the object
+	 * @return the package, or {@code null} if the object belongs to no metamodel
+	 */
+	public static EPackage metamodelOf(EObject object) {
+		Objects.requireNonNull(object, "object must not be null");
+		EObject top = object;
+		while (top.eContainer() != null && top.eContainer().eClass().getEPackage() == EcorePackage.eINSTANCE) {
+			top = top.eContainer();
+		}
+		return top instanceof EPackage ePackage && top.eClass() == EcorePackage.Literals.EPACKAGE
+				&& ePackage.getNsURI() != null ? ePackage : null;
 	}
 
 	private static String describe(EObject object) {

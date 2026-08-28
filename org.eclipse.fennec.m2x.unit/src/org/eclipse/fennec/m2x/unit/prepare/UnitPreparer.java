@@ -65,7 +65,8 @@ import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
  * from the copy the unit carries; an instance with a <em>differing</em> fingerprint is a hard
  * failure naming the nsURI and both values. The same nsURI recorded with two fingerprints by two
  * units of one run is a failure too.</li>
- * <li><b>Bind.</b> The language's {@link UnitBinder} binds the unit to its loaded dependencies and
+ * <li><b>Validate and bind.</b> The language's {@link UnitBinder} checks the unit's well-formedness
+ * ({@code validate}, #142) and binds the unit to its loaded dependencies and
  * checks the blackbox requirements against the runtime. Afterwards nothing is left to resolve.</li>
  * </ul>
  *
@@ -169,6 +170,10 @@ public final class UnitPreparer {
 				}
 			}
 		}
+		// The language's well-formedness first, for every unit, before anything is bound (#142)
+		for (PackagedUnit unit : loaded.values()) {
+			binder(unit).validate(unit.document());
+		}
 		for (PackagedUnit unit : loaded.values()) {
 			bind(unit, loaded);
 		}
@@ -233,12 +238,17 @@ public final class UnitPreparer {
 		}
 	}
 
-	private void bind(PackagedUnit unit, Map<String, PackagedUnit> loaded) throws UnitPrepareException {
+	private UnitBinder binder(PackagedUnit unit) throws UnitPrepareException {
 		UnitBinder binder = binders.get(unit.language());
 		if (binder == null) {
 			throw new UnitPrepareException("no binder for language '" + unit.language() + "' (unit '"
 					+ unit.qualifiedName() + "')");
 		}
+		return binder;
+	}
+
+	private void bind(PackagedUnit unit, Map<String, PackagedUnit> loaded) throws UnitPrepareException {
+		UnitBinder binder = binder(unit);
 		Map<String, CompiledUnit> dependencies = new LinkedHashMap<>();
 		for (DependencyEntry dependency : unit.document().getManifest().getDependencyEntry()) {
 			PackagedUnit bound = loaded.get(dependency.getQualifiedName());

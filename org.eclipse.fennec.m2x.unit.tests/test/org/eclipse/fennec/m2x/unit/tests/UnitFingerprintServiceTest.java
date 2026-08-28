@@ -30,6 +30,8 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.emf.ecore.resource.impl.ResourceImpl;
 import org.eclipse.fennec.m2x.model.compiled.CompiledFactory;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest;
@@ -83,6 +85,38 @@ class UnitFingerprintServiceTest {
 		String value = SERVICE.fingerprint(compiled(samplePackage()));
 		assertEquals("m2x1:" + FROZEN_SAMPLE_DIGEST, value,
 				"the canonicalization of m2x1 changed — that needs a new scheme tag, not an edit");
+	}
+
+	// ==== Reproducible: where a metamodel lives does not enter the value (#142) ====
+
+	@Test
+	void metamodelReference_isKeyedByNsUri_whereverTheMetamodelLives() {
+		EPackage shelf = F.createEPackage();
+		shelf.setName("shelf");
+		shelf.setNsURI("http://shelf/1.0");
+		shelf.setNsPrefix("shelf");
+		EClass book = F.createEClass();
+		book.setName("Book");
+		shelf.getEClassifiers().add(book);
+		EPackage unit = F.createEPackage();
+		unit.setName("unit");
+		unit.setNsURI("http://unit/1.0");
+		EClass sub = F.createEClass();
+		sub.setName("Sub");
+		sub.getESuperTypes().add(book); // a reference into the metamodel
+		unit.getEClassifiers().add(sub);
+
+		String withoutResource = SERVICE.fingerprint(compiled(unit));
+		new ResourceImpl(
+				URI.createFileURI("/somewhere/on/disk/shelf.ecore")).getContents().add(shelf);
+		String fromAFile = SERVICE.fingerprint(compiled(EcoreUtil.copy(unit) instanceof EPackage copy ? relink(copy, book) : unit));
+		assertEquals(withoutResource, fromAFile,
+				"the file the metamodel was loaded from must not enter the value — the unit did not change");
+	}
+
+	private static EPackage relink(EPackage copy, EClass target) {
+		((EClass) copy.getEClassifier("Sub")).getESuperTypes().set(0, target);
+		return copy;
 	}
 
 	// ==== Canonical: what changes the value ====

@@ -27,6 +27,8 @@ import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.InternalEObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.util.EcoreUtil;
@@ -236,6 +238,16 @@ final class AstCanonicalizer {
 			out.append("<#").append(EcoreUtil.getRelativeURIFragmentPath(root, target)).append('>');
 			return;
 		}
+		if (SatelliteCollector.isMetamodelElement(target)) {
+			// A metamodel element is written by its nsURI and its name path, wherever the metamodel
+			// lives: in a resource named by the nsURI (generated code), in an .ecore file (whose
+			// path must not enter the value), in no resource at all (built in memory), or as a copy
+			// the document carries. The value is a statement about the unit, not about where its
+			// metamodels happened to be loaded from — that is what makes it reproducible across a
+			// store round trip, and it is the form EMF itself uses for a generated package.
+			out.append('<').append(metamodelKey(target)).append('>');
+			return;
+		}
 		if (isInDocument(target)) {
 			// A satellite in the compiled unit's container, beside the script: what it says,
 			// inline — the same as an uncontained satellite of a freshly parsed graph, so a parse,
@@ -243,15 +255,34 @@ final class AstCanonicalizer {
 			node(target);
 			return;
 		}
-		if (target.eResource() != null || SatelliteCollector.isMetamodelElement(target)) {
-			// A metamodel type, a standard-library type, anything that lives elsewhere: by URI.
-			// A metamodel counts as elsewhere even without a resource — a package initialized
-			// from generated code or built in memory is addressable by nsURI just the same.
+		if (target.eResource() != null) {
+			// A standard-library type, anything else that lives elsewhere: by URI
 			out.append('<').append(EcoreUtil.getURI(target)).append('>');
 			return;
 		}
 		// An uncontained satellite of a parsed graph: what it says, inline
 		node(target);
+	}
+
+	/**
+	 * {@code nsURI#//Classifier/feature} — the package's nsURI and the name path below it, built the
+	 * way EMF's package implementation names its fragment segments, so it equals
+	 * {@code EcoreUtil.getURI} for a generated package and stays the same for one loaded from a
+	 * file, built in memory or carried as a copy.
+	 */
+	static String metamodelKey(EObject target) {
+		EPackage root = SatelliteCollector.metamodelOf(target);
+		String nsURI = root.getNsURI();
+		if (target == root) {
+			return nsURI + "#/";
+		}
+		StringBuilder path = new StringBuilder();
+		for (EObject current = target; current != root; current = current.eContainer()) {
+			InternalEObject container = (InternalEObject) current.eContainer();
+			String segment = container.eURIFragmentSegment(current.eContainingFeature(), current);
+			path.insert(0, "/" + segment);
+		}
+		return nsURI + "#/" + path;
 	}
 
 	/**
