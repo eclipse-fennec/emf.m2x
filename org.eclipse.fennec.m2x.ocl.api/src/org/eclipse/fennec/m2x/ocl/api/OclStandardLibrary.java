@@ -67,6 +67,14 @@ public final class OclStandardLibrary {
 	/** The one library. */
 	public static final OclStandardLibrary INSTANCE = new OclStandardLibrary();
 
+	/**
+	 * The library package under the name EMF's {@code generated_package} extension point reads:
+	 * in an Eclipse IDE the registry is fed from {@code plugin.xml}, and the extension loads the
+	 * named class and takes its static {@code eINSTANCE} (#157). In a plain JVM the library
+	 * registers itself on first use and this field is merely another way to reach it.
+	 */
+	public static final EPackage eINSTANCE = INSTANCE.ePackage();
+
 	private final EPackage ePackage;
 	private final Map<String, OclType> typesByName;
 	private final PrimitiveType integer;

@@ -7,11 +7,27 @@
   SPDX-License-Identifier: EPL-2.0
 
   Registers the Fennec OCL delegates with EMF's delegate registries so that the
-  generic (reflective) EMF editor evaluates OCL annotations. Each delegate is
+  generic (reflective) EMF editor evaluates OCL annotations, and declares the OCL
+  metamodel and the standard library as EPackages. Each delegate is
   registered under both the Fennec URI and the legacy Eclipse OCL Pivot URI, so
   models authored against either are evaluated by the Fennec engine.
 -->
 <plugin>
+
+   <!-- The OCL metamodel and the standard library as EPackages. In a plain JVM they register
+        themselves when their classes initialize; the IDE fills its registry from here, and reads
+        a resource before running any of our code. Without this a stored unit that references
+        http://www.eclipse.org/fennec/m2x/ocl/stdlib/1.0#//Integer resolves to nothing (#157).
+        The class named must carry a static eINSTANCE; OclIdePackages lists the same two, and a
+        test keeps this file and that list in step. -->
+   <extension point="org.eclipse.emf.ecore.generated_package">
+      <package
+            uri="http://www.eclipse.org/fennec/m2x/ocl/1.0"
+            class="org.eclipse.fennec.m2x.model.ocl.OclPackage"/>
+      <package
+            uri="http://www.eclipse.org/fennec/m2x/ocl/stdlib/1.0"
+            class="org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary"/>
+   </extension>
 
    <!-- Invariant constraints on EClasses / EOperations -->
    <extension point="org.eclipse.emf.ecore.validation_delegate">
