@@ -24,9 +24,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
@@ -79,6 +81,19 @@ class OclStdlib {
 	 */
 	static Object dispatch(String name, Object source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
+		try {
+			return dispatchByType(name, source, args, options, locale);
+		} catch (ArrayIndexOutOfBoundsException wrongArity) {
+			// Operations are resolved by name at evaluation time, so `Set{1}->includes()` or
+			// `self.oclIsKindOf()` reach an implementation that indexes args[0]. Before #182 that
+			// threw out of evaluate(); an operation called with the wrong number of arguments is
+			// simply not applicable, which in OCL is `invalid` (v2.4 §11.2.3).
+			return OclInvalid.INSTANCE;
+		}
+	}
+
+	private static Object dispatchByType(String name, Object source, Object[] args,
+			OclEvaluationOptions options, Locale locale) {
 		// OclAny operations apply to all types (including null/invalid)
 		Object result = dispatchOclAny(name, source, args);
 		if (result != NOT_FOUND) {
@@ -93,10 +108,10 @@ class OclStdlib {
 			return dispatchBoolean(name, b, args);
 		}
 		if (source instanceof Long l) {
-			return dispatchInteger(name, l, args);
+			return dispatchInteger(name, l, args, options);
 		}
 		if (source instanceof Integer i) {
-			return dispatchInteger(name, (long) i, args);
+			return dispatchInteger(name, (long) i, args, options);
 		}
 		if (source instanceof Double d) {
 			return dispatchReal(name, d, args);
@@ -562,7 +577,8 @@ class OclStdlib {
 
 	// --- Integer (OCL v2.4 Section 11.5) ---
 
-	private static Object dispatchInteger(String name, Long source, Object[] args) {
+	private static Object dispatchInteger(String name, Long source, Object[] args,
+			OclEvaluationOptions options) {
 		// Guard: if arg is OclUnlimitedNatural, special-case comparison/max/min
 		if (args.length > 0 && args[0] instanceof OclUnlimitedNatural) {
 			return switch (name) {
@@ -642,6 +658,12 @@ class OclStdlib {
 				} else {
 					yield OclInvalid.INSTANCE;
 				}
+				// Bounded like the literal form Sequence{1..n} (OclEvaluator), which this operation
+				// is the spelled-out version of — 1.range(2000000000) used to be an OOM (#182)
+				long size = end - start + 1;
+				if (size > options.maxCollectionSize()) {
+					yield OclInvalid.INSTANCE;
+				}
 				List<Object> result = new ArrayList<>();
 				for (long i = start; i <= end; i++) {
 					result.add(i);
@@ -651,6 +673,47 @@ class OclStdlib {
 			default -> NOT_FOUND;
 		};
 	}
+
+	/**
+	 * Whether a collection is a feature of a model object rather than a value an expression built.
+	 *
+	 * <p>The mutating operations below exist for QVT-O's {@code List} and {@code Dict} (D26), whose
+	 * values are ordinary Java collections built during evaluation. Reading a many-valued feature
+	 * yields EMF's own list — the live contents of the model object — and calling {@code add} or
+	 * {@code clear} on that rewrites the user's model from inside an expression. OCL is
+	 * side-effect free (v2.4 §7.1), and a constraint evaluated by the validation delegate is the
+	 * worst place to learn otherwise, so the model-owned case yields {@code invalid} (#182).
+	 *
+	 * @param source the collection an operation was called on
+	 * @return {@code true} if it belongs to a model object
+	 */
+	private static boolean belongsToAModel(Object source) {
+		return source instanceof EList<?>;
+	}
+
+	/**
+	 * Whether a format string asks for a field wider than the collection-size limit.
+	 *
+	 * <p>{@code String.format} allocates the padding of a width field before anything else, so a
+	 * width taken from user data is an allocation taken from user data. The collection-size limit
+	 * is the bound the caller already configured for "how much may one expression produce".
+	 */
+	private static boolean hasOversizedWidth(String format, int maxSize) {
+		Matcher widths = FORMAT_WIDTH.matcher(format);
+		while (widths.find()) {
+			try {
+				if (Long.parseLong(widths.group(1)) > maxSize) {
+					return true;
+				}
+			} catch (NumberFormatException tooLongToBeAnInt) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** The width (and precision) fields of a format specifier: {@code %[flags][width][.precision]conv}. */
+	private static final Pattern FORMAT_WIDTH = Pattern.compile("%[-#+ 0,(]*(\\d+)(?:\\.(\\d+))?");
 
 	// --- Real (OCL v2.4 Section 11.5) ---
 
@@ -957,6 +1020,12 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.16.1 + §8.4.4: format / % — placeholder substitution
 			case "format", "%" -> {
+				// A format string is data — from the expression or from the model — and Java's
+				// width field allocates eagerly: '%09999999999d'.format(1) is gigabytes, and the
+				// catch below does not catch OutOfMemoryError (#182)
+				if (hasOversizedWidth(source, options.maxCollectionSize())) {
+					yield OclInvalid.INSTANCE;
+				}
 				try {
 					Object arg = args[0];
 					if (arg instanceof Collection<?> c) {
@@ -1224,6 +1293,9 @@ class OclStdlib {
 			case "toString" -> source.toString();
 			// QVT-O §8.3.9.3: List::add(object) — mutating append
 			case "add" -> {
+				if (belongsToAModel(source)) {
+					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
 				@SuppressWarnings("unchecked")
 				var list = (Collection<Object>) source;
 				list.add(args[0]);
@@ -1231,6 +1303,9 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.9.35: List::remove(element) — mutating remove ALL equal elements
 			case "remove" -> {
+				if (belongsToAModel(source)) {
+					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
 				if (source instanceof List<?> list) {
 					list.removeIf(e -> Objects.equals(e, args[0]));
 				}
@@ -1238,6 +1313,9 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.9.38: List::removeAt(index) — mutating remove at 1-based index, returns removed
 			case "removeAt" -> {
+				if (belongsToAModel(source)) {
+					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
 				if (source instanceof List<?> list && args[0] instanceof Long idx) {
 					int i = idx.intValue() - 1; // 1-based to 0-based
 					if (i >= 0 && i < list.size()) {
@@ -1248,6 +1326,9 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.9.39: List::removeFirst() — mutating remove first, returns removed
 			case "removeFirst" -> {
+				if (belongsToAModel(source)) {
+					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
 				if (source instanceof List<?> list && !list.isEmpty()) {
 					yield list.remove(0);
 				}
@@ -1255,6 +1336,9 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.9.40: List::removeLast() — mutating remove last, returns removed
 			case "removeLast" -> {
+				if (belongsToAModel(source)) {
+					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
 				if (source instanceof List<?> list && !list.isEmpty()) {
 					yield list.remove(list.size() - 1);
 				}
@@ -1262,6 +1346,9 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.9.36: List::removeAll(elements) — mutating remove all matching
 			case "removeAll" -> {
+				if (belongsToAModel(source)) {
+					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
 				if (args[0] instanceof Collection<?> toRemove && source instanceof List<?> list) {
 					list.removeIf(e -> toRemove.stream().anyMatch(r -> Objects.equals(e, r)));
 				}
@@ -1405,6 +1492,9 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.8.4: Dict::put(k, v) — mutable insert/update
 			case "put" -> {
+				if (belongsToAModel(source)) {
+					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
 				@SuppressWarnings("unchecked")
 				var mutableMap = (Map<Object, Object>) source;
 				mutableMap.put(args[0], args[1]);
@@ -1412,6 +1502,9 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.8.5: Dict::clear() — mutable remove all
 			case "clear" -> {
+				if (belongsToAModel(source)) {
+					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
 				source.clear();
 				yield null; // returns Void
 			}

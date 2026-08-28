@@ -70,6 +70,7 @@ import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclControlFlowSignal;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
@@ -1244,6 +1245,29 @@ public class OclEvaluator extends OclSwitch<Object> {
 		return dispatchCustomOperation(opName, source, args, false);
 	}
 
+	/**
+	 * Calls a provider's implementation and keeps its failure inside the diagnostics channel.
+	 *
+	 * <p>A provider is third-party code — a QVT-O blackbox, an M2T library, a caller's own
+	 * operation. Before #182 an unchecked exception from one tore down the whole evaluation and
+	 * surfaced wherever the caller happened to be, which in an EMF delegate is an
+	 * {@code IllegalStateException} on every {@code eGet}. It is an {@code invalid} value with a
+	 * diagnostic now, like every other failure inside an expression.
+	 */
+	private Object invokeProvider(OclOperation op, Object source, Object[] args) {
+		try {
+			return op.implementation().apply(source, args);
+		} catch (RuntimeException failure) {
+			if (failure instanceof OclControlFlowSignal) {
+				// A language on top of OCL steering its own control flow — QVT-O's raise
+				// travelling to the except that catches it. Not a failure, and not ours to stop.
+				throw failure;
+			}
+			addError("Custom operation '" + op.name() + "' failed: " + failure);
+			return OclInvalid.INSTANCE;
+		}
+	}
+
 	private Object dispatchCustomOperation(String opName, Object source, Object[] args,
 			boolean requireMatchingArity) {
 		// §8.1.14.3: most-specific-type-first dispatch
@@ -1266,14 +1290,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 				}
 				// Null source: OclVoid conforms to all → first matching op wins
 				if (source == null) {
-					return op.implementation().apply(source, args);
+					return invokeProvider(op, source, args);
 				}
 				EClassifier ownerType = op.ownerType();
 				// Exact primitive type match
 				if (ownerType instanceof PrimitiveType pt) {
 					String typeName = pt.getName();
 					if (OclStdlib.matchesPrimitiveType(source, typeName)) {
-						return op.implementation().apply(source, args);
+						return invokeProvider(op, source, args);
 					}
 					// Widening: Integer→Real. The first is kept, as for an exact match:
 					// several providers may define the same name, and which one answers
@@ -1303,7 +1327,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 				}
 				// Other types: use isCompatibleOwner
 				if (isCompatibleOwner(ownerType, source)) {
-					return op.implementation().apply(source, args);
+					return invokeProvider(op, source, args);
 				}
 			}
 		}

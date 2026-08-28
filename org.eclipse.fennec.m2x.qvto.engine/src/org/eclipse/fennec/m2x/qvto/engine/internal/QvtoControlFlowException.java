@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.fennec.m2x.ocl.api.OclControlFlowSignal;
 
 /**
  * Sealed hierarchy for QVT-O control flow exceptions.
@@ -30,7 +31,7 @@ import org.eclipse.emf.ecore.EClassifier;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-sealed abstract class QvtoControlFlowException extends RuntimeException
+sealed abstract class QvtoControlFlowException extends RuntimeException implements OclControlFlowSignal
 		permits QvtoControlFlowException.ReturnException,
 				QvtoControlFlowException.BreakException,
 				QvtoControlFlowException.ContinueException,
