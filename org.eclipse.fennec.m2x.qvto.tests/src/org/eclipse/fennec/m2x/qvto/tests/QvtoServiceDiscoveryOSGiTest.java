@@ -16,12 +16,17 @@ package org.eclipse.fennec.m2x.qvto.tests;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
+import java.util.Dictionary;
+import java.util.Hashtable;
+import java.util.Optional;
 import java.util.Collection;
 import java.util.stream.Collectors;
 
+import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.ocl.api.annotation.require.RequireOCL;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
@@ -31,7 +36,9 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
+import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
 import org.eclipse.fennec.m2x.qvto.api.annotation.require.RequireQVTO;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.osgi.framework.Bundle;
@@ -40,6 +47,7 @@ import org.osgi.framework.Constants;
 import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.framework.ServiceReference;
+import org.osgi.framework.ServiceRegistration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -178,6 +186,71 @@ class QvtoServiceDiscoveryOSGiTest {
 
 		assertFalse(requirements != null && requirements.contains("osgi.serviceloader"),
 				() -> "Require-Capability: " + requirements);
+	}
+
+	@Test
+	@DisplayName("with several services for one name, the highest ranking wins (#141)")
+	void higherRankingWins(@InjectBundleContext BundleContext context,
+			@InjectService(filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
+		String text = "library ranked.library;\n";
+		ServiceRegistration<QvtoUnitResolver> low = register(context, "ranked.library", 1, "mem:/low", text);
+		ServiceRegistration<QvtoUnitResolver> high = register(context, "ranked.library", 10, "mem:/high", text);
+		try {
+			QvtoUnit unit = discovery.resolveUnit("ranked.library").orElseThrow();
+			assertEquals(URI.createURI("mem:/high"), ((QvtoUnit.SourceUnit) unit).uri(),
+					"same content from both, the one with the higher ranking is returned");
+		} finally {
+			low.unregister();
+			high.unregister();
+		}
+	}
+
+	@Test
+	@DisplayName("two services with different content for one name are a conflict, not a choice (#141)")
+	void disagreeingServicesAreAConflict(@InjectBundleContext BundleContext context,
+			@InjectService(filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
+		ServiceRegistration<QvtoUnitResolver> one = register(context, "contested.library", 1, "mem:/one",
+				"library contested.library;\n");
+		ServiceRegistration<QvtoUnitResolver> two = register(context, "contested.library", 10, "mem:/two",
+				"library contested.library;\nhelper h() : String { return 'x'; }\n");
+		try {
+			UnitResolutionException failure = assertThrows(UnitResolutionException.class,
+					() -> discovery.resolveUnit("contested.library"));
+			assertTrue(failure.getMessage().contains("disagree"), failure.getMessage());
+		} finally {
+			one.unregister();
+			two.unregister();
+		}
+	}
+
+	@Test
+	@DisplayName("a failing service is an error the caller sees, not 'not found' (#141)")
+	void failingServiceIsAnError(@InjectBundleContext BundleContext context,
+			@InjectService(filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
+		Dictionary<String, Object> properties = new Hashtable<>();
+		properties.put("qvto.unit.name", "broken.library");
+		QvtoUnitResolver broken = name -> {
+			throw new IllegalStateException("disk on fire");
+		};
+		ServiceRegistration<QvtoUnitResolver> registration = context.registerService(QvtoUnitResolver.class, broken, properties);
+		try {
+			UnitResolutionException failure = assertThrows(UnitResolutionException.class,
+					() -> discovery.resolveUnit("broken.library"));
+			assertTrue(failure.getMessage().contains("disk on fire"), failure.getMessage());
+		} finally {
+			registration.unregister();
+		}
+	}
+
+	private static ServiceRegistration<QvtoUnitResolver> register(BundleContext context, String unit, int ranking,
+			String uri, String text) {
+		Dictionary<String, Object> properties = new Hashtable<>();
+		properties.put("qvto.unit.name", unit);
+		properties.put(Constants.SERVICE_RANKING, ranking);
+		QvtoUnitResolver resolver = name -> unit.equals(name)
+				? Optional.of(new QvtoUnit.SourceUnit(name, URI.createURI(uri), text))
+				: Optional.empty();
+		return context.registerService(QvtoUnitResolver.class, resolver, properties);
 	}
 
 	private static QvtoExecutionResult run(QvtoEngine engine) throws Exception {

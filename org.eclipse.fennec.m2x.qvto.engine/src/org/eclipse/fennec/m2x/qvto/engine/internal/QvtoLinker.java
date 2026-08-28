@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -43,6 +44,8 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Resolves stub modules created by the parser into fully parsed modules
@@ -205,13 +208,23 @@ public class QvtoLinker {
 		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(qualifiedName)) {
 			return null;
 		}
-		for (QvtoUnitResolver resolver : unitResolvers) {
-			Optional<QvtoUnit> unit = resolver.resolveUnit(qualifiedName);
-			if (unit.isPresent()) {
-				return toModule(unit.get());
-			}
+		Optional<QvtoUnit> unit;
+		try {
+			unit = ResolutionPolicy.resolve(qualifiedName, sources(unitResolvers));
+		} catch (UnitResolutionException failure) {
+			throw new QvtoParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
+					failure);
 		}
-		return null;
+		return unit.isPresent() ? toModule(unit.get()) : null;
+	}
+
+	/** The configured resolvers as sources, in configuration order — the order that decides. */
+	static List<ResolutionPolicy.Source<QvtoUnit>> sources(List<QvtoUnitResolver> resolvers) {
+		List<ResolutionPolicy.Source<QvtoUnit>> sources = new ArrayList<>();
+		for (QvtoUnitResolver resolver : resolvers) {
+			sources.add(ResolutionPolicy.Source.of(resolver.getClass().getName(), resolver::resolveUnit));
+		}
+		return sources;
 	}
 
 	/**

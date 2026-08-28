@@ -42,6 +42,8 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 import org.eclipse.fennec.m2x.unit.compile.SignatureFingerprint;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
@@ -175,17 +177,16 @@ final class QvtdUnitCompiler {
 		return compileDependency(unit, qualifiedName, path).getManifest().getUnitFingerprint();
 	}
 
-	private Optional<QvtdUnit> resolveUnit(String qualifiedName) {
+	private Optional<QvtdUnit> resolveUnit(String qualifiedName) throws QvtdParseException {
 		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(qualifiedName)) {
 			return Optional.empty();
 		}
-		for (QvtdUnitResolver resolver : unitResolvers) {
-			Optional<QvtdUnit> unit = resolver.resolveUnit(qualifiedName);
-			if (unit.isPresent()) {
-				return unit;
-			}
+		try {
+			return ResolutionPolicy.resolve(qualifiedName, QvtdLinker.sources(unitResolvers));
+		} catch (UnitResolutionException failure) {
+			throw new QvtdParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
+					failure);
 		}
-		return Optional.empty();
 	}
 
 	static List<String> importedNames(RelationalTransformation transformation) {

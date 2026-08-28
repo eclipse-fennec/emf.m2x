@@ -14,14 +14,16 @@
  */
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.eclipse.fennec.m2x.m2t.api.M2tUnit;
 import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Asks every {@link M2tUnitResolver} on the class path, in the order
@@ -49,7 +51,6 @@ import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
  */
 public final class ServiceLoaderM2tUnitResolver implements M2tUnitResolver {
 
-	private static final Logger LOG = Logger.getLogger(ServiceLoaderM2tUnitResolver.class.getName());
 
 	private final ServiceLoader<M2tUnitResolver> loader;
 
@@ -63,22 +64,22 @@ public final class ServiceLoaderM2tUnitResolver implements M2tUnitResolver {
 
 	@Override
 	public Optional<M2tUnit> resolveUnit(String qualifiedName) {
-		for (M2tUnitResolver resolver : loader) {
-			// A provider that declared itself would otherwise recurse forever.
-			if (resolver instanceof ServiceLoaderM2tUnitResolver) {
-				continue;
-			}
-			try {
-				Optional<M2tUnit> unit = resolver.resolveUnit(qualifiedName);
-				if (unit.isPresent()) {
-					return unit;
+		// Declaration order decides; every provider is asked, a failing one is an error, answers
+		// have to agree (#141). A provider that cannot even be instantiated is a failing source.
+		List<ResolutionPolicy.Source<M2tUnit>> sources = new ArrayList<>();
+		try {
+			for (M2tUnitResolver resolver : loader) {
+				// A provider that declared itself would otherwise recurse forever.
+				if (resolver instanceof ServiceLoaderM2tUnitResolver) {
+					continue;
 				}
-			} catch (ServiceConfigurationError | RuntimeException failure) {
-				LOG.log(Level.WARNING, failure,
-						() -> "Discovered unit resolver failed for '" + qualifiedName
-								+ "', skipping it: " + resolver.getClass().getName());
+				sources.add(ResolutionPolicy.Source.of("class-path provider " + resolver.getClass().getName(),
+						resolver::resolveUnit));
 			}
+		} catch (ServiceConfigurationError failure) {
+			throw new UnitResolutionException("a class-path provider of " + M2tUnitResolver.class.getSimpleName()
+					+ " could not be loaded for '" + qualifiedName + "': " + failure.getMessage(), failure);
 		}
-		return Optional.empty();
+		return ResolutionPolicy.resolve(qualifiedName, sources);
 	}
 }

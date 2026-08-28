@@ -16,15 +16,16 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | Bundle | Description | Status |
 |--------|-------------|--------|
 | `org.eclipse.fennec.m2x.unit` | `CompiledUnit` metamodel (manifest, script, satellites, embedded units, package copies, `SourceUnit`), `SatelliteCollector` + `UnitPackager` behind `compile()` (dependency modes embed / pin / rebind, `fp1` package entries, blackbox requirements), the `m2x1` unit fingerprint, `DefaultUnitStore` over a `UnitStoreBackend` (in-memory shipped), `UnitPreparer` → `PreparedContext` (load, verify by fingerprint, bind — Execute asks no resolver) | In progress |
-| `org.eclipse.fennec.m2x.unit.tests` | 79 tests, 0 failures | In progress |
+| `org.eclipse.fennec.m2x.unit.tests` | 88 tests, 0 failures | In progress |
 
 The three language APIs depend on this bundle, never the other way round, so
 `QvtoUnit`, `QvtdUnit` and `M2tUnit` share one base type without a cycle. Every engine
 offers `compile()` beside `parse()`: `parse()` returns the in-memory graph, `compile()`
 the storable document (#137) with its `m2x1` fingerprint (#138) and its dependencies bound
 under `embed`, `pin` or `rebind`, a `UnitStore` to keep sources and compiled units in (#139),
-and a `UnitPreparer` that loads a pipeline into one verified context so that Execute asks
-no resolver (#140). Resolver rules and load-time validation follow (#141, #142).
+a `UnitPreparer` that loads a pipeline into one verified context so that Execute asks no
+resolver (#140), and one `ResolutionPolicy` for several sources — every source asked, a failing
+one an error, disagreeing ones a conflict (#141). Load-time validation follows (#142).
 
 ### OCL — Object Constraint Language
 
@@ -45,7 +46,7 @@ no resolver (#140). Resolver rules and load-time validation follow (#141, #142).
 | `org.eclipse.fennec.m2x.qvto.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvto.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvto.engine` | Evaluator (mappings, resolve, trace, blackbox) | Done |
-| `org.eclipse.fennec.m2x.qvto.tests` | 1,203 tests (1 disabled), 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvto.tests` | 1,207 tests (1 disabled), 0 failures | Done |
 | `org.eclipse.fennec.m2x.qvto.benchmark` | Performance benchmarks | Done |
 
 ### QVT-R — QVT Relations
@@ -94,7 +95,7 @@ The repository root is a Gradle + BND workspace:
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
 
-The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,253 tests and 47 OSGi tests, 0 failures, as of 2026-08-28**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
+The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,266 tests and 50 OSGi tests, 0 failures, as of 2026-08-28**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
 ## Branches & releases
 

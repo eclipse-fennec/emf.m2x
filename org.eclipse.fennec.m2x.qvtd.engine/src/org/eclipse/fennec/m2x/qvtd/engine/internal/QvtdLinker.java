@@ -31,6 +31,8 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Resolves the units a transformation imports (§7.11.1).
@@ -110,13 +112,23 @@ public class QvtdLinker {
 		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(qualifiedName)) {
 			return null;
 		}
-		for (QvtdUnitResolver resolver : unitResolvers) {
-			Optional<QvtdUnit> unit = resolver.resolveUnit(qualifiedName);
-			if (unit.isPresent()) {
-				return toTransformation(unit.get(), qualifiedName);
-			}
+		Optional<QvtdUnit> unit;
+		try {
+			unit = ResolutionPolicy.resolve(qualifiedName, sources(unitResolvers));
+		} catch (UnitResolutionException failure) {
+			throw new QvtdParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
+					failure);
 		}
-		return null;
+		return unit.isPresent() ? toTransformation(unit.get(), qualifiedName) : null;
+	}
+
+	/** The configured resolvers as sources, in configuration order — the order that decides. */
+	static List<ResolutionPolicy.Source<QvtdUnit>> sources(List<QvtdUnitResolver> resolvers) {
+		List<ResolutionPolicy.Source<QvtdUnit>> sources = new ArrayList<>();
+		for (QvtdUnitResolver resolver : resolvers) {
+			sources.add(ResolutionPolicy.Source.of(resolver.getClass().getName(), resolver::resolveUnit));
+		}
+		return sources;
 	}
 
 	private RelationalTransformation toTransformation(QvtdUnit unit, String qualifiedName)

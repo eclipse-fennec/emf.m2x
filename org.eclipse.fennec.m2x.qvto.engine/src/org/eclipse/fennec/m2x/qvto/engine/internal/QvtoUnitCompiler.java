@@ -44,6 +44,8 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 import org.eclipse.fennec.m2x.unit.compile.SignatureFingerprint;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
@@ -251,18 +253,17 @@ final class QvtoUnitCompiler {
 		return compileDependency(unit, path).getManifest().getUnitFingerprint();
 	}
 
-	private Optional<QvtoUnit> resolveUnit(String qualifiedName) {
+	private Optional<QvtoUnit> resolveUnit(String qualifiedName) throws QvtoParseException {
 		// D29: allow-list for unit modules, as in the linker
 		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(qualifiedName)) {
 			return Optional.empty();
 		}
-		for (QvtoUnitResolver resolver : unitResolvers) {
-			Optional<QvtoUnit> unit = resolver.resolveUnit(qualifiedName);
-			if (unit.isPresent()) {
-				return unit;
-			}
+		try {
+			return ResolutionPolicy.resolve(qualifiedName, QvtoLinker.sources(unitResolvers));
+		} catch (UnitResolutionException failure) {
+			throw new QvtoParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
+					failure);
 		}
-		return Optional.empty();
 	}
 
 	private Optional<QvtoBlackboxLibrary> resolveBlackbox(String qualifiedName) {

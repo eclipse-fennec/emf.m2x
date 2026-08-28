@@ -35,6 +35,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
+import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoStoreUnitResolver;
@@ -159,9 +160,10 @@ class QvtoStoreRoundTripTest {
 			}
 		};
 		QvtoEngine overBroken = engineOver(new DefaultUnitStore(broken));
-		IllegalStateException failure = assertThrows(IllegalStateException.class,
-				() -> overBroken.compile(MAIN, "Main"));
+		// #141: a failing source travels to the caller as the compile's own failure, naming source and cause
+		QvtoParseException failure = assertThrows(QvtoParseException.class, () -> overBroken.compile(MAIN, "Main"));
 		assertTrue(failure.getMessage().contains("disk on fire"), failure.getMessage());
+		assertTrue(failure.getMessage().contains("QvtoStoreUnitResolver"), failure.getMessage());
 	}
 
 	// ==== helpers ====
