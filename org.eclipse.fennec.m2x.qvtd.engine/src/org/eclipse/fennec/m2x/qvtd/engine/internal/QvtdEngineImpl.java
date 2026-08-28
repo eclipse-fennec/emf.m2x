@@ -26,6 +26,8 @@ import java.util.stream.Stream;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
@@ -59,6 +61,9 @@ import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
  * @since 1.0
  */
 public class QvtdEngineImpl implements QvtdEngine {
+
+	/** Language tag of this engine's units, as used in store keys and manifests. */
+	private static final String LANGUAGE = "qvtr";
 
 	private final QvtrParserSupport parserSupport;
 	/**
@@ -115,6 +120,29 @@ public class QvtdEngineImpl implements QvtdEngine {
 		Objects.requireNonNull(source, "source must not be null");
 		Objects.requireNonNull(unitName, "unitName must not be null");
 		return parserSupport.parse(source, unitName, config.packageRegistry());
+	}
+
+	@Override
+	public CompiledUnit compile(String source, String unitName) throws QvtdParseException {
+		RelationalTransformation transformation = parse(source, unitName);
+		try {
+			return UnitPackager.compile(LANGUAGE, unitName, transformation);
+		} catch (IllegalStateException | IllegalArgumentException e) {
+			// A unit that is not self-contained is not storable; better said here, with the unit
+			// name, than on the first save() somewhere else with a dangling reference (#137).
+			throw new QvtdParseException("Cannot compile '" + unitName + "': " + e.getMessage(), e);
+		}
+	}
+
+	@Override
+	public CompiledUnit compile(URI transformationUri) throws QvtdParseException {
+		Objects.requireNonNull(transformationUri, "transformationUri must not be null");
+		try (InputStream in = resourceSet.getURIConverter().createInputStream(transformationUri)) {
+			String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+			return compile(source, transformationUri.toString());
+		} catch (IOException e) {
+			throw new QvtdParseException("Failed to read transformation: " + transformationUri, e);
+		}
 	}
 
 	// --- Execution ---

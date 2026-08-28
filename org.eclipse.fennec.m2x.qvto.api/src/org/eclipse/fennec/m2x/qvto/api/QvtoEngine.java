@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvto.api;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
@@ -60,6 +61,42 @@ public interface QvtoEngine {
 	 * @throws QvtoParseException if parsing fails
 	 */
 	OperationalTransformation parse(String source, String unitName) throws QvtoParseException;
+
+	// --- Compiling ---
+
+	/**
+	 * Compiles a QVT-O transformation from source text into a {@link CompiledUnit}: one document that holds the
+	 * parsed script, everything the parser created for it, and a manifest.
+	 *
+	 * <p>{@code parse()} yields the in-memory graph and is what execution needs; {@code compile()}
+	 * yields the storable form. The difference is ownership. A parser creates objects the script
+	 * references but that no metamodel feature contains — {@code self}, a type instance for every
+	 * {@code Integer}, the default expression of an intermediate class — and in memory that costs
+	 * nothing. Saving or copying the result of {@code parse()} fails on exactly those objects. The
+	 * compiled unit gives them a home beside the script, so the whole document saves, loads and
+	 * copies, and every reference resolves within it (#137).
+	 *
+	 * <p>The script is reachable as {@link CompiledUnit#getUnit()} and is the same
+	 * {@link OperationalTransformation} {@code parse()} would have returned; it can be executed as before.
+	 *
+	 * @param source the source text
+	 * @param unitName the logical unit name — the name the unit is imported by
+	 * @return the compiled unit, never {@code null}
+	 * @throws QvtoParseException if parsing fails, or if the result cannot be made self-contained
+	 * @since 1.0
+	 */
+	CompiledUnit compile(String source, String unitName) throws QvtoParseException;
+
+	/**
+	 * Compiles a QVT-O transformation read from the given URI — see {@link #compile(String, String)}.
+	 *
+	 * @param transformationUri the URI of the source
+	 * @return the compiled unit, never {@code null}
+	 * @throws QvtoParseException if the source cannot be read or parsed, or the result cannot be made
+	 *             self-contained
+	 * @since 1.0
+	 */
+	CompiledUnit compile(URI transformationUri) throws QvtoParseException;
 
 	// --- Execution ---
 

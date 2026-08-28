@@ -13,7 +13,6 @@
     <details key="documentation" value="Manifest of a compiled unit: what it was built from, what it was built against, and what it still needs. The nsURI is deliberately neutral — a stored unit survives moving this Ecore, but not a change of its nsURI."/>
     <details key="copyrightText" value="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"/>
   </eAnnotations>
-  <!-- ==================== Enumerations ==================== -->
   <eClassifiers xsi:type="ecore:EEnum" name="DependencyMode">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="How a dependency was bound when the unit was compiled. embed: the dependency's AST was copied into the unit — absolutely reproducible, never picks up a fix. pin: a reference to exactly one fingerprint — reproducible while that version stays resolvable, fixes arrive on recompile. rebind: a reference by name, bound at prepare time — not reproducible, fixes arrive automatically, so prepare has to record what it actually bound."/>
@@ -29,10 +28,59 @@
     <eLiterals name="referenced"/>
     <eLiterals name="embedded" value="1"/>
   </eClassifiers>
-  <!-- ==================== Manifest ==================== -->
+  <eClassifiers xsi:type="ecore:EClass" name="CompiledUnit">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="The compiled unit: one document holding everything a unit needs to be stored, loaded and executed. Four parts, each with one role. The metadata say what this is and how it was built. The unit is the script itself, an EPackage in every language (QVT-O Module, qvtbase Transformation, MOFM2T Module). The satellites are the parser's heap made persistent: objects the script references but that no metamodel feature contains. The embedded units are the dependencies bound under the embed mode, each a complete compiled unit again — a library lends its types, so its satellites stay its own."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="id" lowerBound="1" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"
+        iD="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Unique across all compiled units, independent of the name: two versions of lib.Strings share a qualified name and have different ids. A UUID minted at compile time."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="namespace" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Groups units for versioning: the units of one namespace are versioned together."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="version" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The declared version — what someone claims this is. The fingerprint in the manifest is what the content measurably is; both are needed, the version to talk about a unit and the fingerprint to check one."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="description" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Human-readable, for a store listing."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="manifest" lowerBound="1"
+        eType="#//CompiledUnitManifest" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="How the unit was built and what it was built against — see CompiledUnitManifest."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="unit" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EPackage"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The script: the parsed AST with its language-level root. Typed as EPackage because all three unit roots inherit from it, which is the one point this neutral model can hold on to without knowing a language."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="satellite" upperBound="-1"
+        eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EObject" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Parser-created objects the script references but that no feature of the metamodel contains: self, result, this, type instances, model types, synthetic classifiers, default expressions of intermediate classes. Pure containment with no semantics and no identity of their own — a satellite means nothing outside its unit, which is why the metadata live on the unit and not here. The evaluator never reads this list; it is what makes the unit storable and copyable, nothing more. Typed EObject: the container does not need to know what it holds, only that it holds it."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="embedded" upperBound="-1"
+        eType="#//CompiledUnit" containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Dependencies bound under the embed mode, each a complete compiled unit with its own metadata, manifest and satellites. Under pin and rebind a dependency is a DependencyEntry in the manifest instead and is resolved at prepare time."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+  </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="CompiledUnitManifest">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Everything needed to decide whether a stored unit is still valid, and to say precisely what moved when it is not. The overall unitFingerprint answers the question with one comparison; the entries below are what turns a mismatch into a diagnostic that names the culprit instead of declaring the unit outdated."/>
+      <details key="documentation" value="How the unit was built and what it was built against: everything needed to decide whether a stored unit is still valid, and to say precisely what moved when it is not. Identity, namespace and version live on the CompiledUnit that owns this manifest. The overall unitFingerprint answers the question with one comparison; the entries below are what turns a mismatch into a diagnostic that names the culprit instead of declaring the unit outdated."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="formatVersion" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -51,12 +99,12 @@
     </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="qualifiedName" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="Qualified name of the unit this manifest belongs to."/>
+        <details key="documentation" value="Qualified name the unit is imported by — the name a resolver is asked for. Distinct from CompiledUnit.id, which stays unique across versions of the same name."/>
       </eAnnotations>
     </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="unitFingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="Fingerprint of the unit in the form &lt;scheme&gt;:&lt;digest&gt;, computed Merkle-style over the unit and the fingerprints of its dependencies. Under rebind it describes the unit alone, which is why resolvedClosure exists."/>
+        <details key="documentation" value="Fingerprint of the unit in the form &lt;scheme>:&lt;digest>, computed Merkle-style over the unit and the fingerprints of its dependencies. Under rebind it describes the unit alone, which is why resolvedClosure exists."/>
       </eAnnotations>
     </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="dependencyMode" eType="#//DependencyMode">
@@ -89,7 +137,6 @@
       </eAnnotations>
     </eStructuralFeatures>
   </eClassifiers>
-  <!-- ==================== Entries ==================== -->
   <eClassifiers xsi:type="ecore:EClass" name="PackageEntry">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="One EPackage the unit was compiled against. Prepare looks the nsURI up in the runtime registry and compares fingerprints: on equality the runtime instance is adopted, so generated code stays in play; a matching nsURI with a differing fingerprint is a hard failure, naming both values."/>
@@ -101,7 +148,7 @@
     </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="fingerprint" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-        <details key="documentation" value="The package fingerprint in the form &lt;scheme&gt;:&lt;digest&gt;, computed by the FingerprintService of emf.osgi rather than by the m2x unit mechanism."/>
+        <details key="documentation" value="The package fingerprint in the form &lt;scheme>:&lt;digest>, computed by the FingerprintService of emf.osgi rather than by the m2x unit mechanism."/>
       </eAnnotations>
     </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="scheme" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">

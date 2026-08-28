@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<genmodel:GenModel xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI" xmlns:ecore="http://www.eclipse.org/emf/2002/Ecore"
+    xmlns:genmodel="http://www.eclipse.org/emf/2002/GenModel" copyrightText="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"
+    modelDirectory="/org.eclipse.fennec.m2x.unit/src-gen" modelPluginID="org.eclipse.fennec.m2x.unit"
+    modelName="Compiledunit" rootExtendsClass="org.eclipse.emf.ecore.impl.MinimalEObjectImpl$Container"
+    importerID="org.eclipse.emf.importer.ecore" complianceLevel="21.0" copyrightFields="false"
+    operationReflection="true" importOrganizing="true" oSGiCompatible="true">
+  <foreignModel>compiledunit.ecore</foreignModel>
+  <genPackages prefix="Compiled" basePackage="org.eclipse.fennec.m2x.model" resource="XMI"
+      disposableProviderFactory="true" ecorePackage="compiledunit.ecore#/">
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="compiledunit.ecore#//DependencyMode">
+      <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//DependencyMode/embed"/>
+      <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//DependencyMode/pin"/>
+      <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//DependencyMode/rebind"/>
+    </genEnums>
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="compiledunit.ecore#//PackageRole">
+      <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//PackageRole/referenced"/>
+      <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//PackageRole/embedded"/>
+    </genEnums>
+    <genClasses ecoreClass="compiledunit.ecore#//CompiledUnit">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnit/id"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnit/namespace"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnit/version"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnit/description"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnit/manifest"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnit/unit"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnit/satellite"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnit/embedded"/>
+    </genClasses>
+    <genClasses ecoreClass="compiledunit.ecore#//CompiledUnitManifest">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/formatVersion"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/producedBy"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/language"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/qualifiedName"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/unitFingerprint"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/dependencyMode"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/packageEntry"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/dependencyEntry"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/blackboxRequirement"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/resolvedClosure"/>
+    </genClasses>
+    <genClasses ecoreClass="compiledunit.ecore#//PackageEntry">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//PackageEntry/nsURI"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//PackageEntry/fingerprint"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//PackageEntry/scheme"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//PackageEntry/role"/>
+    </genClasses>
+    <genClasses ecoreClass="compiledunit.ecore#//DependencyEntry">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//DependencyEntry/qualifiedName"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//DependencyEntry/mode"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//DependencyEntry/fingerprint"/>
+    </genClasses>
+    <genClasses ecoreClass="compiledunit.ecore#//BlackboxRequirement">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//BlackboxRequirement/name"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//BlackboxRequirement/signatureFingerprint"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//BlackboxRequirement/provider"/>
+    </genClasses>
+    <genClasses ecoreClass="compiledunit.ecore#//ResolvedDependency">
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//ResolvedDependency/qualifiedName"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//ResolvedDependency/fingerprint"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//ResolvedDependency/source"/>
+    </genClasses>
+  </genPackages>
+</genmodel:GenModel>

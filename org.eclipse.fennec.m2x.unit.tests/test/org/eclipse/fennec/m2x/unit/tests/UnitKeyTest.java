@@ -14,10 +14,6 @@
  */
 package org.eclipse.fennec.m2x.unit.tests;
 
-import org.eclipse.fennec.m2x.unit.api.Unit;
-import org.eclipse.fennec.m2x.unit.api.UnitKey;
-import org.eclipse.fennec.m2x.unit.api.UnitKind;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,6 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Optional;
 
+import org.eclipse.fennec.m2x.unit.api.UnitKey;
+import org.eclipse.fennec.m2x.unit.api.UnitKind;
 import org.junit.jupiter.api.Test;
 
 /**

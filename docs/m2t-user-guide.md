@@ -337,6 +337,30 @@ A name that stays unresolved is a warning from `link`, as it always was — a li
 
 ---
 
+### 3.7 Compiling a Module
+
+`parse()` gives you the module to execute. `compile()` gives you the module to **store**:
+
+```java
+CompiledUnit compiled = engine.compile(source, "my.module");
+Module module = (Module) compiled.getUnit();      // the same module parse() would return
+engine.execute(module, M2tContext.of(input));    // executes as before
+
+Resource resource = resourceSet.createResource(URI.createURI("my.module.compiled"));
+resource.getContents().add(compiled);
+resource.save(null);                             // this is what parse() could not do
+```
+
+The result of `parse()` is not storable: the parser creates objects the module references but that
+nothing contains — variables, type instances — and saving fails on the first of them. `compile()`
+packs them beside the module into one self-contained document, so it saves, loads in a fresh
+resource set and copies without pointing back at the original. The module inside is the very object
+`parse()` would have returned; `compile()` adds a document around it, nothing else.
+
+The `CompiledUnit` carries an `id` (unique across all compiled units), `namespace`, `version` and
+`description` for a store to list it by, and a manifest that records the language and the qualified
+name. Fingerprint and dependency binding follow in later steps of the compiled-unit work.
+
 ## 4. Template Syntax
 
 MOFM2T templates use `[` and `]` as delimiters. Everything outside `[...]` is literal text; everything inside is a directive or OCL expression.
