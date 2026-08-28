@@ -19,6 +19,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.stream.Collectors;
 
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.ocl.api.annotation.require.RequireOCL;
@@ -29,12 +31,15 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
+import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.api.annotation.require.RequireQVTO;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Constants;
 import org.osgi.framework.FrameworkUtil;
+import org.osgi.framework.InvalidSyntaxException;
+import org.osgi.framework.ServiceReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -89,7 +94,8 @@ class QvtoServiceDiscoveryOSGiTest {
 			@Property(key = "qvto.discoverUnitResolvers", value = "true", scalar = Scalar.Boolean)
 	})
 	void registeredUnitResolves(@InjectService QvtoEngine engine) throws Exception {
-		assertTrue(run(engine).isSuccess());
+		QvtoExecutionResult result = run(engine);
+		assertTrue(result.isSuccess(), () -> whyItFailed(engine, result));
 	}
 
 	@Test
@@ -99,7 +105,10 @@ class QvtoServiceDiscoveryOSGiTest {
 	})
 	void withoutDiscoveryTheRegistryIsNotConsulted(@InjectService QvtoEngine engine)
 			throws Exception {
-		assertFalse(run(engine).isSuccess());
+		QvtoExecutionResult result = run(engine);
+		assertFalse(result.isSuccess(),
+				"without the opt-in the registered unit must stay out of reach, but the"
+						+ " transformation succeeded");
 	}
 
 	@Test
@@ -110,7 +119,10 @@ class QvtoServiceDiscoveryOSGiTest {
 			@Property(key = "qvto.allowedUnitModules", value = "something.else")
 	})
 	void allowListStillNarrows(@InjectService QvtoEngine engine) throws Exception {
-		assertFalse(run(engine).isSuccess());
+		QvtoExecutionResult result = run(engine);
+		assertFalse(result.isSuccess(),
+				"the allow-list names something.else, so registered.library must stay out of"
+						+ " reach, but the transformation succeeded");
 	}
 
 	@Test
@@ -171,5 +183,33 @@ class QvtoServiceDiscoveryOSGiTest {
 	private static QvtoExecutionResult run(QvtoEngine engine) throws Exception {
 		return engine.execute(engine.parse(TRANSFORMATION, "discovery"),
 				QvtoExecutionContext.of(new BasicQvtoModelExtent(), new BasicQvtoModelExtent()));
+	}
+
+	/**
+	 * What to print when the import did not resolve.
+	 *
+	 * <p>A bare {@code assertTrue} says only "expected true but was false", which is exactly
+	 * nothing when the failure happens on a CI runner and not here: whether the engine never
+	 * saw the configuration, whether the resolver service was absent, or whether the import
+	 * failed for a third reason all look the same. All three are printed.
+	 */
+	private static String whyItFailed(QvtoEngine engine, QvtoExecutionResult result) {
+		BundleContext context = FrameworkUtil.getBundle(QvtoServiceDiscoveryOSGiTest.class)
+				.getBundleContext();
+		String resolvers;
+		try {
+			Collection<ServiceReference<QvtoUnitResolver>> references =
+					context.getServiceReferences(QvtoUnitResolver.class, null);
+			resolvers = references.stream()
+					.map(reference -> reference.getBundle().getSymbolicName() + " "
+							+ reference.getProperty("qvto.unit.name"))
+					.collect(Collectors.joining(", ", "[", "]"));
+		} catch (InvalidSyntaxException e) {
+			resolvers = "<could not be listed: " + e.getMessage() + ">";
+		}
+		return "the import did not resolve."
+				+ "\n  engine:      " + engine
+				+ "\n  resolvers:   " + resolvers
+				+ "\n  diagnostics: " + result.diagnostics();
 	}
 }
