@@ -36,6 +36,8 @@ import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Compile for MOFM2T: parse → resolve → package (§4 of the compiled-unit concept, #139).
@@ -184,17 +186,16 @@ final class M2tUnitCompiler {
 		return compileDependency(unit, name, path).getManifest().getUnitFingerprint();
 	}
 
-	private Optional<M2tUnit> resolveUnit(String name) {
+	private Optional<M2tUnit> resolveUnit(String name) throws M2tParseException {
 		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(name)) {
 			return Optional.empty();
 		}
-		for (M2tUnitResolver resolver : unitResolvers) {
-			Optional<M2tUnit> unit = resolver.resolveUnit(name);
-			if (unit.isPresent()) {
-				return unit;
-			}
+		try {
+			return ResolutionPolicy.resolve(name, M2tEngineImpl.sources(unitResolvers));
+		} catch (UnitResolutionException failure) {
+			throw new M2tParseException("Cannot resolve import '" + name + "': " + failure.getMessage(), failure,
+					List.of());
 		}
-		return Optional.empty();
 	}
 
 	private static M2tParseResult leaf(Module module) {

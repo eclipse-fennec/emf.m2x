@@ -68,6 +68,7 @@ import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Plain Java implementation of the {@link M2tEngine} facade.
@@ -331,11 +332,9 @@ public class M2tEngineImpl implements M2tEngine {
 
 	private M2tParseResult resolveUnit(List<M2tUnitResolver> resolvers, String name,
 			List<String> warnings) {
-		for (M2tUnitResolver resolver : resolvers) {
-			Optional<M2tUnit> unit = resolver.resolveUnit(name);
-			if (unit.isEmpty()) {
-				continue;
-			}
+		// Every source is asked, a failing source is an error, answers have to agree (#141)
+		Optional<M2tUnit> unit = ResolutionPolicy.resolve(name, sources(resolvers));
+		if (unit.isPresent()) {
 			try {
 				return switch (unit.get()) {
 					case M2tUnit.CompiledUnit compiled -> resultFor(compiled.module());
@@ -353,6 +352,15 @@ public class M2tEngineImpl implements M2tEngine {
 			}
 		}
 		return null;
+	}
+
+	/** The configured resolvers as sources, in configuration order — the order that decides. */
+	static List<ResolutionPolicy.Source<M2tUnit>> sources(List<M2tUnitResolver> resolvers) {
+		List<ResolutionPolicy.Source<M2tUnit>> sources = new ArrayList<>();
+		for (M2tUnitResolver resolver : resolvers) {
+			sources.add(ResolutionPolicy.Source.of(resolver.getClass().getName(), resolver::resolveUnit));
+		}
+		return sources;
 	}
 
 	/**

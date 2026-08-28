@@ -14,14 +14,19 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 import org.osgi.framework.BundleContext;
+import org.osgi.framework.Constants;
 import org.osgi.framework.InvalidSyntaxException;
 import org.osgi.framework.ServiceReference;
 import org.osgi.service.component.annotations.Activate;
@@ -83,24 +88,34 @@ public class QvtoServiceUnitResolver implements QvtoUnitResolver {
 							+ qualifiedName);
 			return Optional.empty();
 		}
-		for (ServiceReference<QvtoUnitResolver> reference : candidates) {
-			QvtoUnitResolver resolver = context.getService(reference);
-			if (resolver == null) {
-				continue; // gone between the lookup and now
-			}
-			try {
-				Optional<QvtoUnit> unit = resolver.resolveUnit(qualifiedName);
-				if (unit.isPresent()) {
-					return unit;
+		// Ranking decides the order, highest first (#141): ServiceReference's natural order is
+		// ascending by ranking and, for equal ranking, descending by id — reversed, the highest
+		// ranking comes first and, among equals, the one registered first.
+		List<ServiceReference<QvtoUnitResolver>> ordered = new ArrayList<>(candidates);
+		ordered.sort(Comparator.reverseOrder());
+		List<ResolutionPolicy.Source<QvtoUnit>> sources = new ArrayList<>();
+		for (ServiceReference<QvtoUnitResolver> reference : ordered) {
+			sources.add(ResolutionPolicy.Source.of(describe(reference), name -> {
+				QvtoUnitResolver resolver = context.getService(reference);
+				if (resolver == null) {
+					return Optional.empty(); // gone between the lookup and now
 				}
-			} catch (RuntimeException failure) {
-				LOG.log(Level.WARNING, failure,
-						() -> "Registered unit resolver failed for '" + qualifiedName
-								+ "', skipping it: " + resolver.getClass().getName());
-			} finally {
-				context.ungetService(reference);
-			}
+				try {
+					return resolver.resolveUnit(name);
+				} finally {
+					context.ungetService(reference);
+				}
+			}));
 		}
-		return Optional.empty();
+		// Every source is asked, a failing source is an error, answers have to agree — and a
+		// failure travels to the caller as a UnitResolutionException, not as "not found"
+		return ResolutionPolicy.resolve(qualifiedName, sources);
+	}
+
+	private static String describe(ServiceReference<?> reference) {
+		Object ranking = reference.getProperty(Constants.SERVICE_RANKING);
+		return "service " + reference.getProperty(Constants.SERVICE_ID) + " of bundle "
+				+ (reference.getBundle() == null ? "?" : reference.getBundle().getSymbolicName())
+				+ (ranking == null ? "" : " (ranking " + ranking + ")");
 	}
 }

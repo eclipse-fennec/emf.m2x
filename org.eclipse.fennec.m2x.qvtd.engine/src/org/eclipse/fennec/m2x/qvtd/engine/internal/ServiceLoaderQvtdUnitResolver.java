@@ -14,14 +14,16 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Asks every {@link QvtdUnitResolver} on the class path, in the order
@@ -49,7 +51,6 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
  */
 public final class ServiceLoaderQvtdUnitResolver implements QvtdUnitResolver {
 
-	private static final Logger LOG = Logger.getLogger(ServiceLoaderQvtdUnitResolver.class.getName());
 
 	private final ServiceLoader<QvtdUnitResolver> loader;
 
@@ -63,22 +64,22 @@ public final class ServiceLoaderQvtdUnitResolver implements QvtdUnitResolver {
 
 	@Override
 	public Optional<QvtdUnit> resolveUnit(String qualifiedName) {
-		for (QvtdUnitResolver resolver : loader) {
-			// A provider that declared itself would otherwise recurse forever.
-			if (resolver instanceof ServiceLoaderQvtdUnitResolver) {
-				continue;
-			}
-			try {
-				Optional<QvtdUnit> unit = resolver.resolveUnit(qualifiedName);
-				if (unit.isPresent()) {
-					return unit;
+		// Declaration order decides; every provider is asked, a failing one is an error, answers
+		// have to agree (#141). A provider that cannot even be instantiated is a failing source.
+		List<ResolutionPolicy.Source<QvtdUnit>> sources = new ArrayList<>();
+		try {
+			for (QvtdUnitResolver resolver : loader) {
+				// A provider that declared itself would otherwise recurse forever.
+				if (resolver instanceof ServiceLoaderQvtdUnitResolver) {
+					continue;
 				}
-			} catch (ServiceConfigurationError | RuntimeException failure) {
-				LOG.log(Level.WARNING, failure,
-						() -> "Discovered unit resolver failed for '" + qualifiedName
-								+ "', skipping it: " + resolver.getClass().getName());
+				sources.add(ResolutionPolicy.Source.of("class-path provider " + resolver.getClass().getName(),
+						resolver::resolveUnit));
 			}
+		} catch (ServiceConfigurationError failure) {
+			throw new UnitResolutionException("a class-path provider of " + QvtdUnitResolver.class.getSimpleName()
+					+ " could not be loaded for '" + qualifiedName + "': " + failure.getMessage(), failure);
 		}
-		return Optional.empty();
+		return ResolutionPolicy.resolve(qualifiedName, sources);
 	}
 }

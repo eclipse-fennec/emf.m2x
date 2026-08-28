@@ -23,6 +23,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitKind;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
@@ -35,9 +36,9 @@ import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
  * without compiling again; a source is parsed by the caller. The store hands out independent
  * copies, so the AST this resolver lends is nobody else's.
  *
- * <p>A store that cannot answer is not "not found": a {@link UnitStoreException} surfaces as an
- * {@link IllegalStateException} instead of an empty result, so a broken store does not let a
- * stale copy elsewhere step in unnoticed (§7 of the concept).
+ * <p>A store that cannot answer is not "not found": a {@link UnitStoreException} surfaces as a
+ * {@link UnitResolutionException} instead of an empty result, so a broken store does not let a
+ * stale copy elsewhere step in unnoticed (§7 of the concept, #141).
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -74,7 +75,7 @@ public final class QvtoStoreUnitResolver implements QvtoUnitResolver {
 			}
 			return Optional.empty();
 		} catch (UnitStoreException e) {
-			throw new IllegalStateException("the unit store could not answer for '" + qualifiedName + "': "
+			throw new UnitResolutionException("the unit store could not answer for '" + qualifiedName + "': "
 					+ e.getMessage(), e);
 		}
 	}

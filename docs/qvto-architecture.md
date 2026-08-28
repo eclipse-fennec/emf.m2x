@@ -608,6 +608,33 @@ are generated), the copies loaded documents carry — and it resolves package-ro
 (`nsURI#/`, `nsURI#//Book`) by walking the fragment from the package that answers, because EMF's own
 route goes through the package's resource and a package built in memory has none.
 
+### 4.u Several sources for one import (#141)
+
+The resolver signature stays `Optional<QvtoUnit> resolveUnit(String)` — minimal, and a store, a
+file system or a bundle each map a qualified name onto their own addressing. What several sources
+newly require is one policy, `ResolutionPolicy` (`unit.resolve`), used by the compiler, the
+execute-time linker and both discovery resolvers:
+
+1. **Every source is asked**, not only until the first answer. Order is the caller's: configured
+   resolvers in configuration order, whiteboard services by `service.ranking` (highest first; among
+   equals the one registered first), class-path providers in declaration order. The first answer in
+   that order is returned.
+2. **A failing source is an error.** A resolver that throws ends the resolution with a
+   `UnitResolutionException` naming the source and the cause, which the compiler and linker turn into
+   their own `Cannot resolve import 'x': source … failed …`. Before, the whiteboard and class-path
+   resolvers logged and skipped — a broken store read as "not found" while a stale copy from the
+   next source stepped in. The store resolvers throw the same exception for a `UnitStoreException`.
+3. **Answers have to agree.** Two answers are compared by what can be compared — source with source
+   by source fingerprint, compiled document with compiled document by unit fingerprint, source with
+   compiled document by the document's `sourceFingerprint` (the reason the manifest records it), bare
+   AST with bare AST by AST fingerprint. Different content is a conflict naming both sources. A bare
+   AST against a source cannot be compared and the first wins — the one gap, stated.
+
+**Ownership** is now in the javadoc of the three resolver interfaces: a unit a resolver hands out is
+lent, the receiver must not mutate it; the compiler copies what it embeds, the linker binds inside
+the importing unit only. Prepare (#140) needs none of this: it takes units from the store by key, and
+two units pinning different versions of one name are its own conflict check.
+
 The three compilers are one shape in three languages: `QvtoUnitCompiler` (this section),
 `QvtdUnitCompiler` (QVT-R: binding is a merge of rules, see the QVT-R architecture) and
 `M2tUnitCompiler` (MOFM2T: `extends`/`imports`; the names to bind are kept on the module under
