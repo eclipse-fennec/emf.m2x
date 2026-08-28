@@ -43,6 +43,21 @@ public interface UnitBinder {
 	String language();
 
 	/**
+	 * Checks a loaded unit for what the language's parser would have guaranteed by construction —
+	 * the root is a unit of this language, every variable use has its declaration in the document,
+	 * every invocation is bound or recorded for binding — before prepare binds it (#142).
+	 *
+	 * <p>The neutral shape of the document (manifest, closure, Ecore structure, size, fingerprint)
+	 * is checked by the store's {@code UnitValidator}; this is the language's half. The default
+	 * checks nothing.
+	 *
+	 * @param unit the loaded unit
+	 * @throws UnitPrepareException if the unit is not well-formed for this language
+	 */
+	default void validate(CompiledUnit unit) throws UnitPrepareException {
+	}
+
+	/**
 	 * Binds a unit to its dependencies, all loaded into one context.
 	 *
 	 * @param unit the unit to bind — a loaded copy, the binder may change it

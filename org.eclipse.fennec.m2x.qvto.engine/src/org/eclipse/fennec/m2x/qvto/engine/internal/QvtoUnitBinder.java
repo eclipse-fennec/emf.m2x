@@ -17,15 +17,20 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.compiled.BlackboxRequirement;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.Module;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
@@ -64,6 +69,40 @@ final class QvtoUnitBinder implements UnitBinder {
 	@Override
 	public String language() {
 		return QvtoUnitCompiler.LANGUAGE;
+	}
+
+	@Override
+	public void validate(CompiledUnit unit) throws UnitPrepareException {
+		Objects.requireNonNull(unit, "unit must not be null");
+		String name = unit.getManifest().getQualifiedName();
+		if (!(unit.getUnit() instanceof OperationalTransformation transformation)) {
+			throw new UnitPrepareException("'" + name + "' is declared a QVT-O unit but its script is a "
+					+ (unit.getUnit() == null ? "null" : unit.getUnit().eClass().getName()));
+		}
+		List<String> findings = new ArrayList<>();
+		for (Iterator<EObject> it = unit.eAllContents(); it.hasNext();) {
+			EObject node = it.next();
+			if (node instanceof VariableExp use) {
+				// The parser resolves every variable use to a declaration it created — in the script
+				// or among the satellites. A use pointing elsewhere is no parser's doing.
+				Variable declaration = use.getReferredVariable();
+				if (declaration == null) {
+					findings.add("a variable use without declaration at " + EcoreUtil.getRelativeURIFragmentPath(unit, use));
+				} else if (!EcoreUtil.isAncestor(unit, declaration)) {
+					findings.add("the variable '" + declaration.getName() + "' used at "
+							+ EcoreUtil.getRelativeURIFragmentPath(unit, use) + " is declared outside the document");
+				}
+			} else if (node instanceof ModuleImport imp && imp.getImportedModule() != null
+					&& QvtoLinker.isLinkerStub(imp.getImportedModule()) && imp.getImportedModule().getName() == null) {
+				findings.add("an import stub without a name at " + EcoreUtil.getRelativeURIFragmentPath(unit, imp));
+			}
+		}
+		if (transformation.getName() == null || transformation.getName().isBlank()) {
+			findings.add("the transformation has no name");
+		}
+		if (!findings.isEmpty()) {
+			throw new UnitPrepareException("'" + name + "' is not a well-formed QVT-O unit: " + String.join("; ", findings));
+		}
 	}
 
 	@Override
