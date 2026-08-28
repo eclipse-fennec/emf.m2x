@@ -51,6 +51,7 @@ import org.osgi.service.component.annotations.ServiceScope;
 public class OclParserSupport implements OclExpressionParser {
 
 	private final EPackage.Registry packageRegistry;
+	private boolean strictPropertyResolution;
 
 	/**
 	 * Creates a parser that resolves classifier names against the global
@@ -112,6 +113,25 @@ public class OclParserSupport implements OclExpressionParser {
 	 * @return the parsed expression AST with types resolved
 	 * @throws OclParseException if the expression contains syntax or type errors
 	 */
+	/**
+	 * Reports a navigation to a property the source type does not declare, instead of leaving it
+	 * for the evaluator to resolve reflectively (#153).
+	 *
+	 * <p>Off by default: a property the parser cannot see may be there at evaluation time — a
+	 * Complete OCL {@code def:} registered by an earlier parse call, a library property such as
+	 * {@code oclLocale}, a feature of the runtime type where the static one is {@code EObject}.
+	 * A caller that hands the parser the whole document — an editor, a validator, a build check —
+	 * turns this on and gets the typo reported with its position. Within one document a
+	 * {@code def:} is seen wherever it stands, so strict resolution does not report it.
+	 *
+	 * @param strict {@code true} to report unknown properties as parse errors
+	 * @return this parser, for chaining
+	 */
+	public OclParserSupport strictPropertyResolution(boolean strict) {
+		this.strictPropertyResolution = strict;
+		return this;
+	}
+
 	public OclExpression parse(String expression, EClassifier contextType) throws OclParseException {
 		OclParser parser = createParser(expression);
 		OclErrorListener errorListener = configureErrorHandling(parser);
@@ -121,7 +141,7 @@ public class OclParserSupport implements OclExpressionParser {
 		checkErrors(errorListener, expression);
 
 		try {
-			OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry);
+			OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry, strictPropertyResolution);
 			OclExpression result = builder.visitExpressionEntry(tree);
 			checkResolutionErrors(builder.support.getDiagnostics());
 			return result;
@@ -168,6 +188,7 @@ public class OclParserSupport implements OclExpressionParser {
 		checkErrors(errorListener, oclDocument);
 
 		OclDocumentBuilder builder = new OclDocumentBuilder(registry);
+		builder.setStrictPropertyResolution(strictPropertyResolution);
 		List<Constraint> result = builder.buildDocument(tree);
 		checkResolutionErrors(builder.getDiagnostics());
 		return result;

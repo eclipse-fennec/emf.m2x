@@ -42,6 +42,7 @@ import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
 import org.eclipse.fennec.m2x.model.qvtbase.Function;
 import org.eclipse.fennec.m2x.model.qvtbase.FunctionParameter;
 import org.eclipse.fennec.m2x.model.qvtbase.Pattern;
@@ -659,6 +660,29 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		return result;
 	}
 
+	/**
+	 * Binds a property template item to the feature of the object template's class (QVT v1.3
+	 * §7.11.2.4: a property template item refers to a property of the referred class). A class
+	 * that has no such property is an error at the item's position; a template whose class could
+	 * not be resolved keeps the marked placeholder, the evaluator's by-name lookup its last resort.
+	 */
+	private void resolveTemplateProperty(PropertyTemplateItem item, EClassifier cls,
+			QvtRParser.PropertyTemplateContext propCtx) {
+		EStructuralFeature current = item.getReferredProperty();
+		if (item.isIsOpposite() || !AbstractExpressionBuilder.isUnresolvedProperty(current)) {
+			return;
+		}
+		if (cls instanceof EClass eClass) {
+			EStructuralFeature feature = eClass.getEStructuralFeature(current.getName());
+			if (feature != null) {
+				item.setReferredProperty(feature);
+				return;
+			}
+			positions.positionAt(propCtx.getStart().getLine(), propCtx.getStart().getCharPositionInLine());
+			diagnostics.add(positions.at("Unknown property (" + eClass.getName() + "::" + current.getName() + ")"));
+		}
+	}
+
 	@Override
 	public ObjectTemplateExp visitObjectTemplate(QvtRParser.ObjectTemplateContext ctx) {
 		ObjectTemplateExp ote = TMPL.createObjectTemplateExp();
@@ -691,6 +715,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			for (QvtRParser.PropertyTemplateContext propCtx :
 					ctx.propertyTemplateList().propertyTemplate()) {
 				PropertyTemplateItem item = visitPropertyTemplate(propCtx);
+				resolveTemplateProperty(item, cls, propCtx);
 				ote.getPart().add(item);
 			}
 		}
@@ -715,16 +740,12 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 				}
 			}
 		} else {
-			// identifier = expression
+			// identifier = expression — resolved against the enclosing object template's class
+			// in visitObjectTemplate, once that class is known; until then a marked placeholder
+			// (#153: before, the placeholder was never replaced and became a stored satellite)
 			String propName = identifierText(ctx.identifier());
-			// Resolve property from the enclosing object template's referred class
-			// (deferred until we have full type context; store name as EAnnotation)
 			item.setIsOpposite(false);
-			// We'll try to resolve later; for now create a placeholder EAttribute
-			EAttribute placeholder =
-					EcoreFactory.eINSTANCE.createEAttribute();
-			placeholder.setName(propName);
-			item.setReferredProperty(placeholder);
+			item.setReferredProperty(AbstractExpressionBuilder.unresolvedProperty(propName));
 		}
 
 		if (ctx.template() != null) {

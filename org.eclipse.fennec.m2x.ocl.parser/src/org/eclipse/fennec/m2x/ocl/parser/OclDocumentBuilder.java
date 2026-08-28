@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
+import org.antlr.v4.runtime.tree.ParseTree;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
@@ -67,6 +68,13 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	private final List<EPackage> importedPackages = new ArrayList<>();
 	private String currentPackagePath;
 
+	/** Whether an unknown property is reported — see {@code OclParserSupport.strictPropertyResolution}. */
+	private boolean strictPropertyResolution;
+
+	void setStrictPropertyResolution(boolean strict) {
+		this.strictPropertyResolution = strict;
+	}
+
 	OclDocumentBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
 	}
@@ -100,6 +108,11 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		for (OclParser.ImportDeclarationContext importCtx : ctx.importDeclaration()) {
 			visitImportDeclaration(importCtx);
 		}
+		// The names a def: adds, before any expression is built: a def defines a property of its
+		// context classifier for the whole document, and an expression may navigate to one that
+		// stands further down (chained defs, OCL v2.4 §12.12). Strict resolution would otherwise
+		// report it as unknown (#153).
+		collectDefNames(ctx, definedProperties);
 		for (int i = 0; i < ctx.getChildCount(); i++) {
 			var child = ctx.getChild(i);
 			if (child instanceof OclParser.PackageDeclarationContext pkgCtx) {
@@ -109,6 +122,20 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			}
 		}
 		return null;
+	}
+
+	private final List<String> definedProperties = new ArrayList<>();
+
+	private static void collectDefNames(ParseTree node, List<String> names) {
+		if (node instanceof OclParser.DefinitionConstraintContext def) {
+			List<OclParser.IdentifierContext> ids = def.identifier();
+			if (!ids.isEmpty()) {
+				names.add(OclAstBuilder.identifierText(ids.get(ids.size() - 1)));
+			}
+		}
+		for (int i = 0; i < node.getChildCount(); i++) {
+			collectDefNames(node.getChild(i), names);
+		}
 	}
 
 	/**
@@ -462,7 +489,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
 			EClassifier contextType, String selfAlias) {
-		OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry);
+		OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry, strictPropertyResolution);
+		builder.support.declareDefinedProperties(definedProperties);
 		builder.support.registerPackageAliases(packageAliases);
 		importedPackages.forEach(builder.support::importPackage);
 		if (selfAlias != null) {
