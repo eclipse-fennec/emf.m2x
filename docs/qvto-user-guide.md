@@ -43,7 +43,7 @@ Fennec QVT-O is faster than Eclipse QVT-O across all dimensions:
 | Execution (cached) | 11% faster |
 | End-to-End | 2.3x faster |
 
-See [benchmark-results.md](benchmark-results.md) for detailed numbers.
+See benchmark-results.md for detailed numbers.
 
 ### Bundles
 

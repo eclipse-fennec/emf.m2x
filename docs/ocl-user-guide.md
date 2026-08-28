@@ -44,7 +44,7 @@ Fennec OCL is significantly faster than Eclipse OCL Classic:
 | Parse + Eval | 176–454x faster |
 | Pure Evaluation | 20–59% faster |
 
-See [benchmark-results.md](benchmark-results.md) for detailed numbers.
+See benchmark-results.md for detailed numbers.
 
 ### Maven Coordinates
 
