@@ -1202,6 +1202,27 @@ model itself has no such dependency.
 
 ---
 
+## 11.9 OCL and Compiled Units
+
+There is no `OclEngine.compile()`, and OCL has no entry in a unit store: an OCL expression is not
+something you import by name, so there is nothing to package, store and resolve. What does concern
+OCL is that expressions live **inside** the units of the other three languages:
+
+- The `m2x1` unit fingerprint walks the OCL expressions of a transformation or template, so what it
+  says about a QVT-O mapping includes the OCL it contains. Standard-library types enter as URIs,
+  and a metamodel reference as `nsURI#//Classifier/feature` — where a metamodel was loaded from
+  does not change the value.
+- A navigation whose owner type is unknown at parse time leaves a *marked* placeholder, which the
+  evaluator resolves by name at runtime. A caller that hands over a whole document can ask for the
+  typo instead:
+
+```java
+new OclParserSupport(registry).strictPropertyResolution(true).parse("self.nam", personClass);
+// OclParseException: Unknown property (Person::nam)
+```
+
+See the [Compiled Units Guide](compiled-units-guide.md) §10.
+
 ## 12. Thread Safety
 
 | Component | Thread-Safe? | Notes |

@@ -430,6 +430,28 @@ RelationalTransformation trafo = engine.parse(source, "MyTrafo");
 
 ---
 
+### 5.3 Storable Units
+
+`parse()` returns a graph that runs; `compile()` returns a document that can be stored, loaded
+elsewhere and executed there:
+
+```java
+CompiledUnit unit = engine.compile(source, "T");   // dependencies pinned by default
+
+UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+UnitKey key = store.store("qvtr", new PackagedUnit(unit));
+
+PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder()).prepare(key);
+QvtdExecutionResult result = engine.execute(prepared, "T", QvtdExecutionContext.enforce("target", extents));
+```
+
+QVT-R binds an `import` by merging the imported relations (§7.11.1.1), so under
+`DependencyMode.EMBED` that merge happens at compile time and the unit runs on an engine that knows
+no resolver at all. `QvtdStoreUnitResolver` resolves imports from a store.
+
+The mechanism — the three dependency modes, the store, prepare, validation on load, fingerprints —
+is described once for all languages in the [Compiled Units Guide](compiled-units-guide.md).
+
 ## 6. Executing Transformations
 
 ### 6.1 Enforce Mode

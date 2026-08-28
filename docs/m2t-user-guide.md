@@ -385,6 +385,20 @@ own resolvers after a reload. A name nobody resolves fails `compile()` in every 
 MOFM2T has no blackboxes — Java services arrive through the OCL operation providers of the engine —
 so a compiled module never carries a blackbox requirement.
 
+A compiled module can be stored and generated from somewhere else:
+
+```java
+UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+UnitKey key = store.store("m2t", new PackagedUnit(engine.compile(source, "my.module")));
+
+PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder()).prepare(key);
+M2tResult result = engine.execute(prepared, "my.module", M2tContext.of(input));
+```
+
+`M2tStoreUnitResolver` resolves `extends` and `import` from a store. The mechanism is described
+once for all languages in the [Compiled Units Guide](compiled-units-guide.md) — including what
+happens with a pinned module that arrives at an engine which never parsed it.
+
 ## 4. Template Syntax
 
 MOFM2T templates use `[` and `]` as delimiters. Everything outside `[...]` is literal text; everything inside is a directive or OCL expression.
