@@ -15,18 +15,22 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-import org.eclipse.fennec.m2x.ocl.engine.OclConfigurationHelper;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngineConfiguration;
+import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
+import org.eclipse.fennec.m2x.ocl.engine.OclConfigurationHelper;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngineConfiguration;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -85,6 +89,8 @@ import org.osgi.service.metatype.annotations.Designate;
 @Component(name="DefaultOclEngine", service = { OclEngine.class, OclDelegateSupport.class }, scope = ServiceScope.PROTOTYPE, configurationPolicy = ConfigurationPolicy.OPTIONAL)
 public class OclEngineComponent extends OclEngineImpl {
 
+	private static final Logger LOG = Logger.getLogger(OclEngineComponent.class.getName());
+
 	@Activate
 	public OclEngineComponent(
 			OclEngineConfiguration config,
@@ -93,5 +99,42 @@ public class OclEngineComponent extends OclEngineImpl {
 			@Reference(name = "operationProvider", cardinality = ReferenceCardinality.MULTIPLE)
 			List<OclOperationProvider> operationProviders) {
 		super(OclConfigurationHelper.from(config, parser, cache, operationProviders));
+	}
+
+	/**
+	 * Puts a Complete OCL document published as a service into effect (#195).
+	 *
+	 * <p>What the {@link CompleteOclContribution} javadoc has promised since 1.0 and nothing
+	 * implemented: a bundle ships constraints and {@code def:} operations for a metamodel it
+	 * does not own, and the engine picks them up. The reference is dynamic and greedy, so a
+	 * contribution that arrives later applies without rebuilding the engine — unlike the
+	 * operation providers above, whose set has to stay fixed for a resolved operation to stay
+	 * resolved, a document is loaded and can be unloaded again.
+	 *
+	 * <p>A document that cannot be parsed is logged and skipped. The programmatic path throws,
+	 * because there the caller asked for this document; a bind cannot — refusing it would
+	 * leave the component unsatisfied and take the engine down with it.
+	 *
+	 * @param contribution the contributed document
+	 */
+	@Reference(name = "completeOclDocument", cardinality = ReferenceCardinality.MULTIPLE,
+			policy = ReferencePolicy.DYNAMIC)
+	void addCompleteOclDocument(CompleteOclContribution contribution) {
+		try {
+			registerCompleteOclDocument(contribution);
+		} catch (RuntimeException failure) {
+			LOG.log(Level.SEVERE, failure,
+					() -> "The Complete OCL document of " + contribution.getDocumentUri()
+							+ " was not put into effect: " + failure.getMessage());
+		}
+	}
+
+	/**
+	 * Takes a contributed document back out.
+	 *
+	 * @param contribution the contributed document
+	 */
+	void removeCompleteOclDocument(CompleteOclContribution contribution) {
+		unregisterCompleteOclDocument(contribution);
 	}
 }

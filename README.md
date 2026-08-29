@@ -37,7 +37,7 @@ one an error, disagreeing ones a conflict (#141), and a `UnitValidator` every lo
 | `org.eclipse.fennec.m2x.ocl.api` | Public API interfaces, `OclStandardLibrary` (the predefined types as one EPackage) | Done |
 | `org.eclipse.fennec.m2x.ocl.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.ocl.engine` | Switch-based evaluator | Done |
-| `org.eclipse.fennec.m2x.ocl.tests` | 4,351 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.ocl.tests` | 4,351 tests and 26 OSGi tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.ocl.benchmark` | Performance benchmarks | Done |
 
 ### QVT-O — QVT Operational
@@ -97,7 +97,7 @@ The repository root is a Gradle + BND workspace:
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
 
-The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,443 tests and 62 OSGi tests, 0 failures, as of 2026-08-29**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
+The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,443 tests and 63 OSGi tests, 0 failures, as of 2026-08-29**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
 ## Branches & releases
 
