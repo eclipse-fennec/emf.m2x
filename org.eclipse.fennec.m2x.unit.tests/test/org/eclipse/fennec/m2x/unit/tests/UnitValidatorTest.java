@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.eclipse.emf.common.util.URI;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -47,6 +48,7 @@ import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 import org.eclipse.fennec.m2x.unit.validate.UnitValidator;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -164,6 +166,74 @@ class UnitValidatorTest {
 
 		UnitStore trusting = DefaultUnitStore.withoutValidation(backend, registry);
 		assertFalse(trusting.load(key).isEmpty(), "without validation the same bytes load");
+	}
+
+	// ==== bypasses that had no guard (#174) ====
+
+	@Test
+	@DisplayName("a manifest without a unit fingerprint is rejected, not trusted")
+	void aManifestWithoutAUnitFingerprint_isRejected() {
+		// There is nothing to compare the content against, so "no finding" would mean "valid"
+		// for exactly the document that carries no proof of what it should be
+		CompiledUnit compiled = compiled("gen.Books");
+		compiled.getManifest().setUnitFingerprint(null);
+
+		List<String> findings = UnitValidator.defaults().validate(compiled);
+
+		assertTrue(findings.stream().anyMatch(f -> f.contains("no unit fingerprint")),
+				findings.toString());
+	}
+
+	@Test
+	@DisplayName("a blank unit fingerprint is rejected too")
+	void aBlankUnitFingerprint_isRejected() {
+		CompiledUnit compiled = compiled("gen.Books");
+		compiled.getManifest().setUnitFingerprint("   ");
+
+		assertTrue(UnitValidator.defaults().validate(compiled).stream()
+				.anyMatch(f -> f.contains("no unit fingerprint")));
+	}
+
+	@Test
+	@DisplayName("a package copy with no entry of its own is named")
+	void aPackageCopyWithoutAnEntry_isNamed() {
+		// A copy serves the unit's types where the runtime has none. One that no entry mentions
+		// has no recorded identity, so nothing can hold it to anything — it must not travel
+		CompiledUnit compiled = compiled("gen.Books");
+		EPackage smuggled = EcoreFactory.eINSTANCE.createEPackage();
+		smuggled.setName("smuggled");
+		smuggled.setNsURI("http://example.org/m2x/smuggled/1.0");
+		compiled.getPackages().add(smuggled);
+
+		List<String> findings = UnitValidator.defaults().validate(compiled);
+
+		assertTrue(findings.stream().anyMatch(f -> f.contains("has no package entry")),
+				findings.toString());
+	}
+
+	@Test
+	@DisplayName("an unresolved proxy is named with the URI it points at")
+	void anUnresolvedProxy_isNamedWithItsUri() {
+		// The message has to say where the reference went, or a reader cannot tell which
+		// metamodel is missing from the runtime
+		CompiledUnit compiled = compiled("gen.Books");
+		EClass proxy = EcoreFactory.eINSTANCE.createEClass();
+		proxy.setName("Gone");
+		((org.eclipse.emf.ecore.InternalEObject) proxy)
+				.eSetProxyURI(URI.createURI("http://example.org/m2x/absent/1.0#//Gone"));
+		((Module) compiled.getUnit()).getOwnedModuleElement().stream()
+				.filter(Template.class::isInstance)
+				.map(Template.class::cast)
+				.findFirst()
+				.orElseThrow()
+				.getParameter()
+				.get(0)
+				.setType(proxy);
+
+		List<String> findings = UnitValidator.defaults().validate(compiled);
+
+		assertTrue(findings.stream().anyMatch(f -> f.contains("unresolved reference")
+				&& f.contains("http://example.org/m2x/absent/1.0")), findings.toString());
 	}
 
 	// ==== helpers ====
