@@ -1,7 +1,10 @@
+Test-Cases: ${classes;HIERARCHY_INDIRECTLY_ANNOTATED;org.junit.platform.commons.annotation.Testable;CONCRETE}
 Bundle-Name: Fennec M2X Unit Tests
 Bundle-Description: Contract tests for the language-neutral unit abstraction and the compiled-unit manifest metamodel
 
--library: enableEMF
+-library: \
+	enableEMF,\
+	enableOSGi-Test
 
 src=${^src}
 
@@ -12,6 +15,7 @@ src=${^src}
 	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
 	org.eclipse.fennec.emf.osgi.component.minimal;version=latest,\
+	org.osgi.test.junit5.cm;version=latest,\
 	org.eclipse.fennec.m2x.qvto.api;version=snapshot,\
 	org.eclipse.fennec.m2x.qvto.model;version=snapshot,\
 	org.eclipse.fennec.m2x.qvtd.api;version=snapshot,\

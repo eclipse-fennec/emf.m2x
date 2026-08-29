@@ -1,0 +1,10 @@
+-library: enableOSGi-Test
+
+-runrequires: bnd.identity;id='org.eclipse.fennec.m2x.unit.tests'
+
+-runbundles.test: \
+	org.eclipse.fennec.m2x.unit.tests;version=snapshot
+
+-runfw: org.apache.felix.framework
+
+-runee: JavaSE-21

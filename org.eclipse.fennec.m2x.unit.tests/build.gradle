@@ -1,4 +1,18 @@
-/*
- * No additional Gradle configuration needed.
- * Build dependencies are managed via bnd.bnd.
- */
+jacocoTestReport {
+    additionalClassDirs(files(
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.unit/bin"
+    ))
+    additionalSourceDirs(files(
+        "${rootProject.projectDir}/org.eclipse.fennec.m2x.unit/src"
+    ))
+}
+
+// The OSGi run is resolved into build/test.bndrun and launched from there, as the
+// language test bundles do — testOSGi otherwise launches the unresolved file.
+def resolveTask = tasks.named("resolve.test") {
+	outputBndrun = layout.buildDirectory.file("test.bndrun")
+}
+
+tasks.named("testOSGi") {
+	bndrun = resolveTask.flatMap { it.outputBndrun }
+}
