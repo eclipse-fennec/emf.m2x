@@ -38,6 +38,7 @@ import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
@@ -214,6 +215,42 @@ class UnitIntegrityTest {
 
 		assertThrows(UnitStoreException.class, () -> store.load(key),
 				"a store that cannot read what it holds says so; it does not report 'not found'");
+	}
+
+	// ==== what the store refuses (#174) ====
+
+	@Test
+	void aBareAst_isRefused_withTheAdviceToCompileFirst() {
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		CompiledUnit compiled = compiled("gen.Books");
+		Module bare = (Module) compiled.getUnit();
+
+		UnitStoreException failure = assertThrows(UnitStoreException.class,
+				() -> store.store("m2t", new BareAst(bare.getName(), bare)));
+
+		assertTrue(failure.getMessage().contains("bare AST"), failure.getMessage());
+		assertTrue(failure.getMessage().contains("compile()"), failure.getMessage());
+	}
+
+	@Test
+	void emptyContent_isAnError_notAnEmptyDocument() throws Exception {
+		InMemoryUnitStoreBackend backend = new InMemoryUnitStoreBackend();
+		UnitStore store = new DefaultUnitStore(backend, registry);
+		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Books")));
+		// Well-formed XMI holding nothing — a truncated write looks like this
+		backend.put(key, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<empty/>"
+				.getBytes(StandardCharsets.UTF_8));
+
+		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.load(key));
+
+		assertTrue(failure.getMessage().contains("cannot read")
+				|| failure.getMessage().contains("is empty")
+				|| failure.getMessage().contains("did not come back"), failure.getMessage());
+	}
+
+	/** A unit that is a parsed script and nothing more — what compile() takes, not what a store does. */
+	private record BareAst(String qualifiedName, org.eclipse.emf.ecore.EObject root)
+			implements Unit.Compiled {
 	}
 
 	// ==== helpers ====

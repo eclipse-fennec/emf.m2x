@@ -32,6 +32,7 @@ import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy.Source;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -123,6 +124,19 @@ class ResolutionPolicyTest {
 		UnitResolutionException failure = assertThrows(UnitResolutionException.class,
 				() -> ResolutionPolicy.resolve("base", List.of(has("text", source("base", OTHER_TEXT)), has("doc", ofDocument(fromText)))));
 		assertTrue(failure.getMessage().contains("source fingerprint"), failure.getMessage());
+	}
+
+	@Test
+	@DisplayName("a source that answers null is treated as no answer, not as an answer of null")
+	void aSourceAnsweringNull_isNoAnswer() {
+		// A resolver is supposed to answer Optional.empty(); one that returns null instead is a
+		// contract violation, and the policy must not pass that on as a value (#174)
+		M2tUnit unit = source("base", TEXT);
+		Source<M2tUnit> nullSource = Source.of("broken", name -> null);
+
+		assertEquals(Optional.empty(), ResolutionPolicy.resolve("base", List.of(nullSource)));
+		assertSame(unit, ResolutionPolicy.resolve("base", List.of(nullSource, has("good", unit)))
+				.orElseThrow(), "the source that does answer still decides");
 	}
 
 	@Test

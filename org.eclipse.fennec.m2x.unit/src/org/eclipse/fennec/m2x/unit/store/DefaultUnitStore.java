@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.ArrayList;
 
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
@@ -282,18 +283,44 @@ public final class DefaultUnitStore implements UnitStore {
 					"http://xml.org/sax/features/external-general-entities", Boolean.FALSE,
 					"http://xml.org/sax/features/external-parameter-entities", Boolean.FALSE));
 
+	/**
+	 * Guards the metamodels a save borrows.
+	 *
+	 * <p>Writing a unit that refers to a metamodel with no resource of its own has to put that
+	 * metamodel into a resource for the length of the save — XMI writes an href by asking the
+	 * target for its resource, and a target without one cannot be referenced. The metamodel
+	 * belongs to the caller, though, and there is one of it: two saves at once each moved it
+	 * into their own resource, and the removal from the other's contents raced
+	 * ({@code ArrayIndexOutOfBoundsException} out of {@code BasicEList.remove}, #174).
+	 *
+	 * <p>Saves that borrow are serialized against each other, and each puts back what it
+	 * borrowed. A store is shared by construction — every engine reaches for it on every
+	 * import — so this is not an exotic case.
+	 */
+	private final Object borrowedMetamodels = new Object();
+
 	private byte[] serialize(EObject document, UnitKey key) throws UnitStoreException {
-		ResourceSet resourceSet = new UnitResourceSet(packages);
-		giveResourcelessMetamodelsAResource(document, resourceSet);
-		Resource resource = resourceSet.createResource(uriOf(key));
-		resource.getContents().add(document);
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		try {
-			resource.save(out, Map.of(XMLResource.OPTION_ENCODING, "UTF-8"));
-		} catch (IOException | RuntimeException e) {
-			throw new UnitStoreException("cannot serialize '" + key.qualifiedName() + "': " + e.getMessage(), e);
+		synchronized (borrowedMetamodels) {
+			ResourceSet resourceSet = new UnitResourceSet(packages);
+			List<EPackage> borrowed = giveResourcelessMetamodelsAResource(document, resourceSet);
+			Resource resource = resourceSet.createResource(uriOf(key));
+			resource.getContents().add(document);
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			try {
+				resource.save(out, Map.of(XMLResource.OPTION_ENCODING, "UTF-8"));
+			} catch (IOException | RuntimeException e) {
+				throw new UnitStoreException("cannot serialize '" + key.qualifiedName() + "': " + e.getMessage(), e);
+			} finally {
+				// Put the caller's metamodels back the way they were: a package left in this
+				// save's resource keeps an eResource() pointing at a set that is gone, and the
+				// next save skips it for exactly that reason and writes an href to nowhere
+				for (EPackage metamodel : borrowed) {
+					metamodel.eResource().getContents().remove(metamodel);
+				}
+				resource.getContents().remove(document);
+			}
+			return out.toByteArray();
 		}
-		return out.toByteArray();
 	}
 
 	private EObject deserialize(byte[] bytes, UnitKey key, UnitResourceSet resourceSet) throws UnitStoreException {
@@ -329,7 +356,8 @@ public final class DefaultUnitStore implements UnitStore {
 	 * {@code createResource(nsURI)}), a package built in memory does not. The store gives it the
 	 * same: a resource named by its nsURI, which is exactly how the document refers to it.
 	 */
-	private void giveResourcelessMetamodelsAResource(EObject document, ResourceSet resourceSet) {
+	private List<EPackage> giveResourcelessMetamodelsAResource(EObject document, ResourceSet resourceSet) {
+		List<EPackage> borrowed = new ArrayList<>();
 		for (EObject target : EcoreUtil.ExternalCrossReferencer.find(document).keySet()) {
 			if (target.eResource() != null || target.eIsProxy() || !SatelliteCollector.isMetamodelElement(target)) {
 				continue;
@@ -345,7 +373,9 @@ public final class DefaultUnitStore implements UnitStore {
 			Resource metamodel = resourceSet.createResource(URI.createURI(root.getNsURI()));
 			metamodel.getContents().add(root);
 			resourceSet.getPackageRegistry().put(root.getNsURI(), root);
+			borrowed.add(root);
 		}
+		return borrowed;
 	}
 
 	private static URI uriOf(UnitKey key) {
