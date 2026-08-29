@@ -1081,6 +1081,23 @@ public class M2tEvaluator {
 	 *
 	 * @param maxOutputSize the configured limit
 	 */
+	/**
+	 * Reports that the JVM stack ran out before the depth limit did.
+	 *
+	 * <p>{@code maxTemplateDepth} defaults to 1000, and a recursion that deep overflows the
+	 * stack first — measured: at 500 the guard reports, at 1000 the generation dies with a
+	 * {@code StackOverflowError}, which is an {@code Error} and reaches no caller as a
+	 * diagnostic (#178). Lowering the default would guess at a stack size that differs per
+	 * platform; catching it here does not.
+	 *
+	 * @param cause what the JVM threw
+	 */
+	public void addStackOverflowError(StackOverflowError cause) {
+		addError("The stack ran out while evaluating; the template depth limit of "
+				+ limits.maxTemplateDepth() + " was not reached first. "
+				+ "A recursion without a base case, or a limit above what this stack can take.");
+	}
+
 	public void addOutputLimitError(long maxOutputSize) {
 		addError("Maximum output size exceeded (" + maxOutputSize
 				+ " characters) — output truncated");
