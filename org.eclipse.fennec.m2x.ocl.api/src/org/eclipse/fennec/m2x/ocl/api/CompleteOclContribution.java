@@ -27,9 +27,11 @@ import org.osgi.annotation.versioning.ConsumerType;
  * <p>Without OSGi, register contributions programmatically via
  * {@link OclEngine#registerCompleteOclDocument(CompleteOclContribution)}.
  *
- * <p><b>Not yet under OSGi.</b> Nothing binds {@code CompleteOclContribution} services, so a
- * bundle that publishes one is not picked up — see issue #195. Register programmatically until
- * then. The intended shape is the whiteboard pattern:
+ * <p>Under OSGi this is a whiteboard: publish the contribution as a service and every engine
+ * picks it up, including the ones already running. Unregistering the service takes the document
+ * back out again. A document that fails to parse is logged and skipped rather than taking the
+ * engine down — the programmatic path throws instead, because there a caller is waiting for an
+ * answer about this one document.
  * <pre>
  * {@literal @}Component(service = CompleteOclContribution.class)
  * public class MyOclDocument implements CompleteOclContribution {
