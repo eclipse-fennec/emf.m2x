@@ -115,7 +115,7 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 	public Optional<String> generate(BuildContext context, M2tGeneratorOptions options) throws Exception {
 		try (Formatter errors = new Formatter()) {
 
-			File output = outputDirectory(context, options);
+			File output = outputDirectory(context, options, errors);
 			List<File> ecores = files(context, ATTR_ECORE, errors);
 			List<File> models = files(context, ATTR_MODEL, errors);
 			List<File> templates = files(context, ATTR_TEMPLATE, errors);
@@ -276,11 +276,15 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 		return named;
 	}
 
-	private File outputDirectory(BuildContext context, M2tGeneratorOptions options) {
+	private File outputDirectory(BuildContext context, M2tGeneratorOptions options, Formatter errors) {
 		String attribute = attribute(context, ATTR_OUTPUT);
 		File output = attribute != null ? context.getFile(attribute)
 				: options.output().orElseGet(() -> context.getFile(DEFAULT_OUTPUT));
-		output.mkdirs();
+		// A directory that cannot be created is worth saying so — every file of the generation
+		// would fail on it afterwards, one diagnostic each, none of them naming the cause
+		if (!output.isDirectory() && !output.mkdirs()) {
+			errors.format("output directory '%s' could not be created%n", output);
+		}
 		return output;
 	}
 
