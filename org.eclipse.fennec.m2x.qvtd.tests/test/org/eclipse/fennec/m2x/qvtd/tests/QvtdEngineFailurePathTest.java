@@ -14,25 +14,16 @@
  */
 package org.eclipse.fennec.m2x.qvtd.tests;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 
 import org.eclipse.emf.common.util.URI;
-import org.eclipse.emf.ecore.EObject;
-import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
-import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
-import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -44,16 +35,6 @@ import org.junit.jupiter.api.Test;
  * cannot be read, and a prepared context asked for something it does not hold.
  */
 class QvtdEngineFailurePathTest extends AbstractQvtdEngineTest {
-
-	private static final String TRANSFORMATION = """
-			transformation copy(uml : simpleuml, rdbms : simplerdbms) {
-			    top relation PackageToSchema {
-			        n : String;
-			        checkonly domain uml p : Package { name = n };
-			        enforce domain rdbms s : Schema { name = n };
-			    }
-			}
-			""";
 
 	@Test
 	@DisplayName("a direction with no extent bound to it is refused when the context is built")

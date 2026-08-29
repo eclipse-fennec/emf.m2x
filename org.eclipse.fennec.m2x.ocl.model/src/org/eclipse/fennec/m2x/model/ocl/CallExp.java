@@ -32,6 +32,7 @@ import org.osgi.annotation.versioning.ProviderType;
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.CallExp#getOwnedSource <em>Owned Source</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.CallExp#isIsImplicit <em>Is Implicit</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.CallExp#isIsSafe <em>Is Safe</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.ocl.CallExp#isIsArrow <em>Is Arrow</em>}</li>
  * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getCallExp()
@@ -114,5 +115,30 @@ public interface CallExp extends OclExpression {
 	 * @generated
 	 */
 	void setIsSafe(boolean value);
+
+	/**
+	 * Returns the value of the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * True if the call was written with the arrow operator (->). OCL v2.4 Section 9.3.35 [B]: an arrow call on a single object is evaluated as if the source were oclAsSet(), so this attribute decides what x->op() means where x is not a collection. It is part of the AST because it is part of the meaning: it used to be an EMF Adapter, which XMI does not write, so a stored compiled unit came back meaning something else (issue #171).
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Is Arrow</em>' attribute.
+	 * @see #setIsArrow(boolean)
+	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getCallExp_IsArrow()
+	 * @model
+	 * @generated
+	 */
+	boolean isIsArrow();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.CallExp#isIsArrow <em>Is Arrow</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Is Arrow</em>' attribute.
+	 * @see #isIsArrow()
+	 * @generated
+	 */
+	void setIsArrow(boolean value);
 
 } // CallExp

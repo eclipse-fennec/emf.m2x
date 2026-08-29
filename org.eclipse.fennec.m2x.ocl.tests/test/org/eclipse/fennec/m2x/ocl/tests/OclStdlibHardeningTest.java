@@ -22,7 +22,6 @@ import java.util.List;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.junit.jupiter.api.Test;

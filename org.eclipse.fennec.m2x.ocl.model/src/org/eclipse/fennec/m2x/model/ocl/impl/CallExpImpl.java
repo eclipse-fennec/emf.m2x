@@ -37,6 +37,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclPackage;
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.CallExpImpl#getOwnedSource <em>Owned Source</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.CallExpImpl#isIsImplicit <em>Is Implicit</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.CallExpImpl#isIsSafe <em>Is Safe</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.CallExpImpl#isIsArrow <em>Is Arrow</em>}</li>
  * </ul>
  *
  * @generated
@@ -91,6 +92,26 @@ public abstract class CallExpImpl extends OclExpressionImpl implements CallExp {
 	 * @ordered
 	 */
 	protected boolean isSafe = IS_SAFE_EDEFAULT;
+
+	/**
+	 * The default value of the '{@link #isIsArrow() <em>Is Arrow</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #isIsArrow()
+	 * @generated
+	 * @ordered
+	 */
+	protected static final boolean IS_ARROW_EDEFAULT = false;
+
+	/**
+	 * The cached value of the '{@link #isIsArrow() <em>Is Arrow</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #isIsArrow()
+	 * @generated
+	 * @ordered
+	 */
+	protected boolean isArrow = IS_ARROW_EDEFAULT;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -208,6 +229,29 @@ public abstract class CallExpImpl extends OclExpressionImpl implements CallExp {
 	 * @generated
 	 */
 	@Override
+	public boolean isIsArrow() {
+		return isArrow;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setIsArrow(boolean newIsArrow) {
+		boolean oldIsArrow = isArrow;
+		isArrow = newIsArrow;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.CALL_EXP__IS_ARROW, oldIsArrow, isArrow));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
 		switch (featureID) {
 			case OclPackage.CALL_EXP__OWNED_SOURCE:
@@ -230,6 +274,8 @@ public abstract class CallExpImpl extends OclExpressionImpl implements CallExp {
 				return isIsImplicit();
 			case OclPackage.CALL_EXP__IS_SAFE:
 				return isIsSafe();
+			case OclPackage.CALL_EXP__IS_ARROW:
+				return isIsArrow();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}
@@ -250,6 +296,9 @@ public abstract class CallExpImpl extends OclExpressionImpl implements CallExp {
 				return;
 			case OclPackage.CALL_EXP__IS_SAFE:
 				setIsSafe((Boolean)newValue);
+				return;
+			case OclPackage.CALL_EXP__IS_ARROW:
+				setIsArrow((Boolean)newValue);
 				return;
 		}
 		super.eSet(featureID, newValue);
@@ -272,6 +321,9 @@ public abstract class CallExpImpl extends OclExpressionImpl implements CallExp {
 			case OclPackage.CALL_EXP__IS_SAFE:
 				setIsSafe(IS_SAFE_EDEFAULT);
 				return;
+			case OclPackage.CALL_EXP__IS_ARROW:
+				setIsArrow(IS_ARROW_EDEFAULT);
+				return;
 		}
 		super.eUnset(featureID);
 	}
@@ -290,6 +342,8 @@ public abstract class CallExpImpl extends OclExpressionImpl implements CallExp {
 				return isImplicit != IS_IMPLICIT_EDEFAULT;
 			case OclPackage.CALL_EXP__IS_SAFE:
 				return isSafe != IS_SAFE_EDEFAULT;
+			case OclPackage.CALL_EXP__IS_ARROW:
+				return isArrow != IS_ARROW_EDEFAULT;
 		}
 		return super.eIsSet(featureID);
 	}
@@ -308,6 +362,8 @@ public abstract class CallExpImpl extends OclExpressionImpl implements CallExp {
 		result.append(isImplicit);
 		result.append(", isSafe: ");
 		result.append(isSafe);
+		result.append(", isArrow: ");
+		result.append(isArrow);
 		result.append(')');
 		return result.toString();
 	}

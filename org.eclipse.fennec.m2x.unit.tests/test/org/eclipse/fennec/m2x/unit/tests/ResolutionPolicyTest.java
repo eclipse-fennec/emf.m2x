@@ -23,11 +23,11 @@ import java.util.List;
 import java.util.Optional;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.fennec.m2x.m2t.api.M2tUnit;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
 import org.eclipse.fennec.m2x.model.m2t.Module;
-import org.eclipse.fennec.m2x.m2t.api.M2tUnit;
 import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;

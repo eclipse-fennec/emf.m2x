@@ -22,14 +22,12 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
-import org.eclipse.emf.common.notify.impl.AdapterImpl;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
-import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
@@ -37,6 +35,7 @@ import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
+import org.eclipse.fennec.m2x.model.ocl.CallExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
@@ -515,7 +514,7 @@ public class AbstractExpressionBuilder {
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
 		exp.setName(iterName);
-		ArrowCallMarker.mark(exp);
+		markArrowCall(exp);
 		exp.getOwnedIterators().addAll(iterVars);
 		exp.setOwnedBody(body);
 
@@ -558,7 +557,7 @@ public class AbstractExpressionBuilder {
 		IterateExp exp = FACTORY.createIterateExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
-		ArrowCallMarker.mark(exp);
+		markArrowCall(exp);
 		exp.getOwnedIterators().add(iterVar);
 		exp.setOwnedResult(accumulator);
 		exp.setOwnedBody(body);
@@ -578,7 +577,7 @@ public class AbstractExpressionBuilder {
 		OperationCallExp exp = FACTORY.createOperationCallExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
-		ArrowCallMarker.mark(exp);
+		markArrowCall(exp);
 		exp.getOwnedArguments().addAll(args);
 		resolveOperation(exp, opName);
 		return exp;
@@ -595,7 +594,7 @@ public class AbstractExpressionBuilder {
 		exp.setOwnedSource(source);
 		exp.setName(iterName);
 		exp.setIsSafe(isSafe);
-		ArrowCallMarker.mark(exp);
+		markArrowCall(exp);
 
 		EClassifier elementType = inferElementType(source);
 		Variable iterVar = FACTORY.createVariable();
@@ -1201,25 +1200,21 @@ public class AbstractExpressionBuilder {
 	}
 
 
-	// ==================== ArrowCallMarker ====================
-
 	/**
-	 * Marker adapter to flag AST nodes created from arrow calls ({@code ->}).
-	 * Used by the evaluator to apply implicit {@code oclAsSet()} on null sources (§11.2.3).
+	 * Records that a call was written with the arrow operator.
+	 *
+	 * <p>OCL v2.4 §9.3.35 [B]: an arrow call on a single object is evaluated as if the source
+	 * were {@code oclAsSet()}, so this is what {@code x->op()} means where {@code x} is not a
+	 * collection — part of the meaning of the expression, and therefore part of the AST.
+	 *
+	 * <p>It used to be an EMF {@code Adapter}. Adapters are not model content: XMI does not
+	 * write them, so a compiled unit lost every arrow on its way through a store and came back
+	 * meaning something else — {@code p->size()} answering "Unknown operation: size" where the
+	 * freshly parsed unit answered 1 (#171).
+	 *
+	 * @param call the call to mark, must not be {@code null}
 	 */
-	public static final class ArrowCallMarker extends AdapterImpl {
-
-		public static void mark(EObject target) {
-			target.eAdapters().add(new ArrowCallMarker());
-		}
-
-		public static boolean isArrowCall(EObject target) {
-			return target.eAdapters().stream().anyMatch(ArrowCallMarker.class::isInstance);
-		}
-
-		@Override
-		public boolean isAdapterForType(Object type) {
-			return type == ArrowCallMarker.class;
-		}
+	protected static void markArrowCall(CallExp call) {
+		call.setIsArrow(true);
 	}
 }

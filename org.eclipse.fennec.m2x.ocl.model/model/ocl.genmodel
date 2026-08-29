@@ -55,6 +55,7 @@
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference ocl.ecore#//CallExp/ownedSource"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//CallExp/isImplicit"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//CallExp/isSafe"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//CallExp/isArrow"/>
     </genClasses>
     <genClasses image="false" ecoreClass="ocl.ecore#//FeatureCallExp">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//FeatureCallExp/isPre"/>

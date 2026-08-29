@@ -37,7 +37,6 @@ import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -66,8 +65,6 @@ class QvtoCompiledUnitArrowSemanticsTest {
 			QvtoConfiguration.builder(OclConfiguration.builder(new OclParserSupport()).build()).build());
 
 	@Test
-	@Disabled("#171 — the arrow marker is an Adapter on the AST node and does not survive XMI; a loaded unit "
-			+ "treats p->size() as p.size() and fails with 'Unknown operation: size on EPackageImpl'")
 	void arrowOnASingleObject_isOclAsSet_beforeAndAfterAStoreRoundTrip() throws Exception {
 		CompiledUnit compiled = engine.compile(MAIN, "Main");
 		assertEquals("1", run((OperationalTransformation) compiled.getUnit()), "fresh: p->size() is Set{p}->size()");

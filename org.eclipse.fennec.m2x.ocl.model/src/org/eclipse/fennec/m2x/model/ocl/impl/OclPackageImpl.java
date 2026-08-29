@@ -774,6 +774,16 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
+	public EAttribute getCallExp_IsArrow() {
+		return (EAttribute)callExpEClass.getEStructuralFeatures().get(3);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getFeatureCallExp() {
 		return featureCallExpEClass;
 	}
@@ -1737,6 +1747,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		createEReference(callExpEClass, CALL_EXP__OWNED_SOURCE);
 		createEAttribute(callExpEClass, CALL_EXP__IS_IMPLICIT);
 		createEAttribute(callExpEClass, CALL_EXP__IS_SAFE);
+		createEAttribute(callExpEClass, CALL_EXP__IS_ARROW);
 
 		featureCallExpEClass = createEClass(FEATURE_CALL_EXP);
 		createEAttribute(featureCallExpEClass, FEATURE_CALL_EXP__IS_PRE);
@@ -1980,6 +1991,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		initEReference(getCallExp_OwnedSource(), this.getOclExpression(), null, "ownedSource", null, 0, 1, CallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getCallExp_IsImplicit(), ecorePackage.getEBoolean(), "isImplicit", null, 0, 1, CallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getCallExp_IsSafe(), ecorePackage.getEBoolean(), "isSafe", null, 0, 1, CallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getCallExp_IsArrow(), ecorePackage.getEBoolean(), "isArrow", null, 0, 1, CallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(featureCallExpEClass, FeatureCallExp.class, "FeatureCallExp", IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getFeatureCallExp_IsPre(), ecorePackage.getEBoolean(), "isPre", null, 0, 1, FeatureCallExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

@@ -32,7 +32,6 @@ import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;

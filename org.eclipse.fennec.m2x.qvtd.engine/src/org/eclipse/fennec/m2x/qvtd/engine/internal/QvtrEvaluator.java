@@ -20,12 +20,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.function.LongSupplier;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
@@ -40,18 +42,14 @@ import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
-import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
-import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
-import org.eclipse.fennec.m2x.ocl.api.OclResult;
-import java.util.function.Function;
-import org.eclipse.emf.ecore.EObject;
-import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 
 /**
  * Core evaluator for QVT-R transformations (§7.10).

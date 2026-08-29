@@ -144,7 +144,12 @@
         <details key="documentation" value="OCL v2.5: true for safe navigation operators (?. and ?->) which return null instead of OclInvalid when the source is null."/>
       </eAnnotations>
     </eStructuralFeatures>
-  </eClassifiers>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="isArrow" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="True if the call was written with the arrow operator (-&gt;). OCL v2.4 Section 9.3.35 [B]: an arrow call on a single object is evaluated as if the source were oclAsSet(), so this attribute decides what x-&gt;op() means where x is not a collection. It is part of the AST because it is part of the meaning: it used to be an EMF Adapter, which XMI does not write, so a stored compiled unit came back meaning something else (issue #171)."/>
+      </eAnnotations>
+    </eStructuralFeatures>
+</eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="FeatureCallExp" abstract="true" eSuperTypes="#//CallExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base for property and operation calls on a model element (OCL v2.4 Section 8.3.2)."/>

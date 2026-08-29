@@ -14,23 +14,22 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.tree.ParseTree;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
-import java.util.logging.Logger;
+import java.util.Map;
 
+import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
-import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
@@ -52,7 +51,6 @@ import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
  */
 class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
-	private static final Logger LOG = Logger.getLogger(OclDocumentBuilder.class.getName());
 	private static final OclFactory FACTORY = OclFactory.eINSTANCE;
 
 	private final EPackage.Registry packageRegistry;

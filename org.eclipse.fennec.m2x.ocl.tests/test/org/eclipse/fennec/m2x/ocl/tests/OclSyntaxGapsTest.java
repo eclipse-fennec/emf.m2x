@@ -14,7 +14,6 @@
  */
 package org.eclipse.fennec.m2x.ocl.tests;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
