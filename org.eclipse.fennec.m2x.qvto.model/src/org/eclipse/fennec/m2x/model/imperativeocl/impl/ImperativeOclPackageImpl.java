@@ -536,6 +536,16 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 	 * @generated
 	 */
 	@Override
+	public EAttribute getImperativeIterateExp_Name() {
+		return (EAttribute)imperativeIterateExpEClass.getEStructuralFeatures().get(1);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getSwitchExp() {
 		return switchExpEClass;
 	}
@@ -990,6 +1000,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 
 		imperativeIterateExpEClass = createEClass(IMPERATIVE_ITERATE_EXP);
 		createEReference(imperativeIterateExpEClass, IMPERATIVE_ITERATE_EXP__TARGET);
+		createEAttribute(imperativeIterateExpEClass, IMPERATIVE_ITERATE_EXP__NAME);
 
 		switchExpEClass = createEClass(SWITCH_EXP);
 		createEReference(switchExpEClass, SWITCH_EXP__ALTERNATIVE_PART);
@@ -1137,6 +1148,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 
 		initEClass(imperativeIterateExpEClass, ImperativeIterateExp.class, "ImperativeIterateExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getImperativeIterateExp_Target(), theOclPackage.getVariable(), null, "target", null, 0, 1, ImperativeIterateExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getImperativeIterateExp_Name(), ecorePackage.getEString(), "name", null, 0, 1, ImperativeIterateExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(switchExpEClass, SwitchExp.class, "SwitchExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getSwitchExp_AlternativePart(), this.getAltExp(), null, "alternativePart", null, 0, -1, SwitchExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

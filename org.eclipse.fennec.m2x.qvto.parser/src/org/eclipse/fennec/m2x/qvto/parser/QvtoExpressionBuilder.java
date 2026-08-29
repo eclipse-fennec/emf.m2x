@@ -42,6 +42,7 @@ import org.eclipse.fennec.m2x.model.imperativeocl.BlockExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ComputeExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ForExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
 import org.eclipse.fennec.m2x.model.imperativeocl.InstantiationExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.LogExp;
@@ -67,6 +68,7 @@ import org.eclipse.fennec.m2x.model.ocl.InvalidLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.IterateExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.LetExp;
+import org.eclipse.fennec.m2x.model.ocl.LoopExp;
 import org.eclipse.fennec.m2x.model.ocl.MapLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.MapLiteralPart;
 import org.eclipse.fennec.m2x.model.ocl.MapType;
@@ -667,9 +669,10 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				? qvtoIdentifierText(ctx.xselectIter)
 				: "_xsel_it";
 
-		IteratorExp selectExp = OCL.createIteratorExp();
+		// §8.2.2.7: this is xselect, not an OCL select — an imperative loop, so the AST says so
+		ImperativeIterateExp selectExp = IMP.createImperativeIterateExp();
 		selectExp.setOwnedSource(source);
-		selectExp.setName("select");
+		selectExp.setName("xselect");
 
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName(iterName);
@@ -690,10 +693,10 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			iterRef.setReferredVariable(iterVar);
 			oclIsKindOf.setOwnedSource(iterRef);
 			oclIsKindOf.getOwnedArguments().add(typeCondition);
-			selectExp.setOwnedBody(oclIsKindOf);
+			selectExp.setCondition(oclIsKindOf);
 		} else {
 			OclExpression condition = (OclExpression) visit(conditionCtx);
-			selectExp.setOwnedBody(condition);
+			selectExp.setCondition(condition);
 		}
 
 		this.environment = savedEnv;
@@ -709,10 +712,11 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				? qvtoIdentifierText(ctx.xselectOneIter)
 				: "_xsel1_it";
 
-		// Build as: source->any(iter | condition)
-		IteratorExp anyExp = OCL.createIteratorExp();
+		// §8.2.2.7: this is xselectOne — the first match, and never a null (which is where it
+		// differs from OCL's any)
+		ImperativeIterateExp anyExp = IMP.createImperativeIterateExp();
 		anyExp.setOwnedSource(source);
-		anyExp.setName("any");
+		anyExp.setName("xselectOne");
 
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName(iterName);
@@ -729,7 +733,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		this.environment = savedEnv;
 
-		anyExp.setOwnedBody(condition);
+		anyExp.setCondition(condition);
 		return anyExp;
 	}
 
@@ -2065,12 +2069,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return collectExp;
 	}
 
-	private IteratorExp createArrowSwitchCall(OclExpression source,
+	private ImperativeIterateExp createArrowSwitchCall(OclExpression source,
 			QvtOParser.ArrowSwitchCallContext ctx) {
-		// §8.2.2.8: coll->switch(i) { ... } desugars to coll->xcollect(i | switch { ... })
+		// §8.2.2.8: coll->switch(i) { ... } desugars to coll->xcollect(i | switch { ... }) —
+		// and xcollect is an ImperativeIterateExp, so the desugaring builds one
 		QvtOParser.SwitchExpContext switchCtx = ctx.switchExp();
 
-		IteratorExp xcollectExp = OCL.createIteratorExp();
+		ImperativeIterateExp xcollectExp = IMP.createImperativeIterateExp();
 		xcollectExp.setOwnedSource(source);
 		xcollectExp.setName("xcollect");
 
@@ -2105,12 +2110,31 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return xcollectExp;
 	}
 
-	private IteratorExp createIteratorExp(OclExpression source,
+	/**
+	 * The five imperative iterate variants of QVT v1.3 §8.2.2.7, told apart by name.
+	 *
+	 * <p>They are not OCL iterators: the spec defines each of them through {@code forEach}, so
+	 * they are loops — bounded like one, and {@code break}, {@code continue} and {@code raise}
+	 * work inside them. The AST has to say which they are, or the evaluator cannot know (#175).
+	 */
+	private static final Set<String> IMPERATIVE_ITERATORS = Set.of(
+			"xcollect", "xselect", "xselectOne", "xcollectselect", "xcollectselectOne");
+
+	private OclExpression createIteratorExp(OclExpression source,
 			QvtOParser.IteratorCallContext ctx, boolean isSafe) {
-		IteratorExp exp = OCL.createIteratorExp();
-		exp.setOwnedSource(source);
-		exp.setIsSafe(isSafe);
-		exp.setName(qvtoIdentifierText(ctx.qvtoIdentifier()));
+		String name = qvtoIdentifierText(ctx.qvtoIdentifier());
+		boolean imperative = IMPERATIVE_ITERATORS.contains(name);
+		ImperativeIterateExp imperativeExp = imperative ? IMP.createImperativeIterateExp() : null;
+		IteratorExp exp = imperative ? null : OCL.createIteratorExp();
+		LoopExp loop = imperative ? imperativeExp : exp;
+		loop.setOwnedSource(source);
+		if (imperative) {
+			imperativeExp.setName(name);
+			imperativeExp.setIsSafe(isSafe);
+		} else {
+			exp.setIsSafe(isSafe);
+			exp.setName(name);
+		}
 
 		QvtoEnvironment savedEnv = this.environment;
 		EClassifier elementType = inferElementType(source);
@@ -2126,14 +2150,21 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				iterVar.setType(elementType);
 			}
 			iterVars.add(iterVar);
-			exp.getOwnedIterators().add(iterVar);
+			loop.getOwnedIterators().add(iterVar);
 		}
 		this.environment = this.environment.nested(iterVars);
 
-		exp.setOwnedBody((OclExpression) visit(ctx.expression()));
+		OclExpression argument = (OclExpression) visit(ctx.expression());
+		// §8.2.2.7 notation: the single expression is the body of a collecting variant and the
+		// condition of a selecting one
+		if (imperative && name.startsWith("xselect")) {
+			imperativeExp.setCondition(argument);
+		} else {
+			loop.setOwnedBody(argument);
+		}
 
 		this.environment = savedEnv;
-		return exp;
+		return imperative ? imperativeExp : exp;
 	}
 
 	private IterateExp createIterateExp(OclExpression source,

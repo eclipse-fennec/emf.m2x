@@ -105,6 +105,11 @@
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="target" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
         containment="true"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The loop variant name: 'xcollect', 'xselect', 'xselectOne', 'xcollectselect' or 'xcollectselectOne' (QVT v1.3 Section 8.2.2.7). The spec derives it from NamedElement; here it is an attribute, as it already is on ForExp."/>
+      </eAnnotations>
+    </eStructuralFeatures>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="SwitchExp" eSuperTypes="#//ImperativeExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">

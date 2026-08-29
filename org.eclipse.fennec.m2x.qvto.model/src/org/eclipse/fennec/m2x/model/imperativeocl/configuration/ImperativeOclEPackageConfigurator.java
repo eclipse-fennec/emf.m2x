@@ -39,7 +39,7 @@ public class ImperativeOclEPackageConfigurator implements EPackageConfigurator {
 	 * service property.
 	 * @generated
 	 */
-	public static final String FINGERPRINT = "fp1:5c3fdf717379827d7db55be185ad85855c86d8c14a91abadbb369a336ef9c11f";
+	public static final String FINGERPRINT = "fp1:dd9be81c4db626c5f2f59318f1de34fd90b5260d2b7def8dd94878fab6bf5261";
 
 	private ImperativeOclPackage ePackage;
 

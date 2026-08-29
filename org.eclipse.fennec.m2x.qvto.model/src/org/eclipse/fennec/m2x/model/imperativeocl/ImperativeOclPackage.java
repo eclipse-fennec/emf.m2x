@@ -45,7 +45,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = ImperativeOclPackage.eNS_URI, fingerprint = "fp1:5c3fdf717379827d7db55be185ad85855c86d8c14a91abadbb369a336ef9c11f", genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/imperativeocl.ecore", ecoreSourceLocations = "/model/imperativeocl.ecore")
+@EPackage(uri = ImperativeOclPackage.eNS_URI, fingerprint = "fp1:dd9be81c4db626c5f2f59318f1de34fd90b5260d2b7def8dd94878fab6bf5261", genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/imperativeocl.ecore", ecoreSourceLocations = "/model/imperativeocl.ecore")
 public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -693,13 +693,22 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int IMPERATIVE_ITERATE_EXP__TARGET = IMPERATIVE_LOOP_EXP_FEATURE_COUNT + 0;
 
 	/**
+	 * The feature id for the '<em><b>Name</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int IMPERATIVE_ITERATE_EXP__NAME = IMPERATIVE_LOOP_EXP_FEATURE_COUNT + 1;
+
+	/**
 	 * The number of structural features of the '<em>Imperative Iterate Exp</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int IMPERATIVE_ITERATE_EXP_FEATURE_COUNT = IMPERATIVE_LOOP_EXP_FEATURE_COUNT + 1;
+	int IMPERATIVE_ITERATE_EXP_FEATURE_COUNT = IMPERATIVE_LOOP_EXP_FEATURE_COUNT + 2;
 
 	/**
 	 * The number of operations of the '<em>Imperative Iterate Exp</em>' class.
@@ -2083,6 +2092,17 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getImperativeIterateExp_Target();
 
 	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp#getName <em>Name</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Name</em>'.
+	 * @see org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp#getName()
+	 * @see #getImperativeIterateExp()
+	 * @generated
+	 */
+	EAttribute getImperativeIterateExp_Name();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.imperativeocl.SwitchExp <em>Switch Exp</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2726,6 +2746,14 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference IMPERATIVE_ITERATE_EXP__TARGET = eINSTANCE.getImperativeIterateExp_Target();
+
+		/**
+		 * The meta object literal for the '<em><b>Name</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute IMPERATIVE_ITERATE_EXP__NAME = eINSTANCE.getImperativeIterateExp_Name();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.SwitchExpImpl <em>Switch Exp</em>}' class.

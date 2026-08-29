@@ -508,20 +508,6 @@ public class QvtoEvaluator {
 				}
 				yield result;
 			}
-			// §8.2.2.7/§8.2.2.8: xcollect — like collect but without flattening
-			case "xcollect" -> {
-				List<Object> result = new ArrayList<>();
-				for (Object elem : coll) {
-					env.pushScope();
-					try {
-						env.define(iterName, elem);
-						result.add(eval(body));
-					} finally {
-						env.popScope();
-					}
-				}
-				yield result;
-			}
 			case "forAll" -> {
 				for (Object elem : coll) {
 					env.pushScope();
@@ -1684,14 +1670,18 @@ public class QvtoEvaluator {
 		}
 
 		/**
-		 * QVT v1.3 §8.2.2.7 — {@code xcollect}, {@code xselect} and their three siblings.
+		 * QVT v1.3 §8.2.2.7 — the five imperative iterate variants.
 		 *
-		 * <p><b>Not reached today.</b> The parser builds a plain OCL {@code IteratorExp} for
-		 * those names, which {@link #evalIteratorExp} evaluates, so nothing constructs an
-		 * {@code ImperativeIterateExp} (#175). The spec says this metaclass is the right one —
-		 * the variants are imperative loops, with {@code break}/{@code continue}/{@code raise}
-		 * inside them — so this is a parser gap rather than dead code, and the implementation
-		 * stays until the parser is brought to the spec.
+		 * <p>{@code xcollect}, {@code xselect}, {@code xselectOne}, {@code xcollectselect} and
+		 * {@code xcollectselectOne}, told apart by {@code name}. The spec defines each of them
+		 * through {@code forEach}, which is why they are bounded by {@code maxLoopIterations}
+		 * like every other loop of this evaluator, and why {@code break}, {@code continue},
+		 * {@code raise} and {@code return} work inside them where they do not in an OCL
+		 * iterator.
+		 *
+		 * <p>Two properties the OCL counterparts do not have: a {@code null} is never collected
+		 * ("if (SELECTOR &lt;&gt; null …)" in every one of the five definitions), and the
+		 * collecting variants flatten what the body produced.
 		 */
 		@Override
 		public Object caseImperativeIterateExp(ImperativeIterateExp exp) {
@@ -1701,28 +1691,22 @@ public class QvtoEvaluator {
 						+ (source == null ? "null" : source.getClass().getSimpleName()));
 				return WRAPPED_NULL;
 			}
+			if (coll.size() > options.maxLoopIterations()) {
+				addError("Maximum loop iterations exceeded: " + options.maxLoopIterations());
+				return WRAPPED_NULL;
+			}
 
+			String variant = exp.getName() == null ? "xcollect" : exp.getName();
 			List<Variable> iterVars = exp.getOwnedIterators();
 			String iterName = iterVars.isEmpty() ? "_it" : iterVars.get(0).getName();
 			Variable target = exp.getTarget();
 			OclExpression condition = exp.getCondition();
 			OclExpression body = exp.getOwnedBody();
+			boolean collecting = variant.startsWith("xcollect");
+			boolean firstOnly = variant.endsWith("One");
 
-			// Initialize target variable
-			Object targetValue = null;
-			if (target != null && target.getOwnedInit() != null) {
-				targetValue = eval(target.getOwnedInit());
-			}
-			if (target != null) {
-				env.define(target.getName(), targetValue);
-			}
-
-			int iterations = 0;
+			List<Object> collected = new ArrayList<>();
 			for (Object element : coll) {
-				if (++iterations > options.maxLoopIterations()) {
-					addError("Maximum loop iterations exceeded: " + options.maxLoopIterations());
-					break;
-				}
 				if (checkTimeout()) {
 					addError("Execution timeout exceeded");
 					break;
@@ -1730,15 +1714,31 @@ public class QvtoEvaluator {
 				env.pushScope();
 				try {
 					env.define(iterName, element);
-					if (condition != null) {
-						Object condVal = eval(condition);
-						if (!Boolean.TRUE.equals(condVal)) {
+					// The candidates of this iteration: what the body produced, flattened, for a
+					// collecting variant — the element itself for a selecting one
+					List<Object> candidates = new ArrayList<>();
+					if (collecting) {
+						flatten(eval(body), candidates);
+					} else {
+						candidates.add(element);
+					}
+					boolean done = false;
+					for (Object candidate : candidates) {
+						if (candidate == null || candidate == WRAPPED_NULL) {
+							continue; // "if (SELECTOR <> null …)" — never collected
+						}
+						if (condition != null && !matchesCondition(condition, target, iterName,
+								candidate)) {
 							continue;
 						}
+						collected.add(candidate);
+						if (firstOnly) {
+							done = true;
+							break;
+						}
 					}
-					Object bodyResult = eval(body);
-					if (target != null) {
-						env.assign(target.getName(), bodyResult);
+					if (done) {
+						break;
 					}
 				} catch (BreakException e) {
 					break;
@@ -1749,7 +1749,44 @@ public class QvtoEvaluator {
 				}
 			}
 
-			return wrapNull(target != null ? env.lookup(target.getName()) : null);
+			if (firstOnly) {
+				return wrapNull(collected.isEmpty() ? null : collected.get(0));
+			}
+			// A List, as every other iterator of this evaluator answers. §8.2.2.7 says the kind
+			// follows the source (Bag for an unordered one, Sequence for an ordered one); this
+			// evaluator does not carry collection kinds through any iterator, so doing it here
+			// alone would be a difference without a rule.
+			return collected;
+		}
+
+		/**
+		 * Evaluates the condition for one candidate, with the selector variable bound.
+		 *
+		 * <p>The selector is the target variable where the construct names one
+		 * ({@code list->xcollectselect(i; res = i.prop | not res.startsWith('_'))}) and the
+		 * iterator otherwise — which is what makes {@code list[i | i.name = 'x']} read the way
+		 * it does.
+		 */
+		private boolean matchesCondition(OclExpression condition, Variable target, String iterName,
+				Object candidate) {
+			env.pushScope();
+			try {
+				env.define(target != null ? target.getName() : iterName, candidate);
+				return Boolean.TRUE.equals(eval(condition));
+			} finally {
+				env.popScope();
+			}
+		}
+
+		/** Appends a value, or the members of a collection value, to the result. */
+		private void flatten(Object value, List<Object> into) {
+			if (value instanceof Collection<?> nested) {
+				for (Object element : nested) {
+					flatten(element, into);
+				}
+				return;
+			}
+			into.add(value == WRAPPED_NULL ? null : value);
 		}
 
 		@Override
