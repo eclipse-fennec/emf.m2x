@@ -168,7 +168,7 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 	// ── Q-5: Stack depth limit (inherited, verify in QVT-O context) ───
 
 	@Test
-	void q5_recursiveMapping_exceedingStackDepth_terminates() throws QvtoParseException {
+	void q5_recursiveHelper_exceedingStackDepth_terminates() throws QvtoParseException {
 		QvtoEvaluationOptions opts = QvtoEvaluationOptions.defaults()
 				.withMaxStackDepth(5);
 
@@ -184,6 +184,30 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 
 		assertFalse(result.isSuccess());
 		assertTrue(hasDiagnosticContaining(result, "Maximum stack depth exceeded"));
+	}
+
+	@Test
+	@DisplayName("Q-5: a mapping that calls itself is bounded too, not only a helper")
+	void q5_recursiveMapping_exceedingStackDepth_terminates() throws QvtoParseException {
+		// The depth counter is checked at four sites; the test above recurses a *helper*, which
+		// was the only one covered. A mapping goes in through another one (#175).
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE) {
+				    mapping EPackage::loop() : EPackage {
+				        result := self.map loop();
+				    }
+				    main() {
+				        m.objectsOfType(EPackage)->forEach(p) { p.map loop(); };
+				    }
+				}
+				""", QvtoEvaluationOptions.defaults().withMaxStackDepth(5),
+				new BasicQvtoModelExtent(EcorePackage.eINSTANCE.getEFactoryInstance()
+						.create(EcorePackage.Literals.EPACKAGE)));
+
+		assertFalse(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+		assertTrue(hasDiagnosticContaining(result, "stack depth"),
+				() -> "diagnostics: " + result.diagnostics());
 	}
 
 	// ── Q-7 / M-4b: Diagnostics flooding limit ───────────────────────
@@ -346,11 +370,11 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 				.create(EcorePackage.Literals.EPACKAGE));
 		QvtoExecutionResult result = eng.execute(t, QvtoExecutionContext.of(extent));
 
-		// Should fail because blackbox is disabled — cannot resolve import
-		assertNotNull(result);
-		assertTrue(hasDiagnosticContaining(result, "Cannot resolve import")
-				|| hasDiagnosticContaining(result, "Link error"),
-				"Blackbox disabled → import should fail: " + result.diagnostics());
+		// The gate is shut, so the import of the blackbox module resolves nowhere. Accepting
+		// either of two messages left it open which one it actually is (#175); it is this one.
+		assertFalse(result.isSuccess());
+		assertTrue(hasDiagnosticContaining(result, "Cannot resolve import: d29lib"),
+				() -> "diagnostics: " + result.diagnostics());
 	}
 
 	@Test
