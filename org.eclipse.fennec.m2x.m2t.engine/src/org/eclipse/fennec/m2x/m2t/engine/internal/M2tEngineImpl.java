@@ -523,18 +523,31 @@ public class M2tEngineImpl implements M2tEngine {
 		if (strategy != null && config.protectedAreaEnabled()) {
 			M2tProtectedAreaMerger merger = new M2tProtectedAreaMerger();
 			Map<String, String> mergedFiles = new LinkedHashMap<>(generatedFiles);
+			Set<String> unwritable = new HashSet<>();
 			for (Map.Entry<String, String> entry : mergedFiles.entrySet()) {
 				// An APPEND file is extended, not regenerated: merging its existing
 				// content in and then appending the result would duplicate the file.
 				if (openModes.get(entry.getKey()) == OpenModeKind.APPEND) {
 					continue;
 				}
-				String existing = strategy.readExistingContent(entry.getKey(),
-						charsetFor(entry.getKey(), charsets));
-				if (existing != null) {
-					entry.setValue(merger.merge(entry.getValue(), existing));
+				try {
+					String existing = strategy.readExistingContent(entry.getKey(),
+							charsetFor(entry.getKey(), charsets));
+					if (existing != null) {
+						entry.setValue(merger.merge(entry.getValue(), existing));
+					}
+				} catch (RuntimeException failure) {
+					// A path the strategy refuses — one that escapes the output directory, say —
+					// used to travel out of execute() from here, so one bad [file] path ended the
+					// whole generation with an exception where every other file failure is a
+					// diagnostic (#177). Reported per file, like the write itself.
+					evaluator.addGenerationError(entry.getKey(), failure);
+					unwritable.add(entry.getKey());
 				}
 			}
+			// A file whose existing content could not even be read is not written either: the
+			// failure was reported once, and writing would report it a second time
+			mergedFiles.keySet().removeAll(unwritable);
 			generatedFiles = Map.copyOf(mergedFiles);
 		}
 
