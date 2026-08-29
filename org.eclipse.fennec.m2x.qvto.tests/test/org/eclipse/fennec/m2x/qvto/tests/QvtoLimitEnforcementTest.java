@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EObject;
@@ -29,9 +30,16 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
 import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
+import org.eclipse.fennec.m2x.model.qvtoperational.Module;
+import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
+import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -41,7 +49,10 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
+import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
+import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 
 /**
  * The QVT-O limits that are enforced, held to it (#175, part of #188).
@@ -187,6 +198,68 @@ class QvtoLimitEnforcementTest extends AbstractQvtoEngineTest {
 			assertTrue(result.diagnostics().stream()
 					.anyMatch(d -> d.getMessage().contains("Cannot instantiate")),
 					() -> "diagnostics: " + result.diagnostics());
+		}
+	}
+
+	@Nested
+	@DisplayName("what a loaded unit is held to")
+	class LoadValidation {
+
+		@Test
+		@DisplayName("an import stub without a name is refused")
+		void importStubWithoutAName() throws Exception {
+			// The two findings of QvtoUnitBinder.validate that QvtoLoadValidationTest does not
+			// reach. A stub with no name cannot be bound to anything, so it must not travel
+			CompiledUnit compiled = compileImporting();
+			firstImportStub(compiled).setName(null);
+
+			UnitPrepareException failure = assertThrows(UnitPrepareException.class,
+					() -> engineWithResolver().unitBinder().validate(compiled));
+
+			assertTrue(failure.getMessage().contains("import stub without a name"),
+					failure::getMessage);
+		}
+
+		@Test
+		@DisplayName("a transformation without a name is refused")
+		void transformationWithoutAName() throws Exception {
+			CompiledUnit compiled = compileImporting();
+			((OperationalTransformation) compiled.getUnit()).setName(null);
+
+			UnitPrepareException failure = assertThrows(UnitPrepareException.class,
+					() -> engineWithResolver().unitBinder().validate(compiled));
+
+			assertTrue(failure.getMessage().contains("no name"), failure::getMessage);
+		}
+
+		private QvtoEngine engineWithResolver() {
+			return QvtoEngines.create(QvtoConfiguration.builder(
+					OclConfiguration.builder(new OclParserSupport()).build())
+					.addUnitResolver(name -> Optional.of(new QvtoUnit.SourceUnit(name,
+							URI.createURI("mem:/" + name + ".qvto"), "library imported.lib;\n")))
+					.unitResolverEnabled(true)
+					.build());
+		}
+
+		private CompiledUnit compileImporting() throws Exception {
+			return engineWithResolver().compile("""
+					modeltype ECORE uses '%s';
+					import imported.lib;
+					transformation importer(inout m : ECORE) {
+					    main() {
+					    }
+					}
+					""".formatted(EcorePackage.eNS_URI), "importer",
+					UnitCompileOptions.of(DependencyMode.REBIND));
+		}
+
+		private Module firstImportStub(CompiledUnit compiled) {
+			OperationalTransformation transformation = (OperationalTransformation) compiled.getUnit();
+			return transformation.getModuleImport().stream()
+					.map(ModuleImport::getImportedModule)
+					.filter(java.util.Objects::nonNull)
+					.findFirst()
+					.orElseThrow(() -> new AssertionError("no import stub in the compiled unit"));
 		}
 	}
 
