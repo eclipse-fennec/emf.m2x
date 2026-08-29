@@ -178,9 +178,7 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		Objects.requireNonNull(unitName, "unitName must not be null");
 		Objects.requireNonNull(options, "options must not be null");
 		// Compile asks the same sources under the same D29 limits as the link phase of execute
-		QvtoUnitCompiler compiler = new QvtoUnitCompiler(parserSupport, packageRegistry,
-				effectiveResolvers(), effectiveBlackboxRegistry(), effectiveBlackboxAllowList(),
-				effectiveUnitAllowList(), maxBlackboxLibraries, packager, options);
+		QvtoUnitCompiler compiler = new QvtoUnitCompiler(linkPolicy(), packager, options);
 		return compiler.compile(source, unitName);
 	}
 
@@ -260,9 +258,9 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 		// When enable flags are false, no resolvers/registry are available,
 		// so unresolved imports will correctly fail with "Cannot resolve import".
 		try {
-			QvtoLinker linker = new QvtoLinker(parserSupport, effectiveResolvers,
-					packageRegistry, effectiveRegistry,
-					effectiveBbAllow, effectiveUrAllow, maxBlackboxLibraries);
+			QvtoLinker linker = new QvtoLinker(new QvtoLinkPolicy(parserSupport, effectiveResolvers,
+					packageRegistry, effectiveRegistry, effectiveBbAllow, effectiveUrAllow,
+					maxBlackboxLibraries));
 			linker.link(transformation);
 		} catch (QvtoParseException e) {
 			return new QvtoExecutionResult(
@@ -304,8 +302,21 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 
 	@Override
 	public UnitBinder unitBinder() {
-		return new QvtoUnitBinder(parserSupport, packageRegistry, effectiveBlackboxRegistry(),
-				effectiveBlackboxAllowList(), maxBlackboxLibraries);
+		return new QvtoUnitBinder(linkPolicy());
+	}
+
+	/**
+	 * What a link of this engine may reach, and how far — the D29 controls as one value.
+	 *
+	 * <p>One place where the enable flags are turned into the effective sources and
+	 * allow-lists, so compiling, linking and binding cannot end up under different limits.
+	 *
+	 * @return the link policy
+	 */
+	private QvtoLinkPolicy linkPolicy() {
+		return new QvtoLinkPolicy(parserSupport, effectiveResolvers(), packageRegistry,
+				effectiveBlackboxRegistry(), effectiveBlackboxAllowList(), effectiveUnitAllowList(),
+				maxBlackboxLibraries);
 	}
 
 	/** The evaluation itself, shared by the linking and the prepared path. */

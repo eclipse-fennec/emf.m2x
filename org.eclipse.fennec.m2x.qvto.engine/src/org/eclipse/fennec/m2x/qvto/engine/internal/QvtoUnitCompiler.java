@@ -26,7 +26,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EClassifier;
-import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.compiled.BlackboxRequirement;
 import org.eclipse.fennec.m2x.model.compiled.CompiledFactory;
@@ -38,11 +37,8 @@ import org.eclipse.fennec.m2x.model.qvtoperational.Module;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
-import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
-import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
-import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
 import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
@@ -83,33 +79,17 @@ final class QvtoUnitCompiler {
 
 	static final String LANGUAGE = "qvto";
 
-	private final QvtoParserSupport parserSupport;
-	private final EPackage.Registry packageRegistry;
-	private final List<QvtoUnitResolver> unitResolvers;
-	private final QvtoBlackboxRegistry blackboxRegistry;
-	private final Set<String> allowedBlackboxModules;
-	private final Set<String> allowedUnitModules;
-	private final int maxBlackboxLibraries;
+	private final QvtoLinkPolicy policy;
 	private final UnitPackager packager;
 	private final DependencyMode mode;
 	private final QvtoLinker linker;
 	private final Set<String> requiredBlackboxModules = new HashSet<>();
 
-	QvtoUnitCompiler(QvtoParserSupport parserSupport, EPackage.Registry packageRegistry,
-			List<QvtoUnitResolver> unitResolvers, QvtoBlackboxRegistry blackboxRegistry,
-			Set<String> allowedBlackboxModules, Set<String> allowedUnitModules,
-			int maxBlackboxLibraries, UnitPackager packager, UnitCompileOptions options) {
-		this.parserSupport = Objects.requireNonNull(parserSupport, "parserSupport must not be null");
-		this.packageRegistry = Objects.requireNonNull(packageRegistry, "packageRegistry must not be null");
-		this.unitResolvers = Objects.requireNonNull(unitResolvers, "unitResolvers must not be null");
-		this.blackboxRegistry = blackboxRegistry; // nullable: blackboxes disabled or none configured
-		this.allowedBlackboxModules = Objects.requireNonNull(allowedBlackboxModules);
-		this.allowedUnitModules = Objects.requireNonNull(allowedUnitModules);
-		this.maxBlackboxLibraries = maxBlackboxLibraries;
+	QvtoUnitCompiler(QvtoLinkPolicy policy, UnitPackager packager, UnitCompileOptions options) {
+		this.policy = Objects.requireNonNull(policy, "policy must not be null");
 		this.packager = Objects.requireNonNull(packager, "packager must not be null");
 		this.mode = Objects.requireNonNull(options, "options must not be null").dependencyMode();
-		this.linker = new QvtoLinker(parserSupport, unitResolvers, packageRegistry, blackboxRegistry,
-				allowedBlackboxModules, allowedUnitModules, maxBlackboxLibraries);
+		this.linker = new QvtoLinker(policy);
 	}
 
 	/**
@@ -122,7 +102,7 @@ final class QvtoUnitCompiler {
 	 *             cycle, or the result cannot be made self-contained
 	 */
 	CompiledUnit compile(String source, String qualifiedName) throws QvtoParseException {
-		OperationalTransformation transformation = parserSupport.parse(source, qualifiedName, packageRegistry);
+		OperationalTransformation transformation = policy.parserSupport().parse(source, qualifiedName, policy.packageRegistry());
 		return compile(transformation, qualifiedName, source, new ArrayDeque<>());
 	}
 
@@ -228,7 +208,7 @@ final class QvtoUnitCompiler {
 	private CompiledUnit compileDependency(QvtoUnit unit, Deque<String> path) throws QvtoParseException {
 		return switch (unit) {
 			case QvtoUnit.SourceUnit source -> compile(
-					parserSupport.parse(source.source(), source.qualifiedName(), packageRegistry),
+					policy.parserSupport().parse(source.source(), source.qualifiedName(), policy.packageRegistry()),
 					source.qualifiedName(), source.source(), path);
 			case QvtoUnit.CompiledUnit compiled -> {
 				if (compiled.transformation().eContainer() instanceof CompiledUnit document) {
@@ -255,11 +235,11 @@ final class QvtoUnitCompiler {
 
 	private Optional<QvtoUnit> resolveUnit(String qualifiedName) throws QvtoParseException {
 		// D29: allow-list for unit modules, as in the linker
-		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(qualifiedName)) {
+		if (!policy.allowedUnitModules().isEmpty() && !policy.allowedUnitModules().contains(qualifiedName)) {
 			return Optional.empty();
 		}
 		try {
-			return ResolutionPolicy.resolve(qualifiedName, QvtoLinker.sources(unitResolvers));
+			return ResolutionPolicy.resolve(qualifiedName, QvtoLinker.sources(policy.unitResolvers()));
 		} catch (UnitResolutionException failure) {
 			throw new QvtoParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
 					failure);
@@ -267,18 +247,18 @@ final class QvtoUnitCompiler {
 	}
 
 	private Optional<QvtoBlackboxLibrary> resolveBlackbox(String qualifiedName) {
-		if (blackboxRegistry == null) {
+		if (policy.blackboxRegistry() == null) {
 			return Optional.empty();
 		}
-		if (!allowedBlackboxModules.isEmpty() && !allowedBlackboxModules.contains(qualifiedName)) {
+		if (!policy.allowedBlackboxModules().isEmpty() && !policy.allowedBlackboxModules().contains(qualifiedName)) {
 			return Optional.empty();
 		}
 		// D29: a ceiling on distinct libraries per compile, counted over the whole compile
 		if (!requiredBlackboxModules.contains(qualifiedName)
-				&& requiredBlackboxModules.size() >= maxBlackboxLibraries) {
+				&& requiredBlackboxModules.size() >= policy.maxBlackboxLibraries()) {
 			return Optional.empty();
 		}
-		Optional<QvtoBlackboxLibrary> library = blackboxRegistry.getLibrary(qualifiedName);
+		Optional<QvtoBlackboxLibrary> library = policy.blackboxRegistry().getLibrary(qualifiedName);
 		library.ifPresent(l -> requiredBlackboxModules.add(qualifiedName));
 		return library;
 	}

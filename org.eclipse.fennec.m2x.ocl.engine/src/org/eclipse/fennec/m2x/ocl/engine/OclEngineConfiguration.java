@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine;
 
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.engine.internal.OclEngineComponent;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
@@ -34,16 +35,16 @@ public @interface OclEngineConfiguration {
 	String PREFIX_ = "ocl.";
 
 	@AttributeDefinition(name = "Max Depth", description = "Maximum recursion depth for OCL evaluation")
-	int maxDepth() default 1000;
+	int maxDepth() default OclEvaluationOptions.DEFAULT_MAX_DEPTH;
 
 	@AttributeDefinition(name = "Max Collection Size", description = "Maximum collection size for ranges, products, allInstances")
-	int maxCollectionSize() default 1_000_000;
+	int maxCollectionSize() default OclEvaluationOptions.DEFAULT_MAX_COLLECTION_SIZE;
 
 	@AttributeDefinition(name = "Max Closure Iterations", description = "Maximum iterations for closure operations")
-	int maxClosureIterations() default 100_000;
+	int maxClosureIterations() default OclEvaluationOptions.DEFAULT_MAX_CLOSURE_ITERATIONS;
 
 	@AttributeDefinition(name = "Max Regex Length", description = "Maximum regex pattern length for matches/replaceAll/replaceFirst")
-	int maxRegexLength() default 1000;
+	int maxRegexLength() default OclEvaluationOptions.DEFAULT_MAX_REGEX_LENGTH;
 
 	@AttributeDefinition(name = "Timeout (ms)", description = "Evaluation timeout in milliseconds (0 = no timeout)")
 	long timeout() default 0;

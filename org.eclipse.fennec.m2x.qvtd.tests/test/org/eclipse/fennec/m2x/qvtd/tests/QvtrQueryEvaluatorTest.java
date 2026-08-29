@@ -34,7 +34,12 @@ import org.eclipse.fennec.m2x.model.qvtrelation.QvtrelationFactory;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
+import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrBlackboxBridge;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrDiagnosticSink;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrQueryEvaluator;
 import org.junit.jupiter.api.Test;
 
@@ -134,9 +139,9 @@ class QvtrQueryEvaluatorTest {
 			}
 		});
 
-		QvtrBlackboxBridge bridge = new QvtrBlackboxBridge(
-				registry, createConfig(true), List.of(),
-				null, null, new ArrayList<>(), (expr, bindings) -> null);
+		// The bridge takes its registry from the configuration — one gate, one registry (#185)
+		QvtrBlackboxBridge bridge = new QvtrBlackboxBridge(createConfig(true, registry), List.of(),
+				null, null, QvtrDiagnosticSink.into(new ArrayList<>()), (expr, bindings) -> null);
 
 		QvtrQueryEvaluator evaluator = new QvtrQueryEvaluator(
 				QvtrelationFactory.eINSTANCE.createRelationalTransformation(),
@@ -234,12 +239,15 @@ class QvtrQueryEvaluatorTest {
 		return t;
 	}
 
-	private org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration createConfig(boolean blackboxEnabled) {
-		return org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration.builder(
-				org.eclipse.fennec.m2x.ocl.api.OclConfiguration.builder(
-						new org.eclipse.fennec.m2x.ocl.parser.OclParserSupport()).build())
-				.blackboxEnabled(blackboxEnabled)
-				.build();
+	private QvtdConfiguration createConfig(boolean blackboxEnabled,
+			QvtdBlackboxRegistry registry) {
+		QvtdConfiguration.Builder builder = QvtdConfiguration.builder(
+				OclConfiguration.builder(new OclParserSupport()).build())
+				.blackboxEnabled(blackboxEnabled);
+		if (registry != null) {
+			builder.blackboxRegistry(registry);
+		}
+		return builder.build();
 	}
 
 	private static void assertTrue(boolean condition) {

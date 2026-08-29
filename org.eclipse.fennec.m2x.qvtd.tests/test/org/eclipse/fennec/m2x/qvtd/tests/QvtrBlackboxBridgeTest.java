@@ -35,6 +35,7 @@ import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrBlackboxBridge;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrDiagnosticSink;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -139,11 +140,10 @@ class QvtrBlackboxBridgeTest {
 		QvtdConfiguration config = builder.build();
 		List<Diagnostic> diagnostics = new ArrayList<>();
 
-		return new QvtrBlackboxBridge(
-				registry, config, List.of(),
+		return new QvtrBlackboxBridge(config, List.of(),
 				null, // extentManager not needed for these tests
 				null, // context not needed for these tests
-				diagnostics,
+				QvtrDiagnosticSink.into(diagnostics),
 				(expr, bindings) -> null); // OCL callback stub
 	}
 

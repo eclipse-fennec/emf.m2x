@@ -25,7 +25,6 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.compiled.BlackboxRequirement;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
@@ -36,7 +35,6 @@ import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
-import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
 import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.compile.SignatureFingerprint;
@@ -59,11 +57,19 @@ final class QvtoUnitBinder implements UnitBinder {
 	private final QvtoLinker linker;
 	private final QvtoBlackboxRegistry blackboxRegistry;
 
-	QvtoUnitBinder(QvtoParserSupport parserSupport, EPackage.Registry packageRegistry,
-			QvtoBlackboxRegistry blackboxRegistry, Set<String> allowedBlackboxModules, int maxBlackboxLibraries) {
-		this.blackboxRegistry = blackboxRegistry; // nullable: none configured or disabled
-		this.linker = new QvtoLinker(parserSupport, List.of(), packageRegistry, blackboxRegistry,
-				allowedBlackboxModules, Set.of(), maxBlackboxLibraries);
+	/**
+	 * Creates a binder for units prepared under the given policy.
+	 *
+	 * <p>Binding resolves no imports of its own — what a unit needed was decided when it was
+	 * compiled — so the policy travels here {@linkplain QvtoLinkPolicy#withoutUnitResolvers()
+	 * without its resolvers}.
+	 *
+	 * @param policy the engine's link policy, must not be {@code null}
+	 */
+	QvtoUnitBinder(QvtoLinkPolicy policy) {
+		Objects.requireNonNull(policy, "policy must not be null");
+		this.blackboxRegistry = policy.blackboxRegistry(); // nullable: none configured or disabled
+		this.linker = new QvtoLinker(policy.withoutUnitResolvers());
 	}
 
 	@Override

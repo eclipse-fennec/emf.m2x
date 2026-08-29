@@ -47,6 +47,7 @@ import org.eclipse.fennec.m2x.model.qvttemplate.QvttemplateFactory;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrDiagnosticSink;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEnforcer;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrExtentManager;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
@@ -352,7 +353,7 @@ class QvtrEnforcerTest {
 	}
 
 	private QvtrEnforcer createEnforcerWithTransformation(RelationalTransformation t) {
-		return new QvtrEnforcer(null, null, t, new ArrayList<>(),
+		return new QvtrEnforcer(null, null, t, QvtrDiagnosticSink.into(new ArrayList<>()),
 				(expr, bindings) -> {
 					if (expr instanceof StringLiteralExp sle) {
 						return sle.getStringSymbol();
@@ -365,13 +366,13 @@ class QvtrEnforcerTest {
 			org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrOclCallback callback) {
 		return new QvtrEnforcer(null, null,
 				QvtrelationFactory.eINSTANCE.createRelationalTransformation(),
-				new ArrayList<>(), callback, null);
+				QvtrDiagnosticSink.into(new ArrayList<>()), callback, null);
 	}
 
 	private QvtrEnforcer createEnforcerWithDiagnostics(List<Diagnostic> diagnostics) {
 		return new QvtrEnforcer(null, null,
 				QvtrelationFactory.eINSTANCE.createRelationalTransformation(),
-				diagnostics,
+				QvtrDiagnosticSink.into(diagnostics),
 				(expr, bindings) -> {
 					if (expr instanceof StringLiteralExp sle) {
 						return sle.getStringSymbol();
@@ -394,7 +395,7 @@ class QvtrEnforcerTest {
 				Map.of(modelName, extent));
 		QvtrExtentManager extentManager = new QvtrExtentManager(t, ctx);
 
-		return new QvtrEnforcer(extentManager, null, t, new ArrayList<>(),
+		return new QvtrEnforcer(extentManager, null, t, QvtrDiagnosticSink.into(new ArrayList<>()),
 				(expr, bindings) -> {
 					if (expr instanceof StringLiteralExp sle) {
 						return sle.getStringSymbol();
