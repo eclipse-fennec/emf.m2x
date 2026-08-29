@@ -102,6 +102,69 @@ class QvtoLimitEnforcementTest extends AbstractQvtoEngineTest {
 	}
 
 	@Nested
+	@DisplayName("Q-4: the loop limit, where a collection is iterated")
+	class IteratorExpressions {
+
+		@Test
+		@DisplayName("xcollect is bounded like while and forEach are")
+		void xcollectIsBounded() throws QvtoParseException {
+			// The limit had three checkpoints and one of them — the ImperativeIterateExp case —
+			// is not reached by anything the parser builds, so the x-variants ran unbounded
+			// (#175). QVT v1.3 §8.2.2.7 defines them in terms of forEach, which is bounded.
+			QvtoExecutionResult result = execute("""
+					transformation T();
+					main() {
+						var items := Sequence{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+						var doubled := items->xcollect(i | i * 2);
+						log(doubled->size().repr());
+					}
+					""", QvtoExecutionContext.of(),
+					QvtoEvaluationOptions.defaults().withMaxLoopIterations(5));
+
+			assertFalse(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+			assertTrue(result.diagnostics().stream()
+					.anyMatch(d -> d.getMessage().contains("Maximum loop iterations exceeded")),
+					() -> "diagnostics: " + result.diagnostics());
+		}
+
+		@Test
+		@DisplayName("select and collect are bounded as well")
+		void oclStyleIteratorsAreBounded() throws QvtoParseException {
+			QvtoExecutionResult result = execute("""
+					transformation T();
+					main() {
+						var items := Sequence{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+						var some := items->select(i | i > 5);
+						log(some->size().repr());
+					}
+					""", QvtoExecutionContext.of(),
+					QvtoEvaluationOptions.defaults().withMaxLoopIterations(5));
+
+			assertFalse(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+		}
+
+		// Written first as items->xcollect(...)->size(): that form fails with "Unknown iterator:
+		// xcollect" because an x-variant nested inside a larger expression is evaluated by the
+		// OCL engine, which does not have QVT-O's iterators. Pre-existing, unrelated to the
+		// limit, and reported separately.
+		@Test
+		@DisplayName("under the limit they run")
+		void withinTheLimitTheyRun() throws QvtoParseException {
+			QvtoExecutionResult result = execute("""
+					transformation T();
+					main() {
+						var items := Sequence{1, 2, 3};
+						var doubled := items->xcollect(i | i * 2);
+						log(doubled->size().repr());
+					}
+					""", QvtoExecutionContext.of(),
+					QvtoEvaluationOptions.defaults().withMaxLoopIterations(5));
+
+			assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+		}
+	}
+
+	@Nested
 	@DisplayName("§8.2.1.9: instantiation")
 	class Instantiation {
 

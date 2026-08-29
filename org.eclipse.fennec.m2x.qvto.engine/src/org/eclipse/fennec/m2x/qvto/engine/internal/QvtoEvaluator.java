@@ -432,12 +432,23 @@ public class QvtoEvaluator {
 	 * Evaluates an OCL IteratorExp (select, reject, collect, etc.) using the
 	 * QVT-O dispatch chain for source evaluation, so that extent operations
 	 * (rootObjects, objectsOfType) and imperative expressions are handled.
+	 *
+	 * <p>Bounded by {@code maxLoopIterations}, like the other loops of this evaluator. The
+	 * limit had three checkpoints — {@code while}, {@code forEach}/{@code forOne} and
+	 * {@code caseImperativeIterateExp} — and the third is not reached by anything the parser
+	 * builds, so {@code xcollect} and its siblings ran unbounded (#175). QVT v1.3 §8.2.2.7
+	 * defines those variants in terms of {@code forEach}, which is bounded; a source collection
+	 * this evaluator will not iterate is refused before the loop rather than counted through it.
 	 */
 	private Object evalIteratorExp(IteratorExp iterExp) {
 		Object sourceVal = eval(iterExp.getOwnedSource());
 		if (!(sourceVal instanceof Collection<?> coll)) {
 			// Fallback to OCL for non-collection sources
 			return evalOcl(iterExp);
+		}
+		if (coll.size() > options.maxLoopIterations()) {
+			addError("Maximum loop iterations exceeded: " + options.maxLoopIterations());
+			return WRAPPED_NULL;
 		}
 
 		List<Variable> iterVars = iterExp.getOwnedIterators();
@@ -1672,6 +1683,16 @@ public class QvtoEvaluator {
 			return WRAPPED_NULL;
 		}
 
+		/**
+		 * QVT v1.3 §8.2.2.7 — {@code xcollect}, {@code xselect} and their three siblings.
+		 *
+		 * <p><b>Not reached today.</b> The parser builds a plain OCL {@code IteratorExp} for
+		 * those names, which {@link #evalIteratorExp} evaluates, so nothing constructs an
+		 * {@code ImperativeIterateExp} (#175). The spec says this metaclass is the right one —
+		 * the variants are imperative loops, with {@code break}/{@code continue}/{@code raise}
+		 * inside them — so this is a parser gap rather than dead code, and the implementation
+		 * stays until the parser is brought to the spec.
+		 */
 		@Override
 		public Object caseImperativeIterateExp(ImperativeIterateExp exp) {
 			Object source = eval(exp.getOwnedSource());
