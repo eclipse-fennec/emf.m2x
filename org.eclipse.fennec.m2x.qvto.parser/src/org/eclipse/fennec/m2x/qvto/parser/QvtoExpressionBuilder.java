@@ -55,6 +55,7 @@ import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
+import org.eclipse.fennec.m2x.model.ocl.CallExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
@@ -645,6 +646,14 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			result = createArrowSwitchCall(source, switchCtx);
 		} else {
 			result = source;
+		}
+
+		// OCL v2.4 §9.3.35 [B]: an arrow call on a single object is evaluated as if the source
+		// were oclAsSet(), and the evaluator can only know that if the AST says so. QVT-O never
+		// recorded it — the marker lived in the OCL expression builder, which this parser does
+		// not use — so `p->size()` on one object failed with "Unknown operation" (#171).
+		if (result instanceof CallExp arrowCall) {
+			arrowCall.setIsArrow(true);
 		}
 
 		// §8.4.4: !-> negates the result of the arrow operation
