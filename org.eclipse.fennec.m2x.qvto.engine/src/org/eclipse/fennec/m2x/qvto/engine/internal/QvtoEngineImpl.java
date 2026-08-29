@@ -485,7 +485,7 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationI
 	 * configured ones, and counting as one resolver towards the limit.
 	 */
 	private Stream<QvtoUnitResolver> discoveredResolvers() {
-		return discoverUnitResolvers ? Stream.of(new ServiceLoaderUnitResolver()) : Stream.of();
+		return discoverUnitResolvers ? Stream.of(new ServiceLoaderQvtoUnitResolver()) : Stream.of();
 	}
 
 	/**
