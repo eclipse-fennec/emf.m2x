@@ -52,7 +52,7 @@ class QvtoEngineComponentOSGiTest {
 
 	@Test
 	@DisplayName("there is an engine without configuring anything")
-	void engineIsThereByDefault(@InjectService QvtoEngine engine) {
+	void engineIsThereByDefault(@InjectService(timeout = 5000) QvtoEngine engine) {
 		assertNotNull(engine);
 		assertNotNull(engine.getOclEngine(),
 				"the engine has to run on the OCL service, not on one it built itself");
@@ -85,7 +85,7 @@ class QvtoEngineComponentOSGiTest {
 	@WithConfiguration(pid = "DefaultQvtoEngine", properties = {
 			@Property(key = "qvto.maxUnitResolvers", value = "3", scalar = Scalar.Integer)
 	})
-	void configuredEngineIsStillTheEngine(@InjectService QvtoEngine engine) {
+	void configuredEngineIsStillTheEngine(@InjectService(timeout = 5000) QvtoEngine engine) {
 		assertNotNull(engine);
 		assertNotNull(engine.getOclEngine());
 	}

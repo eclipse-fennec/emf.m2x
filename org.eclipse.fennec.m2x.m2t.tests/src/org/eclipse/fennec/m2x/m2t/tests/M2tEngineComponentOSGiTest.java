@@ -52,7 +52,7 @@ class M2tEngineComponentOSGiTest {
 
 	@Test
 	@DisplayName("there is an engine without configuring anything")
-	void engineIsThereByDefault(@InjectService M2tEngine engine) {
+	void engineIsThereByDefault(@InjectService(timeout = 5000) M2tEngine engine) {
 		assertNotNull(engine);
 		assertNotNull(engine.getOclEngine(),
 				"the engine has to run on the OCL service, not on one it built itself");
@@ -85,7 +85,7 @@ class M2tEngineComponentOSGiTest {
 	@WithConfiguration(pid = "DefaultM2tEngine", properties = {
 			@Property(key = "m2t.maxTemplateDepth", value = "64", scalar = Scalar.Integer)
 	})
-	void configuredEngineIsStillTheEngine(@InjectService M2tEngine engine) {
+	void configuredEngineIsStillTheEngine(@InjectService(timeout = 5000) M2tEngine engine) {
 		assertNotNull(engine);
 		assertNotNull(engine.getOclEngine());
 	}

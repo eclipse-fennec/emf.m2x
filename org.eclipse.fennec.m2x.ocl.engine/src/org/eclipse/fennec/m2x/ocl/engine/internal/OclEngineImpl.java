@@ -18,9 +18,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
@@ -89,7 +91,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 	private final boolean configCustomOpsEnabled;
 	private final OclEvaluationOptions defaultOptions;
 	private final List<OclOperationProvider> defProviders = new CopyOnWriteArrayList<>();
-	private final List<CompleteOclContribution> oclContributions = new CopyOnWriteArrayList<>();
+	/** What each registered Complete OCL document put into effect, so it can be taken out. */
+	private final Map<CompleteOclContribution, LoadedDefs> contributions = new ConcurrentHashMap<>();
 	private final Map<DefKey, DefEntry> defProperties = new ConcurrentHashMap<>();
 	private volatile OclEvaluationOptions delegateOptions;
 
@@ -167,6 +170,23 @@ public class OclEngineImpl implements OclDelegateSupport {
 	@Override
 	public List<Constraint> loadDocument(String oclDocument) throws OclParseException {
 		List<Constraint> constraints = parseDocument(oclDocument);
+		load(constraints);
+		return constraints;
+	}
+
+	/**
+	 * Puts the {@code def:} constraints of a document into effect, and records what that added.
+	 *
+	 * <p>The record is what makes a contribution removable again: an attribute {@code def}
+	 * becomes an entry in {@link #defProperties}, an operation {@code def} additionally an
+	 * operation provider, and neither carries a mark saying where it came from.
+	 *
+	 * @param constraints the constraints of one document
+	 * @return what this document added
+	 */
+	private LoadedDefs load(List<Constraint> constraints) {
+		Set<DefKey> keys = new LinkedHashSet<>();
+		List<OclOperationProvider> providers = new ArrayList<>();
 		for (Constraint c : constraints) {
 			if (c.getKind() == ConstraintKind.DEF && c.getContextClassifier() != null
 					&& c.getName() != null && c.getSpecification() != null) {
@@ -181,20 +201,26 @@ public class OclEngineImpl implements OclDelegateSupport {
 					for (EParameter p : syntheticOp.getEParameters()) {
 						paramNames.add(p.getName());
 					}
-					defProperties.put(new DefKey(ctx, featureName),
-							new DefEntry(c.getSpecification(), paramNames, isStatic));
-					registerDefOperation(ctx, featureName, c.getSpecification(), paramNames);
+					DefKey key = new DefKey(ctx, featureName);
+					defProperties.put(key, new DefEntry(c.getSpecification(), paramNames, isStatic));
+					keys.add(key);
+					providers.add(registerDefOperation(ctx, featureName, c.getSpecification(), paramNames));
 				} else {
 					// Attribute def: register for property lookup
-					defProperties.put(new DefKey(ctx, featureName),
-							new DefEntry(c.getSpecification(), List.of(), isStatic));
+					DefKey key = new DefKey(ctx, featureName);
+					defProperties.put(key, new DefEntry(c.getSpecification(), List.of(), isStatic));
+					keys.add(key);
 				}
 			}
 		}
-		return constraints;
+		return new LoadedDefs(keys, providers);
 	}
 
-	private void registerDefOperation(EClassifier ctx, String opName,
+	/** What one Complete OCL document put into effect, so that it can be taken out again. */
+	private record LoadedDefs(Set<DefKey> properties, List<OclOperationProvider> providers) {
+	}
+
+	private OclOperationProvider registerDefOperation(EClassifier ctx, String opName,
 			OclExpression body, List<String> paramNames) {
 		// The operation is defined on the context classifier itself (#156)
 		EClassifier ownerType = ctx;
@@ -215,7 +241,9 @@ public class OclEngineImpl implements OclDelegateSupport {
 		AnyType returnType = OclStandardLibrary.INSTANCE.oclAny();
 
 		OclOperation op = new OclOperation(opName, ownerType, List.of(), returnType, impl);
-		defProviders.add(() -> List.of(op));
+		OclOperationProvider provider = () -> List.of(op);
+		defProviders.add(provider);
+		return provider;
 	}
 
 	// --- Evaluation ---
@@ -272,13 +300,29 @@ public class OclEngineImpl implements OclDelegateSupport {
 	@Override
 	public void registerCompleteOclDocument(CompleteOclContribution contribution) {
 		Objects.requireNonNull(contribution, "contribution must not be null");
-		oclContributions.add(contribution);
+		// Registering used to add the contribution to a list nobody read: the constraints of the
+		// document had no effect, and the caller was told nothing (#185). Registering is loading.
+		unregisterCompleteOclDocument(contribution);
+		String text = Objects.requireNonNull(contribution.getDocumentText(),
+				"the contribution has no document text");
+		try {
+			contributions.put(contribution, load(parseDocument(text)));
+		} catch (OclParseException failure) {
+			throw new IllegalArgumentException("The Complete OCL document of "
+					+ contribution.getDocumentUri() + " cannot be parsed: " + failure.getMessage(),
+					failure);
+		}
 	}
 
 	@Override
 	public void unregisterCompleteOclDocument(CompleteOclContribution contribution) {
 		Objects.requireNonNull(contribution, "contribution must not be null");
-		oclContributions.remove(contribution);
+		LoadedDefs loaded = contributions.remove(contribution);
+		if (loaded == null) {
+			return;
+		}
+		loaded.properties().forEach(defProperties::remove);
+		defProviders.removeAll(loaded.providers());
 	}
 
 	// --- Postcondition Evaluation ---
@@ -476,8 +520,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 	 *
 	 * @return unmodifiable snapshot of OCL contributions
 	 */
-	protected List<CompleteOclContribution> getOclContributions() {
-		return List.copyOf(oclContributions);
+	protected Set<CompleteOclContribution> getOclContributions() {
+		return Set.copyOf(contributions.keySet());
 	}
 
 	/**
