@@ -452,7 +452,9 @@ new OclParserSupport(registry).strictPropertyResolution(true).parse("self.nam", 
 ## 11. Bundles and API index
 
 Everything neutral is in **`org.eclipse.fennec.m2x.unit`**; the language APIs depend on it, never
-the other way round.
+the other way round. What needs a `BundleContext` lives beside it in
+**`org.eclipse.fennec.m2x.unit.osgi`**, so that `unit` stays framework-neutral and every engine
+runs as a plain Java library (D39).
 
 | Package | What is in it |
 |---|---|
@@ -460,14 +462,16 @@ the other way round.
 | `…unit.compile` | `UnitPackager`, `ReferencedPackages`, `SignatureFingerprint` |
 | `…unit.store` | `DefaultUnitStore`, `UnitStoreBackend`, `InMemoryUnitStoreBackend`, `PackagedUnit`, `StoredSource` |
 | `…unit.prepare` | `UnitPreparer` |
-| `…unit.resolve` | `ResolutionPolicy` |
+| `…unit.resolve` | `ResolutionPolicy`, `ServiceLoaderUnitResolver` (the class-path half of discovery) |
 | `…unit.validate` | `UnitValidator` |
 | `…unit.satellite` | `SatelliteCollector` |
 | `…unit.fingerprint` | `DefaultUnitFingerprintService`, `AstCanonicalizer` |
 | `…model.compiled` | the `CompiledUnit` metamodel (nsURI `http://www.eclipse.org/fennec/m2x/compiled/1.0`) |
+| `…unit.osgi` | `OsgiServiceUnitResolver` — the whiteboard half of discovery, one for all three languages (in the separate `unit.osgi` bundle) |
 
 Per language, in the engine bundle: `QvtoStoreUnitResolver`, `QvtdStoreUnitResolver`,
-`M2tStoreUnitResolver`, and `engine.unitBinder()` for the preparer.
+`M2tStoreUnitResolver`, the component and the class-path resolver that wrap the two shared
+discovery implementations, and `engine.unitBinder()` for the preparer.
 
 **Where the decisions are written down:** [QVT-O Architecture](qvto-architecture.md) §4.t–§4.z —
 why type references stay non-containment, why satellites get a dedicated container, why packages
