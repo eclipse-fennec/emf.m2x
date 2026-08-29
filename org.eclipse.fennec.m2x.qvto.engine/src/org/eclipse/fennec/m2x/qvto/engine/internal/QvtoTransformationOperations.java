@@ -65,7 +65,7 @@ final class QvtoTransformationOperations {
 	 * using virtual threads.
 	 */
 	static Status handleParallelTransform(QvtoTransformationInstance instance) {
-		Executor executor = instance.getEngine().getParallelExecutor();
+		Executor executor = instance.getEngine().parallelExecutor();
 		CompletableFuture<Status> future = CompletableFuture.supplyAsync(() -> {
 			try {
 				QvtoExecutionContext ctx = buildContext(instance);

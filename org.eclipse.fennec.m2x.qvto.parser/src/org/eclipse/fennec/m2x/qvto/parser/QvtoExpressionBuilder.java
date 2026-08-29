@@ -137,11 +137,6 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private final Map<EObject, SourcePosition> nodePositions = new IdentityHashMap<>();
 	private QvtoEnvironment environment;
 
-	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry) {
-		this(environment, packageRegistry, Map.of(), new java.util.HashMap<>(),
-				new java.util.ArrayList<>(), new java.util.LinkedHashSet<>());
-	}
-
 	/**
 	 * Keeps the diagnostic position with the descent — see {@link ParseDiagnostics}. One override
 	 * covers the visitor, because every step into the tree goes through here.
@@ -184,26 +179,24 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return nodePositions;
 	}
 
-	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
-			Map<String, Module> importedModuleStubs) {
-		this(environment, packageRegistry, importedModuleStubs, new java.util.HashMap<>(),
-				new java.util.ArrayList<>(), new java.util.LinkedHashSet<>());
-	}
-
 	/**
-	 * @param localTypes module-local type names ({@code typedef}), shared with the unit
-	 *        builder so that they survive this builder being recreated mid-unit
+	 * Creates an expression builder for one unit.
+	 *
+	 * @param environment the variable environment of the place the expression stands in
+	 * @param packageRegistry the metamodels names are resolved against
+	 * @param scope what the unit knows so far, shared with the unit builder so that it
+	 *        survives this builder being recreated mid-unit
 	 */
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
-			Map<String, Module> importedModuleStubs, Map<String, EClassifier> localTypes,
-			List<Resource.Diagnostic> diagnostics, Set<EPackage> declaredPackages) {
-		this.declaredPackages = Objects.requireNonNull(declaredPackages, "declaredPackages must not be null");
-		this.localTypes = Objects.requireNonNull(localTypes, "localTypes must not be null");
-		this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics must not be null");
+			QvtoScope scope) {
+		Objects.requireNonNull(scope, "scope must not be null");
+		this.declaredPackages = scope.declaredPackages();
+		this.localTypes = scope.localTypes();
+		this.diagnostics = scope.diagnostics();
+		this.importedModuleStubs = scope.importedModuleStubs();
 		this.environment = Objects.requireNonNull(environment,
 				"environment must not be null");
 		this.packageRegistry = packageRegistry;
-		this.importedModuleStubs = Objects.requireNonNull(importedModuleStubs);
 	}
 
 	// ==================== OCL Literals ====================

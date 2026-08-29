@@ -152,7 +152,8 @@ public final class ResolutionPolicy {
 		}
 		Answer<U> first = answers.get(0);
 		for (Answer<U> other : answers.subList(1, answers.size())) {
-			first.identity.requireAgreement(other.identity, qualifiedName, first.source, other.source);
+			first.identity.requireAgreement(other.identity,
+					new Disagreement(qualifiedName, first.source, other.source));
 		}
 		return Optional.of(first.unit);
 	}
@@ -188,13 +189,35 @@ public final class ResolutionPolicy {
 							document.getManifest().getUnitFingerprint(), null);
 		}
 
-		void requireAgreement(Identity other, String qualifiedName, String mine, String theirs) {
-			compare(sourceFingerprint, other.sourceFingerprint, "source", qualifiedName, mine, theirs);
-			compare(unitFingerprint, other.unitFingerprint, "unit", qualifiedName, mine, theirs);
-			compare(astFingerprint, other.astFingerprint, "AST", qualifiedName, mine, theirs);
+		void requireAgreement(Identity other, Disagreement about) {
+			about.require(sourceFingerprint, other.sourceFingerprint, "source");
+			about.require(unitFingerprint, other.unitFingerprint, "unit");
+			about.require(astFingerprint, other.astFingerprint, "AST");
 		}
+	}
 
-		private static void compare(String a, String b, String what, String qualifiedName, String mine, String theirs) {
+	/**
+	 * The two answers being compared, for the message a disagreement would carry.
+	 *
+	 * <p>Three of the six parameters {@code compare} used to take never changed between its three
+	 * calls, and two of them were {@code String} beside two more (#185) — {@code mine} and
+	 * {@code theirs} could be swapped without the compiler noticing, and the exception would
+	 * then name the wrong source.
+	 *
+	 * @param qualifiedName the unit both sources answered for
+	 * @param mine the source of the first answer
+	 * @param theirs the source of the second answer
+	 */
+	private record Disagreement(String qualifiedName, String mine, String theirs) {
+
+		/**
+		 * Requires two fingerprints of the same kind to agree, where both are known.
+		 *
+		 * @param a what the first source says
+		 * @param b what the second source says
+		 * @param what the kind of fingerprint, for the message
+		 */
+		void require(String a, String b, String what) {
 			if (a != null && b != null && !a.equals(b)) {
 				throw new UnitResolutionException("'" + qualifiedName + "' comes from " + mine + " with " + what
 						+ " fingerprint " + a + " and from " + theirs + " with " + b

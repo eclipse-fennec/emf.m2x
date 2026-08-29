@@ -40,7 +40,7 @@ class QvtoTransformationInstance extends DynamicEObjectImpl {
 
 	private final OperationalTransformation transformation;
 	private final Map<ModelParameter, QvtoModelExtent> modelBindings;
-	private final QvtoEngineImpl engine;
+	private final QvtoEngineServices engine;
 
 	/**
 	 * Creates a new transformation instance.
@@ -53,7 +53,7 @@ class QvtoTransformationInstance extends DynamicEObjectImpl {
 	QvtoTransformationInstance(OperationalTransformation transformation,
 			EClass moduleClass,
 			Map<ModelParameter, QvtoModelExtent> modelBindings,
-			QvtoEngineImpl engine) {
+			QvtoEngineServices engine) {
 		super(moduleClass);
 		this.transformation = Objects.requireNonNull(transformation);
 		this.modelBindings = Objects.requireNonNull(modelBindings);
@@ -68,7 +68,7 @@ class QvtoTransformationInstance extends DynamicEObjectImpl {
 		return modelBindings;
 	}
 
-	QvtoEngineImpl getEngine() {
+	QvtoEngineServices getEngine() {
 		return engine;
 	}
 }

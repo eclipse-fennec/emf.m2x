@@ -74,7 +74,7 @@ import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvider {
+public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationImplementationProvider {
 
 	private final QvtoParserSupport parserSupport;
 	private final EPackage.Registry packageRegistry;
@@ -230,7 +230,8 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	 * @param node the node, may be {@code null}
 	 * @return the position, or {@code null} when it is not known
 	 */
-	SourcePosition positionOf(EObject node) {
+	@Override
+	public SourcePosition positionOf(EObject node) {
 		return parserSupport.positionOf(node);
 	}
 
@@ -323,16 +324,8 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	private QvtoExecutionResult run(OperationalTransformation transformation, QvtoExecutionContext context,
 			QvtoEvaluationOptions options, QvtoBlackboxRegistry effectiveRegistry, EPackage.Registry registry) {
 		QvtoEvalEnvironment env = QvtoEvalEnvironment.forTransformation(context.configProperties());
-		QvtoExtentManager extentManager = new QvtoExtentManager(transformation, context);
-
-		QvtoEvaluator evaluator = new QvtoEvaluator(
-				oclEngine, env, options, transformation, extentManager, this, registry);
-		evaluator.setConfigProperties(context.configProperties());
-
-		// D29: Pass QVT-O operations as additionalProviders — always active, no mutable registration
-		QvtoOperationProvider qvtoProvider = new QvtoOperationProvider(
-				transformation, evaluator, evaluator.getOperationResolver(), effectiveRegistry);
-		evaluator.setAdditionalProviders(List.of(qvtoProvider));
+		QvtoEvaluator evaluator = new QvtoEvaluator(oclEngine, env,
+				new QvtoRun(transformation, context, options, registry, effectiveRegistry), this);
 
 		List<Diagnostic> diagnostics = evaluator.execute();
 		Trace trace = options.tracingEnabled() ? evaluator.getTrace() : null;
@@ -350,7 +343,8 @@ public class QvtoEngineImpl implements QvtoEngine, RelationImplementationProvide
 	/**
 	 * Returns the executor used for {@code parallelTransform()} (§8.3.6.2).
 	 */
-	public Executor getParallelExecutor() {
+	@Override
+	public Executor parallelExecutor() {
 		return parallelExecutor;
 	}
 
