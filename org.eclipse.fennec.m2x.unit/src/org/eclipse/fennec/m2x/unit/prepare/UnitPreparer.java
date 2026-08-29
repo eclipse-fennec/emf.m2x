@@ -218,23 +218,18 @@ public final class UnitPreparer {
 			}
 			EPackage runtimeInstance = runtime.getEPackage(nsURI);
 			if (runtimeInstance == null) {
-				if (resourceSet.packageFor(nsURI) == null) {
+				EPackage carried = resourceSet.packageFor(nsURI);
+				if (carried == null) {
 					throw new UnitPrepareException("'" + unitName + "' needs the metamodel " + nsURI
 							+ ", which the runtime does not have and the unit carries no copy of");
 				}
-				continue; // served from the copy the unit carries
+				// The copy is what the unit's types will resolve to, so it is held to the same
+				// entry as a runtime instance would be (#183) — before, a carried copy was used
+				// without being compared to the fingerprint it was recorded with
+				requireFingerprint(carried, entry, unitName, "the copy the unit carries");
+				continue;
 			}
-			String actual;
-			try {
-				actual = fingerprints.fingerprintInScheme(entry.getScheme(), runtimeInstance);
-			} catch (RuntimeException e) {
-				throw new UnitPrepareException("cannot fingerprint " + nsURI + " in scheme '" + entry.getScheme()
-						+ "': " + e.getMessage(), e);
-			}
-			if (!actual.equals(recorded)) {
-				throw new UnitPrepareException("'" + unitName + "' was compiled against " + nsURI + " with fingerprint "
-						+ recorded + ", the runtime provides " + actual);
-			}
+			requireFingerprint(runtimeInstance, entry, unitName, "the runtime");
 		}
 	}
 
@@ -245,6 +240,30 @@ public final class UnitPreparer {
 					+ unit.qualifiedName() + "')");
 		}
 		return binder;
+	}
+
+	/**
+	 * Holds a package to the fingerprint the unit was compiled against.
+	 *
+	 * @param ePackage the package that would serve the nsURI
+	 * @param entry what the manifest recorded
+	 * @param unitName the unit, for the message
+	 * @param source where the package came from, for the message
+	 * @throws UnitPrepareException if the fingerprints differ, naming both
+	 */
+	private void requireFingerprint(EPackage ePackage, PackageEntry entry, String unitName, String source)
+			throws UnitPrepareException {
+		String actual;
+		try {
+			actual = fingerprints.fingerprintInScheme(entry.getScheme(), ePackage);
+		} catch (RuntimeException e) {
+			throw new UnitPrepareException("cannot fingerprint " + entry.getNsURI() + " in scheme '"
+					+ entry.getScheme() + "': " + e.getMessage(), e);
+		}
+		if (!actual.equals(entry.getFingerprint())) {
+			throw new UnitPrepareException("'" + unitName + "' was compiled against " + entry.getNsURI()
+					+ " with fingerprint " + entry.getFingerprint() + ", " + source + " provides " + actual);
+		}
 	}
 
 	private void bind(PackagedUnit unit, Map<String, PackagedUnit> loaded) throws UnitPrepareException {

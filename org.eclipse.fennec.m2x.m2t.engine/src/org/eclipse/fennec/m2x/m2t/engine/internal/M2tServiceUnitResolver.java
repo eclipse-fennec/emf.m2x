@@ -24,6 +24,7 @@ import java.util.logging.Logger;
 
 import org.eclipse.fennec.m2x.m2t.api.M2tUnit;
 import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
+import org.eclipse.fennec.m2x.unit.api.UnitNames;
 import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.Constants;
@@ -79,7 +80,8 @@ public class M2tServiceUnitResolver implements M2tUnitResolver {
 		Collection<ServiceReference<M2tUnitResolver>> candidates;
 		try {
 			candidates = context.getServiceReferences(M2tUnitResolver.class,
-					"(&(" + UNIT_NAME + "=" + qualifiedName + ")(!(" + RESOLVER_KIND + "=discovery)))");
+					"(&(" + UNIT_NAME + "=" + UnitNames.escapeFilterValue(qualifiedName)
+							+ ")(!(" + RESOLVER_KIND + "=discovery)))");
 		} catch (InvalidSyntaxException malformed) {
 			// The name comes out of a template, so it can contain anything the
 			// grammar allows — which is not necessarily a valid LDAP filter value.

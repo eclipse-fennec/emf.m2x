@@ -162,12 +162,17 @@ public final class DefaultUnitStore implements UnitStore {
 			throw new UnitStoreException("the unit '" + packaged.qualifiedName() + "' declares language '"
 					+ declared + "', not '" + language + "'");
 		}
-		String fingerprint = document.getManifest().getUnitFingerprint();
-		if (fingerprint == null) {
-			fingerprint = fingerprints.fingerprint(document);
+		// The copy is what is stored, so the copy is what is stamped: a document that reaches the
+		// store unsealed used to be written without a fingerprint and rejected by its own load()
+		// as "carries no unit fingerprint" (#183). The caller's document stays as it was.
+		CompiledUnit stored = EcoreUtil.copy(document);
+		String fingerprint = stored.getManifest().getUnitFingerprint();
+		if (fingerprint == null || fingerprint.isBlank()) {
+			fingerprint = fingerprints.fingerprint(stored);
+			stored.getManifest().setUnitFingerprint(fingerprint);
 		}
 		UnitKey key = UnitKey.pinned(language, packaged.qualifiedName(), UnitKind.COMPILED, fingerprint);
-		backend.put(key, serialize(EcoreUtil.copy(document), key));
+		backend.put(key, serialize(stored, key));
 		return key;
 	}
 
@@ -261,9 +266,25 @@ public final class DefaultUnitStore implements UnitStore {
 
 	// --- serialization ---
 
+	/**
+	 * What a unit is parsed with: no doctype, no external entities.
+	 *
+	 * <p>A backend is a plugin — a file, a database, something remote — and the bytes it returns
+	 * are the least trusted input this bundle has. The validator and the fingerprint inspect the
+	 * <em>result</em> of parsing, so a {@code <!DOCTYPE … SYSTEM "file:///etc/passwd">} would
+	 * already have been resolved by the time they run (#183). The three features below are the
+	 * standard XXE defence; refusing a doctype outright makes the other two redundant and is kept
+	 * for readers who look for them.
+	 */
+	private static final Map<Object, Object> SAFE_PARSER_OPTIONS = Map.of(
+			XMLResource.OPTION_PARSER_FEATURES, Map.of(
+					"http://apache.org/xml/features/disallow-doctype-decl", Boolean.TRUE,
+					"http://xml.org/sax/features/external-general-entities", Boolean.FALSE,
+					"http://xml.org/sax/features/external-parameter-entities", Boolean.FALSE));
+
 	private byte[] serialize(EObject document, UnitKey key) throws UnitStoreException {
-		giveResourcelessMetamodelsAResource(document);
 		ResourceSet resourceSet = new UnitResourceSet(packages);
+		giveResourcelessMetamodelsAResource(document, resourceSet);
 		Resource resource = resourceSet.createResource(uriOf(key));
 		resource.getContents().add(document);
 		ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -278,7 +299,7 @@ public final class DefaultUnitStore implements UnitStore {
 	private EObject deserialize(byte[] bytes, UnitKey key, UnitResourceSet resourceSet) throws UnitStoreException {
 		Resource resource = resourceSet.createResource(uriOf(key));
 		try {
-			resource.load(new ByteArrayInputStream(bytes), null);
+			resource.load(new ByteArrayInputStream(bytes), SAFE_PARSER_OPTIONS);
 		} catch (IOException | RuntimeException e) {
 			throw new UnitStoreException("cannot read '" + key.qualifiedName() + "': " + e.getMessage(), e);
 		}
@@ -308,14 +329,22 @@ public final class DefaultUnitStore implements UnitStore {
 	 * {@code createResource(nsURI)}), a package built in memory does not. The store gives it the
 	 * same: a resource named by its nsURI, which is exactly how the document refers to it.
 	 */
-	private static void giveResourcelessMetamodelsAResource(EObject document) {
+	private void giveResourcelessMetamodelsAResource(EObject document, ResourceSet resourceSet) {
 		for (EObject target : EcoreUtil.ExternalCrossReferencer.find(document).keySet()) {
-			if (target.eResource() == null && !target.eIsProxy() && SatelliteCollector.isMetamodelElement(target)) {
-				EPackage root = SatelliteCollector.metamodelOf(target);
-				if (root.eResource() == null && root.eContainer() == null) {
-					new ResourceImpl(URI.createURI(root.getNsURI())).getContents().add(root);
-				}
+			if (target.eResource() != null || target.eIsProxy() || !SatelliteCollector.isMetamodelElement(target)) {
+				continue;
 			}
+			EPackage root = SatelliteCollector.metamodelOf(target);
+			if (root.eResource() != null || root.eContainer() != null) {
+				continue;
+			}
+			// The resource belongs to this save, not to the caller's package: putting the
+			// caller's EPackage into a ResourceImpl changed its eResource() for good, a side
+			// effect of store() that nobody asked for (#183). A resource in the set being
+			// written gives XMI the href it needs and is discarded with the set.
+			Resource metamodel = resourceSet.createResource(URI.createURI(root.getNsURI()));
+			metamodel.getContents().add(root);
+			resourceSet.getPackageRegistry().put(root.getNsURI(), root);
 		}
 	}
 

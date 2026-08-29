@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.unit.validate;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -34,6 +35,8 @@ import org.eclipse.emf.ecore.impl.EValidatorRegistryImpl;
 import org.eclipse.emf.ecore.util.Diagnostician;
 import org.eclipse.emf.ecore.util.EObjectValidator;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
+import org.eclipse.fennec.emf.osgi.fingerprint.util.FingerprintHelper;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest;
 import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
@@ -86,6 +89,7 @@ public final class UnitValidator {
 	private final int maxDepth;
 	private final int maxNodes;
 	private final UnitFingerprintService fingerprints;
+	private final FingerprintService packageFingerprints;
 
 	/**
 	 * Creates a validator with explicit bounds.
@@ -95,12 +99,28 @@ public final class UnitValidator {
 	 * @param fingerprints where the unit fingerprint is recomputed with
 	 */
 	public UnitValidator(int maxDepth, int maxNodes, UnitFingerprintService fingerprints) {
+		this(maxDepth, maxNodes, fingerprints, FingerprintHelper.getDefaultFingerprintService());
+	}
+
+	/**
+	 * Creates a validator with explicit bounds and both fingerprint services.
+	 *
+	 * @param maxDepth the containment depth a document may have
+	 * @param maxNodes the number of objects a document may have
+	 * @param fingerprints where the unit fingerprint is recomputed with
+	 * @param packageFingerprints where a carried package copy is measured with — the same service
+	 *            the packager recorded the {@code PackageEntry} values with
+	 */
+	public UnitValidator(int maxDepth, int maxNodes, UnitFingerprintService fingerprints,
+			FingerprintService packageFingerprints) {
 		if (maxDepth <= 0 || maxNodes <= 0) {
 			throw new IllegalArgumentException("bounds must be positive");
 		}
 		this.maxDepth = maxDepth;
 		this.maxNodes = maxNodes;
 		this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints must not be null");
+		this.packageFingerprints = Objects.requireNonNull(packageFingerprints,
+				"packageFingerprints must not be null");
 	}
 
 	/**
@@ -300,6 +320,65 @@ public final class UnitValidator {
 		if (!recorded.equals(actual)) {
 			findings.add("the manifest records unit fingerprint " + recorded + " but the content has " + actual
 					+ " — the document changed after it was sealed");
+		}
+		checkCarried(document, findings);
+	}
+
+	/**
+	 * Holds what a document carries to the identity the manifest recorded for it (#183).
+	 *
+	 * <p>The unit fingerprint covers the script. A package copy and an embedded unit are carried
+	 * <em>beside</em> the script, and each already has a recorded value: the {@code PackageEntry}
+	 * of the copy's nsURI carries its {@code fp1} fingerprint, the {@code DependencyEntry} of the
+	 * embedded unit carries its {@code m2x1} one. Before this, neither was ever compared — a
+	 * tampered copy served the unit's types and a swapped embedded library was executed, both
+	 * through a validator that reported nothing.
+	 *
+	 * <p>An embedded unit is validated as a document in its own right as well: it is what will run.
+	 */
+	private void checkCarried(CompiledUnit document, List<String> findings) {
+		Map<String, PackageEntry> entries = new HashMap<>();
+		for (PackageEntry entry : document.getManifest().getPackageEntry()) {
+			entries.put(entry.getNsURI(), entry);
+		}
+		for (EPackage copy : document.getPackages()) {
+			PackageEntry entry = entries.get(copy.getNsURI());
+			if (entry == null || entry.getFingerprint() == null || entry.getScheme() == null) {
+				continue; // reported by checkManifest as a copy without an entry
+			}
+			String actual;
+			try {
+				actual = packageFingerprints.fingerprintInScheme(entry.getScheme(), copy);
+			} catch (RuntimeException e) {
+				findings.add("the package copy " + copy.getNsURI() + " cannot be fingerprinted in scheme '"
+						+ entry.getScheme() + "': " + e.getMessage());
+				continue;
+			}
+			if (!actual.equals(entry.getFingerprint())) {
+				findings.add("the package copy " + copy.getNsURI() + " has fingerprint " + actual
+						+ " but its entry records " + entry.getFingerprint()
+						+ " — the carried metamodel changed after it was sealed");
+			}
+		}
+		Map<String, String> pinned = new HashMap<>();
+		for (DependencyEntry entry : document.getManifest().getDependencyEntry()) {
+			if (entry.getFingerprint() != null) {
+				pinned.put(entry.getQualifiedName(), entry.getFingerprint());
+			}
+		}
+		for (CompiledUnit embedded : document.getEmbedded()) {
+			String name = embedded.getManifest() == null ? embedded.getId()
+					: embedded.getManifest().getQualifiedName();
+			String recorded = pinned.get(name);
+			if (recorded != null && embedded.getManifest() != null
+					&& !recorded.equals(embedded.getManifest().getUnitFingerprint())) {
+				findings.add("the embedded unit '" + name + "' carries fingerprint "
+						+ embedded.getManifest().getUnitFingerprint() + " but the manifest records "
+						+ recorded + " — a different unit was embedded than the one recorded");
+			}
+			for (String finding : validate(embedded)) {
+				findings.add("in the embedded unit '" + name + "': " + finding);
+			}
 		}
 	}
 

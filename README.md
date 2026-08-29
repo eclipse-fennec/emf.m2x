@@ -16,7 +16,7 @@ All engines work as **standalone Java 21 libraries** with optional OSGi support 
 | Bundle | Description | Status |
 |--------|-------------|--------|
 | `org.eclipse.fennec.m2x.unit` | `CompiledUnit` metamodel (manifest, script, satellites, embedded units, package copies, `SourceUnit`), `SatelliteCollector` + `UnitPackager` behind `compile()` (dependency modes embed / pin / rebind, `fp1` package entries, blackbox requirements), the `m2x1` unit fingerprint, `DefaultUnitStore` over a `UnitStoreBackend` (in-memory shipped), `UnitPreparer` → `PreparedContext` (load, verify by fingerprint, bind — Execute asks no resolver) | In progress |
-| `org.eclipse.fennec.m2x.unit.tests` | 97 tests, 0 failures | In progress |
+| `org.eclipse.fennec.m2x.unit.tests` | 110 tests, 0 failures | In progress |
 
 The three language APIs depend on this bundle, never the other way round, so
 `QvtoUnit`, `QvtdUnit` and `M2tUnit` share one base type without a cycle. Every engine
@@ -36,7 +36,7 @@ one an error, disagreeing ones a conflict (#141), and a `UnitValidator` every lo
 | `org.eclipse.fennec.m2x.ocl.api` | Public API interfaces, `OclStandardLibrary` (the predefined types as one EPackage) | Done |
 | `org.eclipse.fennec.m2x.ocl.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.ocl.engine` | Switch-based evaluator | Done |
-| `org.eclipse.fennec.m2x.ocl.tests` | 4,308 tests, 0 failures | Done |
+| `org.eclipse.fennec.m2x.ocl.tests` | 4,321 tests, 0 failures | Done |
 | `org.eclipse.fennec.m2x.ocl.benchmark` | Performance benchmarks | Done |
 
 ### QVT-O — QVT Operational
@@ -59,7 +59,7 @@ one an error, disagreeing ones a conflict (#141), and a `UnitValidator` every lo
 | `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces | Done |
 | `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser | Done |
 | `org.eclipse.fennec.m2x.qvtd.engine` | Relation evaluator, enforcer, traces | Done |
-| `org.eclipse.fennec.m2x.qvtd.tests` | 218 tests (2 disabled), 0 failures | Done |
+| `org.eclipse.fennec.m2x.qvtd.tests` | 221 tests (2 disabled), 0 failures | Done |
 
 ### M2T — MOF Model to Text
 
@@ -96,7 +96,7 @@ The repository root is a Gradle + BND workspace:
 
 **Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
 
-The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,300 tests and 50 OSGi tests, 0 failures, as of 2026-08-28**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
+The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,329 tests and 50 OSGi tests, 0 failures, as of 2026-08-29**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
 ## Branches & releases
 
