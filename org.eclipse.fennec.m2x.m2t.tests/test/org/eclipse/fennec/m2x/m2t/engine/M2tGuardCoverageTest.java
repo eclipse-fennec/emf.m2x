@@ -78,6 +78,33 @@ class M2tGuardCoverageTest {
 	}
 
 	@Nested
+	@DisplayName("T-1: the stack, under the default limit")
+	class DefaultDepth {
+
+		@Test
+		@Timeout(value = 30, unit = TimeUnit.SECONDS)
+		@DisplayName("a recursion the stack cannot take is a diagnostic, not an Error")
+		void aRecursionDeeperThanTheStackIsReported() throws Exception {
+			// Measured on this machine: at maxTemplateDepth 500 the depth guard reports, at the
+			// default of 1000 the stack runs out first and the generation used to die with a
+			// StackOverflowError — an Error, so the caller got no result at all (#178). The
+			// default is not lowered: how deep a stack goes differs per platform, and catching
+			// it does not have to guess.
+			M2tResult result = generate("""
+					[module gen(_'http://www.eclipse.org/emf/2002/Ecore')/]
+					[template public loop(c : EClass)][loop(c)/][/template]
+					[template public main(c : EClass)][loop(c)/][/template]
+					""", UnaryOperator.identity());
+
+			assertFalse(result.isSuccess(), "a runaway recursion is a failure, whichever limit stops it");
+			assertTrue(result.diagnostics().stream()
+					.anyMatch(d -> d.getMessage().contains("stack ran out")
+							|| d.getMessage().contains("depth exceeded")),
+					() -> "diagnostics: " + result.diagnostics());
+		}
+	}
+
+	@Nested
 	@DisplayName("T-4: where a template may write")
 	class PathContainment {
 

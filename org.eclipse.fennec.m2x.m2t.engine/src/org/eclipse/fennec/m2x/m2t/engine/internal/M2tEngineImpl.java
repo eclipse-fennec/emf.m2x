@@ -504,7 +504,14 @@ public class M2tEngineImpl implements M2tEngine {
 		}
 
 		List<EObject> inputElements = context.inputElements();
-		evaluator.execute(main, inputElements);
+		try {
+			evaluator.execute(main, inputElements);
+		} catch (StackOverflowError stackRanOut) {
+			// The depth guard counts template invocations; a deep enough recursion exhausts the
+			// stack before the count is reached, and an Error would leave the caller with no
+			// result at all (#178). What was generated so far still travels with the diagnostic.
+			evaluator.addStackOverflowError(stackRanOut);
+		}
 
 		// Check output size limit (T-7)
 		if (writers.isOutputLimitExceeded()) {
