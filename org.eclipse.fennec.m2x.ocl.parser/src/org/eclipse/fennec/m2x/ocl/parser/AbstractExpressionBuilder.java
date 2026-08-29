@@ -14,11 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -99,18 +95,19 @@ public class AbstractExpressionBuilder {
 	private final EClassifier contextType;
 	private final EPackage.Registry packageRegistry;
 
-	/** Aliases a Complete OCL document introduced with {@code import alias : path}. */
-	private Map<String, String> packageAliases = Map.of();
-
 	/**
-	 * The packages an unqualified name may resolve in, besides the context type's own: what
-	 * the unit declares — {@code modeltype} / typed models / {@code [module m(Ecore)]} /
-	 * Complete OCL {@code import}. OCL v2.4 §9.3 resolves a simple name in the context
-	 * namespace and what is imported into it, not in every package the JVM happens to know:
-	 * until #158 a scan of the whole registry did the latter, and which name resolved depended on
-	 * what else was registered — including the AST metamodels of the four languages.
+	 * Which thing a name means, in this scope (#194). The builder keeps what it does with the
+	 * answer — reporting a miss, choosing a placeholder, setting a type on an expression.
+	 *
+	 * <p>The scope it holds is what the unit declares: {@code modeltype} / typed models /
+	 * {@code [module m(Ecore)]} / a Complete OCL {@code import}, plus the aliases such a
+	 * document introduces. OCL v2.4 §9.3 resolves a simple name in the context namespace and
+	 * what is imported into it, not in every package the JVM happens to know — until #158 a
+	 * scan of the whole registry did the latter, and which name resolved depended on what else
+	 * was registered, including the AST metamodels of the four languages.
 	 */
-	private final Set<EPackage> importedPackages = new LinkedHashSet<>();
+	private final OclNameResolver names;
+
 	private OclEnvironment environment;
 
 	/**
@@ -128,6 +125,7 @@ public class AbstractExpressionBuilder {
 	public AbstractExpressionBuilder(EClassifier contextType, EPackage.Registry packageRegistry) {
 		this.contextType = Objects.requireNonNull(contextType, "contextType must not be null");
 		this.packageRegistry = packageRegistry;
+		this.names = new OclNameResolver(contextType, packageRegistry);
 		Variable selfVar = FACTORY.createVariable();
 		selfVar.setName("self");
 		selfVar.setType(contextType);
@@ -187,7 +185,7 @@ public class AbstractExpressionBuilder {
 	 * @param aliases alias to package path, must not be {@code null}
 	 */
 	public void registerPackageAliases(Map<String, String> aliases) {
-		this.packageAliases = Map.copyOf(Objects.requireNonNull(aliases, "aliases must not be null"));
+		names.registerPackageAliases(aliases);
 	}
 
 	/**
@@ -197,7 +195,7 @@ public class AbstractExpressionBuilder {
 	 * @param ePackage the declared package
 	 */
 	public void importPackage(EPackage ePackage) {
-		importedPackages.add(Objects.requireNonNull(ePackage, "ePackage must not be null"));
+		names.importPackage(ePackage);
 	}
 
 	/**
@@ -205,29 +203,7 @@ public class AbstractExpressionBuilder {
 	 * then the imported ones in declaration order.
 	 */
 	public List<EPackage> scopePackages() {
-		List<EPackage> scope = new ArrayList<>();
-		if (contextType != null && contextType.getEPackage() != null) {
-			addWithSubpackages(contextType.getEPackage(), scope);
-		}
-		for (EPackage imported : importedPackages) {
-			addWithSubpackages(imported, scope);
-		}
-		return scope;
-	}
-
-	/**
-	 * A declared package brings the packages it contains: the nsURI names the root of an Ecore
-	 * tree, and a nested package's classifiers are part of that metamodel. Only declared roots
-	 * expand — nothing outside the declaration comes into view.
-	 */
-	private static void addWithSubpackages(EPackage ePackage, List<EPackage> scope) {
-		if (scope.contains(ePackage)) {
-			return;
-		}
-		scope.add(ePackage);
-		for (EPackage nested : ePackage.getESubpackages()) {
-			addWithSubpackages(nested, scope);
-		}
+		return names.scopePackages();
 	}
 
 	public EClassifier getContextType() {
@@ -812,7 +788,7 @@ public class AbstractExpressionBuilder {
 			// does is mark what it could not resolve, so that everything downstream can tell it
 			// from a resolved feature. A caller that parses whole documents and wants the typo
 			// reported switches strict resolution on (#153).
-			if (strictPropertyResolution && !definedProperties.contains(propName)) {
+			if (strictPropertyResolution && !names.isDefinedProperty(propName)) {
 				addError("Unknown property (" + eClass.getName() + "::" + propName + ")");
 			}
 		}
@@ -836,7 +812,7 @@ public class AbstractExpressionBuilder {
 	 * classifier for every expression of that document, including one written before the
 	 * {@code def:} — which is why a document collects them before it builds a single expression.
 	 */
-	private final Set<String> definedProperties = new HashSet<>();
+
 
 	/**
 	 * Reports a navigation to a property the source type does not declare, instead of leaving a
@@ -861,7 +837,7 @@ public class AbstractExpressionBuilder {
 	 * @param names the defined property names
 	 */
 	public void declareDefinedProperties(Collection<String> names) {
-		definedProperties.addAll(Objects.requireNonNull(names, "names must not be null"));
+		this.names.declareDefinedProperties(names);
 	}
 
 	/**
@@ -969,83 +945,7 @@ public class AbstractExpressionBuilder {
 	 * @return the classifier, or {@code null} if nothing in scope has that name
 	 */
 	public EClassifier findClassifier(List<String> segments) {
-		if (segments.size() == 1) {
-			String name = segments.get(0);
-			if (contextType instanceof EClass contextClass) {
-				EClassifier found = contextClass.getEPackage().getEClassifier(name);
-				if (found != null) {
-					return found;
-				}
-			}
-			return findInScope(name);
-		}
-		String classifierName = segments.get(segments.size() - 1);
-		String packageName = String.join("::", segments.subList(0, segments.size() - 1));
-		packageName = packageAliases.getOrDefault(packageName, packageName);
-
-		if (contextType instanceof EClass contextClass) {
-			EPackage ctxPkg = contextClass.getEPackage();
-			if (ctxPkg.getName().equals(packageName) || ctxPkg.getNsURI().equals(packageName)) {
-				EClassifier found = ctxPkg.getEClassifier(classifierName);
-				if (found != null) {
-					return found;
-				}
-			}
-		}
-		// What this expression declared beats what happens to be registered: an import or an
-		// alias names one package, the registry names whatever a bundle put there
-		for (EPackage pkg : scopePackages()) {
-			if (pkg.getName().equals(packageName) || pkg.getNsURI().equals(packageName)) {
-				EClassifier found = pkg.getEClassifier(classifierName);
-				if (found != null) {
-					return found;
-				}
-			}
-		}
-		return findInRegistry(packageName, classifierName);
-	}
-
-	/**
-	 * The registry, asked by nsURI first and only then searched by name.
-	 *
-	 * <p>The nsURI is the identity of a package; a name is not. Searching the registry means
-	 * asking every {@code EPackage.Descriptor} to instantiate its package — in an IDE, every
-	 * model bundle that is registered — and then matching on a simple name, so a package
-	 * another bundle registered under the same name can answer for one this document meant
-	 * (#186). The search stays, because a qualified name without an import has nowhere else to
-	 * go, but it runs last and in a fixed order, so it at least answers the same way twice.
-	 *
-	 * @param packageName the package part of the name, an nsURI or a simple name
-	 * @param classifierName the classifier to find in it
-	 * @return the classifier, or {@code null}
-	 */
-	private EClassifier findInRegistry(String packageName, String classifierName) {
-		if (packageRegistry == null) {
-			return null;
-		}
-		EPackage byUri = packageRegistry.getEPackage(packageName);
-		if (byUri != null) {
-			EClassifier found = byUri.getEClassifier(classifierName);
-			if (found != null) {
-				return found;
-			}
-		}
-		List<String> keys = new ArrayList<>();
-		for (Object key : packageRegistry.keySet().toArray()) {
-			keys.add((String) key);
-		}
-		Collections.sort(keys);
-		for (String key : keys) {
-			EPackage pkg = packageRegistry.getEPackage(key);
-			if (pkg != null && (pkg.getName().equals(packageName)
-					|| pkg.getNsURI().equals(packageName))) {
-				EClassifier found = pkg.getEClassifier(classifierName);
-				if (found != null) {
-					return found;
-				}
-			}
-		}
-		return null;
+		return names.findClassifier(segments);
 	}
 
 	public OclExpression resolveImplicitProperty(String name) {
@@ -1096,7 +996,7 @@ public class AbstractExpressionBuilder {
 				}
 			}
 		}
-		EClassifier inScope = findInScope(name);
+		EClassifier inScope = names.findInScope(name);
 		if (inScope != null) {
 			TypeExp typeExp = FACTORY.createTypeExp();
 			typeExp.setReferredType(inScope);
@@ -1108,22 +1008,13 @@ public class AbstractExpressionBuilder {
 	}
 
 	public EnumLiteralExp tryResolveEnumLiteral(List<String> segments) {
-		String enumName = segments.get(0);
-		String literalName = segments.get(1);
-		if (contextType instanceof EClass contextClass) {
-			EnumLiteralExp result = findEnumLiteralInPackage(
-					contextClass.getEPackage(), enumName, literalName);
-			if (result != null) {
-				return result;
-			}
+		EEnumLiteral literal = names.findEnumLiteral(segments.get(0), segments.get(1));
+		if (literal == null) {
+			return null;
 		}
-		for (EPackage pkg : scopePackages()) {
-			EnumLiteralExp result = findEnumLiteralInPackage(pkg, enumName, literalName);
-			if (result != null) {
-				return result;
-			}
-		}
-		return null;
+		EnumLiteralExp exp = FACTORY.createEnumLiteralExp();
+		exp.setReferredLiteral(literal);
+		return exp;
 	}
 
 	public OclExpression resolveQualifiedName(List<String> segments) {
@@ -1267,15 +1158,6 @@ public class AbstractExpressionBuilder {
 	 * A classifier of that simple name in the scope — the context type's package or a declared
 	 * one. Never the whole registry: see {@link #importedPackages}.
 	 */
-	private EClassifier findInScope(String name) {
-		for (EPackage pkg : scopePackages()) {
-			EClassifier found = pkg.getEClassifier(name);
-			if (found != null) {
-				return found;
-			}
-		}
-		return null;
-	}
 
 	/**
 	 * Records a name that resolved nowhere and returns the context type, so that the
@@ -1318,20 +1200,6 @@ public class AbstractExpressionBuilder {
 		return null;
 	}
 
-	private static EnumLiteralExp findEnumLiteralInPackage(EPackage pkg,
-			String enumName, String literalName) {
-		for (EClassifier classifier : pkg.getEClassifiers()) {
-			if (classifier instanceof EEnum eEnum && eEnum.getName().equals(enumName)) {
-				EEnumLiteral literal = eEnum.getEEnumLiteral(literalName);
-				if (literal != null) {
-					EnumLiteralExp exp = FACTORY.createEnumLiteralExp();
-					exp.setReferredLiteral(literal);
-					return exp;
-				}
-			}
-		}
-		return null;
-	}
 
 	// ==================== ArrowCallMarker ====================
 
