@@ -259,9 +259,12 @@ public class OclEngineImpl implements OclDelegateSupport {
 	public List<Diagnostic> validate(OclExpression expression, EClassifier contextType) {
 		Objects.requireNonNull(expression, "expression must not be null");
 		Objects.requireNonNull(contextType, "contextType must not be null");
-
-		// TODO: implement expression validation (step 5+)
-		return List.of();
+		// An empty list is what a valid expression answers, so a stub returning one told every
+		// caller that whatever they handed in was fine (#186). Until the type checker of GAP-3
+		// exists, saying so is the only honest answer.
+		throw new UnsupportedOperationException(
+				"Type checking of a parsed expression is not implemented (GAP-3). Parsing already "
+						+ "reports what it can resolve; there is nothing further to validate yet.");
 	}
 
 	// --- Extension: Complete OCL Documents ---

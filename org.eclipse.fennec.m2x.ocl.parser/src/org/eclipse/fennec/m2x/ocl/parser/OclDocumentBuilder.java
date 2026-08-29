@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.ocl.parser;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
@@ -474,8 +475,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (byUri != null) {
 			return byUri;
 		}
-		for (Object key : packageRegistry.keySet().toArray()) {
-			EPackage pkg = packageRegistry.getEPackage((String) key);
+		for (String key : registryKeys()) {
+			EPackage pkg = packageRegistry.getEPackage(key);
 			if (pkg != null && matchesPackage(pkg, unquoted)) {
 				return pkg;
 			}
@@ -485,8 +486,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (separator > 0) {
 			String packagePath = unquoted.substring(0, separator);
 			String classifierName = unquoted.substring(separator + 2);
-			for (Object key : packageRegistry.keySet().toArray()) {
-				EPackage pkg = packageRegistry.getEPackage((String) key);
+			for (String key : registryKeys()) {
+				EPackage pkg = packageRegistry.getEPackage(key);
 				if (pkg != null && matchesPackage(pkg, packagePath)
 						&& pkg.getEClassifier(classifierName) != null) {
 					return pkg;
@@ -494,6 +495,26 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The registry's keys, in a fixed order.
+	 *
+	 * <p>Searching the registry by package <em>name</em> is ambiguous — an nsURI identifies a
+	 * package, a name does not — so a package another bundle registered under the same name can
+	 * answer for the one a document meant. The search is still needed where a name has nowhere
+	 * else to go, but the registry is a hash map: without an order, which package answered
+	 * could differ between two runs of the same document (#186).
+	 *
+	 * @return the nsURIs, sorted
+	 */
+	private List<String> registryKeys() {
+		List<String> keys = new ArrayList<>();
+		for (Object key : packageRegistry.keySet().toArray()) {
+			keys.add((String) key);
+		}
+		Collections.sort(keys);
+		return keys;
 	}
 
 	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
@@ -535,9 +556,25 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		}
 
 		if (packagePath != null) {
-			// Qualified, or inside a package … endpackage: the named package, and only that one
-			for (Object key : packageRegistry.keySet().toArray()) {
-				EPackage pkg = packageRegistry.getEPackage((String) key);
+			// Qualified, or inside a package … endpackage: the named package, and only that one.
+			// What the document imported comes first — it named that package on purpose
+			for (EPackage imported : importedPackages) {
+				if (matchesPackage(imported, packagePath)) {
+					EClassifier found = imported.getEClassifier(classifierName);
+					if (found != null) {
+						return found;
+					}
+				}
+			}
+			EPackage byUri = packageRegistry.getEPackage(packagePath);
+			if (byUri != null) {
+				EClassifier found = byUri.getEClassifier(classifierName);
+				if (found != null) {
+					return found;
+				}
+			}
+			for (String key : registryKeys()) {
+				EPackage pkg = packageRegistry.getEPackage(key);
 				if (pkg != null && matchesPackage(pkg, packagePath)) {
 					EClassifier found = pkg.getEClassifier(classifierName);
 					if (found != null) {
