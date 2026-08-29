@@ -122,13 +122,15 @@ class OclLimitEnforcementTest extends AbstractOclTest {
 
 		OclResult result = engine.evaluateWithDiagnostics(parsed, OclContext.of(person), options);
 
-		// Which of the two checks trips first depends on the machine — the one between
-		// iterations, which answers invalid, or the one at the root of the nested evaluation of
-		// the body, which ends the work list and yields what was collected so far. Both stop it,
-		// and both report; the partial-result half of that is #191.
 		assertTrue(result.diagnostics().stream()
 				.anyMatch(d -> d.getMessage().toLowerCase().contains("timeout")),
 				() -> "the timeout has to be reported: " + result.diagnostics());
+		// Which of the two checks trips first depends on the machine — the one between the
+		// iterations of the closure, or the one at the root of the nested evaluation of the
+		// body, which ends the work list and used to yield what had been collected until then
+		// as an ordinary value (#191). Either way there is no result.
+		assertSame(OclInvalid.INSTANCE, result.value(),
+				"an evaluation that ran out of time has no result, not a partial one");
 	}
 
 	// ==== EMF delegates ====

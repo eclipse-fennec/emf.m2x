@@ -128,6 +128,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 	/** Deadline for timeout enforcement (nanoseconds), or 0 if no timeout. */
 	private long deadlineNanos;
 
+	/** Set once the deadline was noticed, so a partial result cannot be answered as a value. */
+	private boolean timedOut;
+
 	/*
 	 * 1-entry feature resolution cache ("last resolved").
 	 *
@@ -188,7 +191,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 */
 	public OclResult evaluate(OclExpression expression) {
 		Object result = eval(expression);
-		return new OclResult(result, diagnostics);
+		// An evaluation that ran out of time has no result, whichever check noticed. Without
+		// this, the answer depends on where the deadline was seen: between the iterations of a
+		// closure it is invalid, inside the evaluation of the body it is whatever had been
+		// collected until then — a truncated collection, with nothing about it saying so (#191).
+		return new OclResult(timedOut ? OclInvalid.INSTANCE : result, diagnostics);
 	}
 
 	/**
@@ -1107,8 +1114,20 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	// --- Internal helpers ---
 
+	/**
+	 * Whether the deadline has passed — and remembers that it has.
+	 *
+	 * <p>Remembering matters because of what happens after: an operation that collects, and
+	 * whose body answered {@code invalid} because the deadline had passed, finishes its loop
+	 * with what it had gathered so far and would return that as an ordinary value. A caller of
+	 * plain {@code evaluate} would receive a truncated collection that looks complete (#191).
+	 */
 	private boolean checkTimeout() {
-		return deadlineNanos != 0 && System.nanoTime() > deadlineNanos;
+		if (timedOut) {
+			return true;
+		}
+		timedOut = deadlineNanos != 0 && System.nanoTime() > deadlineNanos;
+		return timedOut;
 	}
 
 	private Object[] evaluateArguments(List<OclExpression> argExps) {
