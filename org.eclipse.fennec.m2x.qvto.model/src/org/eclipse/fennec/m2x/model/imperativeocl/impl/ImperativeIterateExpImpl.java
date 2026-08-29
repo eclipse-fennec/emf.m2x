@@ -36,6 +36,7 @@ import org.eclipse.fennec.m2x.model.ocl.Variable;
  * </p>
  * <ul>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.ImperativeIterateExpImpl#getTarget <em>Target</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.ImperativeIterateExpImpl#getName <em>Name</em>}</li>
  * </ul>
  *
  * @generated
@@ -50,6 +51,26 @@ public class ImperativeIterateExpImpl extends ImperativeLoopExpImpl implements I
 	 * @ordered
 	 */
 	protected Variable target;
+
+	/**
+	 * The default value of the '{@link #getName() <em>Name</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getName()
+	 * @generated
+	 * @ordered
+	 */
+	protected static final String NAME_EDEFAULT = null;
+
+	/**
+	 * The cached value of the '{@link #getName() <em>Name</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getName()
+	 * @generated
+	 * @ordered
+	 */
+	protected String name = NAME_EDEFAULT;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -121,6 +142,29 @@ public class ImperativeIterateExpImpl extends ImperativeLoopExpImpl implements I
 	 * @generated
 	 */
 	@Override
+	public String getName() {
+		return name;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setName(String newName) {
+		String oldName = name;
+		name = newName;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__NAME, oldName, name));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
 		switch (featureID) {
 			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__TARGET:
@@ -139,6 +183,8 @@ public class ImperativeIterateExpImpl extends ImperativeLoopExpImpl implements I
 		switch (featureID) {
 			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__TARGET:
 				return getTarget();
+			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__NAME:
+				return getName();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}
@@ -153,6 +199,9 @@ public class ImperativeIterateExpImpl extends ImperativeLoopExpImpl implements I
 		switch (featureID) {
 			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__TARGET:
 				setTarget((Variable)newValue);
+				return;
+			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__NAME:
+				setName((String)newValue);
 				return;
 		}
 		super.eSet(featureID, newValue);
@@ -169,6 +218,9 @@ public class ImperativeIterateExpImpl extends ImperativeLoopExpImpl implements I
 			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__TARGET:
 				setTarget((Variable)null);
 				return;
+			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__NAME:
+				setName(NAME_EDEFAULT);
+				return;
 		}
 		super.eUnset(featureID);
 	}
@@ -183,8 +235,26 @@ public class ImperativeIterateExpImpl extends ImperativeLoopExpImpl implements I
 		switch (featureID) {
 			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__TARGET:
 				return target != null;
+			case ImperativeOclPackage.IMPERATIVE_ITERATE_EXP__NAME:
+				return NAME_EDEFAULT == null ? name != null : !NAME_EDEFAULT.equals(name);
 		}
 		return super.eIsSet(featureID);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public String toString() {
+		if (eIsProxy()) return super.toString();
+
+		StringBuilder result = new StringBuilder(super.toString());
+		result.append(" (name: ");
+		result.append(name);
+		result.append(')');
+		return result.toString();
 	}
 
 } //ImperativeIterateExpImpl

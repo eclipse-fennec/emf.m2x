@@ -44,6 +44,7 @@
     </genClasses>
     <genClasses ecoreClass="imperativeocl.ecore#//ImperativeIterateExp">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//ImperativeIterateExp/target"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute imperativeocl.ecore#//ImperativeIterateExp/name"/>
     </genClasses>
     <genClasses ecoreClass="imperativeocl.ecore#//SwitchExp">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//SwitchExp/alternativePart"/>

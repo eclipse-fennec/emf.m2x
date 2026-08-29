@@ -32,6 +32,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * </p>
  * <ul>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp#getTarget <em>Target</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp#getName <em>Name</em>}</li>
  * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclPackage#getImperativeIterateExp()
@@ -61,5 +62,30 @@ public interface ImperativeIterateExp extends ImperativeLoopExp {
 	 * @generated
 	 */
 	void setTarget(Variable value);
+
+	/**
+	 * Returns the value of the '<em><b>Name</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * The loop variant name: 'xcollect', 'xselect', 'xselectOne', 'xcollectselect' or 'xcollectselectOne' (QVT v1.3 Section 8.2.2.7). The spec derives it from NamedElement; here it is an attribute, as it already is on ForExp.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Name</em>' attribute.
+	 * @see #setName(String)
+	 * @see org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclPackage#getImperativeIterateExp_Name()
+	 * @model
+	 * @generated
+	 */
+	String getName();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp#getName <em>Name</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Name</em>' attribute.
+	 * @see #getName()
+	 * @generated
+	 */
+	void setName(String value);
 
 } // ImperativeIterateExp
