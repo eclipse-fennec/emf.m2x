@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.unit.tests;
 
+import java.time.Duration;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -55,6 +57,7 @@ import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -196,6 +199,80 @@ class UnitPreparerTest {
 		assertEquals("store", main.getManifest().getResolvedClosure().get(0).getSource());
 	}
 
+	// ==== paths that had no test (#174) ====
+
+	@Test
+	@DisplayName("an embedded dependency is not looked for in the store")
+	void prepare_takesAnEmbeddedDependencyFromTheUnitItself() throws Exception {
+		// EMBED means the dependency travels inside the unit, bound when it was compiled. A
+		// store that does not have it at all is the point: nothing may be looked up.
+		CompiledUnit library = compiled("gen.Lib");
+		CompiledUnit main = compiled("gen.Main", embed("gen.Lib",
+				library.getManifest().getUnitFingerprint()));
+		main.getEmbedded().add(library);
+		UnitKey mainKey = store.store("m2t", new PackagedUnit(reseal(main)));
+
+		PreparedContext prepared = preparer(registry).prepare(mainKey);
+
+		assertEquals(1, prepared.units().size(),
+				"the embedded unit is content of the host, not a second unit of the run");
+		assertEquals(List.of("gen.Main"), binder.bound.keySet().stream().toList());
+	}
+
+	@Test
+	@DisplayName("what the binder rejects ends the prepare, before anything is bound")
+	void prepare_propagatesWhatTheBinderRefuses() throws Exception {
+		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Main")));
+		RecordingBinder refusing = new RecordingBinder();
+		refusing.refuse = true;
+
+		UnitPrepareException failure = assertThrows(UnitPrepareException.class,
+				() -> new UnitPreparer(store, registry,
+						FingerprintHelper.getDefaultFingerprintService(), List.of(refusing))
+						.prepare(key));
+
+		assertTrue(failure.getMessage().contains("the language says no"), failure::getMessage);
+		assertEquals(Map.of(), refusing.bound,
+				"validate runs for every unit before the first one is bound (#142)");
+	}
+
+	@Test
+	@DisplayName("units that rebind each other terminate")
+	void prepare_terminatesOnACycleOfRebindingUnits() throws Exception {
+		// A rebinds B and B rebinds A. The map of what is already loaded is what ends this;
+		// without it prepare would follow the two entries forever.
+		//
+		// A cycle of *pinned* units cannot be built at all: a pin names the fingerprint of the
+		// other unit, and each fingerprint would then have to be part of the other's content.
+		// Rebind names only the qualified name, which is what makes the cycle possible.
+		store.store("m2t", new PackagedUnit(compiled("gen.A", rebind("gen.B"))));
+		store.store("m2t", new PackagedUnit(compiled("gen.B", rebind("gen.A"))));
+		UnitKey aKey = store.store("m2t", new PackagedUnit(compiled("gen.A", rebind("gen.B"))));
+
+		PreparedContext prepared = assertTimeoutPreemptively(Duration.ofSeconds(10),
+				() -> preparer(registry).prepare(aKey));
+
+		assertTrue(prepared.unit("gen.A").isPresent());
+		assertTrue(prepared.unit("gen.B").isPresent());
+		assertEquals(2, prepared.units().size(), "each of the two loaded once");
+	}
+
+	private static DependencyEntry embed(String name, String fingerprint) {
+		DependencyEntry entry = CompiledFactory.eINSTANCE.createDependencyEntry();
+		entry.setQualifiedName(name);
+		entry.setMode(DependencyMode.EMBED);
+		entry.setFingerprint(fingerprint);
+		return entry;
+	}
+
+	/** Seals again after content was added, so the fingerprint covers what the unit carries. */
+	private static CompiledUnit reseal(CompiledUnit document) {
+		document.getManifest().setUnitFingerprint(
+				org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService.INSTANCE
+						.fingerprint(document));
+		return document;
+	}
+
 	// ==== helpers ====
 
 	private UnitPreparer preparer(EPackage.Registry runtime) {
@@ -281,6 +358,15 @@ class UnitPreparerTest {
 	static final class RecordingBinder implements UnitBinder {
 		final Map<String, List<String>> bound = new LinkedHashMap<>();
 		final List<String> verified = new ArrayList<>();
+		/** Set to have {@code validate} refuse, as a language rejecting a unit would. */
+		boolean refuse;
+
+		@Override
+		public void validate(CompiledUnit unit) throws UnitPrepareException {
+			if (refuse) {
+				throw new UnitPrepareException("the language says no");
+			}
+		}
 
 		@Override
 		public String language() {
