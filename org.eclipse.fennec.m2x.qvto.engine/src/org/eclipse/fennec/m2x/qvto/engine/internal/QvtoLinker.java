@@ -27,7 +27,6 @@ import java.util.Set;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.m2x.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
@@ -63,31 +62,18 @@ public class QvtoLinker {
 
 	private static final QvtOperationalFactory QVTO = QvtOperationalFactory.eINSTANCE;
 
-	private final QvtoParserSupport parserSupport;
-	private final List<QvtoUnitResolver> unitResolvers;
-	private final EPackage.Registry packageRegistry;
-	private final QvtoBlackboxRegistry blackboxRegistry;
-	private final Set<String> allowedBlackboxModules;
-	private final Set<String> allowedUnitModules;
-	private final int maxBlackboxLibraries;
+	private final QvtoLinkPolicy policy;
 
-	/** Blackbox modules resolved during this link, to hold {@code maxBlackboxLibraries}. */
+	/** Blackbox modules resolved during this link, to hold {@code policy.maxBlackboxLibraries()}. */
 	private final Set<String> resolvedBlackboxModules = new HashSet<>();
 
-	public QvtoLinker(QvtoParserSupport parserSupport,
-			List<QvtoUnitResolver> unitResolvers,
-			EPackage.Registry packageRegistry,
-			QvtoBlackboxRegistry blackboxRegistry,
-			Set<String> allowedBlackboxModules,
-			Set<String> allowedUnitModules,
-			int maxBlackboxLibraries) {
-		this.parserSupport = Objects.requireNonNull(parserSupport);
-		this.unitResolvers = Objects.requireNonNull(unitResolvers);
-		this.packageRegistry = Objects.requireNonNull(packageRegistry);
-		this.blackboxRegistry = blackboxRegistry; // nullable
-		this.allowedBlackboxModules = Objects.requireNonNull(allowedBlackboxModules);
-		this.allowedUnitModules = Objects.requireNonNull(allowedUnitModules);
-		this.maxBlackboxLibraries = maxBlackboxLibraries;
+	/**
+	 * Creates a linker that resolves under the given policy.
+	 *
+	 * @param policy what this link may reach, and how far, must not be {@code null}
+	 */
+	public QvtoLinker(QvtoLinkPolicy policy) {
+		this.policy = Objects.requireNonNull(policy, "policy must not be null");
 	}
 
 	/**
@@ -205,12 +191,12 @@ public class QvtoLinker {
 
 	private Module resolveModule(String qualifiedName) throws QvtoParseException {
 		// D29: Allow-list enforcement for unit modules
-		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(qualifiedName)) {
+		if (!policy.allowedUnitModules().isEmpty() && !policy.allowedUnitModules().contains(qualifiedName)) {
 			return null;
 		}
 		Optional<QvtoUnit> unit;
 		try {
-			unit = ResolutionPolicy.resolve(qualifiedName, sources(unitResolvers));
+			unit = ResolutionPolicy.resolve(qualifiedName, sources(policy.unitResolvers()));
 		} catch (UnitResolutionException failure) {
 			throw new QvtoParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
 					failure);
@@ -232,21 +218,21 @@ public class QvtoLinker {
 	 * {@link Library} module with blackbox operations as EOperations.
 	 */
 	Module resolveBlackboxModule(String qualifiedName) {
-		if (blackboxRegistry == null) {
+		if (policy.blackboxRegistry() == null) {
 			return null;
 		}
 		// D29: Allow-list enforcement for blackbox modules
-		if (!allowedBlackboxModules.isEmpty() && !allowedBlackboxModules.contains(qualifiedName)) {
+		if (!policy.allowedBlackboxModules().isEmpty() && !policy.allowedBlackboxModules().contains(qualifiedName)) {
 			return null;
 		}
 		// D29: and a ceiling on how many distinct libraries one link may pull in, counted
 		// over the whole link rather than per import, so a chain of imports cannot walk
 		// past it one module at a time.
 		if (!resolvedBlackboxModules.contains(qualifiedName)
-				&& resolvedBlackboxModules.size() >= maxBlackboxLibraries) {
+				&& resolvedBlackboxModules.size() >= policy.maxBlackboxLibraries()) {
 			return null;
 		}
-		Optional<QvtoBlackboxLibrary> optLib = blackboxRegistry.getLibrary(qualifiedName);
+		Optional<QvtoBlackboxLibrary> optLib = policy.blackboxRegistry().getLibrary(qualifiedName);
 		if (optLib.isEmpty()) {
 			return null;
 		}
@@ -299,8 +285,8 @@ public class QvtoLinker {
 	private Module toModule(QvtoUnit unit) throws QvtoParseException {
 		Module module = switch (unit) {
 			case QvtoUnit.CompiledUnit compiled -> compiled.transformation();
-			case QvtoUnit.SourceUnit source -> parserSupport.parse(
-					source.source(), source.qualifiedName(), packageRegistry);
+			case QvtoUnit.SourceUnit source -> policy.parserSupport().parse(
+					source.source(), source.qualifiedName(), policy.packageRegistry());
 		};
 		return unwrapLibrary(module);
 	}

@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
@@ -49,29 +50,45 @@ import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
  */
 public class QvtrBlackboxBridge {
 
-	private final QvtdBlackboxRegistry blackboxRegistry;
 	private final QvtdConfiguration config;
 	private final List<RelationImplementationProvider> implementationProviders;
 	private final QvtrExtentManager extentManager;
 	private final QvtdExecutionContext context;
-	private final List<Diagnostic> diagnostics;
+	private final QvtrDiagnosticSink diagnostics;
 	private final QvtrOclCallback oclCallback;
 	/** Diagnostic source id, as used by the rest of the QVT-R engine. */
-	private static final String SOURCE = "org.eclipse.fennec.m2x.qvtd.engine";
+	private static final String SOURCE = QvtrDiagnosticSink.SOURCE;
 	/** The blackbox modules this run has reached into, for the D29 ceiling. */
 	private final Set<String> usedLibraries = new HashSet<>();
 
-	public QvtrBlackboxBridge(QvtdBlackboxRegistry blackboxRegistry, QvtdConfiguration config,
+	/**
+	 * Creates a bridge for one run.
+	 *
+	 * <p>The blackbox registry is the configuration's — it used to be a parameter of its own,
+	 * which allowed a caller to gate one registry with the flags of another (#185).
+	 *
+	 * @param config the configuration, and with it the registry and the D29 controls
+	 * @param implementationProviders the providers for {@code implementedby} relations
+	 * @param extentManager the extents of the run
+	 * @param context the execution context
+	 * @param diagnostics where a failure is reported
+	 * @param oclCallback how an OCL expression of the transformation is evaluated
+	 */
+	public QvtrBlackboxBridge(QvtdConfiguration config,
 			List<RelationImplementationProvider> implementationProviders,
 			QvtrExtentManager extentManager, QvtdExecutionContext context,
-			List<Diagnostic> diagnostics, QvtrOclCallback oclCallback) {
-		this.blackboxRegistry = blackboxRegistry;
-		this.config = config;
+			QvtrDiagnosticSink diagnostics, QvtrOclCallback oclCallback) {
+		this.config = Objects.requireNonNull(config, "config must not be null");
 		this.implementationProviders = implementationProviders;
 		this.extentManager = extentManager;
 		this.context = context;
-		this.diagnostics = diagnostics;
+		this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics must not be null");
 		this.oclCallback = oclCallback;
+	}
+
+	/** The registry of this run, or {@code null} when blackboxes are off or none are configured. */
+	private QvtdBlackboxRegistry blackboxRegistry() {
+		return config.blackboxRegistry();
 	}
 
 	/**
@@ -108,7 +125,7 @@ public class QvtrBlackboxBridge {
 				}
 
 				// Fallback: blackbox registry (M-R5: enforce config gate)
-				if (blackboxRegistry == null || !config.blackboxEnabled()) {
+				if (blackboxRegistry() == null || !config.blackboxEnabled()) {
 					continue;
 				}
 				QvtdBlackboxLibrary library = libraryFor(opName);
@@ -155,7 +172,7 @@ public class QvtrBlackboxBridge {
 	 */
 	public Object evaluateBlackboxQuery(Function query, OperationCallExp callExpr,
 			Map<String, Object> callerBindings) {
-		if (blackboxRegistry == null || !config.blackboxEnabled()) {
+		if (blackboxRegistry() == null || !config.blackboxEnabled()) {
 			return null;
 		}
 
@@ -198,10 +215,10 @@ public class QvtrBlackboxBridge {
 	 * @return the library, or {@code null} if none may serve it
 	 */
 	QvtdBlackboxLibrary libraryFor(String operationName) {
-		if (blackboxRegistry == null || !config.blackboxEnabled()) {
+		if (blackboxRegistry() == null || !config.blackboxEnabled()) {
 			return null;
 		}
-		for (QvtdBlackboxLibrary library : blackboxRegistry.getLibraries()) {
+		for (QvtdBlackboxLibrary library : blackboxRegistry().getLibraries()) {
 			if (!library.getOperationNames().contains(operationName)) {
 				continue;
 			}
@@ -212,9 +229,8 @@ public class QvtrBlackboxBridge {
 			// the run rather than per call, so a chain of queries cannot walk past it one at a time
 			String moduleName = library.getModuleName();
 			if (!usedLibraries.contains(moduleName) && usedLibraries.size() >= config.maxBlackboxLibraries()) {
-				diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE, 0,
-						"Blackbox library '" + moduleName + "' is past the limit of "
-								+ config.maxBlackboxLibraries() + " libraries per run", null));
+				diagnostics.error("Blackbox library '" + moduleName + "' is past the limit of "
+						+ config.maxBlackboxLibraries() + " libraries per run");
 				return null;
 			}
 			usedLibraries.add(moduleName);

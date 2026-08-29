@@ -44,10 +44,15 @@ import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
  */
 public final class OclConfiguration {
 
-	private static final int DEFAULT_MAX_DEPTH = 1000;
-	private static final int DEFAULT_MAX_COLLECTION_SIZE = 1_000_000;
-	private static final int DEFAULT_MAX_CLOSURE_ITERATIONS = 100_000;
-	private static final int DEFAULT_MAX_REGEX_LENGTH = 1000;
+	// The evaluation defaults have one home: OclEvaluationOptions. Restated here they could
+	// drift apart, and a configured engine would then run under limits its own options
+	// documented differently (#185).
+	private static final int DEFAULT_MAX_DEPTH = OclEvaluationOptions.DEFAULT_MAX_DEPTH;
+	private static final int DEFAULT_MAX_COLLECTION_SIZE =
+			OclEvaluationOptions.DEFAULT_MAX_COLLECTION_SIZE;
+	private static final int DEFAULT_MAX_CLOSURE_ITERATIONS =
+			OclEvaluationOptions.DEFAULT_MAX_CLOSURE_ITERATIONS;
+	private static final int DEFAULT_MAX_REGEX_LENGTH = OclEvaluationOptions.DEFAULT_MAX_REGEX_LENGTH;
 
 	private final OclExpressionParser parser;
 	private final OclExpressionCache expressionCache;

@@ -87,16 +87,6 @@ public class OclEvalEnvironment {
 	}
 
 	/**
-	 * Creates a child environment with multiple additional variable bindings.
-	 *
-	 * @param additionalBindings the variable bindings to add
-	 * @return a new child environment
-	 */
-	OclEvalEnvironment nested(Map<String, Object> additionalBindings) {
-		return new OclEvalEnvironment(this, new HashMap<>(additionalBindings), context);
-	}
-
-	/**
 	 * Returns the original evaluation context, providing access to the model extent.
 	 */
 	OclContext getContext() {

@@ -494,10 +494,8 @@ public class M2tEngineImpl implements M2tEngine {
 		M2tEvalEnvironment env = M2tEvalEnvironment.root(context);
 		M2tWriterStack writers = new M2tWriterStack(config.maxOutputSize());
 		M2tEvaluator evaluator = new M2tEvaluator(oclEngine, env, writers, module,
-				generationModules(module), globalIndentationMap, globalPositions,
-				config.maxDiagnostics(),
-				config.maxTemplateDepth(), config.maxForIterations(), config.maxCrossProductSize(),
-				config.protectedAreaEnabled());
+				new M2tLinkSet(generationModules(module), globalIndentationMap, globalPositions),
+				M2tLimits.of(config));
 
 		Template main = findMainTemplate(module);
 		if (main == null) {

@@ -62,10 +62,17 @@ public record OclEvaluationOptions(
 		COLLECT_ERRORS
 	}
 
-	private static final int DEFAULT_MAX_DEPTH = 1000;
-	private static final int DEFAULT_MAX_COLLECTION_SIZE = 1_000_000;
-	private static final int DEFAULT_MAX_CLOSURE_ITERATIONS = 100_000;
-	private static final int DEFAULT_MAX_REGEX_LENGTH = 1000;
+	/** Default maximum recursion depth. */
+	public static final int DEFAULT_MAX_DEPTH = 1000;
+
+	/** Default maximum collection size for ranges, products and {@code allInstances}. */
+	public static final int DEFAULT_MAX_COLLECTION_SIZE = 1_000_000;
+
+	/** Default maximum number of iterations of {@code closure}. */
+	public static final int DEFAULT_MAX_CLOSURE_ITERATIONS = 100_000;
+
+	/** Default maximum length of a regular expression. */
+	public static final int DEFAULT_MAX_REGEX_LENGTH = 1000;
 
 	/**
 	 * Canonical constructor with validation.
@@ -142,9 +149,7 @@ public record OclEvaluationOptions(
 	 */
 	public OclEvaluationOptions withNullHandling(NullHandling nullHandling) {
 		Objects.requireNonNull(nullHandling, "nullHandling must not be null");
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders, useEMFTypes);
+		return toBuilder().nullHandling(nullHandling).build();
 	}
 
 	/**
@@ -154,9 +159,7 @@ public record OclEvaluationOptions(
 	 * @return new options with the given depth
 	 */
 	public OclEvaluationOptions withMaxDepth(int maxDepth) {
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders, useEMFTypes);
+		return toBuilder().maxDepth(maxDepth).build();
 	}
 
 	/**
@@ -166,9 +169,7 @@ public record OclEvaluationOptions(
 	 * @return new options with the given collection size limit
 	 */
 	public OclEvaluationOptions withMaxCollectionSize(int maxCollectionSize) {
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders, useEMFTypes);
+		return toBuilder().maxCollectionSize(maxCollectionSize).build();
 	}
 
 	/**
@@ -178,9 +179,7 @@ public record OclEvaluationOptions(
 	 * @return new options with the given closure iteration limit
 	 */
 	public OclEvaluationOptions withMaxClosureIterations(int maxClosureIterations) {
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders, useEMFTypes);
+		return toBuilder().maxClosureIterations(maxClosureIterations).build();
 	}
 
 	/**
@@ -190,9 +189,7 @@ public record OclEvaluationOptions(
 	 * @return new options with the given regex length limit
 	 */
 	public OclEvaluationOptions withMaxRegexLength(int maxRegexLength) {
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders, useEMFTypes);
+		return toBuilder().maxRegexLength(maxRegexLength).build();
 	}
 
 	/**
@@ -202,9 +199,7 @@ public record OclEvaluationOptions(
 	 * @return new options with the given timeout
 	 */
 	public OclEvaluationOptions withTimeout(Duration timeout) {
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders, useEMFTypes);
+		return toBuilder().timeout(timeout).build();
 	}
 
 	/**
@@ -217,9 +212,7 @@ public record OclEvaluationOptions(
 	 * @return new options with the given flag
 	 */
 	public OclEvaluationOptions withCustomOperationsEnabled(boolean enabled) {
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				enabled, additionalProviders, useEMFTypes);
+		return toBuilder().customOperationsEnabled(enabled).build();
 	}
 
 	/**
@@ -233,9 +226,7 @@ public record OclEvaluationOptions(
 	 * @return new options with the given providers
 	 */
 	public OclEvaluationOptions withAdditionalProviders(List<OclOperationProvider> providers) {
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, providers, useEMFTypes);
+		return toBuilder().additionalProviders(providers).build();
 	}
 
 	/**
@@ -253,8 +244,148 @@ public record OclEvaluationOptions(
 	 * @see <a href="https://github.com/eclipse-fennec/emf.m2x/issues/4">issue #4</a>
 	 */
 	public OclEvaluationOptions withUseEMFTypes(boolean useEMFTypes) {
-		return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-				maxCollectionSize, maxClosureIterations, maxRegexLength,
-				customOperationsEnabled, additionalProviders, useEMFTypes);
+		return toBuilder().useEMFTypes(useEMFTypes).build();
+	}
+	/**
+	 * Returns a builder holding these options, for a copy that changes more than one of them.
+	 *
+	 * <p>Every {@code withX} goes through it. Written out, each of the nine restated all ten
+	 * components, so a component added to this record had to be added in nine more places and
+	 * a single miss silently reset a limit to its default — the kind of mistake that shows up
+	 * as a security control that quietly stopped applying (#185).
+	 *
+	 * @return a builder initialized with these options
+	 */
+	public Builder toBuilder() {
+		return new Builder(this);
+	}
+
+	/**
+	 * Builds {@link OclEvaluationOptions}.
+	 */
+	public static final class Builder {
+
+		private NullHandling nullHandling;
+		private ErrorRecovery errorRecovery;
+		private int maxDepth;
+		private Duration timeout;
+		private int maxCollectionSize;
+		private int maxClosureIterations;
+		private int maxRegexLength;
+		private boolean customOperationsEnabled;
+		private List<OclOperationProvider> additionalProviders;
+		private boolean useEMFTypes;
+
+		private Builder(OclEvaluationOptions options) {
+			this.nullHandling = options.nullHandling();
+			this.errorRecovery = options.errorRecovery();
+			this.maxDepth = options.maxDepth();
+			this.timeout = options.timeout();
+			this.maxCollectionSize = options.maxCollectionSize();
+			this.maxClosureIterations = options.maxClosureIterations();
+			this.maxRegexLength = options.maxRegexLength();
+			this.customOperationsEnabled = options.customOperationsEnabled();
+			this.additionalProviders = options.additionalProviders();
+			this.useEMFTypes = options.useEMFTypes();
+		}
+
+		/**
+		 * @param nullHandling the null handling strategy
+		 * @return this builder
+		 */
+		public Builder nullHandling(NullHandling nullHandling) {
+			this.nullHandling = nullHandling;
+			return this;
+		}
+
+		/**
+		 * @param errorRecovery the error recovery strategy
+		 * @return this builder
+		 */
+		public Builder errorRecovery(ErrorRecovery errorRecovery) {
+			this.errorRecovery = errorRecovery;
+			return this;
+		}
+
+		/**
+		 * @param maxDepth the maximum recursion depth
+		 * @return this builder
+		 */
+		public Builder maxDepth(int maxDepth) {
+			this.maxDepth = maxDepth;
+			return this;
+		}
+
+		/**
+		 * @param timeout the evaluation timeout, or {@code null} for none
+		 * @return this builder
+		 */
+		public Builder timeout(Duration timeout) {
+			this.timeout = timeout;
+			return this;
+		}
+
+		/**
+		 * @param maxCollectionSize the maximum collection size
+		 * @return this builder
+		 */
+		public Builder maxCollectionSize(int maxCollectionSize) {
+			this.maxCollectionSize = maxCollectionSize;
+			return this;
+		}
+
+		/**
+		 * @param maxClosureIterations the maximum number of closure iterations
+		 * @return this builder
+		 */
+		public Builder maxClosureIterations(int maxClosureIterations) {
+			this.maxClosureIterations = maxClosureIterations;
+			return this;
+		}
+
+		/**
+		 * @param maxRegexLength the maximum regular expression length
+		 * @return this builder
+		 */
+		public Builder maxRegexLength(int maxRegexLength) {
+			this.maxRegexLength = maxRegexLength;
+			return this;
+		}
+
+		/**
+		 * @param customOperationsEnabled whether config-registered custom operations are active
+		 * @return this builder
+		 */
+		public Builder customOperationsEnabled(boolean customOperationsEnabled) {
+			this.customOperationsEnabled = customOperationsEnabled;
+			return this;
+		}
+
+		/**
+		 * @param additionalProviders the per-evaluation operation providers
+		 * @return this builder
+		 */
+		public Builder additionalProviders(List<OclOperationProvider> additionalProviders) {
+			this.additionalProviders = additionalProviders;
+			return this;
+		}
+
+		/**
+		 * @param useEMFTypes whether top-level collections are returned as EMF types
+		 * @return this builder
+		 */
+		public Builder useEMFTypes(boolean useEMFTypes) {
+			this.useEMFTypes = useEMFTypes;
+			return this;
+		}
+
+		/**
+		 * @return the options
+		 */
+		public OclEvaluationOptions build() {
+			return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
+					maxCollectionSize, maxClosureIterations, maxRegexLength,
+					customOperationsEnabled, additionalProviders, useEMFTypes);
+		}
 	}
 }

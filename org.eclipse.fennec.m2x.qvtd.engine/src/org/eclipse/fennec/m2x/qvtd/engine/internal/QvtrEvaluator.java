@@ -93,7 +93,7 @@ public class QvtrEvaluator {
 	 * Where an expression node stood, so a runtime diagnostic can name the place and the unit —
 	 * including an imported one (#116). Set by the engine, which holds the parser.
 	 */
-	private Function<EObject, SourcePosition> positionLookup = node -> null;
+	private Function<EObject, SourcePosition> positionLookup;
 
 	/**
 	 * The transformation's queries and blackboxes, as operations the OCL engine can resolve —
@@ -111,13 +111,15 @@ public class QvtrEvaluator {
 	private int relationCallDepth;
 	private long deadlineNanos;
 
-	public QvtrEvaluator(OclEngine oclEngine, QvtrEvalEnvironment env,
-			RelationalTransformation transformation, QvtrExtentManager extentManager,
-			QvtdExecutionContext context, QvtdConfiguration config,
-			QvtdBlackboxRegistry blackboxRegistry,
-			List<RelationImplementationProvider> implementationProviders) {
-		this(oclEngine, env, transformation, extentManager, context, config,
-				blackboxRegistry, implementationProviders, System::nanoTime);
+	/**
+	 * Creates an evaluator for one run.
+	 *
+	 * @param oclEngine the OCL engine expressions are evaluated with
+	 * @param env the variable environment
+	 * @param run what runs, on what, under which configuration
+	 */
+	public QvtrEvaluator(OclEngine oclEngine, QvtrEvalEnvironment env, QvtrRun run) {
+		this(oclEngine, env, run, System::nanoTime);
 	}
 
 	/**
@@ -131,34 +133,34 @@ public class QvtrEvaluator {
 	 *
 	 * @param nanoTimeSource the source of monotonic nanoseconds, must not be {@code null}
 	 */
-	public QvtrEvaluator(OclEngine oclEngine, QvtrEvalEnvironment env,
-			RelationalTransformation transformation, QvtrExtentManager extentManager,
-			QvtdExecutionContext context, QvtdConfiguration config,
-			QvtdBlackboxRegistry blackboxRegistry,
-			List<RelationImplementationProvider> implementationProviders,
+	public QvtrEvaluator(OclEngine oclEngine, QvtrEvalEnvironment env, QvtrRun run,
 			LongSupplier nanoTimeSource) {
 		this.nanoTimeSource = Objects.requireNonNull(nanoTimeSource,
 				"nanoTimeSource must not be null");
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.env = Objects.requireNonNull(env, "env must not be null");
-		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
-		this.extentManager = Objects.requireNonNull(extentManager, "extentManager must not be null");
-		this.context = Objects.requireNonNull(context, "context must not be null");
-		this.config = Objects.requireNonNull(config, "config must not be null");
+		Objects.requireNonNull(run, "run must not be null");
+		this.transformation = run.transformation();
+		this.context = run.context();
+		this.config = run.config();
+		this.positionLookup = run.positionLookup();
+		// Derived, not handed in: an extent manager belongs to exactly this transformation and
+		// this context, and the registry is the one the configuration was built with
+		this.extentManager = new QvtrExtentManager(transformation, context);
 		this.traceManager = new QvtrTraceManager(config.maxTraceRecords());
 		this.patternMatcher = new QvtrPatternMatcher(oclEngine, extentManager, config.maxBindings());
 
 		QvtrOclCallback oclCallback = this::evaluateOcl;
-		this.blackboxBridge = new QvtrBlackboxBridge(
-				blackboxRegistry, config, implementationProviders,
-				extentManager, context, diagnostics, oclCallback);
+		QvtrDiagnosticSink sink = QvtrDiagnosticSink.into(diagnostics);
+		this.blackboxBridge = new QvtrBlackboxBridge(config, run.implementationProviders(),
+				extentManager, context, sink, oclCallback);
 		// One counter for every way into a query body of this run (#181)
 		this.queryDepth = new QvtrQueryEvaluator.QueryDepth(config.maxRelationDepth());
 		this.queryEvaluator = new QvtrQueryEvaluator(
 				transformation, oclCallback, blackboxBridge, queryDepth);
 		this.enforcer = new QvtrEnforcer(
 				extentManager, patternMatcher, transformation,
-				diagnostics, oclCallback, blackboxBridge);
+				sink, oclCallback, blackboxBridge);
 	}
 
 	// ── Execution entry point ────────────────────────────────────────
@@ -626,15 +628,6 @@ public class QvtrEvaluator {
 					blackboxBridge, this::evaluateOcl, queryDepth);
 		}
 		return operationProvider;
-	}
-
-	/**
-	 * Sets how a node is turned into the place it stood, so a runtime diagnostic can name it.
-	 *
-	 * @param positionLookup the lookup, {@code null} restores "no position known"
-	 */
-	public void setPositionLookup(Function<EObject, SourcePosition> positionLookup) {
-		this.positionLookup = positionLookup == null ? node -> null : positionLookup;
 	}
 
 	/**

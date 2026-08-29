@@ -37,20 +37,6 @@ public final class ParseDiagnostic implements Resource.Diagnostic {
 	private final String message;
 	private final int line;
 	private final int column;
-	private final String location;
-
-	/**
-	 * @param message  what is wrong, phrased for the author of the expression or template
-	 * @param line     1-based line, or {@link #UNKNOWN_POSITION}
-	 * @param column   0-based column, or {@link #UNKNOWN_POSITION}
-	 * @param location the unit the problem is in, or {@code null}
-	 */
-	public ParseDiagnostic(String message, int line, int column, String location) {
-		this.message = message;
-		this.line = line;
-		this.column = column;
-		this.location = location;
-	}
 
 	/**
 	 * @param message what is wrong
@@ -58,7 +44,9 @@ public final class ParseDiagnostic implements Resource.Diagnostic {
 	 * @param column  0-based column, or {@link #UNKNOWN_POSITION}
 	 */
 	public ParseDiagnostic(String message, int line, int column) {
-		this(message, line, column, null);
+		this.message = message;
+		this.line = line;
+		this.column = column;
 	}
 
 	@Override
@@ -66,9 +54,17 @@ public final class ParseDiagnostic implements Resource.Diagnostic {
 		return message;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>Always {@code null}: a parse diagnostic says where in a unit the problem is, not
+	 * which unit it was. The unit travels beside it — with the parse result, and in the
+	 * {@link SourcePosition#unit()} of a runtime diagnostic. There used to be a field for it
+	 * here that no caller ever filled and no caller ever read (#185).
+	 */
 	@Override
 	public String getLocation() {
-		return location;
+		return null;
 	}
 
 	@Override

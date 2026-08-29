@@ -251,12 +251,10 @@ public class QvtdEngineImpl implements QvtdEngine {
 	/** The evaluation itself, shared by the linking and the prepared path. */
 	private QvtdExecutionResult run(RelationalTransformation transformation, QvtdExecutionContext context) {
 		QvtrEvalEnvironment env = new QvtrEvalEnvironment();
-		QvtrExtentManager extentManager = new QvtrExtentManager(transformation, context);
-		QvtrEvaluator evaluator = new QvtrEvaluator(
-				oclEngine, env, transformation, extentManager, context,
-				config, config.blackboxRegistry(), List.copyOf(implementationProviders));
-		evaluator.setPositionLookup(parserSupport::positionOf);
-		List<Diagnostic> diagnostics = evaluator.execute();
+		QvtrRun run = QvtrRun.of(transformation, context, config)
+				.withImplementationProviders(List.copyOf(implementationProviders))
+				.withPositionLookup(parserSupport::positionOf);
+		List<Diagnostic> diagnostics = new QvtrEvaluator(oclEngine, env, run).execute();
 		return new QvtdExecutionResult(diagnostics, !context.checkOnly());
 	}
 

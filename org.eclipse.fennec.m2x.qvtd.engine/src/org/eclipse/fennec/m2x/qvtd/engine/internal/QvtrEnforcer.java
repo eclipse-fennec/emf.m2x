@@ -64,12 +64,12 @@ public class QvtrEnforcer {
 	private final QvtrExtentManager extentManager;
 	private final QvtrPatternMatcher patternMatcher;
 	private final RelationalTransformation transformation;
-	private final List<Diagnostic> diagnostics;
+	private final QvtrDiagnosticSink diagnostics;
 	private final QvtrOclCallback oclCallback;
 	private final QvtrBlackboxBridge blackboxBridge;
 
 	public QvtrEnforcer(QvtrExtentManager extentManager, QvtrPatternMatcher patternMatcher,
-			RelationalTransformation transformation, List<Diagnostic> diagnostics,
+			RelationalTransformation transformation, QvtrDiagnosticSink diagnostics,
 			QvtrOclCallback oclCallback, QvtrBlackboxBridge blackboxBridge) {
 		this.extentManager = extentManager;
 		this.patternMatcher = patternMatcher;

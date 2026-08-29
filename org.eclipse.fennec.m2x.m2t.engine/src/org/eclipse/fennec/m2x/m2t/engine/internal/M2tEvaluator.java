@@ -77,7 +77,7 @@ import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
  *
  * <p>Usage:
  * <pre>
- * M2tEvaluator evaluator = new M2tEvaluator(oclEngine, env, writers, module);
+ * M2tEvaluator evaluator = new M2tEvaluator(oclEngine, env, writers, module, List.of(module));
  * evaluator.execute(mainTemplate, context.inputElements());
  * </pre>
  *
@@ -90,16 +90,11 @@ public class M2tEvaluator {
 	private static final Object WRAPPED_NULL = new Object();
 
 	private final OclEngine oclEngine;
-	private final Module module;
 	private final OclEvaluationOptions oclOptions;
 	private final M2tEvalEnvironment env;
 	private final M2tWriterStack writers;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
-	private final int maxDiagnostics;
-	private final int maxTemplateDepth;
-	private final int maxForIterations;
-	private final int maxCrossProductSize;
-	private final boolean protectedAreaEnabled;
+	private final M2tLimits limits;
 	private int templateDepth;
 	private int queryDepth;
 
@@ -146,23 +141,15 @@ public class M2tEvaluator {
 	 * @param env the variable environment
 	 * @param writers the writer stack for output routing
 	 * @param module the module being executed
-	 * @param allLinkedModules all modules in the link set (for override resolution)
-	 * @param indentationMap standalone invocation indentation map (§8.4)
-	 * @param maxDiagnostics maximum diagnostic entries before truncation
-	 * @param maxTemplateDepth maximum template invocation depth (T-1)
-	 * @param maxForIterations maximum for-block iterations (T-2)
-	 * @param maxCrossProductSize maximum cross-product size (T-3)
-	 * @param protectedAreaEnabled whether to emit protected area markers (T-6)
+	 * @param linkSet the modules this generation runs against and what is known about them
+	 * @param limits what this generation is allowed to do
 	 */
 	public M2tEvaluator(OclEngine oclEngine, M2tEvalEnvironment env,
-			M2tWriterStack writers, Module module, Collection<Module> allLinkedModules,
-			Map<TemplateInvocation, String> indentationMap,
-			Map<EObject, SourcePosition> positions, int maxDiagnostics,
-			int maxTemplateDepth, int maxForIterations, int maxCrossProductSize,
-			boolean protectedAreaEnabled) {
+			M2tWriterStack writers, Module module, M2tLinkSet linkSet, M2tLimits limits) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.env = Objects.requireNonNull(env, "env must not be null");
-		this.module = Objects.requireNonNull(module, "module must not be null");
+		Objects.requireNonNull(module, "module must not be null");
+		Objects.requireNonNull(linkSet, "linkSet must not be null");
 		// MOFM2T §8.3 string operations ride along with every evaluation: the engine
 		// belongs to the caller, so M2T adds what it needs instead of building its own.
 		// LENIENT null handling is what a generator wants and what D14 asked for: navigating
@@ -175,23 +162,24 @@ public class M2tEvaluator {
 				.withAdditionalProviders(withStandardLibraryAndQueries(
 						oclEngine.getDefaultOptions(), module, this::invokeQueryValue));
 		this.writers = Objects.requireNonNull(writers, "writers must not be null");
-		this.indentationMap = Objects.requireNonNull(indentationMap, "indentationMap must not be null");
-		this.positions = positions == null ? Map.of() : positions;
-		this.maxDiagnostics = maxDiagnostics;
-		this.maxTemplateDepth = maxTemplateDepth;
-		this.maxForIterations = maxForIterations;
-		this.maxCrossProductSize = maxCrossProductSize;
-		this.protectedAreaEnabled = protectedAreaEnabled;
-		buildOverrideIndex(allLinkedModules);
+		this.indentationMap = linkSet.indentation();
+		this.positions = linkSet.positions();
+		this.limits = Objects.requireNonNull(limits, "limits must not be null");
+		buildOverrideIndex(linkSet.modules());
 	}
 
 	/**
-	 * Creates a new evaluator without indentation map (for programmatic AST usage).
+	 * Creates a new evaluator on an AST alone, under the default limits.
+	 *
+	 * @param oclEngine the OCL engine for expression evaluation
+	 * @param env the variable environment
+	 * @param writers the writer stack for output routing
+	 * @param module the module being executed
+	 * @param allLinkedModules the modules this generation runs against
 	 */
 	public M2tEvaluator(OclEngine oclEngine, M2tEvalEnvironment env,
 			M2tWriterStack writers, Module module, Collection<Module> allLinkedModules) {
-		this(oclEngine, env, writers, module, allLinkedModules, Map.of(), Map.of(),
-				10_000, 1_000, 1_000_000, 1_000_000, true);
+		this(oclEngine, env, writers, module, M2tLinkSet.of(allLinkedModules), M2tLimits.defaults());
 	}
 
 	/**
@@ -230,8 +218,8 @@ public class M2tEvaluator {
 			inputElements = List.copyOf(args);
 		}
 
-		if (templateDepth >= maxTemplateDepth) {
-			addError("Maximum template depth exceeded (" + maxTemplateDepth
+		if (templateDepth >= limits.maxTemplateDepth()) {
+			addError("Maximum template depth exceeded (" + limits.maxTemplateDepth()
 					+ ") — possible infinite recursion in template '" + template.getName() + "'");
 			return "";
 		}
@@ -337,10 +325,10 @@ public class M2tEvaluator {
 				writers.append(asString(evaluateOcl(block.getBefore())));
 			}
 
-			int iterLimit = Math.min(items.size(), maxForIterations);
+			int iterLimit = Math.min(items.size(), limits.maxForIterations());
 			for (int i = 0; i < items.size(); i++) {
 				if (i >= iterLimit) {
-					addError("Maximum for-block iterations exceeded (" + maxForIterations
+					addError("Maximum for-block iterations exceeded (" + limits.maxForIterations()
 							+ ") — loop terminated early");
 					break;
 				}
@@ -458,7 +446,7 @@ public class M2tEvaluator {
 
 		@Override
 		public Object caseProtectedAreaBlock(ProtectedAreaBlock block) {
-			if (!protectedAreaEnabled) {
+			if (!limits.protectedAreaEnabled()) {
 				// T-6: Protected areas disabled — emit body content without markers
 				executeBody(block);
 				return WRAPPED_NULL;
@@ -560,8 +548,8 @@ public class M2tEvaluator {
 				long productSize = 1;
 				for (List<?> setArg : setArgs) {
 					productSize *= setArg.size();
-					if (productSize > maxCrossProductSize) {
-						addError("Cross-product size exceeds limit (" + maxCrossProductSize
+					if (productSize > limits.maxCrossProductSize()) {
+						addError("Cross-product size exceeds limit (" + limits.maxCrossProductSize()
 								+ ") — template invocation skipped");
 						return WRAPPED_NULL;
 					}
@@ -838,8 +826,8 @@ public class M2tEvaluator {
 	 * should report it rather than exhaust the stack.
 	 */
 	private Object invokeQueryValue(Query query, Object[] arguments) {
-		if (queryDepth >= maxTemplateDepth) {
-			addError("Maximum query depth exceeded (" + maxTemplateDepth
+		if (queryDepth >= limits.maxTemplateDepth()) {
+			addError("Maximum query depth exceeded (" + limits.maxTemplateDepth()
 					+ ") — possible recursion in query '" + query.getName() + "'");
 			return null;
 		}
@@ -1001,8 +989,8 @@ public class M2tEvaluator {
 	 * to argument values and executes the template body.
 	 */
 	private void invokeTemplate(Template target, List<Object> argValues) {
-		if (templateDepth >= maxTemplateDepth) {
-			addError("Maximum template depth exceeded (" + maxTemplateDepth
+		if (templateDepth >= limits.maxTemplateDepth()) {
+			addError("Maximum template depth exceeded (" + limits.maxTemplateDepth()
 					+ ") — possible infinite recursion in template '" + target.getName() + "'");
 			return;
 		}
@@ -1126,10 +1114,10 @@ public class M2tEvaluator {
 	}
 
 	private void addDiagnostic(int severity, String message, SourcePosition position) {
-		if (diagnostics.size() >= maxDiagnostics) {
-			if (diagnostics.size() == maxDiagnostics) {
+		if (diagnostics.size() >= limits.maxDiagnostics()) {
+			if (diagnostics.size() == limits.maxDiagnostics()) {
 				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
-						"Maximum diagnostics limit reached (" + maxDiagnostics
+						"Maximum diagnostics limit reached (" + limits.maxDiagnostics()
 								+ "), further diagnostics truncated", null));
 			}
 			return;
