@@ -34,6 +34,7 @@ import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -197,6 +198,34 @@ class SatelliteCollectorTest {
 		assertEquals(2, placed);
 		assertEquals(List.of(first, behindFirst), home.getContents());
 		assertEquals(List.of(), SatelliteCollector.find(root));
+	}
+
+	@Test
+	@DisplayName("a chain longer than MAX_ROUNDS is refused, not walked forever")
+	void contain_givesUpOnAnEndlessChain() {
+		// Each round places what the previous one exposed, so a chain of N satellites needs N
+		// rounds. Past the ceiling the collector says so instead of running on — the ceiling
+		// had no test, and a document that never becomes self-contained is what it is for.
+		EPackage root = F.createEPackage();
+		EClass owner = F.createEClass();
+		root.getEClassifiers().add(owner);
+		// One longer than the ceiling of 32 rounds, which is package-private
+		EClass previous = owner;
+		for (int i = 0; i <= 32; i++) {
+			EClass next = F.createEClass();
+			next.setName("Link" + i);
+			previous.getESuperTypes().add(next);
+			previous = next;
+		}
+		EAnnotation home = F.createEAnnotation();
+		root.getEAnnotations().add(home);
+
+		IllegalStateException failure = assertThrows(IllegalStateException.class,
+				() -> SatelliteCollector.contain(root, home.getContents()));
+
+		assertTrue(failure.getMessage().contains("did not become self-contained"),
+				failure::getMessage);
+		assertTrue(failure.getMessage().contains("rounds"), failure::getMessage);
 	}
 
 	@Test
