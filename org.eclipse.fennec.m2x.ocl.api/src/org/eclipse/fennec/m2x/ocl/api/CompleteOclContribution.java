@@ -27,7 +27,9 @@ import org.osgi.annotation.versioning.ConsumerType;
  * <p>Without OSGi, register contributions programmatically via
  * {@link OclEngine#registerCompleteOclDocument(CompleteOclContribution)}.
  *
- * <p>With OSGi, contributions are discovered automatically via the whiteboard pattern:
+ * <p><b>Not yet under OSGi.</b> Nothing binds {@code CompleteOclContribution} services, so a
+ * bundle that publishes one is not picked up — see issue #195. Register programmatically until
+ * then. The intended shape is the whiteboard pattern:
  * <pre>
  * {@literal @}Component(service = CompleteOclContribution.class)
  * public class MyOclDocument implements CompleteOclContribution {

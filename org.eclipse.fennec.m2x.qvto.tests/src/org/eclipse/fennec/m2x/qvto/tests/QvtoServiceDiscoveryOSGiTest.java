@@ -101,7 +101,7 @@ class QvtoServiceDiscoveryOSGiTest {
 			@Property(key = "qvto.unitResolverEnabled", value = "true", scalar = Scalar.Boolean),
 			@Property(key = "qvto.discoverUnitResolvers", value = "true", scalar = Scalar.Boolean)
 	})
-	void registeredUnitResolves(@InjectService QvtoEngine engine) throws Exception {
+	void registeredUnitResolves(@InjectService(timeout = 5000) QvtoEngine engine) throws Exception {
 		QvtoExecutionResult result = run(engine);
 		assertTrue(result.isSuccess(), () -> whyItFailed(engine, result));
 	}
@@ -111,7 +111,7 @@ class QvtoServiceDiscoveryOSGiTest {
 	@WithConfiguration(pid = "DefaultQvtoEngine", properties = {
 			@Property(key = "qvto.unitResolverEnabled", value = "true", scalar = Scalar.Boolean)
 	})
-	void withoutDiscoveryTheRegistryIsNotConsulted(@InjectService QvtoEngine engine)
+	void withoutDiscoveryTheRegistryIsNotConsulted(@InjectService(timeout = 5000) QvtoEngine engine)
 			throws Exception {
 		QvtoExecutionResult result = run(engine);
 		assertFalse(result.isSuccess(),
@@ -126,7 +126,7 @@ class QvtoServiceDiscoveryOSGiTest {
 			@Property(key = "qvto.discoverUnitResolvers", value = "true", scalar = Scalar.Boolean),
 			@Property(key = "qvto.allowedUnitModules", value = "something.else")
 	})
-	void allowListStillNarrows(@InjectService QvtoEngine engine) throws Exception {
+	void allowListStillNarrows(@InjectService(timeout = 5000) QvtoEngine engine) throws Exception {
 		QvtoExecutionResult result = run(engine);
 		assertFalse(result.isSuccess(),
 				"the allow-list names something.else, so registered.library must stay out of"
@@ -191,7 +191,7 @@ class QvtoServiceDiscoveryOSGiTest {
 	@Test
 	@DisplayName("with several services for one name, the highest ranking wins (#141)")
 	void higherRankingWins(@InjectBundleContext BundleContext context,
-			@InjectService(filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
+			@InjectService(timeout = 5000, filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
 		String text = "library ranked.library;\n";
 		ServiceRegistration<QvtoUnitResolver> low = register(context, "ranked.library", 1, "mem:/low", text);
 		ServiceRegistration<QvtoUnitResolver> high = register(context, "ranked.library", 10, "mem:/high", text);
@@ -208,7 +208,7 @@ class QvtoServiceDiscoveryOSGiTest {
 	@Test
 	@DisplayName("two services with different content for one name are a conflict, not a choice (#141)")
 	void disagreeingServicesAreAConflict(@InjectBundleContext BundleContext context,
-			@InjectService(filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
+			@InjectService(timeout = 5000, filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
 		ServiceRegistration<QvtoUnitResolver> one = register(context, "contested.library", 1, "mem:/one",
 				"library contested.library;\n");
 		ServiceRegistration<QvtoUnitResolver> two = register(context, "contested.library", 10, "mem:/two",
@@ -226,7 +226,7 @@ class QvtoServiceDiscoveryOSGiTest {
 	@Test
 	@DisplayName("a failing service is an error the caller sees, not 'not found' (#141)")
 	void failingServiceIsAnError(@InjectBundleContext BundleContext context,
-			@InjectService(filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
+			@InjectService(timeout = 5000, filter = "(qvto.resolver.kind=discovery)") QvtoUnitResolver discovery) {
 		Dictionary<String, Object> properties = new Hashtable<>();
 		properties.put("qvto.unit.name", "broken.library");
 		QvtoUnitResolver broken = name -> {
