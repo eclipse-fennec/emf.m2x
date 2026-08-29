@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.List;
@@ -181,13 +182,41 @@ class OclCompleteDocumentTest {
 	}
 
 	@Test
-	void unresolvedClassifierSkipped() throws OclParseException {
+	void unresolvedClassifierIsReportedWithItsLine() {
+		// The line matters as much as the message: a Complete OCL document holds many context
+		// blocks, and "something did not resolve" without a place is a search, not a report
+		String doc = """
+				package company
+				context Person
+				  inv ok: self.age >= 0
+				context Persn
+				  inv typo: self.age >= 0
+				endpackage
+				""";
+
+		OclParseException failure = assertThrows(OclParseException.class,
+				() -> engine.parseDocument(doc));
+
+		assertTrue(failure.getErrors().stream()
+				.anyMatch(d -> d.getMessage().contains("Persn") && d.getLine() == 4),
+				() -> failure.getErrors().stream()
+						.map(d -> d.getLine() + ":" + d.getMessage()).toList().toString());
+	}
+
+	@Test
+	void unresolvedClassifierIsReported() {
+		// A typo in the type name used to be a log line: the document parsed successfully and
+		// every invariant of that block was quietly absent. A caller who is told nothing has no
+		// way of noticing that the constraints they wrote are not in effect (#187).
 		String doc = """
 				context NonExistent
 				  inv : self.name.size() > 0
 				""";
-		List<Constraint> constraints = engine.parseDocument(doc);
-		assertEquals(0, constraints.size());
+
+		OclParseException failure = assertThrows(OclParseException.class,
+				() -> engine.parseDocument(doc));
+
+		assertTrue(failure.getMessage().contains("NonExistent"), failure::getMessage);
 	}
 
 	@Test
@@ -205,10 +234,10 @@ class OclCompleteDocumentTest {
 		String nsURI = companyPackage.getNsURI();
 		Object saved = EPackage.Registry.INSTANCE.remove(nsURI);
 		try {
-			// Without global registry, unresolved
-			List<Constraint> withoutRs = engine.parseDocument(
-					"context company::Person inv : self.age >= 0");
-			assertEquals(0, withoutRs.size());
+			// Without the global registry the name resolves nowhere, and that is now said out
+			// loud rather than yielding an empty document (#187)
+			assertThrows(OclParseException.class, () -> engine.parseDocument(
+					"context company::Person inv : self.age >= 0"));
 
 			// With local ResourceSet registry, resolved
 			ResourceSet rs = new ResourceSetImpl();
@@ -380,13 +409,16 @@ class OclCompleteDocumentTest {
 	}
 
 	@Test
-	void operationContext_unresolvedClassifier() throws OclParseException {
+	void operationContext_unresolvedClassifier() {
 		String doc = """
 				context NonExistent::doSomething() : Boolean
 				  pre : true
 				""";
-		List<Constraint> constraints = engine.parseDocument(doc);
-		assertEquals(0, constraints.size());
+
+		OclParseException failure = assertThrows(OclParseException.class,
+				() -> engine.parseDocument(doc));
+
+		assertTrue(failure.getMessage().contains("NonExistent"), failure::getMessage);
 	}
 
 	@Test

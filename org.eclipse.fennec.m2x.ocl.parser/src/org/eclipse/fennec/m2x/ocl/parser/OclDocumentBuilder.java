@@ -224,11 +224,11 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		String classifierName = pathNameText(ctx.pathName());
 		EClassifier classifier = resolveClassifierFromPath(classifierName);
 		if (classifier == null) {
-			// Skipped, not reported: three tests pin this (OclCompleteDocumentTest —
-			// unresolvedClassifierSkipped, operationContext_unresolvedClassifier,
-			// resourceSetOverload), so whether an unresolved context is an error of the
-			// document is a decision, not a cleanup. Open in #187.
-			LOG.warning("Unresolved classifier: " + classifierName + " — skipping context");
+			// Reported, not logged away: every invariant of this block would vanish while
+			// parseDocument answers successfully, so a typo in the type name switches
+			// constraints off and nobody is told (#187)
+			addError("Unresolved classifier '" + classifierName + "' in context declaration; "
+					+ "the constraints of this block cannot be built", ctx);
 			return null;
 		}
 
@@ -338,13 +338,17 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			String classifierName = pathNameText(ctx.pathName());
 			classifier = resolveClassifierFromPath(classifierName);
 			if (classifier == null) {
-				LOG.warning("Unresolved classifier: " + classifierName + " — skipping context");
+				addError("Unresolved classifier '" + classifierName
+						+ "' in operation context declaration; the constraints of this block "
+						+ "cannot be built", ctx);
 				return null;
 			}
 		} else {
-			// G-11: Unqualified: context op(...) — use current package context
-			// Without a classifier qualifier, we cannot resolve — skip with warning
-			LOG.warning("Unqualified operation context (no classifier) — skipping");
+			// G-11: an unqualified `context op(...)` has no classifier to attach the operation
+			// to. Reported rather than skipped: the body or the pre/postcondition the document
+			// defines would simply be absent, and the caller would have no way of knowing.
+			addError("Operation context without a classifier is not supported; "
+					+ "write 'context Type::op(...)'", ctx);
 			return null;
 		}
 
@@ -411,11 +415,11 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		String classifierName = pathNameText(ctx.pathName());
 		EClassifier classifier = resolveClassifierFromPath(classifierName);
 		if (classifier == null) {
-			// Skipped, not reported: three tests pin this (OclCompleteDocumentTest —
-			// unresolvedClassifierSkipped, operationContext_unresolvedClassifier,
-			// resourceSetOverload), so whether an unresolved context is an error of the
-			// document is a decision, not a cleanup. Open in #187.
-			LOG.warning("Unresolved classifier: " + classifierName + " — skipping context");
+			// Reported, not logged away: every invariant of this block would vanish while
+			// parseDocument answers successfully, so a typo in the type name switches
+			// constraints off and nobody is told (#187)
+			addError("Unresolved classifier '" + classifierName + "' in context declaration; "
+					+ "the constraints of this block cannot be built", ctx);
 			return null;
 		}
 
