@@ -118,14 +118,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
 	private final Map<String, Module> importedModuleStubs = new HashMap<>();
+	/** What this unit knows so far, shared with every expression builder it creates. */
+	private final QvtoScope scope;
 	private String intermediatePackageUri;
 	private EPackage intermediatePackage;
 
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
-		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry,
-				importedModuleStubs, localTypes, diagnostics, declaredPackages);
+		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, declaredPackages);
+		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry, scope);
 	}
 
 	// ==================== Entry Point ====================
@@ -2099,9 +2101,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void updateExpressionBuilder() {
-		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry,
-				this.importedModuleStubs, this.localTypes, this.diagnostics,
-				this.declaredPackages);
+		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry, scope);
 	}
 
 	private String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {

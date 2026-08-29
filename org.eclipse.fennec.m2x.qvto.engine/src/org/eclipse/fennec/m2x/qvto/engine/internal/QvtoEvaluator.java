@@ -85,6 +85,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.BreakException;
@@ -141,12 +142,19 @@ public class QvtoEvaluator {
 	// §8.3.19: predefined tags "proxy" and "topclasses"
 	private final QvtoTagRegistry tagRegistry;
 	private final QvtoOperationResolver operationResolver;
+	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final QvtoModelOperations modelOperations;
-	private final QvtoEngineImpl engine;
-	private Map<String, Object> configProps = Map.of();
+	private final QvtoEngineServices engine;
+	private final Map<String, Object> configProps;
 
-	// D29: Per-evaluation additional providers (QVT-O↔OCL bridge)
-	private List<OclOperationProvider> additionalProviders = List.of();
+	/**
+	 * D29: the QVT-O operations every OCL sub-evaluation of this run sees.
+	 *
+	 * <p>Built on first use, because the provider needs this evaluator: it is what evaluates a
+	 * QVT-O helper body an OCL expression calls. That cycle is why this used to be set after
+	 * construction, from outside, by whoever remembered to (#185).
+	 */
+	private List<OclOperationProvider> additionalProviders;
 
 	// Late resolve support
 	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
@@ -158,22 +166,28 @@ public class QvtoEvaluator {
 	private boolean pendingLvalueIsSubtract;
 
 	/**
-	 * Creates a new evaluator for a single transformation execution.
+	 * Creates an evaluator for a single transformation execution.
+	 *
+	 * @param oclEngine the OCL engine expressions are evaluated with
+	 * @param env the variable environment
+	 * @param run what runs, on what, under which options
+	 * @param engine what this evaluation needs from the engine that started it
 	 */
-	public QvtoEvaluator(OclEngine oclEngine, QvtoEvalEnvironment env,
-			QvtoEvaluationOptions options, OperationalTransformation transformation,
-			QvtoExtentManager extentManager, QvtoEngineImpl engine,
-			EPackage.Registry packageRegistry) {
+	public QvtoEvaluator(OclEngine oclEngine, QvtoEvalEnvironment env, QvtoRun run,
+			QvtoEngineServices engine) {
 		this.oclEngine = Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		this.env = Objects.requireNonNull(env, "env must not be null");
-		this.options = Objects.requireNonNull(options, "options must not be null");
-		this.transformation = Objects.requireNonNull(transformation, "transformation must not be null");
-		this.extentManager = Objects.requireNonNull(extentManager, "extentManager must not be null");
-		this.engine = engine; // nullable for backward compatibility in tests
+		Objects.requireNonNull(run, "run must not be null");
+		this.options = run.options();
+		this.transformation = run.transformation();
+		this.packageRegistry = run.packageRegistry();
+		this.blackboxRegistry = run.blackboxRegistry();
+		this.configProps = run.context().configProperties();
+		// Derived: extents belong to exactly this transformation and this context
+		this.extentManager = new QvtoExtentManager(transformation, run.context());
+		this.engine = Objects.requireNonNull(engine, "engine must not be null");
 		this.traceManager = new QvtoTraceManager(options.maxTraceRecords());
 		this.intermediateStore = new QvtoIntermediatePropertyStore(transformation, this::eval);
-		this.packageRegistry = Objects.requireNonNull(packageRegistry,
-				"packageRegistry must not be null");
 		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager, packageRegistry, diagnostics);
 		this.tagRegistry = new QvtoTagRegistry(transformation);
 		this.operationResolver = new QvtoOperationResolver(transformation);
@@ -366,7 +380,7 @@ public class QvtoEvaluator {
 			// to avoid invoking multiple matching ops with side effects
 			OclOperation fallback = null;
 			for (var provider : oclEngine.getOperationProviders(
-				OclEvaluationOptions.lenient().withAdditionalProviders(additionalProviders))) {
+				OclEvaluationOptions.lenient().withAdditionalProviders(additionalProviders()))) {
 				for (var op : provider.getOperations()) {
 					if (!op.name().equals(opName)) {
 						continue;
@@ -582,9 +596,9 @@ public class QvtoEvaluator {
 					: OclContext.of(vars);
 		}
 		// Use LENIENT null handling for QVT-O — module-level operations have no self
-		// D29: Pass additionalProviders (QVT-O bridge) so they are always active
+		// D29: Pass the QVT-O bridge providers so they are always active
 		OclEvaluationOptions oclOpts = OclEvaluationOptions.lenient()
-				.withAdditionalProviders(additionalProviders);
+				.withAdditionalProviders(additionalProviders());
 		OclResult oclResult = oclEngine.evaluateWithDiagnostics(expr, oclCtx, oclOpts);
 		// Placed, not just copied: the OCL engine names the node it stumbled over, and the parser
 		// recorded where that node stood — including in an imported unit (#116).
@@ -949,9 +963,9 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * Returns the engine that created this evaluator (for nested transformation execution).
+	 * Returns what this evaluation may ask of the engine that started it.
 	 */
-	QvtoEngineImpl getEngine() {
+	QvtoEngineServices getEngine() {
 		return engine;
 	}
 
@@ -984,19 +998,19 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * Sets the config properties (called from engine before execution).
+	 * The QVT-O operations of this transformation, as an OCL provider (D29).
+	 *
+	 * <p>These are passed through to every OCL sub-evaluation via
+	 * {@link OclEvaluationOptions#additionalProviders()}. Built here rather than handed in:
+	 * the provider evaluates helper bodies through this evaluator, so it cannot exist before
+	 * the evaluator does.
 	 */
-	public void setConfigProperties(Map<String, Object> configProperties) {
-		this.configProps = configProperties != null ? configProperties : Map.of();
-	}
-
-	/**
-	 * Sets the additional OCL operation providers for this evaluation (D29).
-	 * These providers are passed through to every OCL sub-evaluation via
-	 * {@link OclEvaluationOptions#additionalProviders()}.
-	 */
-	public void setAdditionalProviders(List<OclOperationProvider> providers) {
-		this.additionalProviders = providers != null ? List.copyOf(providers) : List.of();
+	private List<OclOperationProvider> additionalProviders() {
+		if (additionalProviders == null) {
+			additionalProviders = List.of(new QvtoOperationProvider(
+					transformation, this, operationResolver, blackboxRegistry));
+		}
+		return additionalProviders;
 	}
 
 
@@ -1086,7 +1100,7 @@ public class QvtoEvaluator {
 		if (diagnostic.getData() != null) {
 			for (Object entry : diagnostic.getData()) {
 				if (entry instanceof EObject node) {
-					position = engine == null ? null : engine.positionOf(node);
+					position = engine.positionOf(node);
 					if (position != null) {
 						break;
 					}

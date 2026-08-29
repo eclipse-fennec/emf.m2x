@@ -141,43 +141,61 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 				return Optional.of("no template resolved from the 'template' attribute");
 			}
 
-			return run(context, output, ecores, models, templates.get(0), modules, charset, whitespace,
-					protectedAreas);
+			return run(context, new GeneratorInputs(output, ecores, models, templates.get(0),
+					modules, charset, whitespace, protectedAreas));
 		}
 	}
 
-	private Optional<String> run(BuildContext context, File output, List<File> ecores, List<File> models,
-			File template, List<File> modules, Charset charset, WhitespaceMode whitespace,
-			boolean protectedAreas) {
+	/**
+	 * Everything one generator run was configured with, read off the bnd instruction.
+	 *
+	 * <p>Eight of the nine parameters {@code run} used to take, three of them
+	 * {@code List<File>} and two of them {@code File} — a call site could hand the models
+	 * where the metamodels belong and the compiler would agree (#185).
+	 *
+	 * @param output where generated files go
+	 * @param ecores the metamodels to register
+	 * @param models the input models
+	 * @param template the module holding the main template
+	 * @param modules the further modules of the generation
+	 * @param charset the charset generated files are written in
+	 * @param whitespace the MOFM2T §8.4 whitespace mode
+	 * @param protectedAreas whether protected areas are honoured
+	 */
+	private record GeneratorInputs(File output, List<File> ecores, List<File> models, File template,
+			List<File> modules, Charset charset, WhitespaceMode whitespace, boolean protectedAreas) {
+	}
+
+	private Optional<String> run(BuildContext context, GeneratorInputs inputs) {
 
 		try (Formatter errors = new Formatter()) {
 
 			M2tModelLoader loader = new M2tModelLoader();
-			for (File ecore : ecores) {
+			for (File ecore : inputs.ecores()) {
 				for (EPackage ePackage : loader.loadMetamodel(ecore)) {
 					context.trace("fennecM2T: registered %s from %s", ePackage.getNsURI(), ecore);
 				}
 			}
 
 			List<EObject> roots = new ArrayList<>();
-			for (File model : models) {
+			for (File model : inputs.models()) {
 				roots.addAll(loader.loadModel(model));
 			}
 			loader.getWarnings().forEach(w -> context.warning("fennecM2T: %s", w));
 
 			M2tConfiguration configuration = M2tConfiguration.builder()
 					.resourceSet(loader.getResourceSet())
-					.generationStrategy(new FileSystemGenerationStrategy(output.toPath()))
-					.defaultCharset(charset)
-					.whitespaceMode(whitespace)
-					.protectedAreaEnabled(protectedAreas)
+					.generationStrategy(new FileSystemGenerationStrategy(inputs.output().toPath()))
+					.defaultCharset(inputs.charset())
+					.whitespaceMode(inputs.whitespace())
+					.protectedAreaEnabled(inputs.protectedAreas())
 					.build();
 			M2tEngine engine = M2tEngines.create(configuration);
 
-			Module main = engine.parse(URI.createFileURI(template.getAbsolutePath()));
+			Module main = engine.parse(URI.createFileURI(inputs.template().getAbsolutePath()));
 			List<Module> linked = new ArrayList<>();
 			linked.add(main);
-			for (File module : modules) {
+			for (File module : inputs.modules()) {
 				linked.add(engine.parse(URI.createFileURI(module.getAbsolutePath())));
 			}
 			if (linked.size() > 1) {
@@ -187,8 +205,8 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 
 			Template mainTemplate = mainTemplate(main);
 			if (mainTemplate == null) {
-				return Optional.of("module '" + main.getName() + "' in " + template
-						+ " has no [template public main(...)] entry point");
+				return Optional.of("module '" + main.getName() + "' in " + inputs.template()
+						+ " has no [inputs.template() public main(...)] entry point");
 			}
 
 			int parameters = mainTemplate.getParameter().size();
@@ -197,12 +215,12 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 						+ "was configured");
 			}
 			if (parameters > 1 && roots.size() != parameters) {
-				context.warning("fennecM2T: template 'main' takes %d parameters but %d model root(s) "
+				context.warning("fennecM2T: inputs.template() 'main' takes %d parameters but %d model root(s) "
 						+ "were loaded", parameters, roots.size());
 			}
 
 			for (List<EObject> arguments : bind(roots, parameters)) {
-				M2tResult result = engine.execute(main, new M2tContext(arguments, output.toPath()));
+				M2tResult result = engine.execute(main, new M2tContext(arguments, inputs.output().toPath()));
 				report(context, errors, result);
 			}
 
