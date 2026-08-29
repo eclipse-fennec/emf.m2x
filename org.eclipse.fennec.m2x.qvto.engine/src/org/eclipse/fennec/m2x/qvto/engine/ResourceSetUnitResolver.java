@@ -25,6 +25,7 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
+import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
 
 /**
  * Resolves imported compilation units through a {@link ResourceSet}.
@@ -98,9 +99,16 @@ public class ResourceSetUnitResolver implements QvtoUnitResolver {
 		try (InputStream in = resourceSet.getURIConverter().createInputStream(unitUri)) {
 			String source = new String(in.readAllBytes(), charset);
 			return Optional.of(new QvtoUnit.SourceUnit(qualifiedName, unitUri, source));
-		} catch (IOException | RuntimeException e) {
+		} catch (IOException notThere) {
 			// Not found through this resolver — the engine asks the next one
 			return Optional.empty();
+		} catch (RuntimeException failure) {
+			// A broken URI converter, an unreadable charset, a resource set in a bad state: this
+			// resolver could not answer, which is not the same as "the unit does not exist"
+			// (#141, #183). Reported as a failing source instead of letting a stale copy from the
+			// next resolver step in unnoticed.
+			throw new UnitResolutionException("cannot read '" + qualifiedName + "' from " + unitUri
+					+ ": " + failure, failure);
 		}
 	}
 }

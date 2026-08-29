@@ -114,6 +114,11 @@ public final class DefaultUnitFingerprintService implements UnitFingerprintServi
 			dependencies.forEach((name, fingerprint) ->
 					form.append(name).append('=').append(fingerprint).append('\n'));
 		}
+		// What the document carries is deliberately not folded in here: a metamodel copy and an
+		// embedded unit each already have a recorded identity — the PackageEntry's fp1 value and
+		// the DependencyEntry's m2x1 value — and UnitValidator holds them to it (#183). Folding
+		// them into this value as well would make a compiled document differ from the very AST it
+		// was built from, which is a property the round-trip tests rely on.
 		return value(form.toString());
 	}
 
