@@ -159,12 +159,24 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 
 	@Test
 	void s5_typeMismatch_noClassCastException() throws OclParseException {
-		// This test verifies that type mismatches in stdlib operations
-		// don't throw ClassCastException but produce OclInvalid
+		// A type mismatch in a stdlib operation is OclInvalid, not a ClassCastException out of
+		// evaluate(). This used to evaluate 1.div(0) — division by zero, which is a different
+		// thing entirely and would pass with every safe cast removed (#173).
 		EObject person = createPerson("test", 30, 50000, false);
-		// Division by zero returns OclInvalid, not an exception
-		Object result = eval("1.div(0)", person);
-		assertSame(OclInvalid.INSTANCE, result);
+
+		assertSame(OclInvalid.INSTANCE, eval("'abc'.abs()", person), "a String where a number goes");
+		assertSame(OclInvalid.INSTANCE, eval("Sequence{'a','b'}->sum()", person),
+				"summing what cannot be added");
+		assertSame(OclInvalid.INSTANCE, eval("1.concat('x')", person), "a number where a String goes");
+		assertSame(OclInvalid.INSTANCE, eval("Set{1}->at(1)", person), "an index into an unordered set");
+	}
+
+	@Test
+	void s5_divisionByZero_isInvalid() throws OclParseException {
+		// What the test above used to assert, kept because it is worth asserting
+		EObject person = createPerson("test", 30, 50000, false);
+
+		assertSame(OclInvalid.INSTANCE, eval("1.div(0)", person));
 	}
 
 	// --- S-9: Recursion Depth Limit ---

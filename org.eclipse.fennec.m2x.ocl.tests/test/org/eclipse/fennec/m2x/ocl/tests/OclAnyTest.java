@@ -17,6 +17,9 @@ package org.eclipse.fennec.m2x.ocl.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
@@ -52,7 +55,9 @@ class OclAnyTest extends AbstractOclTest {
 	void any_firstMatch() throws OclParseException {
 		// any returns some matching element
 		Object result = eval("Sequence{1, 2, 3}->any(i | i > 1)", self);
-		assertNotNull(result);
+		// §11.9.1 leaves the choice of element open, so the assertion is membership — but
+		// OclInvalid is non-null, and asserting non-null passed for a broken any() (#173)
+		assertTrue(List.of(2, 3).contains(result), () -> "one of the matching elements: " + result);
 	}
 
 	@Test
@@ -64,7 +69,7 @@ class OclAnyTest extends AbstractOclTest {
 	@Test
 	void any_allMatch() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->any(i | i > 0)", self);
-		assertNotNull(result);
+		assertTrue(List.of(1, 2, 3).contains(result), () -> "one of the elements: " + result);
 	}
 
 	@Test
@@ -89,7 +94,7 @@ class OclAnyTest extends AbstractOclTest {
 	void any_stringBySize() throws OclParseException {
 		Object result = eval(
 				"Sequence{'a', 'bb', 'ccc'}->any(s | s.size() > 1)", self);
-		assertNotNull(result);
+		assertTrue(List.of("bb", "ccc").contains(result), () -> "one of the longer strings: " + result);
 	}
 
 	// --- any on Set ---
@@ -97,7 +102,7 @@ class OclAnyTest extends AbstractOclTest {
 	@Test
 	void any_onSet() throws OclParseException {
 		Object result = eval("Set{1, 2, 3}->any(i | i > 0)", self);
-		assertNotNull(result);
+		assertTrue(List.of(1, 2, 3).contains(result), () -> "one of the elements: " + result);
 	}
 
 	// --- any on Bag ---
@@ -113,7 +118,7 @@ class OclAnyTest extends AbstractOclTest {
 	@Test
 	void any_onOrderedSet() throws OclParseException {
 		Object result = eval("OrderedSet{1, 2, 3}->any(i | i > 0)", self);
-		assertNotNull(result);
+		assertTrue(List.of(1, 2, 3).contains(result), () -> "one of the elements: " + result);
 	}
 
 	// --- any on model ---
@@ -157,7 +162,7 @@ class OclAnyTest extends AbstractOclTest {
 	@Test
 	void any_trueCondition() throws OclParseException {
 		Object result = eval("Sequence{1, 2, 3}->any(i | true)", self);
-		assertNotNull(result);
+		assertTrue(List.of(1, 2, 3).contains(result), () -> "one of the elements: " + result);
 	}
 
 	@Test

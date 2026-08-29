@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.tests;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.eclipse.emf.ecore.EAnnotation;
@@ -33,9 +35,12 @@ import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
+import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.engine.OclDelegateFactories;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -131,6 +136,68 @@ class OclLimitEnforcementTest extends AbstractOclTest {
 		// as an ordinary value (#191). Either way there is no result.
 		assertSame(OclInvalid.INSTANCE, result.value(),
 				"an evaluation that ran out of time has no result, not a partial one");
+	}
+
+	// ==== the parser ====
+
+	@Test
+	@Timeout(value = 30, unit = TimeUnit.SECONDS)
+	@DisplayName("an expression nested past what the stack can take is a parse exception")
+	void deeplyNestedExpressionIsAParseException() {
+		// ANTLR and the AST builder both recurse, and the evaluator's maxDepth applies only
+		// after parsing. Since #181 every failure of parse — a StackOverflowError included —
+		// comes out as an OclParseException, which is what makes this survivable (#173).
+		String deep = "(".repeat(50_000) + "1" + ")".repeat(50_000);
+
+		assertThrows(OclParseException.class, () -> engine.parse(deep, null));
+	}
+
+	@Test
+	@DisplayName("an input past maxInputLength is refused before the parser sees it")
+	void inputPastTheLengthLimitIsRefused() {
+		OclParserSupport parser = new OclParserSupport().maxInputLength(100);
+
+		OclParseException failure = assertThrows(OclParseException.class,
+				() -> parser.parse("1 + ".repeat(100) + "1", null));
+
+		assertTrue(failure.getMessage().contains("longer than 100 characters"), failure::getMessage);
+	}
+
+	// ==== the D29 gate, and what it deliberately does not cover ====
+
+	@Test
+	@DisplayName("additional providers are caller trust and are not gated")
+	void additionalProvidersAreNotGated() {
+		// The enable flag governs providers registered in the *configuration* — those come from
+		// wherever the engine was configured. A provider handed in with the options for one
+		// evaluation comes from the caller making that call, who is already trusted with the
+		// expression itself. Written down because "not gated" reads like an oversight (#173).
+		EObject person = createPerson("Alice", 30, 1000.0, false);
+		OclEvaluationOptions options = OclEvaluationOptions.strict()
+				.withCustomOperationsEnabled(false)
+				.withAdditionalProviders(List.of(() -> List.of(new OclOperation(
+						"shout", OclStandardLibrary.INSTANCE.string(), List.of(),
+						OclStandardLibrary.INSTANCE.string(),
+						(self, args) -> String.valueOf(self).toUpperCase()))));
+
+		assertEquals("HELLO", assertDoesNotThrow(
+				() -> evalWith("'hello'.shout()", person, options)),
+				"the flag is off, and the caller's own provider still runs");
+	}
+
+	// ==== the options themselves ====
+
+	@Test
+	@DisplayName("a limit that is not positive is refused when the options are built")
+	void nonPositiveLimitsAreRefused() {
+		// Fail closed: a zero or negative limit would read as "no limit" everywhere it is used
+		assertThrows(IllegalArgumentException.class, () -> OclEvaluationOptions.strict().withMaxDepth(0));
+		assertThrows(IllegalArgumentException.class,
+				() -> OclEvaluationOptions.strict().withMaxCollectionSize(-1));
+		assertThrows(IllegalArgumentException.class,
+				() -> OclEvaluationOptions.strict().withMaxClosureIterations(0));
+		assertThrows(IllegalArgumentException.class,
+				() -> OclEvaluationOptions.strict().withMaxRegexLength(-5));
 	}
 
 	// ==== EMF delegates ====
