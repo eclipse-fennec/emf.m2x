@@ -272,8 +272,9 @@ class OclAstBuilderBranchTest extends AbstractOclTest {
 		Object result = eval(
 				"self.employees->closure(e | e.employer.employees)->asSet()->size()",
 				company);
-		// All employees belong to same company, closure should find them all
-		assertNotNull(result);
+		// All employees belong to the same company, so the closure finds all three. The
+		// assertNotNull that stood here also passed for OclInvalid (#173).
+		assertEquals(3, result);
 	}
 
 	// === collectNested ===

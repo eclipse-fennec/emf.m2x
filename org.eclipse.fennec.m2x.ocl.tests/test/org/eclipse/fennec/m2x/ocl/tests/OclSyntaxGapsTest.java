@@ -145,8 +145,9 @@ class OclSyntaxGapsTest extends AbstractOclTest {
 
 	@Test
 	void g06_implicitSourceOpPre_parses() throws OclParseException {
-		// Ensure self.name@pre syntax parses (needs navigation context for @pre)
-		assertDoesNotThrow(() -> eval("self.name@pre", self));
+		// Outside a postcondition there is no pre-state, so @pre reads the current value —
+		// which is a result worth asserting, where "it parses" was not (#173)
+		assertEquals("Alice", eval("self.name@pre", self));
 	}
 
 	// ==================== G-07: Qualified Calls obj.Path::op() (§9.3.35/36) ====================
@@ -154,13 +155,13 @@ class OclSyntaxGapsTest extends AbstractOclTest {
 	@Test
 	void g07_qualifiedPropertyCall_parses() throws OclParseException {
 		// obj.Person::name — qualified property access (uses qualifier prefix)
-		assertDoesNotThrow(() -> eval("self.Person::name", self));
+		assertEquals("Alice", eval("self.Person::name", self));
 	}
 
 	@Test
 	void g07_qualifiedOperationCall_parses() throws OclParseException {
 		// obj.Person::getAge() — qualified operation call
-		assertDoesNotThrow(() -> eval("self.Person::name.size()", self));
+		assertEquals(5, eval("self.Person::name.size()", self));
 	}
 
 	// ==================== G-09: Nested Block Comments (§9.3.49) ====================
