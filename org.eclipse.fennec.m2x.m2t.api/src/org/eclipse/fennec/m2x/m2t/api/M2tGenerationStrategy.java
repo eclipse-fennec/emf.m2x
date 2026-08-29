@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.m2t.api;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.Charset;
 
@@ -48,14 +49,21 @@ public interface M2tGenerationStrategy {
 	 * Called when a writer is no longer needed (FileBlock ends).
 	 * Default implementation closes the writer.
 	 *
+	 * <p>A close that fails is reported, not swallowed. A buffered writer does its last —
+	 * and largest — write inside {@code close()}, so a disk that is full or a quota that is
+	 * exhausted shows up here and nowhere else; silence would let the generation report
+	 * success over a truncated file. The engine flushes before it closes and turns whatever
+	 * comes out of this method into a generation error for that file.
+	 *
 	 * @param filePath the file path
 	 * @param writer the writer to close
+	 * @throws UncheckedIOException if the writer could not be closed
 	 */
 	default void closeWriter(String filePath, Writer writer) {
 		try {
 			writer.close();
 		} catch (IOException e) {
-			// Close errors are non-fatal — file content was already flushed
+			throw new UncheckedIOException("Cannot close " + filePath, e);
 		}
 	}
 

@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,7 @@ import org.eclipse.fennec.m2x.m2t.api.M2tUnit;
 import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
 import org.eclipse.fennec.m2x.m2t.api.UnresolvedReferenceMode;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
+import org.eclipse.fennec.m2x.m2t.engine.FileSystemGenerationStrategy;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParserSupport;
 import org.eclipse.fennec.m2x.m2t.parser.M2tWhitespaceNormalizer;
@@ -102,15 +104,31 @@ public class M2tEngineImpl implements M2tEngine {
 	private final M2tParserSupport parserSupport;
 	private final UnitPackager packager;
 
-	// The four caches below are keyed weakly. They used to hold every module ever
+	// The caches below are keyed weakly. They used to hold every module ever
 	// parsed for the lifetime of the engine, which for a long-lived instance means a
 	// leak. EMF model objects do not override equals/hashCode, so a WeakHashMap keys by
 	// identity exactly as the IdentityHashMap did — it just lets go once the caller
 	// drops the module. Callers who want to be certain use release(Module).
+	//
+	// The parse result itself is not among them: it names its own module and indexes nodes
+	// inside it, so as the value of an entry it would keep its own key alive and no weak
+	// map could ever drop it (#184). It lives on the module, as a M2tParseMemo adapter.
 
-	/** Cache of parse results keyed by module identity, for auto-linking. */
-	private final Map<Module, M2tParseResult> parseResultCache =
-			Collections.synchronizedMap(new WeakHashMap<>());
+	/**
+	 * Guards everything that rewrites an AST: linking and whitespace normalization.
+	 *
+	 * <p>Both replace nodes in the caller's module in place, and both are done once and then
+	 * remembered. Without a lock two threads generating from the same module at the same time
+	 * can have one evaluate the AST while the other is still rewriting it, and the guard that
+	 * makes normalization happen once ({@code normalizedModules.add}) lets the second thread
+	 * straight through while the first is halfway (#184). Only this prologue is serialized —
+	 * evaluation, which does not write to the AST, runs outside it.
+	 */
+	private final Object astMutationLock = new Object();
+
+	/** The modules this engine parsed, for lookup by name. Weak — no value points back. */
+	private final Set<Module> parsedModules =
+			Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
 	/** Tracks which modules have been linked to avoid re-linking. */
 	private final Set<Module> linkedModules =
@@ -124,6 +142,16 @@ public class M2tEngineImpl implements M2tEngine {
 	private final Map<Module, List<String>> unresolvedReferences =
 			Collections.synchronizedMap(new WeakHashMap<>());
 
+	/**
+	 * Which modules were linked together with each module, so that a generation started
+	 * from one of them sees exactly that set (#184).
+	 *
+	 * <p>Values reference the co-linked modules strongly, but only for as long as the key
+	 * module lives — which is what makes a released or dropped module take its group with it.
+	 */
+	private final Map<Module, List<Module>> linkGroups =
+			Collections.synchronizedMap(new WeakHashMap<>());
+
 	/** Tracks which modules have been whitespace-normalized. */
 	private final Set<Module> normalizedModules =
 			Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
@@ -134,7 +162,7 @@ public class M2tEngineImpl implements M2tEngine {
 	 * parse time and dropped with the module, like the indentation map beside it.
 	 */
 	private final Map<EObject, SourcePosition> globalPositions =
-			java.util.Collections.synchronizedMap(new java.util.IdentityHashMap<>());
+			Collections.synchronizedMap(new WeakHashMap<>());
 
 	private final Map<TemplateInvocation, String> globalIndentationMap =
 			Collections.synchronizedMap(new WeakHashMap<>());
@@ -199,7 +227,8 @@ public class M2tEngineImpl implements M2tEngine {
 		Objects.requireNonNull(unitName, "unitName must not be null");
 		M2tParseResult result = parserSupport.buildModuleWithPending(source, unitName,
 				EcorePackage.eINSTANCE.getEObject(), config.packageRegistry());
-		parseResultCache.put(result.module(), result);
+		M2tParseMemo.attach(result);
+		parsedModules.add(result.module());
 		globalPositions.putAll(result.positions());
 		return result;
 	}
@@ -221,7 +250,7 @@ public class M2tEngineImpl implements M2tEngine {
 		Objects.requireNonNull(unitName, "unitName must not be null");
 		Objects.requireNonNull(options, "options must not be null");
 		// Compile asks the same resolvers under the same D29 limits as a link
-		return new M2tUnitCompiler(this::parseCached, parseResultCache, effectiveUnitResolvers(),
+		return new M2tUnitCompiler(this::parseCached, M2tParseMemo::of, effectiveUnitResolvers(),
 				config.unitResolverEnabled() ? config.allowedUnitModules() : Set.of(), packager, options)
 				.compile(source, unitName);
 	}
@@ -242,11 +271,17 @@ public class M2tEngineImpl implements M2tEngine {
 	@Override
 	public List<String> link(Module... modules) {
 		Objects.requireNonNull(modules, "modules must not be null");
+		synchronized (astMutationLock) {
+			return linkUnderLock(modules);
+		}
+	}
+
+	private List<String> linkUnderLock(Module... modules) {
 		List<M2tParseResult> results = new ArrayList<>();
 		List<String> warnings = new ArrayList<>();
 		for (Module m : modules) {
 			Objects.requireNonNull(m, "module element must not be null");
-			M2tParseResult pr = parseResultCache.get(m);
+			M2tParseResult pr = M2tParseMemo.of(m);
 			if (pr == null) {
 				// A module compiled under pin or rebind and loaded here carries what it still
 				// has to bind on itself (#139); an engine that never parsed it binds it from that
@@ -268,9 +303,11 @@ public class M2tEngineImpl implements M2tEngine {
 		M2tModuleLinker linker = new M2tModuleLinker();
 		warnings.addAll(linker.link(results));
 		Map<Module, List<String>> unresolved = linker.unresolvedReferences();
+		List<Module> group = results.stream().map(M2tParseResult::module).distinct().toList();
 		for (Module m : modules) {
 			linkedModules.add(m);
 			unresolvedReferences.put(m, unresolved.getOrDefault(m, List.of()));
+			linkGroups.put(m, group);
 		}
 		return warnings;
 	}
@@ -337,7 +374,7 @@ public class M2tEngineImpl implements M2tEngine {
 					case M2tUnit.CompiledUnit compiled -> resultFor(compiled.module());
 					case M2tUnit.SourceUnit source -> {
 						parse(source.source(), name);
-						yield parseResultCache.get(moduleByName(name));
+						yield M2tParseMemo.of(moduleByName(name));
 					}
 				};
 			} catch (M2tParseException failure) {
@@ -367,7 +404,7 @@ public class M2tEngineImpl implements M2tEngine {
 	 * an {@code extends}, has nothing left to resolve.
 	 */
 	private M2tParseResult resultFor(Module module) {
-		M2tParseResult known = parseResultCache.get(module);
+		M2tParseResult known = M2tParseMemo.of(module);
 		if (known != null) {
 			return known;
 		}
@@ -376,7 +413,7 @@ public class M2tEngineImpl implements M2tEngine {
 	}
 
 	private Module moduleByName(String name) {
-		for (Module module : parseResultCache.keySet()) {
+		for (Module module : List.copyOf(parsedModules)) {
 			if (name.equals(module.getName())) {
 				return module;
 			}
@@ -430,32 +467,34 @@ public class M2tEngineImpl implements M2tEngine {
 		Objects.requireNonNull(module, "module must not be null");
 		Objects.requireNonNull(context, "context must not be null");
 
-		// Auto-link if not yet linked
-		if (!linkedModules.contains(module)) {
-			link(module);
-		}
+		// Linking and normalizing rewrite the module; both happen once, under one lock
+		synchronized (astMutationLock) {
+			if (!linkedModules.contains(module)) {
+				linkUnderLock(module);
+			}
 
-		// A reference naming something that is not there ends the generation, as it does in
-		// QVT-O and QVT-R. Generating anyway is the quieter and worse outcome: a missing
-		// extends silently changes which templates are visible, so the document is not absent
-		// but wrong (#144). WARN restores the older, lenient behaviour.
-		List<String> unresolved = unresolvedReferences.getOrDefault(module, List.of());
-		if (!unresolved.isEmpty()
-				&& config.unresolvedReferenceMode() == UnresolvedReferenceMode.FAIL) {
-			return unresolvedReferenceFailure(unresolved);
-		}
+			// A reference naming something that is not there ends the generation, as it does in
+			// QVT-O and QVT-R. Generating anyway is the quieter and worse outcome: a missing
+			// extends silently changes which templates are visible, so the document is not absent
+			// but wrong (#144). WARN restores the older, lenient behaviour. Checked before
+			// normalization so a generation that will not run does not rewrite the AST.
+			List<String> unresolved = unresolvedReferences.getOrDefault(module, List.of());
+			if (!unresolved.isEmpty()
+					&& config.unresolvedReferenceMode() == UnresolvedReferenceMode.FAIL) {
+				return unresolvedReferenceFailure(unresolved);
+			}
 
-		// Apply MOFM2T §8.4 whitespace normalization after linking (needs resolved invocations)
-		WhitespaceMode wsMode = config.whitespaceMode();
-		if (wsMode != WhitespaceMode.NONE && normalizedModules.add(module)) {
-			M2tWhitespaceNormalizer normalizer = new M2tWhitespaceNormalizer(wsMode);
-			globalIndentationMap.putAll(normalizer.normalize(module));
+			WhitespaceMode mode = config.whitespaceMode();
+			if (mode != WhitespaceMode.NONE && normalizedModules.add(module)) {
+				// MOFM2T §8.4 whitespace normalization, after linking — it needs resolved invocations
+				globalIndentationMap.putAll(new M2tWhitespaceNormalizer(mode).normalize(module));
+			}
 		}
 
 		M2tEvalEnvironment env = M2tEvalEnvironment.root(context);
 		M2tWriterStack writers = new M2tWriterStack(config.maxOutputSize());
 		M2tEvaluator evaluator = new M2tEvaluator(oclEngine, env, writers, module,
-				getAllLinkedModules(module), globalIndentationMap, globalPositions,
+				generationModules(module), globalIndentationMap, globalPositions,
 				config.maxDiagnostics(),
 				config.maxTemplateDepth(), config.maxForIterations(), config.maxCrossProductSize(),
 				config.protectedAreaEnabled());
@@ -481,8 +520,8 @@ public class M2tEngineImpl implements M2tEngine {
 		Map<String, OpenModeKind> openModes = writers.getFileOpenModes();
 		Map<String, Charset> charsets = writers.getFileCharsets();
 
-		// Apply protected area merging if strategy is configured AND protected areas enabled (D31, T-6)
-		M2tGenerationStrategy strategy = config.generationStrategy();
+		// Apply protected area merging if a strategy applies AND protected areas enabled (D31, T-6)
+		M2tGenerationStrategy strategy = generationStrategy(context);
 		if (strategy != null && config.protectedAreaEnabled()) {
 			M2tProtectedAreaMerger merger = new M2tProtectedAreaMerger();
 			Map<String, String> mergedFiles = new LinkedHashMap<>(generatedFiles);
@@ -510,6 +549,28 @@ public class M2tEngineImpl implements M2tEngine {
 		}
 
 		return new M2tResult(evaluator.getDiagnostics(), generatedFiles, fileUniqueIds);
+	}
+
+	/**
+	 * Where this generation writes: the configured strategy, or the directory the context
+	 * names, or nowhere.
+	 *
+	 * <p>{@link M2tContext#targetDirectory()} says it is "the base directory for generated
+	 * files" and used to be read by nobody — an engine without a configured strategy kept
+	 * its files in the result and wrote none, whatever the context asked for (#184). The
+	 * configuration still wins where both are given: it is the more specific statement, and
+	 * it can direct output somewhere other than a directory.
+	 *
+	 * @param context the execution context
+	 * @return the strategy to write with, or {@code null} to keep the files in the result only
+	 */
+	private M2tGenerationStrategy generationStrategy(M2tContext context) {
+		if (config.generationStrategy() != null) {
+			return config.generationStrategy();
+		}
+		return context.targetDirectory() != null
+				? new FileSystemGenerationStrategy(context.targetDirectory())
+				: null;
 	}
 
 	/** Diagnostic source of the linking errors this engine raises itself. */
@@ -545,10 +606,23 @@ public class M2tEngineImpl implements M2tEngine {
 				if (writer == null) {
 					continue;
 				}
+				boolean written = false;
 				try {
 					writer.write(entry.getValue());
+					// Flush inside the try: a buffered writer writes most of the file here,
+					// and a failure has to reach the catch below as this file's error
+					writer.flush();
+					written = true;
 				} finally {
-					strategy.closeWriter(filePath, writer);
+					try {
+						strategy.closeWriter(filePath, writer);
+					} catch (RuntimeException closeFailure) {
+						// Only when the write itself succeeded — otherwise the write's own
+						// failure is the one worth reporting and this would replace it
+						if (written) {
+							throw closeFailure;
+						}
+					}
 				}
 			} catch (IOException | RuntimeException e) {
 				evaluator.addGenerationError(filePath, e);
@@ -578,12 +652,18 @@ public class M2tEngineImpl implements M2tEngine {
 	@Override
 	public void release(Module module) {
 		Objects.requireNonNull(module, "module must not be null");
-		parseResultCache.remove(module);
+		M2tParseMemo.detach(module);
+		parsedModules.remove(module);
 		linkedModules.remove(module);
+		linkGroups.remove(module);
+		unresolvedReferences.remove(module);
 		normalizedModules.remove(module);
 		synchronized (globalIndentationMap) {
 			globalIndentationMap.keySet().removeIf(
 					invocation -> EcoreUtil.isAncestor(module, invocation));
+		}
+		synchronized (globalPositions) {
+			globalPositions.keySet().removeIf(node -> EcoreUtil.isAncestor(module, node));
 		}
 	}
 
@@ -594,24 +674,44 @@ public class M2tEngineImpl implements M2tEngine {
 	 */
 	@Override
 	public void clearCaches() {
-		parseResultCache.clear();
+		for (Module module : List.copyOf(parsedModules)) {
+			M2tParseMemo.detach(module);
+		}
+		parsedModules.clear();
 		linkedModules.clear();
+		linkGroups.clear();
+		unresolvedReferences.clear();
 		normalizedModules.clear();
 		globalIndentationMap.clear();
 		globalPositions.clear();
 	}
 
 	/**
-	 * Returns all modules in the link set that includes the given module.
-	 * Collects from linkedModules set, or just the module itself if not linked.
+	 * The modules one generation started from the given module runs against: the module
+	 * itself, whatever it was linked together with, and everything those extend or import.
+	 *
+	 * <p>This used to be every module the engine had ever linked. That is not a link set —
+	 * an engine is a long-lived service, so a module linked much later and for an unrelated
+	 * caller could contribute a {@code overrides} to this generation and quietly take over a
+	 * template (#184). What a generation may see is decided by the module it starts from.
 	 */
-	private List<Module> getAllLinkedModules(Module module) {
+	private List<Module> generationModules(Module module) {
 		List<Module> all = new ArrayList<>();
-		synchronized (linkedModules) {
-			all.addAll(linkedModules);
+		Set<Module> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+		Deque<Module> queue = new ArrayDeque<>();
+		queue.add(module);
+		List<Module> group = linkGroups.get(module);
+		if (group != null) {
+			queue.addAll(group);
 		}
-		if (all.isEmpty()) {
-			all.add(module);
+		while (!queue.isEmpty()) {
+			Module current = queue.removeFirst();
+			if (current == null || !seen.add(current)) {
+				continue;
+			}
+			all.add(current);
+			queue.addAll(current.getExtends());
+			queue.addAll(current.getImports());
 		}
 		return all;
 	}

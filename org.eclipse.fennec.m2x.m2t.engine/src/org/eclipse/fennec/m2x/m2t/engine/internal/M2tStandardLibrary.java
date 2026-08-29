@@ -58,8 +58,16 @@ public class M2tStandardLibrary implements OclOperationProvider {
 	private static final PrimitiveType BOOLEAN_TYPE = OclStandardLibrary.INSTANCE.booleanType();
 
 	/**
-	 * Stateful tokenizer cache for strtok(). Keyed by source string.
-	 * Uses WeakHashMap so entries are cleaned up when the string is GC'd.
+	 * Stateful tokenizer cache for {@code strtok(delimiters, flag)}, keyed by source string.
+	 *
+	 * <p>Keying by the string is what the operation specifies: {@code flag = 0} starts a
+	 * tokenization of that string and {@code flag = 1} continues it, with nothing else
+	 * identifying which tokenization is meant. Two templates tokenizing the same string
+	 * value therefore share one position — inherent to the operation, not to this cache.
+	 * What is not inherent is how long that state lives: this library is built per
+	 * evaluation ({@code M2tEvaluator}), so the state ends with the generation. The
+	 * Acceleo reference keeps the same map {@code static}, shared by every generation in
+	 * the JVM.
 	 */
 	private final Map<String, StringTokenizer> tokenizerCache =
 			Collections.synchronizedMap(new WeakHashMap<>());

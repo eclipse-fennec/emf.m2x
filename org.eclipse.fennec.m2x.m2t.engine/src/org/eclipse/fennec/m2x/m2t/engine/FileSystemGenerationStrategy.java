@@ -71,6 +71,15 @@ public class FileSystemGenerationStrategy implements M2tGenerationStrategy {
 		return outputDirectory;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The file itself is opened with {@link LinkOption#NOFOLLOW_LINKS}: a symbolic link
+	 * where the generated file goes is refused rather than followed, so a link planted in the
+	 * output directory cannot make a template truncate a file outside of it. Checking for the
+	 * link first and opening afterwards would leave the gap between the two open; the option
+	 * makes the refusal part of the open itself.
+	 */
 	@Override
 	public Writer createWriter(String filePath, OpenModeKind mode, Charset charset) {
 		Path target = resolve(filePath);
@@ -82,12 +91,16 @@ public class FileSystemGenerationStrategy implements M2tGenerationStrategy {
 			}
 			if (mode == OpenModeKind.APPEND) {
 				return Files.newBufferedWriter(target, charset, StandardOpenOption.CREATE,
-						StandardOpenOption.WRITE, StandardOpenOption.APPEND);
+						StandardOpenOption.WRITE, StandardOpenOption.APPEND,
+						LinkOption.NOFOLLOW_LINKS);
 			}
 			return Files.newBufferedWriter(target, charset, StandardOpenOption.CREATE,
-					StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+					StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING,
+					LinkOption.NOFOLLOW_LINKS);
 		} catch (IOException e) {
-			throw new UncheckedIOException("Cannot write " + target, e);
+			// The template only ever named the relative path, and the diagnostic travels
+			// wherever the result does — the absolute output directory is not its business
+			throw new UncheckedIOException("Cannot write " + filePath, e);
 		}
 	}
 
@@ -100,7 +113,7 @@ public class FileSystemGenerationStrategy implements M2tGenerationStrategy {
 		try {
 			return Files.readString(target, charset);
 		} catch (IOException e) {
-			throw new UncheckedIOException("Cannot read existing content of " + target, e);
+			throw new UncheckedIOException("Cannot read existing content of " + filePath, e);
 		}
 	}
 

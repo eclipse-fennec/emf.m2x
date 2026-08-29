@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
@@ -74,13 +75,13 @@ final class M2tUnitCompiler {
 	}
 
 	private final Parser parser;
-	private final Map<Module, M2tParseResult> knownResults;
+	private final Function<Module, M2tParseResult> knownResults;
 	private final List<M2tUnitResolver> unitResolvers;
 	private final Set<String> allowedUnitModules;
 	private final UnitPackager packager;
 	private final DependencyMode mode;
 
-	M2tUnitCompiler(Parser parser, Map<Module, M2tParseResult> knownResults,
+	M2tUnitCompiler(Parser parser, Function<Module, M2tParseResult> knownResults,
 			List<M2tUnitResolver> unitResolvers, Set<String> allowedUnitModules,
 			UnitPackager packager, UnitCompileOptions options) {
 		this.parser = Objects.requireNonNull(parser, "parser must not be null");
@@ -167,7 +168,7 @@ final class M2tUnitCompiler {
 					yield EcoreUtil.copy(document);
 				}
 				Module copy = (Module) UnitPackager.detach(compiled.module());
-				M2tParseResult known = knownResults.get(compiled.module());
+				M2tParseResult known = knownResults.apply(compiled.module());
 				// A module this engine parsed keeps its link information; any other bare module
 				// is taken as it is — a leaf with nothing left to resolve
 				M2tParseResult result = known == null ? leaf(copy)
