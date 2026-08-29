@@ -14,16 +14,13 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
-import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+
+import org.eclipse.fennec.m2x.unit.resolve.ServiceLoaderUnitResolver;
 
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
-import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
-import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Asks every {@link QvtoUnitResolver} on the class path, in the order
@@ -49,37 +46,27 @@ import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
  *
  * @since 1.0
  */
-public final class ServiceLoaderUnitResolver implements QvtoUnitResolver {
+public final class ServiceLoaderQvtoUnitResolver implements QvtoUnitResolver {
 
 
-	private final ServiceLoader<QvtoUnitResolver> loader;
+	private final ServiceLoaderUnitResolver<QvtoUnitResolver, QvtoUnit> discovery;
 
-	public ServiceLoaderUnitResolver() {
-		this(ServiceLoader.load(QvtoUnitResolver.class, QvtoUnitResolver.class.getClassLoader()));
+	/** Asks the class path, through the loader bound to the resolver interface. */
+	public ServiceLoaderQvtoUnitResolver() {
+		this.discovery = new ServiceLoaderUnitResolver<>(QvtoUnitResolver.class,
+				QvtoUnitResolver::resolveUnit, ServiceLoaderQvtoUnitResolver.class);
 	}
 
-	ServiceLoaderUnitResolver(ServiceLoader<QvtoUnitResolver> loader) {
-		this.loader = loader;
+	/**
+	 * @param loader the loader to ask, for tests
+	 */
+	ServiceLoaderQvtoUnitResolver(ServiceLoader<QvtoUnitResolver> loader) {
+		this.discovery = new ServiceLoaderUnitResolver<>(QvtoUnitResolver.class, loader,
+				QvtoUnitResolver::resolveUnit, ServiceLoaderQvtoUnitResolver.class);
 	}
 
 	@Override
 	public Optional<QvtoUnit> resolveUnit(String qualifiedName) {
-		// Declaration order decides; every provider is asked, a failing one is an error, answers
-		// have to agree (#141). A provider that cannot even be instantiated is a failing source.
-		List<ResolutionPolicy.Source<QvtoUnit>> sources = new ArrayList<>();
-		try {
-			for (QvtoUnitResolver resolver : loader) {
-				// A provider that declared itself would otherwise recurse forever.
-				if (resolver instanceof ServiceLoaderUnitResolver) {
-					continue;
-				}
-				sources.add(ResolutionPolicy.Source.of("class-path provider " + resolver.getClass().getName(),
-						resolver::resolveUnit));
-			}
-		} catch (ServiceConfigurationError failure) {
-			throw new UnitResolutionException("a class-path provider of " + QvtoUnitResolver.class.getSimpleName()
-					+ " could not be loaded for '" + qualifiedName + "': " + failure.getMessage(), failure);
-		}
-		return ResolutionPolicy.resolve(qualifiedName, sources);
+		return discovery.resolveUnit(qualifiedName);
 	}
 }

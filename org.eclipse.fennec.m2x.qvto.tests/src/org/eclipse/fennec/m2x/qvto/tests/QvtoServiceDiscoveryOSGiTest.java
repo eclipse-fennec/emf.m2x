@@ -153,7 +153,7 @@ class QvtoServiceDiscoveryOSGiTest {
 	@DisplayName("the class-path route finds nothing here — one mechanism per environment")
 	void serviceLoaderRouteIsInert() throws Exception {
 		// DiscoveredTestUnitResolver sits in this bundle's META-INF/services and answers for
-		// discovered.library. ServiceLoaderUnitResolver looks through the class loader of
+		// discovered.library. ServiceLoaderQvtoUnitResolver looks through the class loader of
 		// QvtoUnitResolver, which is the api bundle's and cannot see into this one — so the
 		// class-path route is inert under OSGi by construction, and the service route is the
 		// only one that answers. Two mechanisms racing for the same import is exactly what a

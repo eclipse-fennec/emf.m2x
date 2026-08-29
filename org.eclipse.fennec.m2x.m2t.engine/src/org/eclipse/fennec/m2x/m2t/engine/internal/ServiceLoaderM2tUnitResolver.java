@@ -14,16 +14,13 @@
  */
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
-import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+
+import org.eclipse.fennec.m2x.unit.resolve.ServiceLoaderUnitResolver;
 
 import org.eclipse.fennec.m2x.m2t.api.M2tUnit;
 import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
-import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
-import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Asks every {@link M2tUnitResolver} on the class path, in the order
@@ -52,34 +49,24 @@ import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 public final class ServiceLoaderM2tUnitResolver implements M2tUnitResolver {
 
 
-	private final ServiceLoader<M2tUnitResolver> loader;
+	private final ServiceLoaderUnitResolver<M2tUnitResolver, M2tUnit> discovery;
 
+	/** Asks the class path, through the loader bound to the resolver interface. */
 	public ServiceLoaderM2tUnitResolver() {
-		this(ServiceLoader.load(M2tUnitResolver.class, M2tUnitResolver.class.getClassLoader()));
+		this.discovery = new ServiceLoaderUnitResolver<>(M2tUnitResolver.class,
+				M2tUnitResolver::resolveUnit, ServiceLoaderM2tUnitResolver.class);
 	}
 
+	/**
+	 * @param loader the loader to ask, for tests
+	 */
 	ServiceLoaderM2tUnitResolver(ServiceLoader<M2tUnitResolver> loader) {
-		this.loader = loader;
+		this.discovery = new ServiceLoaderUnitResolver<>(M2tUnitResolver.class, loader,
+				M2tUnitResolver::resolveUnit, ServiceLoaderM2tUnitResolver.class);
 	}
 
 	@Override
 	public Optional<M2tUnit> resolveUnit(String qualifiedName) {
-		// Declaration order decides; every provider is asked, a failing one is an error, answers
-		// have to agree (#141). A provider that cannot even be instantiated is a failing source.
-		List<ResolutionPolicy.Source<M2tUnit>> sources = new ArrayList<>();
-		try {
-			for (M2tUnitResolver resolver : loader) {
-				// A provider that declared itself would otherwise recurse forever.
-				if (resolver instanceof ServiceLoaderM2tUnitResolver) {
-					continue;
-				}
-				sources.add(ResolutionPolicy.Source.of("class-path provider " + resolver.getClass().getName(),
-						resolver::resolveUnit));
-			}
-		} catch (ServiceConfigurationError failure) {
-			throw new UnitResolutionException("a class-path provider of " + M2tUnitResolver.class.getSimpleName()
-					+ " could not be loaded for '" + qualifiedName + "': " + failure.getMessage(), failure);
-		}
-		return ResolutionPolicy.resolve(qualifiedName, sources);
+		return discovery.resolveUnit(qualifiedName);
 	}
 }

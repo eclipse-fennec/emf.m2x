@@ -14,16 +14,13 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
-import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
+
+import org.eclipse.fennec.m2x.unit.resolve.ServiceLoaderUnitResolver;
 
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
-import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
-import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Asks every {@link QvtdUnitResolver} on the class path, in the order
@@ -52,34 +49,24 @@ import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 public final class ServiceLoaderQvtdUnitResolver implements QvtdUnitResolver {
 
 
-	private final ServiceLoader<QvtdUnitResolver> loader;
+	private final ServiceLoaderUnitResolver<QvtdUnitResolver, QvtdUnit> discovery;
 
+	/** Asks the class path, through the loader bound to the resolver interface. */
 	public ServiceLoaderQvtdUnitResolver() {
-		this(ServiceLoader.load(QvtdUnitResolver.class, QvtdUnitResolver.class.getClassLoader()));
+		this.discovery = new ServiceLoaderUnitResolver<>(QvtdUnitResolver.class,
+				QvtdUnitResolver::resolveUnit, ServiceLoaderQvtdUnitResolver.class);
 	}
 
+	/**
+	 * @param loader the loader to ask, for tests
+	 */
 	ServiceLoaderQvtdUnitResolver(ServiceLoader<QvtdUnitResolver> loader) {
-		this.loader = loader;
+		this.discovery = new ServiceLoaderUnitResolver<>(QvtdUnitResolver.class, loader,
+				QvtdUnitResolver::resolveUnit, ServiceLoaderQvtdUnitResolver.class);
 	}
 
 	@Override
 	public Optional<QvtdUnit> resolveUnit(String qualifiedName) {
-		// Declaration order decides; every provider is asked, a failing one is an error, answers
-		// have to agree (#141). A provider that cannot even be instantiated is a failing source.
-		List<ResolutionPolicy.Source<QvtdUnit>> sources = new ArrayList<>();
-		try {
-			for (QvtdUnitResolver resolver : loader) {
-				// A provider that declared itself would otherwise recurse forever.
-				if (resolver instanceof ServiceLoaderQvtdUnitResolver) {
-					continue;
-				}
-				sources.add(ResolutionPolicy.Source.of("class-path provider " + resolver.getClass().getName(),
-						resolver::resolveUnit));
-			}
-		} catch (ServiceConfigurationError failure) {
-			throw new UnitResolutionException("a class-path provider of " + QvtdUnitResolver.class.getSimpleName()
-					+ " could not be loaded for '" + qualifiedName + "': " + failure.getMessage(), failure);
-		}
-		return ResolutionPolicy.resolve(qualifiedName, sources);
+		return discovery.resolveUnit(qualifiedName);
 	}
 }

@@ -14,22 +14,11 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.List;
 import java.util.Optional;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
-import org.eclipse.fennec.m2x.unit.api.UnitNames;
-import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
+import org.eclipse.fennec.m2x.unit.osgi.OsgiServiceUnitResolver;
 import org.osgi.framework.BundleContext;
-import org.osgi.framework.Constants;
-import org.osgi.framework.InvalidSyntaxException;
-import org.osgi.framework.ServiceReference;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 
@@ -66,58 +55,20 @@ public class QvtoServiceUnitResolver implements QvtoUnitResolver {
 	/** Service property marking this resolver, so the lookup can exclude itself. */
 	public static final String RESOLVER_KIND = "qvto.resolver.kind";
 
-	private static final Logger LOG = Logger.getLogger(QvtoServiceUnitResolver.class.getName());
+	private final OsgiServiceUnitResolver<QvtoUnitResolver, QvtoUnit> discovery;
 
-	private final BundleContext context;
-
+	/**
+	 * @param context the bundle context, injected by the component runtime
+	 */
 	@Activate
 	public QvtoServiceUnitResolver(BundleContext context) {
-		this.context = context;
+		this.discovery = new OsgiServiceUnitResolver<>(context, QvtoUnitResolver.class,
+				UNIT_NAME, RESOLVER_KIND, QvtoUnitResolver::resolveUnit);
 	}
 
 	@Override
 	public Optional<QvtoUnit> resolveUnit(String qualifiedName) {
-		Collection<ServiceReference<QvtoUnitResolver>> candidates;
-		try {
-			candidates = context.getServiceReferences(QvtoUnitResolver.class,
-					"(&(" + UNIT_NAME + "=" + UnitNames.escapeFilterValue(qualifiedName)
-							+ ")(!(" + RESOLVER_KIND + "=discovery)))");
-		} catch (InvalidSyntaxException malformed) {
-			// The name comes out of a transformation, so it can contain anything the
-			// grammar allows — which is not necessarily a valid LDAP filter value.
-			LOG.log(Level.FINE, malformed,
-					() -> "Not a usable service filter, so nothing can be registered under it: "
-							+ qualifiedName);
-			return Optional.empty();
-		}
-		// Ranking decides the order, highest first (#141): ServiceReference's natural order is
-		// ascending by ranking and, for equal ranking, descending by id — reversed, the highest
-		// ranking comes first and, among equals, the one registered first.
-		List<ServiceReference<QvtoUnitResolver>> ordered = new ArrayList<>(candidates);
-		ordered.sort(Comparator.reverseOrder());
-		List<ResolutionPolicy.Source<QvtoUnit>> sources = new ArrayList<>();
-		for (ServiceReference<QvtoUnitResolver> reference : ordered) {
-			sources.add(ResolutionPolicy.Source.of(describe(reference), name -> {
-				QvtoUnitResolver resolver = context.getService(reference);
-				if (resolver == null) {
-					return Optional.empty(); // gone between the lookup and now
-				}
-				try {
-					return resolver.resolveUnit(name);
-				} finally {
-					context.ungetService(reference);
-				}
-			}));
-		}
-		// Every source is asked, a failing source is an error, answers have to agree — and a
-		// failure travels to the caller as a UnitResolutionException, not as "not found"
-		return ResolutionPolicy.resolve(qualifiedName, sources);
+		return discovery.resolveUnit(qualifiedName);
 	}
 
-	private static String describe(ServiceReference<?> reference) {
-		Object ranking = reference.getProperty(Constants.SERVICE_RANKING);
-		return "service " + reference.getProperty(Constants.SERVICE_ID) + " of bundle "
-				+ (reference.getBundle() == null ? "?" : reference.getBundle().getSymbolicName())
-				+ (ranking == null ? "" : " (ranking " + ranking + ")");
-	}
 }
