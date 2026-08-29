@@ -62,6 +62,7 @@ import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
+import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
@@ -132,6 +133,7 @@ public class QvtoEvaluator {
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
 	private final ImperativeDispatch imperativeSwitch = new ImperativeDispatch();
 	private final QvtOpDispatch qvtOpSwitch = new QvtOpDispatch();
+	private final OclDispatch oclSwitch = new OclDispatch();
 	private int stackDepth;
 
 	/** Deadline for timeout enforcement (nanoseconds), or 0 if no timeout. */
@@ -301,116 +303,151 @@ public class QvtoEvaluator {
 			return null;
 		}
 
-		// 1. ImperativeOCL switch
+		// One dispatch per metamodel, and nothing else. The three switches are generated from
+		// the three packages an expression can come from, and each of them answers UNHANDLED
+		// for a node that is not its own. Before #193 the third was an instanceof chain of six
+		// special cases in this method, which meant a new expression type had to be added in
+		// two places and would otherwise be silently half-implemented — evaluated by the OCL
+		// engine, which does not know QVT-O's semantics.
 		Object result = imperativeSwitch.doSwitch(expr);
 		if (result != UNHANDLED) {
 			return unwrapNull(result);
 		}
-
-		// 2. QvtOperational switch (Phase B: mappings, object exp, etc.)
 		result = qvtOpSwitch.doSwitch(expr);
 		if (result != UNHANDLED) {
 			return unwrapNull(result);
 		}
-
-		// 3. QVT-O model extent operations (objectsOfType, objects)
-		// Check operation name BEFORE evaluating source to avoid unnecessary
-		// side effects (e.g. String.incrStrCounter('Foo').repr() — repr is not
-		// an extent/element op, so don't evaluate the incrStrCounter source here)
-		if (expr instanceof OperationCallExp opCall && opCall.getOwnedSource() != null) {
-			String opName = opCall.getName();
-			if (QvtoModelOperations.isExtentOperation(opName)) {
-				result = modelOperations.handleExtentOperation(opCall);
-				if (result != QvtoModelOperations.UNHANDLED) {
-					return QvtoModelOperations.unwrapNull(result);
-				}
-			}
-			if (QvtoModelOperations.isElementOperation(opName)) {
-				// §8.3.4: Element operations (metaClassName, subobjects, clone, etc.)
-				result = modelOperations.handleElementOperation(opCall);
-				if (result != QvtoModelOperations.UNHANDLED) {
-					return QvtoModelOperations.unwrapNull(result);
-				}
-			}
+		result = oclSwitch.doSwitch(expr);
+		if (result != UNHANDLED) {
+			return unwrapNull(result);
 		}
 
-		// 4. IteratorExp — evaluate source through QVT-O dispatch so extent
-		// operations (rootObjects, objectsOfType) and imperative expressions work
-		if (expr instanceof IteratorExp iterExp) {
-			return unwrapNull(evalIteratorExp(iterExp));
-		}
-
-		// 5. IfExp — evaluate here to ensure imperative body expressions
-		// (BlockExp, etc.) are dispatched through QVT-O eval, not OCL eval
-		if (expr instanceof IfExp ifExp) {
-			return evalIfExp(ifExp);
-		}
-
-		// 6. §8.1.10: Intermediate property read — intercept before OCL delegation
-		if (expr instanceof PropertyCallExp propCall) {
-			Object propResult = evalIntermediatePropertyRead(propCall);
-			if (propResult != UNHANDLED) {
-				return unwrapNull(propResult);
-			}
-		}
-
-		// 6.5. QVT-O lenient null handling for string concat — OCL strict mode
-		// rejects null arguments, but QVT-O should coerce null to "" in string context
-		if (expr instanceof OperationCallExp opCall && "+".equals(opCall.getName())) {
-			Object source = eval(opCall.getOwnedSource());
-			if (source instanceof String || source == null) {
-				Object arg = !opCall.getOwnedArguments().isEmpty()
-						? eval(opCall.getOwnedArguments().get(0)) : null;
-				String left = source != null ? source.toString() : "";
-				String right = arg != null ? arg.toString() : "";
-				return left + right;
-			}
-		}
-
-		// 6.6. §8.1.13: OperationCallExp with imperative source expression
-		// (e.g. "new T(m).transform()") — OCL engine cannot evaluate imperative
-		// sub-expressions, so we evaluate the source through QVT-O dispatch and
-		// delegate the operation call to the registered OCL custom operations.
-		// IMPORTANT: Must return here to avoid evalOcl re-evaluating the source.
-		if (expr instanceof OperationCallExp opCall
-				&& opCall.getOwnedSource() instanceof ImperativeExpression) {
-			Object source = eval(opCall.getOwnedSource());
-			Object[] args = new Object[opCall.getOwnedArguments().size()];
-			for (int i = 0; i < args.length; i++) {
-				args[i] = eval(opCall.getOwnedArguments().get(i));
-			}
-			String opName = opCall.getName();
-			// Try custom operation providers — use fallback pattern (AnyType catch-all)
-			// to avoid invoking multiple matching ops with side effects
-			OclOperation fallback = null;
-			for (var provider : oclEngine.getOperationProviders(
-				OclEvaluationOptions.lenient().withAdditionalProviders(additionalProviders()))) {
-				for (var op : provider.getOperations()) {
-					if (!op.name().equals(opName)) {
-						continue;
-					}
-					EClassifier ownerType = op.ownerType();
-					if (ownerType instanceof AnyType) {
-						fallback = op;
-					} else {
-						// Non-AnyType: exact match — invoke immediately
-						return op.implementation().apply(source, args);
-					}
-				}
-			}
-			if (fallback != null) {
-				Object opResult = fallback.implementation().apply(source, args);
-				if (opResult != null) {
-					return opResult;
-				}
-			}
-			// No custom provider matched — fall through to evalOcl for stdlib ops
-			// (e.g. repr, size). Re-evaluation of ImperativeExpression source is
-			// acceptable here since stdlib ops have no side effects.
-		}
-
-		// 7. OCL delegation
+		// What no QVT-O rule claims is plain OCL, and the OCL engine evaluates it
 		return evalOcl(expr);
+	}
+
+	/**
+	 * The OCL expressions QVT-O evaluates itself, rather than handing to the OCL engine.
+	 *
+	 * <p>Each of these has a QVT-O meaning the OCL engine cannot know: an extent operation, an
+	 * iterator whose source may be one, an {@code if} whose branches may be imperative, an
+	 * intermediate property, a {@code +} that treats null as the empty string, an operation
+	 * whose source is an imperative expression. A node this switch does not claim answers
+	 * {@link #UNHANDLED} and goes to OCL.
+	 */
+	private class OclDispatch extends OclSwitch<Object> {
+
+		@Override
+		public Object caseOperationCallExp(OperationCallExp opCall) {
+			// The operation name is checked before the source is evaluated, so that a source
+			// with a side effect is not evaluated for an operation this switch does not claim
+			// (String::incrStrCounter('Foo').repr() — repr is neither an extent nor an element
+			// operation, so the counter must not be incremented here)
+			if (opCall.getOwnedSource() != null) {
+				String opName = opCall.getName();
+				if (QvtoModelOperations.isExtentOperation(opName)) {
+					Object handled = modelOperations.handleExtentOperation(opCall);
+					if (handled != QvtoModelOperations.UNHANDLED) {
+						return wrapNull(QvtoModelOperations.unwrapNull(handled));
+					}
+				}
+				if (QvtoModelOperations.isElementOperation(opName)) {
+					// §8.3.4: metaClassName, subobjects, clone and the rest
+					Object handled = modelOperations.handleElementOperation(opCall);
+					if (handled != QvtoModelOperations.UNHANDLED) {
+						return wrapNull(QvtoModelOperations.unwrapNull(handled));
+					}
+				}
+			}
+			// QVT-O reads null as the empty string in a string concatenation, where OCL's
+			// strict mode rejects the argument
+			if ("+".equals(opCall.getName())) {
+				Object source = eval(opCall.getOwnedSource());
+				if (source instanceof String || source == null) {
+					Object arg = opCall.getOwnedArguments().isEmpty() ? null
+							: eval(opCall.getOwnedArguments().get(0));
+					return (source != null ? source.toString() : "")
+							+ (arg != null ? arg.toString() : "");
+				}
+			}
+			// §8.1.13: an operation on an imperative source — "new T(m).transform()". The OCL
+			// engine cannot evaluate the source, so it is evaluated here and the call is offered
+			// to the registered custom operations. Answering here matters: falling through would
+			// evaluate the source a second time.
+			if (opCall.getOwnedSource() instanceof ImperativeExpression) {
+				Object handled = callOnImperativeSource(opCall);
+				if (handled != UNHANDLED) {
+					return handled;
+				}
+			}
+			return UNHANDLED;
+		}
+
+		@Override
+		public Object caseIteratorExp(IteratorExp iterExp) {
+			// Through the QVT-O dispatch, so that an extent operation as the source
+			// (rootObjects, objectsOfType) and imperative bodies work
+			return wrapNull(evalIteratorExp(iterExp));
+		}
+
+		@Override
+		public Object caseIfExp(IfExp ifExp) {
+			// Here rather than in OCL, so that an imperative branch (a BlockExp, say) is
+			// dispatched through this evaluator
+			return wrapNull(evalIfExp(ifExp));
+		}
+
+		@Override
+		public Object casePropertyCallExp(PropertyCallExp propCall) {
+			// §8.1.10: an intermediate property is read from the store, not from the object
+			Object handled = evalIntermediatePropertyRead(propCall);
+			return handled == UNHANDLED ? UNHANDLED : wrapNull(handled);
+		}
+
+		@Override
+		public Object defaultCase(EObject object) {
+			return UNHANDLED;
+		}
+	}
+
+	/**
+	 * §8.1.13: an operation call whose source is an imperative expression.
+	 *
+	 * @param opCall the call
+	 * @return what the operation answered, or {@link #UNHANDLED} to let OCL evaluate it — which
+	 *         re-evaluates the source, acceptable only because the standard-library operations
+	 *         that end up there have no side effects
+	 */
+	private Object callOnImperativeSource(OperationCallExp opCall) {
+		Object source = eval(opCall.getOwnedSource());
+		Object[] args = new Object[opCall.getOwnedArguments().size()];
+		for (int i = 0; i < args.length; i++) {
+			args[i] = eval(opCall.getOwnedArguments().get(i));
+		}
+		String opName = opCall.getName();
+		// The catch-all is remembered rather than invoked, so that an exact match wins and no
+		// operation with a side effect is invoked twice
+		OclOperation fallback = null;
+		for (var provider : oclEngine.getOperationProviders(
+				OclEvaluationOptions.lenient().withAdditionalProviders(additionalProviders()))) {
+			for (var op : provider.getOperations()) {
+				if (!op.name().equals(opName)) {
+					continue;
+				}
+				if (op.ownerType() instanceof AnyType) {
+					fallback = op;
+				} else {
+					return wrapNull(op.implementation().apply(source, args));
+				}
+			}
+		}
+		if (fallback != null) {
+			Object opResult = fallback.implementation().apply(source, args);
+			if (opResult != null) {
+				return opResult;
+			}
+		}
+		return UNHANDLED;
 	}
 
 	/**
