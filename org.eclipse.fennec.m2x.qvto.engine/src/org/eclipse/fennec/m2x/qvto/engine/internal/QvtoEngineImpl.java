@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.stream.Stream;
 import org.eclipse.emf.common.util.BasicDiagnostic;
@@ -99,8 +100,16 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationI
 	private final int maxBlackboxLibraries;
 	private final UnitPackager packager;
 
-	/** Loaded transformation for RelationImplementationProvider (D39, Phase 4b). */
-	private volatile OperationalTransformation loadedTransformation;
+	/**
+	 * The transformations loaded for {@link RelationImplementationProvider} (D39, Phase 4b).
+	 *
+	 * <p>A list, not one slot: an engine is shared, and two QVT-R runs using it as their
+	 * implementation provider each load their own transformation — with a single slot the
+	 * second load silently took the first run's relations away, mid-run (#187). Loads keep
+	 * their order, so which transformation answers for a relation name is decided the same way
+	 * every time.
+	 */
+	private final List<OperationalTransformation> loadedTransformations = new CopyOnWriteArrayList<>();
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -366,22 +375,36 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationI
 	 */
 	@Override
 	public void loadTransformation(OperationalTransformation transformation) {
-		this.loadedTransformation = Objects.requireNonNull(transformation);
+		Objects.requireNonNull(transformation, "transformation must not be null");
+		if (!loadedTransformations.contains(transformation)) {
+			loadedTransformations.add(transformation);
+		}
 	}
 
 	@Override
 	public boolean canProvide(String relationQualifiedName) {
-		OperationalTransformation ot = loadedTransformation;
-		if (ot == null) {
-			return false;
+		return providerFor(relationQualifiedName) != null;
+	}
+
+	/**
+	 * The loaded transformation that has a mapping of this name, in load order.
+	 *
+	 * @param relationQualifiedName the relation a QVT-R run is asking for
+	 * @return the transformation, or {@code null} if none of them has it
+	 */
+	private OperationalTransformation providerFor(String relationQualifiedName) {
+		for (OperationalTransformation candidate : loadedTransformations) {
+			if (findMappingByName(candidate, relationQualifiedName) != null) {
+				return candidate;
+			}
 		}
-		return findMappingByName(ot, relationQualifiedName) != null;
+		return null;
 	}
 
 	@Override
 	public QvtdExecutionResult executeRelation(String relationQualifiedName,
 			QvtdExecutionContext qvtdContext) {
-		OperationalTransformation ot = loadedTransformation;
+		OperationalTransformation ot = providerFor(relationQualifiedName);
 		if (ot == null) {
 			return new QvtdExecutionResult(
 					List.of(new BasicDiagnostic(

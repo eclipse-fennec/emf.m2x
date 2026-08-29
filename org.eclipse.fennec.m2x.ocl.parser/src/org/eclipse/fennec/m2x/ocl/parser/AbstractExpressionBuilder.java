@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Collection;
 import java.util.HashSet;
@@ -991,15 +992,56 @@ public class AbstractExpressionBuilder {
 				}
 			}
 		}
-		if (packageRegistry != null) {
-			for (Object key : packageRegistry.keySet().toArray()) {
-				EPackage pkg = packageRegistry.getEPackage((String) key);
-				if (pkg != null && (pkg.getName().equals(packageName)
-						|| pkg.getNsURI().equals(packageName))) {
-					EClassifier found = pkg.getEClassifier(classifierName);
-					if (found != null) {
-						return found;
-					}
+		// What this expression declared beats what happens to be registered: an import or an
+		// alias names one package, the registry names whatever a bundle put there
+		for (EPackage pkg : scopePackages()) {
+			if (pkg.getName().equals(packageName) || pkg.getNsURI().equals(packageName)) {
+				EClassifier found = pkg.getEClassifier(classifierName);
+				if (found != null) {
+					return found;
+				}
+			}
+		}
+		return findInRegistry(packageName, classifierName);
+	}
+
+	/**
+	 * The registry, asked by nsURI first and only then searched by name.
+	 *
+	 * <p>The nsURI is the identity of a package; a name is not. Searching the registry means
+	 * asking every {@code EPackage.Descriptor} to instantiate its package — in an IDE, every
+	 * model bundle that is registered — and then matching on a simple name, so a package
+	 * another bundle registered under the same name can answer for one this document meant
+	 * (#186). The search stays, because a qualified name without an import has nowhere else to
+	 * go, but it runs last and in a fixed order, so it at least answers the same way twice.
+	 *
+	 * @param packageName the package part of the name, an nsURI or a simple name
+	 * @param classifierName the classifier to find in it
+	 * @return the classifier, or {@code null}
+	 */
+	private EClassifier findInRegistry(String packageName, String classifierName) {
+		if (packageRegistry == null) {
+			return null;
+		}
+		EPackage byUri = packageRegistry.getEPackage(packageName);
+		if (byUri != null) {
+			EClassifier found = byUri.getEClassifier(classifierName);
+			if (found != null) {
+				return found;
+			}
+		}
+		List<String> keys = new ArrayList<>();
+		for (Object key : packageRegistry.keySet().toArray()) {
+			keys.add((String) key);
+		}
+		Collections.sort(keys);
+		for (String key : keys) {
+			EPackage pkg = packageRegistry.getEPackage(key);
+			if (pkg != null && (pkg.getName().equals(packageName)
+					|| pkg.getNsURI().equals(packageName))) {
+				EClassifier found = pkg.getEClassifier(classifierName);
+				if (found != null) {
+					return found;
 				}
 			}
 		}

@@ -472,6 +472,43 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 	 * Under OSGi that role arrives as its own service registration; in plain Java the
 	 * engine created by {@code QvtoEngines} carries both.
 	 */
+	@Nested
+	@DisplayName("#187: an engine serving two runs")
+	class SharedProvider {
+
+		@Test
+		@DisplayName("a second loaded transformation does not take the first one's relations away")
+		void loadingASecondTransformationKeepsTheFirst() throws QvtoParseException {
+			// An engine is shared — under OSGi one service serves everybody — and each QVT-R run
+			// loads the transformation that implements its relations. With one slot for it, the
+			// second load silently emptied the first run's provider, mid-run.
+			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
+			QvtoEngine engine = QvtoEngines.create(QvtoConfiguration.builder(oclConfig).build());
+
+			engine.loadTransformation(engine.parse("""
+					modeltype SRC uses 'http://test/simpleuml/1.0';
+					modeltype TGT uses 'http://test/simplerdbms/1.0';
+					transformation First(in uml : SRC, out rdbms : TGT);
+					mapping Class::firstMapping() : Table {
+						name := self.name;
+					}
+					""", "First"));
+			engine.loadTransformation(engine.parse("""
+					modeltype SRC uses 'http://test/simpleuml/1.0';
+					modeltype TGT uses 'http://test/simplerdbms/1.0';
+					transformation Second(in uml : SRC, out rdbms : TGT);
+					mapping Class::secondMapping() : Table {
+						name := self.name;
+					}
+					""", "Second"));
+
+			RelationImplementationProvider provider = asProvider(engine);
+			assertTrue(provider.canProvide("secondMapping"), "the transformation just loaded");
+			assertTrue(provider.canProvide("firstMapping"),
+					"the one loaded before it is still there");
+		}
+	}
+
 	private static RelationImplementationProvider asProvider(QvtoEngine engine) {
 		return (RelationImplementationProvider) engine;
 	}

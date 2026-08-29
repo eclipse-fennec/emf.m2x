@@ -195,9 +195,15 @@ public interface OclEngine {
 	/**
 	 * Validates a parsed expression for type correctness and well-formedness.
 	 *
+	 * <p><b>Not implemented yet</b> (GAP-3): the default engine throws
+	 * {@link UnsupportedOperationException}. What parsing can resolve it reports as it parses,
+	 * so an expression that came out of {@code parse} has been checked as far as this
+	 * implementation checks anything.
+	 *
 	 * @param expression the parsed OCL expression to validate
 	 * @param contextType the {@code EClassifier} that defines the type of {@code self}
 	 * @return a list of diagnostics; empty if the expression is valid
+	 * @throws UnsupportedOperationException if the engine has no type checker
 	 */
 	List<Diagnostic> validate(OclExpression expression, EClassifier contextType);
 
