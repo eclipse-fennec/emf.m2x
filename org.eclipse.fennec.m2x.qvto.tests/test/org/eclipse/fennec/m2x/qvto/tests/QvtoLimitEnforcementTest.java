@@ -102,6 +102,32 @@ class QvtoLimitEnforcementTest extends AbstractQvtoEngineTest {
 	}
 
 	@Nested
+	@DisplayName("§8.2.1.9: instantiation")
+	class Instantiation {
+
+		@Test
+		@DisplayName("an abstract class cannot be instantiated")
+		void abstractClassIsRefused() throws QvtoParseException {
+			// An object expression naming an abstract class would produce an instance of
+			// something the metamodel says has none — untested until now (#175)
+			// EClassifier is abstract in Ecore, so no test metamodel of its own is needed
+			QvtoExecutionResult result = executeWithExtents("""
+					modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+					transformation abstractTest(inout m : ECORE) {
+					    main() {
+					        var made := object EClassifier {};
+					    }
+					}
+					""", new BasicQvtoModelExtent());
+
+			assertFalse(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+			assertTrue(result.diagnostics().stream()
+					.anyMatch(d -> d.getMessage().contains("Cannot instantiate")),
+					() -> "diagnostics: " + result.diagnostics());
+		}
+	}
+
+	@Nested
 	@DisplayName("D29: which blackbox libraries a transformation may reach")
 	class BlackboxControls {
 

@@ -368,6 +368,41 @@ class QvtdSecurityHardeningTest {
 	}
 
 	@SuppressWarnings("unchecked")
+	@Test
+	@DisplayName("M-R3: a nested object template is bounded by maxBindings too")
+	void r3_nestedObjectTemplate_exceedingBindingLimit_terminates() throws QvtdParseException {
+		// The binding limit is checked at two places: where a relation collects its candidate
+		// bindings, and inside the pattern matcher where a nested object template multiplies
+		// them. The 50-class test reaches the first only, so the second — which is where a
+		// cross-product actually explodes — had no test (#176).
+		String source = """
+				transformation nestedTest(uml : simpleuml, rdbms : simplerdbms) {
+				    top relation PackageToSchema {
+				        pn : String;
+				        cn : String;
+				        checkonly domain uml p : Package {
+				            name = pn,
+				            ownedClass = c : Class { name = cn }
+				        };
+				        enforce domain rdbms s : Schema {
+				            name = pn,
+				            ownedTable = t : Table { name = cn }
+				        };
+				    }
+				}
+				""";
+
+		QvtdEngine engine = createEngine(b -> b.maxBindings(3));
+		RelationalTransformation t = engine.parse(source, "nestedTest");
+		QvtdExecutionContext ctx = QvtdExecutionContext.enforce("rdbms",
+				Map.of("uml", createUmlExtentMany(50), "rdbms", new BasicQvtdModelExtent()));
+
+		QvtdExecutionException failure = assertThrows(QvtdExecutionException.class,
+				() -> engine.execute(t, ctx));
+
+		assertTrue(failure.getMessage().contains("binding limit exceeded"), failure::getMessage);
+	}
+
 	private QvtdModelExtent createUmlExtentMany(int count) {
 		EClass pkgClass = ecoreHelper.getEClass(umlPackage, "Package");
 		EObject root = EcoreUtil.create(pkgClass);
