@@ -86,6 +86,61 @@ public class OclOrderedSet<E> extends ArrayList<E> {
 		return true;
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>Adds the elements that are not in this set yet, in their order, and answers whether
+	 * anything was added. {@code ArrayList.addAll} copies straight into the backing array
+	 * without asking {@link #add(Object)}, which let a duplicate into an OrderedSet through
+	 * every caller that used it — {@code OrderedSet->union(...)} among them (#187).
+	 */
+	@Override
+	public boolean addAll(Collection<? extends E> c) {
+		boolean changed = false;
+		for (E element : c) {
+			changed |= add(element);
+		}
+		return changed;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>Inserts the elements that are not in this set yet, in their order, at the index.
+	 */
+	@Override
+	public boolean addAll(int index, Collection<? extends E> c) {
+		int at = index;
+		boolean changed = false;
+		for (E element : c) {
+			int before = size();
+			add(at, element);
+			if (size() > before) {
+				at++;
+				changed = true;
+			}
+		}
+		return changed;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>An element this set already holds is not inserted a second time: a set keeps the
+	 * occurrence it has.
+	 */
+	@Override
+	public void add(int index, E element) {
+		Object key = OclEqualityUtil.lookupKey(element);
+		Set<Object> known = keys();
+		if (known.contains(key)) {
+			return;
+		}
+		super.add(index, element);
+		known.add(key);
+		keysModCount = modCount;
+	}
+
 	@Override
 	public E set(int index, E element) {
 		keys = null; // replacing an element is not a structural change, so modCount stays put

@@ -34,6 +34,8 @@ import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
@@ -129,10 +131,10 @@ class QvtrOperationProvider implements OclOperationProvider {
 		Map<String, Object> bindings = new HashMap<>();
 		List<EParameter> parameters = query.getEParameters();
 		for (int i = 0; i < Math.min(parameters.size(), args.length); i++) {
-			org.eclipse.fennec.m2x.model.ocl.Variable variable =
+			Variable variable =
 					OclFactory.eINSTANCE.createVariable();
 			variable.setName(parameters.get(i).getName());
-			org.eclipse.fennec.m2x.model.ocl.VariableExp variableExp =
+			VariableExp variableExp =
 					OclFactory.eINSTANCE.createVariableExp();
 			variableExp.setReferredVariable(variable);
 			call.getOwnedArguments().add(variableExp);

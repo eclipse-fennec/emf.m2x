@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.unit.api;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.osgi.annotation.versioning.ConsumerType;
 
 /**
  * A compilation unit of one of the m2x languages, addressed by qualified name.
@@ -41,6 +42,7 @@ import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
  * @author Data In Motion Consulting
  * @since 1.0
  */
+@ConsumerType
 public interface Unit {
 
 	/**

@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import java.util.ArrayList;
 import java.util.Map;
@@ -87,9 +88,11 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	 */
 	/**
 	 * Returns the diagnostics collected while building the document (#66).
+	 *
+	 * @return what could not be built, unmodifiable
 	 */
 	List<Resource.Diagnostic> getDiagnostics() {
-		return diagnostics;
+		return List.copyOf(diagnostics);
 	}
 
 	List<Constraint> buildDocument(OclParser.CompleteOclDocumentEntryContext tree) {
@@ -166,7 +169,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (ctx.getStart() != null && "library".equals(ctx.getStart().getText())) {
 			addError("Library imports are not supported (library " + path
 					+ "). Additional operations are given to the engine as operation "
-					+ "providers rather than named by the document.");
+					+ "providers rather than named by the document.", ctx);
 		} else {
 			if (ctx.identifier() != null) {
 				packageAliases.put(OclAstBuilder.identifierText(ctx.identifier()), path);
@@ -175,15 +178,18 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			if (imported != null) {
 				importedPackages.add(imported);
 			} else {
-				addError("Unknown package in import: " + path);
+				addError("Unknown package in import: " + path, ctx);
 			}
 		}
 		return null;
 	}
 
-	/** Records a diagnostic for the document being built. */
-	private void addError(String message) {
-		diagnostics.add(new ParseDiagnostic(message, 0, 0));
+	/** Records a diagnostic for the document being built, at the place it was found. */
+	private void addError(String message, ParserRuleContext ctx) {
+		diagnostics.add(ctx == null ? new ParseDiagnostic(message,
+				ParseDiagnostic.UNKNOWN_POSITION, ParseDiagnostic.UNKNOWN_POSITION)
+				: new ParseDiagnostic(message, ctx.getStart().getLine(),
+						ctx.getStart().getCharPositionInLine()));
 	}
 
 	@Override
@@ -217,6 +223,10 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		String classifierName = pathNameText(ctx.pathName());
 		EClassifier classifier = resolveClassifierFromPath(classifierName);
 		if (classifier == null) {
+			// Skipped, not reported: three tests pin this (OclCompleteDocumentTest —
+			// unresolvedClassifierSkipped, operationContext_unresolvedClassifier,
+			// resourceSetOverload), so whether an unresolved context is an error of the
+			// document is a decision, not a cleanup. Open in #187.
 			LOG.warning("Unresolved classifier: " + classifierName + " — skipping context");
 			return null;
 		}
@@ -400,6 +410,10 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		String classifierName = pathNameText(ctx.pathName());
 		EClassifier classifier = resolveClassifierFromPath(classifierName);
 		if (classifier == null) {
+			// Skipped, not reported: three tests pin this (OclCompleteDocumentTest —
+			// unresolvedClassifierSkipped, operationContext_unresolvedClassifier,
+			// resourceSetOverload), so whether an unresolved context is an error of the
+			// document is a decision, not a cleanup. Open in #187.
 			LOG.warning("Unresolved classifier: " + classifierName + " — skipping context");
 			return null;
 		}

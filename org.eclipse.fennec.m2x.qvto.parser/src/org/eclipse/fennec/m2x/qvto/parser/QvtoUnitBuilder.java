@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -33,6 +34,7 @@ import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -1510,7 +1512,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (featureCtx.simpleSignature().paramList() != null) {
 			for (QvtOParser.ParamContext paramCtx :
 					featureCtx.simpleSignature().paramList().param()) {
-				org.eclipse.emf.ecore.EParameter eParam =
+				EParameter eParam =
 						EcoreFactory.eINSTANCE.createEParameter();
 				eParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
 						paramCtx.qvtoIdentifier()));
@@ -1692,7 +1694,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 		// A reference to the typedef name resolves to the type it stands for
 		localTypes.put(typedef.getName(), baseClassifier(baseType));
-		localTypes.values().removeIf(java.util.Objects::isNull);
+		localTypes.values().removeIf(Objects::isNull);
 
 		if (ctx.expression() != null) {
 			typedef.setCondition((OclExpression) expressionBuilder.visit(ctx.expression()));
@@ -2128,7 +2130,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private static void markAsLinkerStub(Module module) {
-		EAnnotation ann = org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEAnnotation();
+		EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
 		ann.setSource(LINKER_STUB_ANNOTATION);
 		module.getEAnnotations().add(ann);
 	}

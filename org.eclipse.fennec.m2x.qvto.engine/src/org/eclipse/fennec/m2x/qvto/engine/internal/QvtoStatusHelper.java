@@ -18,6 +18,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.Status;
+import org.eclipse.fennec.m2x.model.qvtoperational.impl.StatusImpl;
 
 /**
  * Factory and utility methods for QVT-O {@link Status} objects (§8.3.6).
@@ -75,7 +76,7 @@ final class QvtoStatusHelper {
 	 * A Status subtype that wraps a CompletableFuture for async execution.
 	 * Calling {@link #join()} blocks until the real status is available.
 	 */
-	static final class PendingStatus extends org.eclipse.fennec.m2x.model.qvtoperational.impl.StatusImpl {
+	static final class PendingStatus extends StatusImpl {
 
 		private final CompletableFuture<Status> future;
 

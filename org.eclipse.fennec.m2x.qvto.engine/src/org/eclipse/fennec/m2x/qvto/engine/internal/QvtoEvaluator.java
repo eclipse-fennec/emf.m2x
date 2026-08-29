@@ -17,9 +17,12 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.SequencedSet;
+import java.util.Set;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
@@ -30,6 +33,7 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.imperativeocl.AltExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.AssertExp;
@@ -1383,7 +1387,7 @@ public class QvtoEvaluator {
 							} else {
 								// §8.2.1: Collection assignment uses value-copy semantics
 								if (coerced instanceof Collection<?> srcCol) {
-									target.eSet(sf, new java.util.ArrayList<>(srcCol));
+									target.eSet(sf, new ArrayList<>(srcCol));
 								} else {
 									target.eSet(sf, coerced);
 								}
@@ -1497,7 +1501,7 @@ public class QvtoEvaluator {
 						} else if (exp.isIsReset()) {
 							// §8.2.1: Collection assignment uses value-copy semantics
 							if (value instanceof Collection<?> srcCol) {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), new java.util.ArrayList<>(srcCol));
+								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), new ArrayList<>(srcCol));
 							} else {
 								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
 							}
@@ -1552,7 +1556,7 @@ public class QvtoEvaluator {
 						} else {
 							// §8.2.1: Collection assignment uses value-copy semantics
 							if (coerced instanceof Collection<?> srcCol) {
-								eo.eSet(actualSf, new java.util.ArrayList<>(srcCol));
+								eo.eSet(actualSf, new ArrayList<>(srcCol));
 							} else {
 								eo.eSet(actualSf, coerced);
 							}
@@ -1621,8 +1625,8 @@ public class QvtoEvaluator {
 			// §8.2.2.6: non-ordered collections are implicitly converted to ordered
 			// (Set → OrderedSet/LinkedHashSet, Bag → Sequence/ArrayList)
 			Iterable<?> iterable = coll;
-			if (coll instanceof java.util.Set<?> && !(coll instanceof java.util.SequencedSet<?>)) {
-				iterable = new java.util.LinkedHashSet<>(coll);
+			if (coll instanceof Set<?> && !(coll instanceof SequencedSet<?>)) {
+				iterable = new LinkedHashSet<>(coll);
 			}
 
 			List<Variable> iterVars = exp.getOwnedIterators();
@@ -1936,7 +1940,7 @@ public class QvtoEvaluator {
 			EClass moduleClass = QvtoOperationResolver.findModuleClassIn(importedTransf);
 			if (moduleClass == null) {
 				// Create a minimal EClass so DynamicEObjectImpl has something
-				moduleClass = org.eclipse.emf.ecore.EcoreFactory.eINSTANCE.createEClass();
+				moduleClass = EcoreFactory.eINSTANCE.createEClass();
 				moduleClass.setName(importedTransf.getName());
 			}
 

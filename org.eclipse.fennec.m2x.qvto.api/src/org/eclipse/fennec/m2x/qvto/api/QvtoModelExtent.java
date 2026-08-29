@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvto.api;
 import java.util.List;
 
 import org.eclipse.emf.ecore.EObject;
+import org.osgi.annotation.versioning.ConsumerType;
 
 /**
  * Mutable model extent for QVT-O transformations.
@@ -32,6 +33,7 @@ import org.eclipse.emf.ecore.EObject;
  * @author Data In Motion Consulting
  * @since 1.0
  */
+@ConsumerType
 public interface QvtoModelExtent {
 
 	/**

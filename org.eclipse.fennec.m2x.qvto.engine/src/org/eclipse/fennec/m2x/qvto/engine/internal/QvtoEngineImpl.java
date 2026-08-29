@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.stream.Stream;
+import org.eclipse.emf.common.util.BasicDiagnostic;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
@@ -265,7 +266,7 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationI
 			linker.link(transformation);
 		} catch (QvtoParseException e) {
 			return new QvtoExecutionResult(
-					List.of(new org.eclipse.emf.common.util.BasicDiagnostic(
+					List.of(new BasicDiagnostic(
 							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine",
 							0, "Link error: " + e.getMessage(), null)),
 					null);
@@ -383,7 +384,7 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationI
 		OperationalTransformation ot = loadedTransformation;
 		if (ot == null) {
 			return new QvtdExecutionResult(
-					List.of(new org.eclipse.emf.common.util.BasicDiagnostic(
+					List.of(new BasicDiagnostic(
 							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine", 0,
 							"No QVT-O transformation loaded for relation: " + relationQualifiedName,
 							null)),

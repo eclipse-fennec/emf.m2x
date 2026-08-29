@@ -127,26 +127,22 @@ public class OclValidationDelegateFactory implements EValidator.ValidationDelega
 	}
 
 	private boolean evaluateConstraint(String expression, EObject eObject, EClass contextType) {
-		try {
-			String cacheKey = cacheKey(contextType, expression);
-			OclExpression parsed = expressionCache.computeIfAbsent(cacheKey, k -> {
-				try {
-					return engine.parse(expression, contextType);
-				} catch (OclParseException e) {
-					throw new IllegalStateException(
-							"Failed to parse OCL constraint on " + contextType.getName()
-									+ ": " + e.getMessage(), e);
-				}
-			});
-			OclContext oclContext = OclContext.of(eObject);
-			Object result = engine.evaluate(parsed, oclContext, engine.getDelegateOptions());
-			if (result instanceof Boolean b) {
-				return b;
+		String cacheKey = cacheKey(contextType, expression);
+		OclExpression parsed = expressionCache.computeIfAbsent(cacheKey, k -> {
+			try {
+				return engine.parse(expression, contextType);
+			} catch (OclParseException e) {
+				throw new IllegalStateException(
+						"Failed to parse OCL constraint on " + contextType.getName()
+								+ ": " + e.getMessage(), e);
 			}
-			// Non-boolean result or OclInvalid → constraint violated
-			return result != null && result != OclInvalid.INSTANCE;
-		} catch (IllegalStateException e) {
-			throw e;
+		});
+		OclContext oclContext = OclContext.of(eObject);
+		Object result = engine.evaluate(parsed, oclContext, engine.getDelegateOptions());
+		if (result instanceof Boolean b) {
+			return b;
 		}
+		// Non-boolean result or OclInvalid → constraint violated
+		return result != null && result != OclInvalid.INSTANCE;
 	}
 }
