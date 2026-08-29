@@ -43,7 +43,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = OclPackage.eNS_URI, fingerprint = "fp1:5a70f551d4abab5627d219d2d5eec4759ea8a72867ac990f08ba82d57f3c6878", genModel = "/model/ocl.genmodel", genModelSourceLocations = {"model/ocl.genmodel","org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel"}, ecore = "/model/ocl.ecore", ecoreSourceLocations = "/model/ocl.ecore")
+@EPackage(uri = OclPackage.eNS_URI, fingerprint = "fp1:1f1669f597959634f7d5627b5d2ab988b23f977f9d4c9d126bb932b1952b536b", genModel = "/model/ocl.genmodel", genModelSourceLocations = {"model/ocl.genmodel","org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel"}, ecore = "/model/ocl.ecore", ecoreSourceLocations = "/model/ocl.ecore")
 public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -1956,13 +1956,22 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int CALL_EXP__IS_SAFE = OCL_EXPRESSION_FEATURE_COUNT + 2;
 
 	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int CALL_EXP__IS_ARROW = OCL_EXPRESSION_FEATURE_COUNT + 3;
+
+	/**
 	 * The number of structural features of the '<em>Call Exp</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int CALL_EXP_FEATURE_COUNT = OCL_EXPRESSION_FEATURE_COUNT + 3;
+	int CALL_EXP_FEATURE_COUNT = OCL_EXPRESSION_FEATURE_COUNT + 4;
 
 	/**
 	 * The number of operations of the '<em>Call Exp</em>' class.
@@ -2018,6 +2027,15 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int FEATURE_CALL_EXP__IS_SAFE = CALL_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int FEATURE_CALL_EXP__IS_ARROW = CALL_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
@@ -2091,6 +2109,15 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int PROPERTY_CALL_EXP__IS_SAFE = FEATURE_CALL_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int PROPERTY_CALL_EXP__IS_ARROW = FEATURE_CALL_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
@@ -2175,6 +2202,15 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int NAVIGATION_CALL_EXP__IS_SAFE = FEATURE_CALL_EXP__IS_SAFE;
 
 	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int NAVIGATION_CALL_EXP__IS_ARROW = FEATURE_CALL_EXP__IS_ARROW;
+
+	/**
 	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2255,6 +2291,15 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int ASSOCIATION_CLASS_CALL_EXP__IS_SAFE = NAVIGATION_CALL_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ASSOCIATION_CLASS_CALL_EXP__IS_ARROW = NAVIGATION_CALL_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
@@ -2346,6 +2391,15 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int OPERATION_CALL_EXP__IS_SAFE = FEATURE_CALL_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int OPERATION_CALL_EXP__IS_ARROW = FEATURE_CALL_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
@@ -2448,6 +2502,15 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int LOOP_EXP__IS_SAFE = CALL_EXP__IS_SAFE;
 
 	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int LOOP_EXP__IS_ARROW = CALL_EXP__IS_ARROW;
+
+	/**
 	 * The feature id for the '<em><b>Owned Body</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2528,6 +2591,15 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int ITERATOR_EXP__IS_SAFE = LOOP_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ITERATOR_EXP__IS_ARROW = LOOP_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Owned Body</b></em>' containment reference.
@@ -2619,6 +2691,15 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int ITERATE_EXP__IS_SAFE = LOOP_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int ITERATE_EXP__IS_ARROW = LOOP_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Owned Body</b></em>' containment reference.
@@ -4263,6 +4344,17 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EAttribute getCallExp_IsSafe();
 
 	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.ocl.CallExp#isIsArrow <em>Is Arrow</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Is Arrow</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.CallExp#isIsArrow()
+	 * @see #getCallExp()
+	 * @generated
+	 */
+	EAttribute getCallExp_IsArrow();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.ocl.FeatureCallExp <em>Feature Call Exp</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -5475,6 +5567,14 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EAttribute CALL_EXP__IS_SAFE = eINSTANCE.getCallExp_IsSafe();
+
+		/**
+		 * The meta object literal for the '<em><b>Is Arrow</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute CALL_EXP__IS_ARROW = eINSTANCE.getCallExp_IsArrow();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.FeatureCallExpImpl <em>Feature Call Exp</em>}' class.

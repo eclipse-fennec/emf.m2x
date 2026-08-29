@@ -16,45 +16,45 @@ package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.eclipse.fennec.m2x.model.qvtrelation.QvtrelationFactory;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
-import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvalEnvironment;
-import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvaluator;
-import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrRun;
-import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
-import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
+import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvalEnvironment;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrEvaluator;
+import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrRun;
 import org.eclipse.fennec.m2x.qvtd.engine.internal.QvtrTraceManager;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
@@ -367,7 +367,6 @@ class QvtdSecurityHardeningTest {
 		return new BasicQvtdModelExtent(List.of(pkg));
 	}
 
-	@SuppressWarnings("unchecked")
 	@Test
 	@DisplayName("M-R3: a nested object template is bounded by maxBindings too")
 	void r3_nestedObjectTemplate_exceedingBindingLimit_terminates() throws QvtdParseException {
@@ -403,6 +402,7 @@ class QvtdSecurityHardeningTest {
 		assertTrue(failure.getMessage().contains("binding limit exceeded"), failure::getMessage);
 	}
 
+	@SuppressWarnings("unchecked")
 	private QvtdModelExtent createUmlExtentMany(int count) {
 		EClass pkgClass = ecoreHelper.getEClass(umlPackage, "Package");
 		EObject root = EcoreUtil.create(pkgClass);

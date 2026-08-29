@@ -39,6 +39,7 @@ import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
+import org.eclipse.fennec.m2x.model.ocl.CallExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
@@ -1510,12 +1511,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	/**
-	 * Checks whether an AST node was created from an arrow call ({@code ->}).
-	 * The parser marks these nodes with an {@code ArrowCallMarker} adapter.
+	 * Whether a call was written with the arrow operator ({@code ->}).
+	 *
+	 * <p>Read from the AST (#171). It used to be read from an {@code Adapter}, and by the
+	 * adapter's <em>class name</em> — so a compiled unit lost it in the store, and a rename or
+	 * any other adapter of that name would have changed what an expression means.
 	 */
 	private static boolean isArrowCall(EObject exp) {
-		return exp.eAdapters().stream()
-				.anyMatch(a -> a.getClass().getSimpleName().equals("ArrowCallMarker"));
+		return exp instanceof CallExp call && call.isIsArrow();
 	}
 
 	// --- oclLocale Support (OCL v2.4 §11.2.1) ---
