@@ -36,9 +36,13 @@ import org.eclipse.fennec.m2x.model.compiled.CompiledFactory;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest;
 import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
+import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
+import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitFingerprintService;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -326,4 +330,24 @@ class UnitFingerprintServiceTest {
 		copy.setFingerprint(entry.getFingerprint());
 		return copy;
 	}
+	@Test
+	@DisplayName("an escaped quote does not collide with the quote it escapes")
+	void escapedQuotes_doNotCollide() {
+		// Attribute values are written into the canonical form between quotes. Without escaping
+		// the escape character itself, the text a"b and the text a\\"b canonicalize the same way,
+		// and two units that say different things get one fingerprint — which is what a
+		// fingerprint exists to prevent.
+		assertNotEquals(fingerprintOfModuleNamed("a\"b"), fingerprintOfModuleNamed("a\\\"b"));
+		assertNotEquals(fingerprintOfModuleNamed("a\\b"), fingerprintOfModuleNamed("a\\\\b"));
+		assertEquals(fingerprintOfModuleNamed("a\"b"), fingerprintOfModuleNamed("a\"b"),
+				"and the same text still gives the same value");
+	}
+
+	private static String fingerprintOfModuleNamed(String name) {
+		Module module = M2tFactory.eINSTANCE.createModule();
+		module.setName(name);
+		module.setNsURI("http://example.org/m2x/escaping/1.0");
+		return SERVICE.fingerprint(UnitPackager.compile("m2t", "gen.Escaping", module));
+	}
+
 }
