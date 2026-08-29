@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.lang.invoke.CallSite;
+import java.lang.invoke.LambdaConversionException;
 import java.lang.invoke.LambdaMetafactory;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -115,14 +116,18 @@ public final class PropertyAccessorCache {
 		// Generated EMF classes have a containerClass — use LambdaMetafactory for
 		// JIT-inlineable direct getter calls (~5 ns vs ~40 ns for eGet)
 		if (sf.getContainerClass() != null) {
-			String getterName = getterName(sf);
 			try {
-				Method getter = findGetter(implClass, getterName);
+				// Inside the try: a feature whose name is empty makes this throw, and the
+				// fallback below serves that case as well as any other (#187)
+				Method getter = findGetter(implClass, getterName(sf));
 				if (getter != null) {
 					return createLambdaAccessor(implClass, getter);
 				}
-			} catch (Throwable t) {
-				// Fall through to eGet fallback
+			} catch (RuntimeException | ReflectiveOperationException | LambdaConversionException
+					| LinkageError failure) {
+				// Fall through to the eGet fallback. Narrower than Throwable on purpose: an
+				// OutOfMemoryError or a StackOverflowError says the JVM is in trouble, not that
+				// this getter is unavailable, and swallowing it here would hide that.
 			}
 		}
 		// Dynamic EMF objects (no generated class): cache an eGet-based accessor.
@@ -139,7 +144,8 @@ public final class PropertyAccessorCache {
 	 * resolve the model's implementation classes in OSGi environments where the
 	 * engine bundle cannot see the model bundle's classes.
 	 */
-	private static PropertyAccessor createLambdaAccessor(Class<?> implClass, Method getter) throws Throwable {
+	private static PropertyAccessor createLambdaAccessor(Class<?> implClass, Method getter)
+			throws ReflectiveOperationException, LambdaConversionException {
 		// Obtain a lookup rooted in the model class's module/classloader,
 		// not the engine bundle's. This is critical for OSGi cross-bundle access.
 		MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(implClass, ENGINE_LOOKUP);
@@ -155,7 +161,17 @@ public final class PropertyAccessorCache {
 				MethodType.methodType(autobox(getter.getReturnType()), getter.getDeclaringClass()) // specific type
 		);
 
-		Function<Object, Object> fn = (Function<Object, Object>) site.getTarget().invokeExact();
+		// invokeExact declares Throwable, but this call site is a no-argument factory whose
+		// target was just built: only an Error can come out of it, and an Error is not this
+		// method's to swallow (#187)
+		Function<Object, Object> fn;
+		try {
+			fn = (Function<Object, Object>) site.getTarget().invokeExact();
+		} catch (RuntimeException | Error direct) {
+			throw direct;
+		} catch (Throwable unexpected) {
+			throw new IllegalStateException("Cannot build an accessor for " + getter, unexpected);
+		}
 		return fn::apply;
 	}
 
@@ -181,9 +197,10 @@ public final class PropertyAccessorCache {
 	 */
 	private static Method findGetter(Class<?> clazz, String getterName) {
 		try {
-			Method m = clazz.getMethod(getterName);
-			m.setAccessible(true);
-			return m;
+			// No setAccessible: getMethod only ever returns a public method, and asking for
+			// access to one is what throws InaccessibleObjectException under JPMS when the
+			// module does not open the package (#187)
+			return clazz.getMethod(getterName);
 		} catch (NoSuchMethodException e) {
 			return null;
 		}

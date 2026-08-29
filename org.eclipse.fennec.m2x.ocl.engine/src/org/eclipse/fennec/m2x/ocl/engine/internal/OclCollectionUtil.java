@@ -33,24 +33,55 @@ final class OclCollectionUtil {
 	}
 
 	/**
-	 * Cross-type numeric comparison for OCL: Long vs Double etc.
+	 * Cross-type comparison for OCL: {@code Long} against {@code Double}, and anything
+	 * {@link Comparable} against its own kind.
 	 *
-	 * <p>Numbers are compared by their double value. Other comparable values
-	 * are compared naturally. Non-comparable values compare as equal (0).
+	 * <p>Values that cannot be compared are ordered by the name of their type, and only then
+	 * by identity. Answering 0 for them, as this did, breaks the contract every sort in the JDK
+	 * relies on: with three values where a and b are "equal", b and c are "equal" and a and c
+	 * are not, {@code sortedBy} over a mixed collection can fail with "Comparison method
+	 * violates its general contract" (#187). It is arbitrary but consistent, which is what an
+	 * order over values OCL gives no order to has to be.
+	 *
+	 * @param a the first value
+	 * @param b the second value
+	 * @return a negative number, zero, or a positive number as a is less than, equal to, or
+	 *         greater than b
 	 */
 	@SuppressWarnings("unchecked")
 	static int compareOcl(Object a, Object b) {
 		if (a instanceof Number na && b instanceof Number nb) {
 			return Double.compare(na.doubleValue(), nb.doubleValue());
 		}
-		if (a instanceof Comparable<?> ca) {
+		if (a instanceof Comparable<?> ca && b != null && a.getClass() == b.getClass()) {
+			return ((Comparable<Object>) ca).compareTo(b);
+		}
+		if (a instanceof Comparable<?> ca && b != null) {
 			try {
 				return ((Comparable<Object>) ca).compareTo(b);
-			} catch (ClassCastException e) {
-				return 0;
+			} catch (ClassCastException incomparable) {
+				return fallbackOrder(a, b);
 			}
 		}
-		return 0;
+		return fallbackOrder(a, b);
+	}
+
+	/**
+	 * A total order over values OCL cannot compare: nulls first, then by type name, then by
+	 * identity hash — stable within one run, and transitive, which is all a sort needs.
+	 */
+	private static int fallbackOrder(Object a, Object b) {
+		if (a == b) {
+			return 0;
+		}
+		if (a == null) {
+			return -1;
+		}
+		if (b == null) {
+			return 1;
+		}
+		int byType = a.getClass().getName().compareTo(b.getClass().getName());
+		return byType != 0 ? byType : Integer.compare(System.identityHashCode(a), System.identityHashCode(b));
 	}
 
 	/**

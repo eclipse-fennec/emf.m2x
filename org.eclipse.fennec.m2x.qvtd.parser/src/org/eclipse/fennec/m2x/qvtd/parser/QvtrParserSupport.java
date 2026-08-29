@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvtd.parser;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -57,7 +58,7 @@ public class QvtrParserSupport {
 
 	/** Where every expression node this support parsed stood — see {@link #positionOf}. */
 	private final Map<EObject, SourcePosition> nodePositions =
-			java.util.Collections.synchronizedMap(new IdentityHashMap<>());
+			Collections.synchronizedMap(new IdentityHashMap<>());
 
 	/**
 	 * Where a node stood, for a diagnostic that knows the node and not the place.

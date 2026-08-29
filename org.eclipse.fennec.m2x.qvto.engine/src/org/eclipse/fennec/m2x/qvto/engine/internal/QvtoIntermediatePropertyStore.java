@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -130,10 +131,10 @@ class QvtoIntermediatePropertyStore {
 				if (defaultValue != null) {
 					if (feature.isMany()) {
 						// Multi-valued features (EList): addAll instead of eSet
-						java.util.Collection<Object> list =
-								(java.util.Collection<Object>) target.eGet(feature);
-						if (defaultValue instanceof java.util.Collection<?> coll) {
-							list.addAll((java.util.Collection<Object>) coll);
+						Collection<Object> list =
+								(Collection<Object>) target.eGet(feature);
+						if (defaultValue instanceof Collection<?> coll) {
+							list.addAll((Collection<Object>) coll);
 						} else {
 							list.add(defaultValue);
 						}

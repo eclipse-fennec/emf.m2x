@@ -205,10 +205,12 @@ public class QvtdEngineImpl implements QvtdEngine {
 		} catch (QvtdExecutionException e) {
 			throw e;
 		} catch (Exception e) {
+			// The cause travels as diagnostic data, as it does everywhere else in the two QVT
+			// engines: a message alone loses the stack trace of what actually broke (#187)
 			return new QvtdExecutionResult(
 					List.of(new BasicDiagnostic(
 							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvtd.engine",
-							0, "Execution error: " + e.getMessage(), null)),
+							0, "Execution error: " + e.getMessage(), new Object[] { e })),
 					false);
 		}
 	}
@@ -235,10 +237,12 @@ public class QvtdEngineImpl implements QvtdEngine {
 		} catch (QvtdExecutionException e) {
 			throw e;
 		} catch (Exception e) {
+			// The cause travels as diagnostic data, as it does everywhere else in the two QVT
+			// engines: a message alone loses the stack trace of what actually broke (#187)
 			return new QvtdExecutionResult(
 					List.of(new BasicDiagnostic(
 							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvtd.engine",
-							0, "Execution error: " + e.getMessage(), null)),
+							0, "Execution error: " + e.getMessage(), new Object[] { e })),
 					false);
 		}
 	}

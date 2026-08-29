@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.api;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -59,9 +60,17 @@ public class BasicQvtoModelExtent implements QvtoModelExtent {
 		this.contents = new ArrayList<>(Arrays.asList(initial));
 	}
 
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>A read-only extent hands out an unmodifiable view. §8.1.3.2 makes an {@code in}
+	 * parameter immutable at runtime, and every other way into this extent honours that —
+	 * but the list itself was the live one, so the flag could be walked around by adding to
+	 * what {@code getContents()} returned (#187).
+	 */
 	@Override
 	public List<EObject> getContents() {
-		return contents;
+		return readOnly ? Collections.unmodifiableList(contents) : contents;
 	}
 
 	@Override

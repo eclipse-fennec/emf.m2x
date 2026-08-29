@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvto.parser;
 
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +64,7 @@ public class QvtoParserSupport {
 	 * others evaluates their nodes too. Each entry names the unit it came from (#116).
 	 */
 	private final Map<EObject, SourcePosition> nodePositions =
-			java.util.Collections.synchronizedMap(new IdentityHashMap<>());
+			Collections.synchronizedMap(new IdentityHashMap<>());
 
 	/**
 	 * EAnnotation source used to mark stub modules that need link-time resolution.

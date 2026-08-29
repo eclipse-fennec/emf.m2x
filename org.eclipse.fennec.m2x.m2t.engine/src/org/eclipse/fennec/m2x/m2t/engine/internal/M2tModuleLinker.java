@@ -26,6 +26,7 @@ import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
 import org.eclipse.fennec.m2x.model.m2t.Block;
+import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
@@ -340,8 +341,8 @@ public class M2tModuleLinker {
 				resolveInlineInBody(nestedBlock, contextModule);
 			}
 			// Recurse into IfBlock elseIf/else
-			if (expr instanceof org.eclipse.fennec.m2x.model.m2t.IfBlock ifBlock) {
-				for (org.eclipse.fennec.m2x.model.m2t.IfBlock elseIf : ifBlock.getElseIf()) {
+			if (expr instanceof IfBlock ifBlock) {
+				for (IfBlock elseIf : ifBlock.getElseIf()) {
 					resolveInlineInBody(elseIf, contextModule);
 				}
 				if (ifBlock.getElse() != null) {

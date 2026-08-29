@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvto.parser;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
@@ -101,7 +102,7 @@ public final class QvtoStandardLibraryTypes {
 	}
 
 	private static Map<String, EClassifier> index() {
-		Map<String, EClassifier> types = new java.util.HashMap<>();
+		Map<String, EClassifier> types = new HashMap<>();
 		for (EClassifier classifier : PACKAGE.getEClassifiers()) {
 			types.put(classifier.getName(), classifier);
 		}
