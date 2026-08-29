@@ -41,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceObjects;
+import org.osgi.framework.ServiceReference;
 import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.annotation.Property;
@@ -142,7 +143,13 @@ class QvtdEngineComponentOSGiTest {
 		String message = "no limit was reached at all";
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
 		do {
-			QvtdEngine engine = context.getService(context.getServiceReference(QvtdEngine.class));
+			QvtdEngine engine = currentEngine(context);
+			if (engine == null) {
+				// Reconfiguring deregisters the old instance before the new one appears, so
+				// there is a moment with no service at all
+				Thread.sleep(100);
+				continue;
+			}
 			RelationalTransformation transformation = engine.parse("""
 					transformation loop(source : shelf, target : shelf) {
 					    top relation Init {
@@ -181,6 +188,12 @@ class QvtdEngineComponentOSGiTest {
 			Thread.sleep(100);
 		} while (System.nanoTime() < deadline);
 		return message;
+	}
+
+	/** The engine registered right now, or {@code null} while the component is restarting. */
+	private static QvtdEngine currentEngine(BundleContext context) {
+		ServiceReference<QvtdEngine> reference = context.getServiceReference(QvtdEngine.class);
+		return reference == null ? null : context.getService(reference);
 	}
 
 	/** A metamodel built here, so this test needs no resource of its own. */

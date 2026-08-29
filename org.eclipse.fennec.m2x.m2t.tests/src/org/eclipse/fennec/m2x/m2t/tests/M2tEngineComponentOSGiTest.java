@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceObjects;
+import org.osgi.framework.ServiceReference;
 import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.common.annotation.Property;
@@ -114,7 +115,13 @@ class M2tEngineComponentOSGiTest {
 		String diagnostics = "no limit was reached at all";
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
 		do {
-			M2tEngine engine = context.getService(context.getServiceReference(M2tEngine.class));
+			M2tEngine engine = currentEngine(context);
+			if (engine == null) {
+				// Reconfiguring deregisters the old instance before the new one appears, so
+				// there is a moment with no service at all
+				Thread.sleep(100);
+				continue;
+			}
 			Module module = engine.parse("""
 					[module gen(_'http://www.eclipse.org/emf/2002/Ecore')/]
 					[template public loop(c : EClass)][loop(c)/][/template]
@@ -136,5 +143,11 @@ class M2tEngineComponentOSGiTest {
 		String seen = diagnostics;
 		assertTrue(seen.contains("depth exceeded (3)"),
 				() -> "the configured limit is what the engine ran under: " + seen);
+	}
+
+	/** The engine registered right now, or {@code null} while the component is restarting. */
+	private static M2tEngine currentEngine(BundleContext context) {
+		ServiceReference<M2tEngine> reference = context.getServiceReference(M2tEngine.class);
+		return reference == null ? null : context.getService(reference);
 	}
 }
