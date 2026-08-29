@@ -20,6 +20,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
@@ -124,7 +127,10 @@ class OclAstBuilderBranchTest2 extends AbstractOclTest {
 		Object result = eval(
 				"self.employees->iterate(e : Person; acc : OrderedSet(String) = OrderedSet{} | acc->including(e.name))",
 				company);
-		assertNotNull(result);
+
+		// assertNotNull passes for OclInvalid too, so it said nothing about the accumulator
+		// this test exists to build (#173)
+		assertEquals(List.of("Alice", "Bob", "Charlie"), List.copyOf((Collection<?>) result));
 	}
 
 	@Test
@@ -133,7 +139,8 @@ class OclAstBuilderBranchTest2 extends AbstractOclTest {
 		Object result = eval(
 				"self.employees->iterate(e : Person; acc : Bag(Integer) = Bag{} | acc->including(e.age))",
 				company);
-		assertNotNull(result);
+
+		assertEquals(Set.of(30, 22, 45), Set.copyOf((Collection<?>) result));
 	}
 
 	@Test
@@ -141,7 +148,8 @@ class OclAstBuilderBranchTest2 extends AbstractOclTest {
 		Object result = eval(
 				"self.employees->iterate(e; acc : Sequence(String) = Sequence{} | acc->including(e.name))",
 				company);
-		assertNotNull(result);
+
+		assertEquals(List.of("Alice", "Bob", "Charlie"), List.copyOf((Collection<?>) result));
 	}
 
 	// === Map type expression (L696 resolveMapType path) ===
@@ -152,7 +160,8 @@ class OclAstBuilderBranchTest2 extends AbstractOclTest {
 		Object result = eval(
 				"self.employees->iterate(e; acc : Map(String, Integer) = Map{} | acc->including(e.name, e.age))",
 				company);
-		assertNotNull(result);
+
+		assertEquals(Map.of("Alice", 30, "Bob", 22, "Charlie", 45), result);
 	}
 
 	// === Implicit operation call (L443 visitOperationCallExp) ===
