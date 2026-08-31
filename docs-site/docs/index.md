@@ -49,6 +49,15 @@ implementations of the OMG modeling-transformation stack — **OCL**, **QVT
 Operational**, **QVT Relations** and **MOFM2T** — that run as plain Java 21
 libraries and as OSGi services. Every engine works without the Eclipse platform.
 
+### Compile once, execute often
+
+QVT-O, QVT-R and MOFM2T units can be compiled into a storable document — the AST
+together with its manifest, its dependencies and the fingerprints it was built
+against — and later loaded, prepared and executed without a parser. How that
+works, and what the dependency modes `embed`, `pin` and `rebind` mean, is
+described once for all languages in the
+[Compiled Units guide](/guides/compiled-units).
+
 ### Use it in the Eclipse IDE
 
 The OCL engine ships as an Eclipse feature that adds OCL delegate support to the
