@@ -15,19 +15,36 @@
 package org.eclipse.fennec.m2x.qvto.tests.regression;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EAttribute;
+import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
+import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
+import org.eclipse.fennec.emf.osgi.fingerprint.util.FingerprintHelper;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest;
+import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
 import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
+import org.eclipse.fennec.m2x.model.compiled.PackageEntry;
+import org.eclipse.fennec.m2x.model.compiled.PackageRole;
+import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -41,15 +58,19 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoStoreUnitResolver;
 import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitKind;
+import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The examples of {@code docs/compiled-units-guide.md}, executed. A guide whose code does not
@@ -76,6 +97,46 @@ class CompiledUnitsGuideExamplesTest {
 			    main() {
 			        m.objectsOfType(EPackage)->forEach(p) {
 			            p.name := greet();
+			        };
+			    }
+			}
+			""";
+
+	/** §7 — the metamodel of the worked examples, dynamic: built here, no generated code. */
+	private static final String SHELF_NS = "http://example.org/m2x/guide/shelf/1.0";
+	private static final String CASE_LIB = """
+			library text.Case {
+			    helper shout(s : String) : String {
+			        return s.toUpperCase() + '!';
+			    }
+			}
+			""";
+	private static final String TITLES_LIB = """
+			library shelf.Titles {
+			    helper prefix(s : String) : String {
+			        return 'now reading: ' + s;
+			    }
+			}
+			""";
+	private static final String ANNOUNCE = """
+			modeltype SHELF uses 'http://example.org/m2x/guide/shelf/1.0';
+			import shelf.Titles;
+			import text.Case;
+			transformation Announce(inout m : SHELF) {
+			    main() {
+			        m.objectsOfType(Book)->forEach(b) {
+			            b.title := shout(prefix(b.title));
+			        };
+			    }
+			}
+			""";
+	/** The same, without any import — example A. */
+	private static final String UPPERCASE = """
+			modeltype SHELF uses 'http://example.org/m2x/guide/shelf/1.0';
+			transformation Uppercase(inout m : SHELF) {
+			    main() {
+			        m.objectsOfType(Book)->forEach(b) {
+			            b.title := b.title.toUpperCase();
 			        };
 			    }
 			}
@@ -182,7 +243,242 @@ class CompiledUnitsGuideExamplesTest {
 		assertEquals("store", ran.getManifest().getResolvedClosure().get(0).getSource());
 	}
 
+	// ==== §7: the two worked examples ====
+
+	/**
+	 * §7.1 — one script, no imports: compile it, store it, and run it from the store on an engine
+	 * whose only resolver would fail if prepare had left anything to resolve.
+	 */
+	@Test
+	void section7_exampleA_oneScriptBecomesAStoredUnit() throws Exception {
+		EPackage shelf = shelf();
+		EPackage.Registry registry = new EPackageRegistryImpl();
+		registry.put(SHELF_NS, shelf);
+		QvtoEngine engine = engineOver(registry);
+
+		CompiledUnit unit = engine.compile(UPPERCASE, "Uppercase");
+
+		assertEquals("Uppercase", unit.getManifest().getQualifiedName());
+		assertTrue(unit.getManifest().getUnitFingerprint().startsWith("m2x1:"));
+		assertEquals(List.of(), unit.getManifest().getDependencyEntry(), "nothing imported");
+		PackageEntry entry = unit.getManifest().getPackageEntry().get(0);
+		assertEquals(SHELF_NS, entry.getNsURI());
+		assertEquals(PackageRole.EMBEDDED, entry.getRole(), "dynamic metamodel: the copy travels");
+		assertTrue(entry.getFingerprint().startsWith("fp1:"));
+		assertEquals(1, unit.getPackages().size());
+
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		UnitKey key = store.store("qvto", new PackagedUnit(unit));
+		assertEquals(unit.getManifest().getUnitFingerprint(), key.fingerprint().orElseThrow());
+
+		QvtoEngine runner = engineOver(registry, forbiddenResolver());
+		PreparedContext prepared = preparer(store, registry, runner.unitBinder()).prepare(key);
+		EObject book = book(shelf, "moby dick");
+		QvtoExecutionResult run = runner.execute(prepared, "Uppercase",
+				QvtoExecutionContext.of(new BasicQvtoModelExtent(List.of(book))));
+
+		assertTrue(run.isSuccess(), () -> "execution failed: " + run.diagnostics());
+		assertEquals("MOBY DICK", title(book));
+	}
+
+	/**
+	 * §7.2 — three scripts under {@code embed}: one self-contained document. It runs where neither
+	 * the libraries nor the metamodel are known, because both travel inside it.
+	 */
+	@Test
+	void section7_exampleB_embedCarriesTheLibrariesAndTheMetamodel() throws Exception {
+		EPackage shelf = shelf();
+		EPackage.Registry registry = new EPackageRegistryImpl();
+		registry.put(SHELF_NS, shelf);
+		QvtoEngine compiler = engineOver(registry, sourceResolver());
+
+		CompiledUnit archive = compiler.compile(ANNOUNCE, "Announce",
+				UnitCompileOptions.of(DependencyMode.EMBED));
+
+		assertEquals(List.of("shelf.Titles", "text.Case"),
+				archive.getEmbedded().stream().map(u -> u.getManifest().getQualifiedName()).sorted().toList());
+		assertEquals(1, archive.getPackages().size(), "the dynamic metamodel travels too");
+
+		// Machine B: an empty registry, no resolver, no source of either library anywhere
+		EPackage.Registry nothing = new EPackageRegistryImpl();
+		UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend(), nothing);
+		UnitKey key = transported.store("qvto", new PackagedUnit(archive));
+		QvtoEngine runner = engineOver(nothing, forbiddenResolver());
+
+		PreparedContext prepared = preparer(transported, nothing, runner.unitBinder()).prepare(key);
+		assertEquals(List.of("Announce"), prepared.units().stream().map(Unit::qualifiedName).toList(),
+				"the libraries are inside the unit, not units of the context");
+
+		// The metamodel this run has is the copy the unit carries — that is what its types resolve
+		// to, so that is what the input model has to be built with
+		EPackage carried = ((PackagedUnit) prepared.unit("Announce").orElseThrow()).document().getPackages().get(0);
+		assertEquals(SHELF_NS, carried.getNsURI());
+		EObject book = book(carried, "moby dick");
+		QvtoExecutionResult run = runner.execute(prepared, "Announce",
+				QvtoExecutionContext.of(new BasicQvtoModelExtent(List.of(book))));
+
+		assertTrue(run.isSuccess(), () -> "execution failed: " + run.diagnostics());
+		assertEquals("NOW READING: MOBY DICK!", title(book));
+	}
+
+	/**
+	 * §7.2 — a carried metamodel serves the unit's own references, not the package registry: a
+	 * model in a file whose metamodel only exists as a copy cannot be loaded through the context.
+	 * Register the metamodel on the executing side if that is what you need.
+	 */
+	@Test
+	void section7_exampleB_aCarriedMetamodelIsNotInTheRegistry(@TempDir Path dir) throws Exception {
+		EPackage shelf = shelf();
+		EPackage.Registry registry = new EPackageRegistryImpl();
+		registry.put(SHELF_NS, shelf);
+		Path file = dir.resolve("shelf.xmi");
+		saveBook(file, shelf, "moby dick");
+
+		CompiledUnit archive = engineOver(registry, sourceResolver())
+				.compile(ANNOUNCE, "Announce", UnitCompileOptions.of(DependencyMode.EMBED));
+		EPackage.Registry nothing = new EPackageRegistryImpl();
+		UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend(), nothing);
+		UnitKey key = transported.store("qvto", new PackagedUnit(archive));
+		QvtoEngine runner = engineOver(nothing, forbiddenResolver());
+		PreparedContext prepared = preparer(transported, nothing, runner.unitBinder()).prepare(key);
+
+		UnitPrepareException failure = assertThrows(UnitPrepareException.class,
+				() -> prepared.contents(URI.createFileURI(file.toString())));
+		assertTrue(failure.getMessage().contains("Package with uri '" + SHELF_NS + "' not found"),
+				failure.getMessage());
+	}
+
+	/**
+	 * §7.2 — the same three scripts under {@code pin}: links instead of copies. Each unit is in the
+	 * store once, and prepare needs the ones the manifest names.
+	 */
+	@Test
+	void section7_exampleB_pinKeepsLinks_andPrepareNeedsTheClosure() throws Exception {
+		EPackage shelf = shelf();
+		EPackage.Registry registry = new EPackageRegistryImpl();
+		registry.put(SHELF_NS, shelf);
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		QvtoEngine compiler = engineOver(registry, sourceResolver());
+
+		CompiledUnit main = compiler.compile(ANNOUNCE, "Announce");   // pin is the default
+
+		assertEquals(List.of(), main.getEmbedded(), "nothing carried");
+		assertEquals(List.of("shelf.Titles", "text.Case"), main.getManifest().getDependencyEntry().stream()
+				.map(DependencyEntry::getQualifiedName).sorted().toList());
+		DependencyEntry dependency = main.getManifest().getDependencyEntry().get(0);
+		assertEquals(DependencyMode.PIN, dependency.getMode());
+		assertTrue(dependency.getFingerprint().startsWith("m2x1:"),
+				"named with the exact version it was built against");
+
+		// prepare loads documents by key, so every pinned dependency has to be in the store as a
+		// compiled unit — a source there serves the compiler, which parses it
+		UnitKey key = store.store("qvto", new PackagedUnit(main));
+		QvtoEngine runner = engineOver(registry, forbiddenResolver());
+		UnitPrepareException missing = assertThrows(UnitPrepareException.class,
+				() -> preparer(store, registry, runner.unitBinder()).prepare(key));
+		assertTrue(missing.getMessage().contains("no compiled unit 'shelf.Titles'")
+				|| missing.getMessage().contains("no compiled unit 'text.Case'"), missing.getMessage());
+
+		store.store("qvto", new PackagedUnit(compiler.compile(CASE_LIB, "text.Case")));
+		store.store("qvto", new PackagedUnit(compiler.compile(TITLES_LIB, "shelf.Titles")));
+		PreparedContext prepared = preparer(store, registry, runner.unitBinder()).prepare(key);
+		assertEquals(List.of("Announce", "shelf.Titles", "text.Case"),
+				prepared.units().stream().map(Unit::qualifiedName).sorted().toList(),
+				"the closure is loaded, each unit once");
+
+		EObject book = book(shelf, "moby dick");
+		QvtoExecutionResult run = runner.execute(prepared, "Announce",
+				QvtoExecutionContext.of(new BasicQvtoModelExtent(List.of(book))));
+		assertTrue(run.isSuccess(), () -> "execution failed: " + run.diagnostics());
+		assertEquals("NOW READING: MOBY DICK!", title(book));
+	}
+
+	/**
+	 * §7.3 — a metamodel with generated code is only named, never copied: the runtime has it, and
+	 * the entry says which version was expected.
+	 */
+	@Test
+	void section7_generatedMetamodel_isALinkNotACopy() throws Exception {
+		OclPackage.eINSTANCE.getNsURI();   // the generated package registers itself
+		QvtoEngine plain = QvtoEngines.create(QvtoConfiguration.builder(oclConfig()).build());
+
+		CompiledUnit unit = plain.compile("""
+				modeltype OCL uses 'http://www.eclipse.org/fennec/m2x/ocl/1.0';
+				transformation Count(in m : OCL) {
+				    main() { log('expressions: ' + m.objectsOfType(OclExpression)->size().repr()); }
+				}
+				""", "Count");
+
+		PackageEntry entry = unit.getManifest().getPackageEntry().get(0);
+		assertEquals(OclPackage.eNS_URI, entry.getNsURI());
+		assertEquals(PackageRole.REFERENCED, entry.getRole());
+		assertTrue(entry.getFingerprint().startsWith("fp1:"));
+		assertEquals(List.of(), unit.getPackages(), "no copy of a metamodel the runtime brings");
+	}
+
 	// ==== helpers ====
+
+	/** The dynamic metamodel of §7: no generated code, so a unit carries a copy of it. */
+	private static EPackage shelf() {
+		EPackage shelf = EcoreFactory.eINSTANCE.createEPackage();
+		shelf.setName("shelf");
+		shelf.setNsURI(SHELF_NS);
+		shelf.setNsPrefix("shelf");
+		EClass book = EcoreFactory.eINSTANCE.createEClass();
+		book.setName("Book");
+		EAttribute title = EcoreFactory.eINSTANCE.createEAttribute();
+		title.setName("title");
+		title.setEType(EcorePackage.Literals.ESTRING);
+		book.getEStructuralFeatures().add(title);
+		shelf.getEClassifiers().add(book);
+		return shelf;
+	}
+
+	private static EObject book(EPackage shelf, String title) {
+		EClass book = (EClass) shelf.getEClassifier("Book");
+		EObject instance = shelf.getEFactoryInstance().create(book);
+		instance.eSet(book.getEStructuralFeature("title"), title);
+		return instance;
+	}
+
+	private static String title(EObject book) {
+		return (String) book.eGet(book.eClass().getEStructuralFeature("title"));
+	}
+
+	private static void saveBook(Path file, EPackage shelf, String title) throws Exception {
+		ResourceSet set = new ResourceSetImpl();
+		set.getResourceFactoryRegistry().getExtensionToFactoryMap().put("xmi", new XMIResourceFactoryImpl());
+		set.getPackageRegistry().put(SHELF_NS, shelf);
+		Resource resource = set.createResource(URI.createFileURI(file.toString()));
+		resource.getContents().add(book(shelf, title));
+		resource.save(Map.of());
+	}
+
+	private static QvtoEngine engineOver(EPackage.Registry registry, QvtoUnitResolver... resolvers) {
+		QvtoConfiguration.Builder builder = QvtoConfiguration.builder(oclConfig()).packageRegistry(registry);
+		for (QvtoUnitResolver resolver : resolvers) {
+			builder.addUnitResolver(resolver).unitResolverEnabled(true);
+		}
+		return QvtoEngines.create(builder.build());
+	}
+
+	/** The two libraries of §7 as sources — what a compile is allowed to ask for. */
+	private static QvtoUnitResolver sourceResolver() {
+		Map<String, String> sources = Map.of("text.Case", CASE_LIB, "shelf.Titles", TITLES_LIB);
+		return name -> Optional.ofNullable(sources.get(name))
+				.map(source -> new QvtoUnit.SourceUnit(name, URI.createURI("mem:/" + name + ".qvto"), source));
+	}
+
+	/** What execute must never reach. */
+	private static QvtoUnitResolver forbiddenResolver() {
+		return name -> {
+			throw new AssertionError("a resolver was asked for '" + name + "' after prepare");
+		};
+	}
+
+	private static UnitPreparer preparer(UnitStore store, EPackage.Registry runtime, UnitBinder binder) {
+		return new UnitPreparer(store, runtime, FingerprintHelper.getDefaultFingerprintService(), List.of(binder));
+	}
 
 	private static OclConfiguration oclConfig() {
 		return OclConfiguration.builder(new OclParserSupport()).build();

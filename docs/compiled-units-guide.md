@@ -13,11 +13,12 @@ QVT-R and MOFM2T, and every example below is a shape the test suites execute.
 4. [Dependency modes: embed, pin, rebind](#4-dependency-modes-embed-pin-rebind)
 5. [The unit store](#5-the-unit-store)
 6. [Prepare and execute](#6-prepare-and-execute)
-7. [Several sources for one name](#7-several-sources-for-one-name)
-8. [Validation on load](#8-validation-on-load)
-9. [Fingerprints](#9-fingerprints)
-10. [What this means for OCL](#10-what-this-means-for-ocl)
-11. [Bundles and API index](#11-bundles-and-api-index)
+7. [Two worked examples](#7-two-worked-examples)
+8. [Several sources for one name](#8-several-sources-for-one-name)
+9. [Validation on load](#9-validation-on-load)
+10. [Fingerprints](#10-fingerprints)
+11. [What this means for OCL](#11-what-this-means-for-ocl)
+12. [Bundles and API index](#12-bundles-and-api-index)
 
 ---
 
@@ -350,7 +351,263 @@ ran.getManifest().getResolvedClosure().get(0).getFingerprint();    // the versio
 
 ---
 
-## 7. Several sources for one name
+## 7. Two worked examples
+
+Both examples use one dynamic metamodel — `shelf`, with a `Book` that has a `title` — and the
+QVT-O engine; QVT-R and MOFM2T work the same way with their own roots. Everything below is
+executed by `CompiledUnitsGuideExamplesTest`.
+
+### 7.1 One script becomes a stored unit
+
+The metamodel first. It is *dynamic*: built in memory here, loaded from an `.ecore` in practice —
+either way there is no generated code behind it, and that decides what the unit carries (§7.3).
+
+```java
+EPackage shelf = EcoreFactory.eINSTANCE.createEPackage();
+shelf.setName("shelf");
+shelf.setNsURI("http://example.org/m2x/guide/shelf/1.0");
+shelf.setNsPrefix("shelf");
+// … plus an EClass Book with an EAttribute title : EString
+
+EPackage.Registry registry = new EPackageRegistryImpl();
+registry.put(shelf.getNsURI(), shelf);
+```
+
+Compile instead of parse — one call, and the result is a document rather than an object graph:
+
+```java
+QvtoEngine engine = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
+        .packageRegistry(registry).build());
+
+CompiledUnit unit = engine.compile("""
+        modeltype SHELF uses 'http://example.org/m2x/guide/shelf/1.0';
+        transformation Uppercase(inout m : SHELF) {
+            main() {
+                m.objectsOfType(Book)->forEach(b) {
+                    b.title := b.title.toUpperCase();
+                };
+            }
+        }
+        """, "Uppercase");
+```
+
+What came out — the manifest says what this is and what it was built against:
+
+```java
+unit.getManifest().getQualifiedName();        // "Uppercase"
+unit.getManifest().getUnitFingerprint();      // m2x1:… — this exact unit
+unit.getManifest().getDependencyEntry();      // empty: nothing imported
+
+PackageEntry entry = unit.getManifest().getPackageEntry().get(0);
+entry.getNsURI();                             // http://example.org/m2x/guide/shelf/1.0
+entry.getFingerprint();                       // fp1:… — the version it was compiled against
+entry.getRole();                              // EMBEDDED — no generated code, so a copy travels
+unit.getPackages().size();                    // 1 — and here it is
+```
+
+Store it. The key carries the fingerprint, and that is the version anything else pins:
+
+```java
+UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+UnitKey key = store.store("qvto", new PackagedUnit(unit));
+
+key.fingerprint().orElseThrow();              // == unit.getManifest().getUnitFingerprint()
+```
+
+Run it from the store — on an engine whose only resolver *fails* if it is ever asked, which is how
+the test proves that nothing was left to resolve:
+
+```java
+QvtoUnitResolver forbidden = name -> {
+    throw new AssertionError("a resolver was asked for '" + name + "' after prepare");
+};
+QvtoEngine runner = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
+        .packageRegistry(registry).addUnitResolver(forbidden).unitResolverEnabled(true).build());
+
+UnitPreparer preparer = new UnitPreparer(store, registry,
+        FingerprintHelper.getDefaultFingerprintService(), List.of(runner.unitBinder()));
+PreparedContext prepared = preparer.prepare(key);
+
+EObject book = /* a Book of the shelf metamodel, title "moby dick" */;
+runner.execute(prepared, "Uppercase", QvtoExecutionContext.of(new BasicQvtoModelExtent(book)));
+// title: "MOBY DICK"
+```
+
+`UnitPreparer.withDefaults(store, runner.unitBinder())` is the short form for a plain JVM, where
+the metamodels are in the global registry — which is where generated code puts itself. The explicit
+constructor above is what a private registry needs.
+
+### 7.2 Three scripts, and what travels with them
+
+One transformation over two libraries:
+
+```java
+static final String CASE_LIB = """
+        library text.Case {
+            helper shout(s : String) : String {
+                return s.toUpperCase() + '!';
+            }
+        }
+        """;
+static final String TITLES_LIB = """
+        library shelf.Titles {
+            helper prefix(s : String) : String {
+                return 'now reading: ' + s;
+            }
+        }
+        """;
+static final String ANNOUNCE = """
+        modeltype SHELF uses 'http://example.org/m2x/guide/shelf/1.0';
+        import shelf.Titles;
+        import text.Case;
+        transformation Announce(inout m : SHELF) {
+            main() {
+                m.objectsOfType(Book)->forEach(b) {
+                    b.title := shout(prefix(b.title));
+                };
+            }
+        }
+        """;
+```
+
+The compiling engine may ask for the two libraries — as sources here, from a store or a bundle just
+as well (§5, §8):
+
+```java
+Map<String, String> sources = Map.of("text.Case", CASE_LIB, "shelf.Titles", TITLES_LIB);
+QvtoUnitResolver libraries = name -> Optional.ofNullable(sources.get(name))
+        .map(source -> new QvtoUnit.SourceUnit(name, URI.createURI("mem:/" + name + ".qvto"), source));
+
+QvtoEngine compiler = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
+        .packageRegistry(registry).addUnitResolver(libraries).unitResolverEnabled(true).build());
+```
+
+#### Everything inside — `embed`
+
+```java
+CompiledUnit archive = compiler.compile(ANNOUNCE, "Announce",
+        UnitCompileOptions.of(DependencyMode.EMBED));
+
+archive.getEmbedded();     // two complete compiled units: shelf.Titles and text.Case
+archive.getPackages();     // one EPackage: the copy of the shelf metamodel
+```
+
+One document, and it is the whole delivery. On the other side nothing is registered, nothing is
+resolvable, and no source of either library exists anywhere:
+
+```java
+EPackage.Registry nothing = new EPackageRegistryImpl();
+UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend(), nothing);
+UnitKey key = transported.store("qvto", new PackagedUnit(archive));
+
+QvtoEngine runner = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
+        .packageRegistry(nothing).addUnitResolver(forbidden).unitResolverEnabled(true).build());
+PreparedContext prepared = new UnitPreparer(transported, nothing,
+        FingerprintHelper.getDefaultFingerprintService(), List.of(runner.unitBinder())).prepare(key);
+
+prepared.units();          // one unit: "Announce" — the libraries are inside it, not beside it
+```
+
+The metamodel this run has is the copy the unit brought, and that is what the prepared unit's types
+resolve to. So that is the instance the input model has to be built with:
+
+```java
+EPackage carried = ((PackagedUnit) prepared.unit("Announce").orElseThrow())
+        .document().getPackages().get(0);
+EObject book = carried.getEFactoryInstance()
+        .create((EClass) carried.getEClassifier("Book"));   // "moby dick"
+
+runner.execute(prepared, "Announce", QvtoExecutionContext.of(new BasicQvtoModelExtent(book)));
+// title: "NOW READING: MOBY DICK!"
+```
+
+**One boundary worth knowing.** A carried copy serves the *unit's* references; it does not enter the
+package registry. A model in a file whose metamodel exists only as a copy therefore cannot be loaded
+through the context:
+
+```java
+prepared.contents(URI.createFileURI("/models/shelf.xmi"));
+// UnitPrepareException: cannot load … Package with uri 'http://example.org/…/shelf/1.0' not found
+```
+
+Register the metamodel on the executing side if you need that — an equal one is adopted and costs
+nothing (§6).
+
+#### Only links — `pin`
+
+The same three scripts, compiled with the default mode:
+
+```java
+CompiledUnit main = compiler.compile(ANNOUNCE, "Announce");   // pin
+
+main.getEmbedded();                              // empty — nothing carried
+main.getManifest().getDependencyEntry();         // shelf.Titles and text.Case,
+                                                 //   each with mode PIN and an m2x1 fingerprint
+```
+
+Each unit now lives in the store once, and prepare needs the ones the manifest names — as
+**compiled** units, because prepare loads documents and has no parser:
+
+```java
+UnitKey key = store.store("qvto", new PackagedUnit(main));
+UnitPreparer preparer = new UnitPreparer(store, registry,
+        FingerprintHelper.getDefaultFingerprintService(), List.of(runner.unitBinder()));
+
+preparer.prepare(key);
+// UnitPrepareException: the store has no compiled unit 'shelf.Titles'
+
+store.store("qvto", new PackagedUnit(compiler.compile(CASE_LIB, "text.Case")));
+store.store("qvto", new PackagedUnit(compiler.compile(TITLES_LIB, "shelf.Titles")));
+
+PreparedContext prepared = preparer.prepare(key);
+prepared.units();     // three: Announce, shelf.Titles, text.Case — the closure, each once
+```
+
+A library that several transformations import is stored, fingerprinted and loaded **once** per run,
+however many units name it. That is the whole difference from `embed`, where each archive brings its
+own copy.
+
+#### Which to choose
+
+| | `embed` | `pin` (default) | `rebind` |
+|---|---|---|---|
+| The dependency is | inside the unit | named, with its fingerprint | named |
+| Prepare needs the store to hold | nothing else | the pinned versions | the newest versions |
+| A fix in the library arrives | never | on recompile | on the next prepare |
+| One library shared by ten units | ten copies | one | one |
+| Good for | transport, archiving, an air-gapped runtime | a repository that holds what it runs | a unit that should follow its libraries |
+
+### 7.3 Metamodels: carried or named
+
+Units are your choice per compile. Metamodels are not — the packager decides per package, by
+whether it has generated code:
+
+| The metamodel | In the manifest | In the document | Why |
+|---|---|---|---|
+| **dynamic** — no generated code (an `.ecore` loaded at runtime) | `PackageEntry`, role `EMBEDDED`, `fp1:…` | a **copy** in `getPackages()` | a runtime may have no way to supply it |
+| **generated** — an `EPackage` subclass with a factory | `PackageEntry`, role `REFERENCED`, `fp1:…` | nothing | the runtime has it, and its generated types are the better ones |
+| Ecore, XMLType, the OCL standard library | nothing | nothing | part of every runtime by definition |
+
+```java
+// a unit over a generated metamodel: named, never copied
+CompiledUnit unit = plain.compile(overOclMetamodel, "Count");
+unit.getManifest().getPackageEntry().get(0).getRole();   // REFERENCED
+unit.getPackages();                                      // empty
+```
+
+So the way to turn a copy into a link is to give the metamodel generated code — or to register it on
+the compiling *and* the executing side, which is the same thing seen from prepare: an entry whose
+nsURI the runtime answers for, with an equal fingerprint, resolves to the runtime instance and the
+copy is not used. A differing fingerprint is a hard failure naming both values, never a silent
+choice (§6).
+
+The copy is held to its recorded fingerprint as strictly as a runtime instance is: changing a
+carried metamodel after the unit was sealed is what the validator reports as `carried metamodel
+changed` (§9).
+
+---
+
+## 8. Several sources for one name
 
 With one resolver nothing here matters. With several — a store, a file system, a bundle — three
 rules apply, in one place (`ResolutionPolicy`), for compile and for the execute-time link alike:
@@ -372,7 +629,7 @@ therefore hand out the same instance again and again.
 
 ---
 
-## 8. Validation on load
+## 9. Validation on load
 
 A unit from a store bypasses the parser and every check it enforces. `DefaultUnitStore` validates
 what it loads — on by default:
@@ -401,7 +658,7 @@ any change to the store or the format. The shipped in-memory backend does not si
 
 ---
 
-## 9. Fingerprints
+## 10. Fingerprints
 
 Two kinds, two schemes, both in the manifest:
 
@@ -428,7 +685,7 @@ value in the test suite says so.
 
 ---
 
-## 10. What this means for OCL
+## 11. What this means for OCL
 
 OCL has no unit concept: an OCL expression is not something you import by name, so there is no
 `OclEngine.compile()` and no OCL entry in a store. Two things still touch OCL:
@@ -449,7 +706,7 @@ new OclParserSupport(registry).strictPropertyResolution(true).parse("self.nam", 
 
 ---
 
-## 11. Bundles and API index
+## 12. Bundles and API index
 
 Everything neutral is in **`org.eclipse.fennec.m2x.unit`**; the language APIs depend on it, never
 the other way round. What needs a `BundleContext` lives beside it in

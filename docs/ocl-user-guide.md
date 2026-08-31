@@ -1221,7 +1221,7 @@ new OclParserSupport(registry).strictPropertyResolution(true).parse("self.nam", 
 // OclParseException: Unknown property (Person::nam)
 ```
 
-See the [Compiled Units Guide](compiled-units-guide.md) §10.
+See the [Compiled Units Guide](compiled-units-guide.md) §11.
 
 ## 12. Thread Safety
 
