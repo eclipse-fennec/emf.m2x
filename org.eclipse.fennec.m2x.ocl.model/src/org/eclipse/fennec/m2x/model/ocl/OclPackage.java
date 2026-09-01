@@ -43,7 +43,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = OclPackage.eNS_URI, fingerprint = "fp1:1f1669f597959634f7d5627b5d2ab988b23f977f9d4c9d126bb932b1952b536b", genModel = "/model/ocl.genmodel", genModelSourceLocations = {"model/ocl.genmodel","org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel"}, ecore = "/model/ocl.ecore", ecoreSourceLocations = "/model/ocl.ecore")
+@EPackage(uri = OclPackage.eNS_URI, fingerprint = "fp1:596c0d7dcabd56cd159b01cfdaae2084093946fc5231c422f52f2913e7171793", genModel = "/model/ocl.genmodel", genModelSourceLocations = {"model/ocl.genmodel","org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel"}, ecore = "/model/ocl.ecore", ecoreSourceLocations = "/model/ocl.ecore")
 public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -4052,6 +4052,133 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int STATE_EXP_OPERATION_COUNT = OCL_EXPRESSION_OPERATION_COUNT + 0;
 
 	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.CompleteOclDocumentImpl <em>Complete Ocl Document</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2x.model.ocl.impl.CompleteOclDocumentImpl
+	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getCompleteOclDocument()
+	 * @generated
+	 */
+	int COMPLETE_OCL_DOCUMENT = 50;
+
+	/**
+	 * The feature id for the '<em><b>EAnnotations</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__EANNOTATIONS = EcorePackage.EPACKAGE__EANNOTATIONS;
+
+	/**
+	 * The feature id for the '<em><b>Name</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__NAME = EcorePackage.EPACKAGE__NAME;
+
+	/**
+	 * The feature id for the '<em><b>Ns URI</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__NS_URI = EcorePackage.EPACKAGE__NS_URI;
+
+	/**
+	 * The feature id for the '<em><b>Ns Prefix</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__NS_PREFIX = EcorePackage.EPACKAGE__NS_PREFIX;
+
+	/**
+	 * The feature id for the '<em><b>EFactory Instance</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__EFACTORY_INSTANCE = EcorePackage.EPACKAGE__EFACTORY_INSTANCE;
+
+	/**
+	 * The feature id for the '<em><b>EClassifiers</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__ECLASSIFIERS = EcorePackage.EPACKAGE__ECLASSIFIERS;
+
+	/**
+	 * The feature id for the '<em><b>ESubpackages</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__ESUBPACKAGES = EcorePackage.EPACKAGE__ESUBPACKAGES;
+
+	/**
+	 * The feature id for the '<em><b>ESuper Package</b></em>' container reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__ESUPER_PACKAGE = EcorePackage.EPACKAGE__ESUPER_PACKAGE;
+
+	/**
+	 * The feature id for the '<em><b>Constraints</b></em>' containment reference list.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT__CONSTRAINTS = EcorePackage.EPACKAGE_FEATURE_COUNT + 0;
+
+	/**
+	 * The number of structural features of the '<em>Complete Ocl Document</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT_FEATURE_COUNT = EcorePackage.EPACKAGE_FEATURE_COUNT + 1;
+
+	/**
+	 * The operation id for the '<em>Get EAnnotation</em>' operation.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT___GET_EANNOTATION__STRING = EcorePackage.EPACKAGE___GET_EANNOTATION__STRING;
+
+	/**
+	 * The operation id for the '<em>Get EClassifier</em>' operation.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT___GET_ECLASSIFIER__STRING = EcorePackage.EPACKAGE___GET_ECLASSIFIER__STRING;
+
+	/**
+	 * The number of operations of the '<em>Complete Ocl Document</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPLETE_OCL_DOCUMENT_OPERATION_COUNT = EcorePackage.EPACKAGE_OPERATION_COUNT + 0;
+
+	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.CollectionKind <em>Collection Kind</em>}' enum.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -4059,7 +4186,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getCollectionKind()
 	 * @generated
 	 */
-	int COLLECTION_KIND = 50;
+	int COLLECTION_KIND = 51;
 
 	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.ocl.ConstraintKind <em>Constraint Kind</em>}' enum.
@@ -4069,7 +4196,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getConstraintKind()
 	 * @generated
 	 */
-	int CONSTRAINT_KIND = 51;
+	int CONSTRAINT_KIND = 52;
 
 
 	/**
@@ -5288,6 +5415,27 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getStateExp_ReferredState();
 
 	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument <em>Complete Ocl Document</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>Complete Ocl Document</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument
+	 * @generated
+	 */
+	EClass getCompleteOclDocument();
+
+	/**
+	 * Returns the meta object for the containment reference list '{@link org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument#getConstraints <em>Constraints</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the containment reference list '<em>Constraints</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument#getConstraints()
+	 * @see #getCompleteOclDocument()
+	 * @generated
+	 */
+	EReference getCompleteOclDocument_Constraints();
+
+	/**
 	 * Returns the meta object for enum '{@link org.eclipse.fennec.m2x.model.ocl.CollectionKind <em>Collection Kind</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -6349,6 +6497,24 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference STATE_EXP__REFERRED_STATE = eINSTANCE.getStateExp_ReferredState();
+
+		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.impl.CompleteOclDocumentImpl <em>Complete Ocl Document</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2x.model.ocl.impl.CompleteOclDocumentImpl
+		 * @see org.eclipse.fennec.m2x.model.ocl.impl.OclPackageImpl#getCompleteOclDocument()
+		 * @generated
+		 */
+		EClass COMPLETE_OCL_DOCUMENT = eINSTANCE.getCompleteOclDocument();
+
+		/**
+		 * The meta object literal for the '<em><b>Constraints</b></em>' containment reference list feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference COMPLETE_OCL_DOCUMENT__CONSTRAINTS = eINSTANCE.getCompleteOclDocument_Constraints();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.ocl.CollectionKind <em>Collection Kind</em>}' enum.

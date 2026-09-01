@@ -1204,9 +1204,36 @@ model itself has no such dependency.
 
 ## 11.9 OCL and Compiled Units
 
-There is no `OclEngine.compile()`, and OCL has no entry in a unit store: an OCL expression is not
-something you import by name, so there is nothing to package, store and resolve. What does concern
-OCL is that expressions live **inside** the units of the other three languages:
+Since #209 a **Complete OCL document** is a unit of its own: compiled once, stored, prepared —
+and then *registered*, because a document is installed into an engine, never executed. The
+runtime that registers needs no parser for the document.
+
+```java
+// build side
+CompiledUnit unit = engine.compileDocument("company.rules", """
+        package company
+        context Person
+          def : isAdult : Boolean = self.age >= 18
+        endpackage
+        """);
+UnitKey key = store.put(unit);            // language "ocl", manifest nature = LIBRARY
+
+// runtime side — no document text, no document parse
+PreparedContext prepared = new UnitPreparer(store, List.of(runtime.unitBinder()))
+        .registerPackage(company).prepare(key);
+runtime.registerCompleteOclDocument(prepared, "company.rules");
+runtime.evaluate("self.isAdult", OclContext.of(person));   // true
+```
+
+`registerCompleteOclDocument(CompleteOclDocument)` is the AST-taking sibling of the
+text-taking contribution API, with `unregisterCompleteOclDocument` taking it back out. A
+document has no unit imports, so there is no `OclStoreUnitResolver` and nothing to bind — the
+`OclUnitBinder` only holds the root to its type. The manifest's `nature = LIBRARY` says the
+rest: a store, a registry entry or an atlas answers "installable, not startable" without
+loading the AST.
+
+Ad-hoc expressions stay what they were — an expression is not something you import by name.
+And expressions keep living **inside** the units of the other three languages:
 
 - The `m2x1` unit fingerprint walks the OCL expressions of a transformation or template, so what it
   says about a QVT-O mapping includes the OCL it contains. Standard-library types enter as URIs,

@@ -6,6 +6,7 @@ Bundle-Description: OCL v2.5 evaluator, standard library, and EMF delegate integ
 -buildpath: \
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.osgi.service.metatype.annotations;version=latest,\
 	org.osgi.service.component.annotations;version=latest,\
 	org.osgi.service.condition;version=latest

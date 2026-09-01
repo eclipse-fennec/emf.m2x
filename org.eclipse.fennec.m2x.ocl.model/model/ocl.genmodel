@@ -175,5 +175,8 @@
     <genClasses ecoreClass="ocl.ecore#//StateExp">
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//StateExp/referredState"/>
     </genClasses>
+    <genClasses ecoreClass="ocl.ecore#//CompleteOclDocument">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference ocl.ecore#//CompleteOclDocument/constraints"/>
+    </genClasses>
   </genPackages>
 </genmodel:GenModel>

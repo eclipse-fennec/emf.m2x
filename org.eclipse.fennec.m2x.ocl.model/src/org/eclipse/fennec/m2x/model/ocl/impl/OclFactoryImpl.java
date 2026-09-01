@@ -110,6 +110,7 @@ public class OclFactoryImpl extends EFactoryImpl implements OclFactory {
 			case OclPackage.MAP_LITERAL_PART: return createMapLiteralPart();
 			case OclPackage.TUPLE_PART: return createTuplePart();
 			case OclPackage.STATE_EXP: return createStateExp();
+			case OclPackage.COMPLETE_OCL_DOCUMENT: return createCompleteOclDocument();
 			default:
 				throw new IllegalArgumentException("The class '" + eClass.getName() + "' is not a valid classifier");
 		}
@@ -598,6 +599,17 @@ public class OclFactoryImpl extends EFactoryImpl implements OclFactory {
 	public StateExp createStateExp() {
 		StateExpImpl stateExp = new StateExpImpl();
 		return stateExp;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public CompleteOclDocument createCompleteOclDocument() {
+		CompleteOclDocumentImpl completeOclDocument = new CompleteOclDocumentImpl();
+		return completeOclDocument;
 	}
 
 	/**

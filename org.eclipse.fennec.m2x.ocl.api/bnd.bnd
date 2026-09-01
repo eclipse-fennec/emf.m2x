@@ -5,4 +5,5 @@ Bundle-Description: Public API interfaces for the Fennec OCL engine
 
 -buildpath: \
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.osgi.service.condition;version=latest

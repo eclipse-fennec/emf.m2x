@@ -47,8 +47,16 @@ import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
+import org.eclipse.fennec.m2x.model.compiled.UnitNature;
+import org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument;
 import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
@@ -93,6 +101,7 @@ public class OclEngineImpl implements OclDelegateSupport {
 	private final List<OclOperationProvider> defProviders = new CopyOnWriteArrayList<>();
 	/** What each registered Complete OCL document put into effect, so it can be taken out. */
 	private final Map<CompleteOclContribution, LoadedDefs> contributions = new ConcurrentHashMap<>();
+	private final Map<CompleteOclDocument, LoadedDefs> documentContributions = new ConcurrentHashMap<>();
 	private final Map<DefKey, DefEntry> defProperties = new ConcurrentHashMap<>();
 	private volatile OclEvaluationOptions delegateOptions;
 
@@ -323,6 +332,61 @@ public class OclEngineImpl implements OclDelegateSupport {
 		}
 		loaded.properties().forEach(defProperties::remove);
 		defProviders.removeAll(loaded.providers());
+	}
+
+	@Override
+	public CompiledUnit compileDocument(String qualifiedName, String oclDocument) throws OclParseException {
+		Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
+		Objects.requireNonNull(oclDocument, "oclDocument must not be null");
+		CompleteOclDocument document = OclFactory.eINSTANCE.createCompleteOclDocument();
+		document.setName(qualifiedName);
+		// Deterministic, like the QVT-O intermediate package: the nsURI is part of the
+		// canonical form, so it must not depend on where or when the compile ran
+		document.setNsURI("http://www.eclipse.org/fennec/m2x/ocl/document/" + qualifiedName);
+		document.setNsPrefix("ocldoc");
+		document.getConstraints().addAll(parseDocument(oclDocument));
+		CompiledUnit compiled = UnitPackager.compile("ocl", qualifiedName, document);
+		// A document is installed, never started — an atlas or a store answers that
+		// from the manifest, without loading the AST (#224)
+		compiled.getManifest().setNature(UnitNature.LIBRARY);
+		return compiled;
+	}
+
+	@Override
+	public void registerCompleteOclDocument(CompleteOclDocument document) {
+		Objects.requireNonNull(document, "document must not be null");
+		unregisterCompleteOclDocument(document);
+		documentContributions.put(document, load(document.getConstraints()));
+	}
+
+	@Override
+	public void unregisterCompleteOclDocument(CompleteOclDocument document) {
+		Objects.requireNonNull(document, "document must not be null");
+		LoadedDefs loaded = documentContributions.remove(document);
+		if (loaded == null) {
+			return;
+		}
+		loaded.properties().forEach(defProperties::remove);
+		defProviders.removeAll(loaded.providers());
+	}
+
+	@Override
+	public void registerCompleteOclDocument(PreparedContext prepared, String qualifiedName) {
+		Objects.requireNonNull(prepared, "prepared must not be null");
+		Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
+		Unit unit = prepared.unit(qualifiedName).orElseThrow(() -> new IllegalArgumentException(
+				"the prepared context holds no unit '" + qualifiedName + "'"));
+		if (!(unit instanceof Unit.Packaged packaged)
+				|| !(packaged.document().getUnit() instanceof CompleteOclDocument document)) {
+			throw new IllegalArgumentException("'" + qualifiedName
+					+ "' is not a compiled Complete OCL document");
+		}
+		registerCompleteOclDocument(document);
+	}
+
+	@Override
+	public UnitBinder unitBinder() {
+		return new OclUnitBinder();
 	}
 
 	// --- Postcondition Evaluation ---

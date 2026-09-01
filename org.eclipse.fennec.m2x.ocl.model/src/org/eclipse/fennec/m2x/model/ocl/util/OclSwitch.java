@@ -501,6 +501,15 @@ public class OclSwitch<T> extends Switch<T> {
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
+			case OclPackage.COMPLETE_OCL_DOCUMENT: {
+				CompleteOclDocument completeOclDocument = (CompleteOclDocument)theEObject;
+				T result = caseCompleteOclDocument(completeOclDocument);
+				if (result == null) result = caseEPackage(completeOclDocument);
+				if (result == null) result = caseENamedElement(completeOclDocument);
+				if (result == null) result = caseEModelElement(completeOclDocument);
+				if (result == null) result = defaultCase(theEObject);
+				return result;
+			}
 			default: return defaultCase(theEObject);
 		}
 	}
@@ -1256,6 +1265,21 @@ public class OclSwitch<T> extends Switch<T> {
 	}
 
 	/**
+	 * Returns the result of interpreting the object as an instance of '<em>Complete Ocl Document</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>Complete Ocl Document</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseCompleteOclDocument(CompleteOclDocument object) {
+		return null;
+	}
+
+	/**
 	 * Returns the result of interpreting the object as an instance of '<em>EModel Element</em>'.
 	 * <!-- begin-user-doc -->
 	 * This implementation returns null;
@@ -1312,6 +1336,21 @@ public class OclSwitch<T> extends Switch<T> {
 	 * @generated
 	 */
 	public T caseEDataType(EDataType object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>EPackage</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>EPackage</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseEPackage(EPackage object) {
 		return null;
 	}
 

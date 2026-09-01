@@ -106,7 +106,7 @@ The manifest is the interesting half:
 
 ```java
 CompiledUnitManifest m = compiled.getManifest();
-m.getLanguage();             // "qvto", "qvtr", "m2t"
+m.getLanguage();             // "qvto", "qvtr", "m2t", "ocl"
 m.getQualifiedName();        // the name it is imported by
 m.getUnitFingerprint();      // m2x1:… — what this unit is
 m.getSourceFingerprint();    // m2x1:… — the text it was compiled from
@@ -385,6 +385,23 @@ the runtime provides fp1:9a04…
 
 Two units of one run that pin different versions of one name are a conflict too — not a silent
 choice.
+
+### OCL: prepare, then register
+
+A Complete OCL document is the fourth unit language (#209), with one twist: its lifecycle ends
+at prepare. `OclEngine.compileDocument(name, text)` seals the document's constraints under the
+tag `ocl` with `nature = LIBRARY`; the runtime side prepares it like any unit and then
+*registers* instead of executing:
+
+```java
+PreparedContext prepared = new UnitPreparer(store, List.of(oclEngine.unitBinder()))
+        .registerPackage(company).prepare(key);
+oclEngine.registerCompleteOclDocument(prepared, "company.rules");
+```
+
+The document's `def:` constraints take effect exactly as with the text-taking contribution API
+— only that no parser ran. A document has no unit imports, so there is no store resolver for
+OCL and its binder only holds the root to its type.
 
 ### A pipeline shares one context
 
