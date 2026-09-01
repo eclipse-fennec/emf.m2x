@@ -80,6 +80,7 @@ final class QvtoUnitCompiler {
 	static final String LANGUAGE = "qvto";
 
 	private final QvtoLinkPolicy policy;
+	private QvtoReferencedUnits referencedUnits;
 	private final UnitPackager packager;
 	private final DependencyMode mode;
 	private final QvtoLinker linker;
@@ -217,6 +218,8 @@ final class QvtoUnitCompiler {
 				yield compile((OperationalTransformation) UnitPackager.detach(compiled.transformation()),
 						compiled.qualifiedName(), null, path);
 			}
+			// dereferenced at resolution; kept for exhaustiveness, and for a caller that hands one in
+			case QvtoUnit.ResourceUnit reference -> compileDependency(referencedUnits().dereference(reference), path);
 		};
 	}
 
@@ -238,12 +241,25 @@ final class QvtoUnitCompiler {
 		if (!policy.allowedUnitModules().isEmpty() && !policy.allowedUnitModules().contains(qualifiedName)) {
 			return Optional.empty();
 		}
+		Optional<QvtoUnit> unit;
 		try {
-			return ResolutionPolicy.resolve(qualifiedName, QvtoLinker.sources(policy.unitResolvers()));
+			unit = ResolutionPolicy.resolve(qualifiedName, QvtoLinker.sources(policy.unitResolvers()));
 		} catch (UnitResolutionException failure) {
 			throw new QvtoParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
 					failure);
 		}
+		if (unit.isPresent()) {
+			// a reference is loaded here, in this compile's context, before any switch sees it
+			unit = Optional.of(referencedUnits().dereference(unit.get()));
+		}
+		return unit;
+	}
+
+	private QvtoReferencedUnits referencedUnits() {
+		if (referencedUnits == null) {
+			referencedUnits = new QvtoReferencedUnits(policy.packageRegistry());
+		}
+		return referencedUnits;
 	}
 
 	private Optional<QvtoBlackboxLibrary> resolveBlackbox(String qualifiedName) {

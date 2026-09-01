@@ -66,6 +66,7 @@ public class QvtoLinker {
 
 	/** Blackbox modules resolved during this link, to hold {@code policy.maxBlackboxLibraries()}. */
 	private final Set<String> resolvedBlackboxModules = new HashSet<>();
+	private QvtoReferencedUnits referencedUnits;
 
 	/**
 	 * Creates a linker that resolves under the given policy.
@@ -201,7 +202,7 @@ public class QvtoLinker {
 			throw new QvtoParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
 					failure);
 		}
-		return unit.isPresent() ? toModule(unit.get()) : null;
+		return unit.isPresent() ? toModule(referencedUnits().dereference(unit.get())) : null;
 	}
 
 	/** The configured resolvers as sources, in configuration order — the order that decides. */
@@ -287,8 +288,17 @@ public class QvtoLinker {
 			case QvtoUnit.CompiledUnit compiled -> compiled.transformation();
 			case QvtoUnit.SourceUnit source -> policy.parserSupport().parse(
 					source.source(), source.qualifiedName(), policy.packageRegistry());
+			// dereferenced before any switch sees it
+			case QvtoUnit.ResourceUnit reference -> toModule(referencedUnits().dereference(reference));
 		};
 		return unwrapLibrary(module);
+	}
+
+	private QvtoReferencedUnits referencedUnits() {
+		if (referencedUnits == null) {
+			referencedUnits = new QvtoReferencedUnits(policy.packageRegistry());
+		}
+		return referencedUnits;
 	}
 
 	/**

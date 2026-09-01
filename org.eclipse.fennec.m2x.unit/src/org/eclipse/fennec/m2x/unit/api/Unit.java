@@ -29,7 +29,7 @@ import org.osgi.annotation.versioning.ConsumerType;
  * (§8 of the compiled-unit concept). The dependency points from the language
  * APIs to this bundle and never back, so no cycle arises (D39).
  *
- * <p>A unit is either {@link Source} or {@link Compiled} — the nested names keep
+ * <p>A unit is {@link Source}, {@link Compiled} or {@link Referenced} — the nested names keep
  * this interface free of a collision with the language-level record names such
  * as {@code QvtoUnit.SourceUnit}.
  *
@@ -84,6 +84,35 @@ public interface Unit {
 		@Override
 		default UnitKind kind() {
 			return UnitKind.SOURCE;
+		}
+	}
+
+	/**
+	 * A unit named by reference: a resolver answers with where it lives, and loading happens at
+	 * consumption, in the consumer's context, through the {@code UnitMaterializer} (#214).
+	 *
+	 * <p>This is deliberately not a {@link Compiled}: {@code root()} cannot be answered before
+	 * loading. The URI is expected to hold a compiled-unit document — the normal case, with the
+	 * validation funnel and the carried copies of a store load — or a bare AST, the pre-unit
+	 * shape, which loads with its known gaps but binds consistently in the consumer's context.
+	 * A resolution conflict cannot compare a reference by fingerprint before loading, so among
+	 * agreeing answers a reference never decides (#141).
+	 *
+	 * @author Data In Motion Consulting
+	 * @since 1.0
+	 */
+	interface Referenced extends Unit {
+
+		/**
+		 * Returns where the unit lives.
+		 *
+		 * @return the location, never {@code null}
+		 */
+		URI uri();
+
+		@Override
+		default UnitKind kind() {
+			return UnitKind.COMPILED;
 		}
 	}
 

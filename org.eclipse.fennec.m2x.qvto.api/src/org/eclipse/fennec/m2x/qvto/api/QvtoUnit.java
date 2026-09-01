@@ -24,16 +24,17 @@ import org.eclipse.fennec.m2x.unit.api.Unit;
 /**
  * A resolved QVT-O compilation unit, either as source text or a pre-compiled AST.
  *
- * <p>This is a sealed interface with two permitted implementations:
+ * <p>This is a sealed interface with three permitted implementations:
  * <ul>
  *   <li>{@link SourceUnit} — source text to be parsed</li>
  *   <li>{@link CompiledUnit} — an already-parsed transformation AST</li>
+ *   <li>{@link ResourceUnit} — a location to load the unit from at consumption</li>
  * </ul>
  *
  * @author Data In Motion Consulting
  * @since 1.0
  */
-public sealed interface QvtoUnit extends Unit permits QvtoUnit.SourceUnit, QvtoUnit.CompiledUnit {
+public sealed interface QvtoUnit extends Unit permits QvtoUnit.SourceUnit, QvtoUnit.CompiledUnit, QvtoUnit.ResourceUnit {
 
 	/**
 	 * Returns the qualified name of this unit.
@@ -72,6 +73,22 @@ public sealed interface QvtoUnit extends Unit permits QvtoUnit.SourceUnit, QvtoU
 		@Override
 		public EObject root() {
 			return transformation;
+		}
+	}
+
+	/**
+	 * A unit named by reference: a resolver answers with where it lives, and loading happens at
+	 * consumption, in the consumer's context (#214). The URI is expected to hold a compiled-unit
+	 * document — then this is a store load without the store, validation funnel included — or a
+	 * bare AST, the pre-unit shape.
+	 *
+	 * @param qualifiedName the qualified unit name
+	 * @param uri where the unit lives
+	 */
+	record ResourceUnit(String qualifiedName, URI uri) implements QvtoUnit, Unit.Referenced {
+		public ResourceUnit {
+			Objects.requireNonNull(qualifiedName, "qualifiedName must not be null");
+			Objects.requireNonNull(uri, "uri must not be null");
 		}
 	}
 }

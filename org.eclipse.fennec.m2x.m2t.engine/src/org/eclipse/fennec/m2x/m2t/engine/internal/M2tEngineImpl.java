@@ -111,6 +111,7 @@ public class M2tEngineImpl implements M2tEngine {
 	 * rewriting them (#194). Weakly keyed, per link set, under one lock — see the class.
 	 */
 	private final M2tLinkRegistry registry = new M2tLinkRegistry();
+	private M2tReferencedUnits referencedUnits;
 
 	/**
 	 * Creates a new engine from the given configuration.
@@ -194,7 +195,8 @@ public class M2tEngineImpl implements M2tEngine {
 		Objects.requireNonNull(options, "options must not be null");
 		// Compile asks the same resolvers under the same D29 limits as a link
 		return new M2tUnitCompiler(this::parseCached, registry::parseResultOf, effectiveUnitResolvers(),
-				config.unitResolverEnabled() ? config.allowedUnitModules() : Set.of(), packager, options)
+				config.unitResolverEnabled() ? config.allowedUnitModules() : Set.of(), packager, options,
+				new M2tReferencedUnits(config.packageRegistry()))
 				.compile(source, unitName);
 	}
 
@@ -307,12 +309,15 @@ public class M2tEngineImpl implements M2tEngine {
 		Optional<M2tUnit> unit = ResolutionPolicy.resolve(name, sources(resolvers));
 		if (unit.isPresent()) {
 			try {
-				return switch (unit.get()) {
+				return switch (referencedUnits().dereference(unit.get())) {
 					case M2tUnit.CompiledUnit compiled -> resultFor(compiled.module());
 					case M2tUnit.SourceUnit source -> {
 						parse(source.source(), name);
 						yield registry.parseResultOf(registry.moduleByName(name));
 					}
+					// dereference() never answers with a reference
+					case M2tUnit.ResourceUnit reference -> throw new M2tParseException(
+							"unreachable: '" + reference.qualifiedName() + "' was not dereferenced");
 				};
 			} catch (M2tParseException failure) {
 				// One unusable module must not decide the fate of the others; the linker
@@ -323,6 +328,13 @@ public class M2tEngineImpl implements M2tEngine {
 			}
 		}
 		return null;
+	}
+
+	private M2tReferencedUnits referencedUnits() {
+		if (referencedUnits == null) {
+			referencedUnits = new M2tReferencedUnits(config.packageRegistry());
+		}
+		return referencedUnits;
 	}
 
 	/** The configured resolvers as sources, in configuration order — the order that decides. */

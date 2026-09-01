@@ -58,6 +58,7 @@ public class QvtdLinker {
 
 	/** Units resolved during this link, so that {@code maxUnitResolvers} bounds the whole. */
 	private final Set<String> resolved = new HashSet<>();
+	private QvtdReferencedUnits referencedUnits;
 
 	public QvtdLinker(QvtrParserSupport parserSupport, EPackage.Registry packageRegistry,
 			List<QvtdUnitResolver> unitResolvers, Set<String> allowedUnitModules) {
@@ -119,7 +120,7 @@ public class QvtdLinker {
 			throw new QvtdParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
 					failure);
 		}
-		return unit.isPresent() ? toTransformation(unit.get(), qualifiedName) : null;
+		return unit.isPresent() ? toTransformation(referencedUnits().dereference(unit.get()), qualifiedName) : null;
 	}
 
 	/** The configured resolvers as sources, in configuration order — the order that decides. */
@@ -136,7 +137,17 @@ public class QvtdLinker {
 		return switch (unit) {
 			case QvtdUnit.CompiledUnit compiled -> compiled.transformation();
 			case QvtdUnit.SourceUnit source -> parserSupport.parse(source.source(), qualifiedName, packageRegistry);
+			// dereferenced before any switch sees it
+			case QvtdUnit.ResourceUnit reference -> toTransformation(referencedUnits().dereference(reference),
+					qualifiedName);
 		};
+	}
+
+	private QvtdReferencedUnits referencedUnits() {
+		if (referencedUnits == null) {
+			referencedUnits = new QvtdReferencedUnits(packageRegistry);
+		}
+		return referencedUnits;
 	}
 
 	/**

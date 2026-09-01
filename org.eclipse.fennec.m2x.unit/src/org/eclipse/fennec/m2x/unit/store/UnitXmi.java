@@ -138,6 +138,24 @@ public final class UnitXmi {
 	}
 
 	/**
+	 * Loads a resource with the safe parser options — the read every unit byte from outside goes
+	 * through, whether it comes from a backend or from a URI a resolver named (#214).
+	 *
+	 * @param resource the resource to load, created in the set it belongs to
+	 * @throws UnitStoreException if the content cannot be read, or holds nothing
+	 */
+	public static void loadSafely(Resource resource) throws UnitStoreException {
+		try {
+			resource.load(SAFE_PARSER_OPTIONS);
+		} catch (IOException | RuntimeException e) {
+			throw new UnitStoreException("cannot read '" + resource.getURI() + "': " + e.getMessage(), e);
+		}
+		if (resource.getContents().isEmpty()) {
+			throw new UnitStoreException("the content under " + resource.getURI() + " is empty");
+		}
+	}
+
+	/**
 	 * XMI writes a reference to another document as {@code <resource URI>#<fragment>}, so a
 	 * referenced package has to live in a resource — a generated one does (EMF's
 	 * {@code createResource(nsURI)}), a package built in memory does not. The write gives it the

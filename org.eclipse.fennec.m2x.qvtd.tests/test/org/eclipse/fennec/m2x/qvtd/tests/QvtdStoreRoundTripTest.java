@@ -100,7 +100,7 @@ class QvtdStoreRoundTripTest {
 		store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		OclConfiguration ocl = OclConfiguration.builder(new OclParserSupport()).build();
 		engine = QvtdEngines.create(QvtdConfiguration.builder(ocl).packageRegistry(registry)
-				.addUnitResolver(new QvtdStoreUnitResolver(store, registry)).unitResolverEnabled(true).build());
+				.addUnitResolver(new QvtdStoreUnitResolver(store)).unitResolverEnabled(true).build());
 		bare = QvtdEngines.create(QvtdConfiguration.builder(ocl).packageRegistry(registry).build());
 	}
 
