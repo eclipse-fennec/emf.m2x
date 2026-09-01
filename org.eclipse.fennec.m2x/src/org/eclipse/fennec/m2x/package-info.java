@@ -11,9 +11,4 @@
  * Contributors:
  *     Data In Motion - initial API and implementation
  */
-/**
- * 
- * @author mark
- * @since 19.02.2026
- */
 package org.eclipse.fennec.m2x;
