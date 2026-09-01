@@ -1,0 +1,9 @@
+/*
+ * The example's model and document files are read from the project directory at run time,
+ * so they are inputs of the smoke test — without this, an edited file leaves the test
+ * up-to-date and green.
+ */
+tasks.named("test") {
+	inputs.dir("model")
+	inputs.dir("documents")
+}
