@@ -28,6 +28,7 @@ rootProject.name = "fennec-m2x"
 // Exclude non-standard projects from Gradle build
 def excludedProjects = [
   'docs',                                          // documentation, not build targets
+  'tools',                                         // shell scripts, nothing to compile or jar
 ] as Set
 excludedProjects.addAll(gradle.benchmarkProjectsWithoutDependencies)
 
