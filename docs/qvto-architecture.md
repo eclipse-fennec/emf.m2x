@@ -10,7 +10,7 @@ The QVT-O engine implements **QVT-Operational v1.3** as a pure Java library,
 fully decoupled from the Eclipse platform. It reuses the OCL engine (Phase 1) for
 expression evaluation via composition (D25).
 
-**Status:** Phase 2 complete. 941 QVT-O tests (0 failures, 0 @Disabled, 1 @Tag("perf")). Phase 0–10 spec-conformance complete, incl. blackbox libraries (§8.1.4), `from ... import` (§8.4), String Counter API (§8.3.16.31–35), and §8.4.4 shorthand operators (`%`, `#`, `##`, `*`, `!->`).
+**Status:** Phase 2 complete. 941 QVT-O tests (0 failures, 2 @Disabled, 1 @Tag("perf")). Phase 0–10 spec-conformance complete, incl. blackbox libraries (§8.1.4), `from ... import` (§8.4), String Counter API (§8.3.16.31–35), and §8.4.4 shorthand operators (`%`, `#`, `##`, `*`, `!->`).
 
 **Key properties:**
 - Hybrid evaluator — QvtoEvaluator delegates OCL sub-expressions to OclEvaluator (D25)
@@ -1073,12 +1073,19 @@ if (ro.oclIsKindOf(Family::Family)) then {
 
 | # | Gap | Severity | Status |
 |---|-----|----------|--------|
-| P10-05 | `<<id>>` Stereotyp-Syntax | Low | @Disabled — Lexer `<<`/`>>` collision |
-| P10-06 | Model I/O (removeElement, read-only guards) | High | @Disabled — requires EMF resource model integration |
+| P10-05 | `<<id>>` Stereotyp-Syntax | Low | **Done** — `QvtoUnitBuilder` reads the stereotype qualifier, `<<id>>` sets `EAttribute.isID`; tested in `QvtoE2eIntermediateClass*Test` |
+| P10-06 | Model I/O (removeElement, read-only guards) | High | **Done** — `removeElement` (§8.3.5.6) in `QvtoModelOperations`, read-only guards on in-parameter extents; tested in `QvtoE2eModelOpsTest` |
 | P10-07 | UML-specific Ops | Low | Skipped — intentionally not implemented (like Eclipse) |
+
+The two entries that remain `@Disabled` in the suite are the runtime-diagnostic positions
+(#116, `QvtoRuntimeDiagnosticPositionTest`) and an `xselect` variant nested in a larger
+expression (`QvtoImperativeIterateTest`).
 
 ### 12.2 Future Enhancements
 
-- **OSGi DS Component:** `QvtoEngineComponent` with `@Reference` injection for blackbox libraries and unit resolvers
-- **Performance benchmarks:** QVT-O vs Eclipse QVT-O under identical conditions (following OCL benchmark pattern)
 - **QVT-O Language Server:** LSP support (Phase 5)
+
+Both items that used to stand here are done: `QvtoEngineComponent` exists as a DS component with
+`@Reference` injection (oclEngine, unitDiscovery, fingerprints), and the QVT-O benchmarks against
+Eclipse QVT-O live in `org.eclipse.fennec.m2x.qvto.benchmark` with their numbers in
+[benchmark-results.md](benchmark-results.md).

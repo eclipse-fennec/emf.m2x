@@ -26,7 +26,7 @@ The Fennec QVT-R Engine provides:
 - **QVT Relations v1.3** transformation parsing and execution
 - **Direct interpretation** — no intermediate QVT Core representation (D33)
 - **Standalone operation** — works as a plain Java library without OSGi
-- **OSGi-optional** — designed for future Declarative Services support
+- **OSGi-optional** — full Declarative Services support when running in OSGi (see §3.4)
 - **ANTLR4-based parser** — fast, reliable parsing with precise error locations
 - **Built on Fennec OCL** — full OCL v2.5 expression support within relations
 - **Binding validation** — static §7.5 analysis catches unbound variables at parse time
@@ -1016,5 +1016,5 @@ The trace is **implicit and internal** — there is no public API to read trace 
 | Default values | §7.11.3 | Fully implemented |
 | Opposite properties | §7.11.2 | Fully implemented |
 | Standard Library | §7.12 | Fully implemented (= OCL stdlib) |
-| Multi-file import | §7.3 | Deferred (GAP-10 → Phase 5) |
+| Multi-file import | §7.3 | Implemented — `import` resolves through the configured unit resolvers (§3.4.2) |
 | Change propagation | §7.6 | Deferred (GAP-13 → Phase 5) |

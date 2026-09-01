@@ -46,7 +46,7 @@ Three EPackages following the spec structure:
 | `QvtdBlackboxRegistry` | Registry for blackbox libraries (GAP-9, GAP-12) |
 | `QvtdBlackboxLibrary` | Individual blackbox library: `invoke(name, self, args)` |
 | `QvtdUnit` | Sealed interface: `SourceUnit` (string) / `CompiledUnit` (parsed AST) |
-| `QvtdUnitResolver` | Resolves import URIs to units (future: GAP-10) |
+| `QvtdUnitResolver` | Resolves import URIs to units; implemented by the store and service resolvers |
 | `QvtdParseException` | Parse errors with `Resource.Diagnostic` list |
 
 ### 3.x `compile()` — the storable form
@@ -265,7 +265,6 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 
 | Gap | Feature | Reason | Target |
 |-----|---------|--------|--------|
-| GAP-10 | Multi-file import | Needs file resolution infrastructure | Phase 5 |
 | GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution | Phase 5 |
 | GAP-6 | QVT-O `refined` — stub resolution | Parser + Provider-Brücke ✅ (Phase 4b). Runtime Stub-Auflösung (`OT.refined` → echte RT) + Trace-Semantik ausstehend | Phase 5 |
 
@@ -277,7 +276,7 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | D34 | 3 EPackages (qvtbase/qvttemplate/qvtrelation) | Follows spec package structure |
 | D35 | Spec-first approach | QVT v1.3 Ch. 7 as primary, Eclipse as reference |
 | D36 | Evaluator composition (QvtrEvaluator → OclEngine) | Reuse OCL engine, no duplication |
-| D37 | UnitResolver for imports | Future extensibility (GAP-10) |
+| D37 | UnitResolver for imports | Import resolution kept out of the engine, one contract for store and OSGi |
 | D38 | TraceManager for implicit traces | No explicit trace model needed |
 | D39 | Module independence (qvtd.model ↔ qvto.model) | No circular dependencies |
 
