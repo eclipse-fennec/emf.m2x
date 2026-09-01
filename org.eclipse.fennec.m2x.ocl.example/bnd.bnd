@@ -1,0 +1,24 @@
+Bundle-Name: Fennec OCL Example
+Bundle-Description: A worked, plain-Java OCL example over real files: a metamodel with OCL \
+ delegate annotations and a Complete OCL document for the same metamodel — the annotation-driven \
+ EMF delegates, the document loaded ad hoc, and the document as a compiled unit (#205). The main \
+ classes are the walkthrough; the smoke test keeps them honest.
+
+-library: enableEMF
+
+src=${^src}
+
+-includeresource: \
+	model=model,\
+	documents=documents
+
+-buildpath: \
+	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.unit;version=snapshot
+
+-testpath: \
+	org.antlr.antlr4-runtime;version=latest,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest

@@ -1,0 +1,41 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+
+-- A Complete OCL document for the library metamodel: everything here lives NEXT TO the
+-- .ecore, which stays free of these rules. def: feeds ad-hoc evaluation, derive:/body:
+-- become visible to OCL evaluation, inv: feeds the OclDocumentValidator — and none of it
+-- reaches EMF's own eGet/eInvoke/Diagnostician, that boundary belongs to the delegate
+-- annotations inside the .ecore (see the README).
+
+-- 'library' is a keyword (document imports), so the package name is escaped
+package _'library'
+
+context Book
+  def : label : String = self.author + ': ' + self.title
+  def : isVintage : Boolean = self.year < 1970
+
+context Book::displayName : String
+  derive : self.author + ' - ' + self.title
+
+context Library
+  def : authorCount : Integer = self.books->collect(b | b.author)->asSet()->size()
+
+context Member
+  inv borrowLimit : self.borrowed->size() <= 3
+
+context Member::canBorrow() : Boolean
+  body : self.borrowed->size() < 3
+
+endpackage

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lib:Library xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:lib="http://example.org/fennec/m2x/ocl-library/1.0" name="City Library">
+  <books title="Moby Dick" author="Herman Melville" year="1851" displayName="MD-0001"/>
+  <books title="Structure and Interpretation of Computer Programs" author="Harold Abelson" year="1985"/>
+  <books title="The Trial" author="Franz Kafka" year="1925"/>
+  <books title="Faust" author="Johann Wolfgang von Goethe" year="1808"/>
+  <books title="Voynich Manuscript" author="Anonymous" year="1478" lendable="false"/>
+  <books title="Codex Gigas" author="Anonymous" year="1229" lendable="false"/>
+  <shelves name="Fiction" books="//@books.2">
+    <shelves name="Classics" books="//@books.0 //@books.3"/>
+  </shelves>
+  <shelves name="Rare" books="//@books.4 //@books.5"/>
+  <shelves name="Science" books="//@books.1"/>
+  <members name="Ada Lovelace" borrowed="//@books.0 //@books.1"/>
+  <members name="Grace Hopper" borrowed="//@books.0 //@books.1 //@books.2 //@books.3"/>
+</lib:Library>
