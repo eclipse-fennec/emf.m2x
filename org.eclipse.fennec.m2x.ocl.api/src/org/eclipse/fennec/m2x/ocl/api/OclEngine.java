@@ -20,6 +20,10 @@ import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
+import org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.osgi.annotation.versioning.ProviderType;
@@ -218,6 +222,59 @@ public interface OclEngine {
 	 * @param contribution the Complete OCL contribution to register
 	 */
 	void registerCompleteOclDocument(CompleteOclContribution contribution);
+
+	/**
+	 * Compiles a Complete OCL document into a storable unit (#209).
+	 *
+	 * <p>The document's constraints become a {@link CompleteOclDocument} root, sealed into a
+	 * compiled-unit document under the language tag {@code ocl} — fingerprinted, storable and
+	 * preparable like a transformation. Its manifest carries
+	 * {@code nature = LIBRARY}: an OCL document is installed into an engine, never executed,
+	 * so its lifecycle ends at prepare — see
+	 * {@link #registerCompleteOclDocument(PreparedContext, String)}.
+	 *
+	 * @param qualifiedName the name the unit is stored and prepared by
+	 * @param oclDocument the Complete OCL document text
+	 * @return the compiled unit document, never {@code null}
+	 * @throws OclParseException if the document cannot be parsed
+	 */
+	CompiledUnit compileDocument(String qualifiedName, String oclDocument) throws OclParseException;
+
+	/**
+	 * Puts a compiled Complete OCL document into effect — the AST-taking sibling of
+	 * {@link #registerCompleteOclDocument(CompleteOclContribution)}: no parser runs, which is
+	 * what makes a parser-free runtime deployment possible (#209). Registering again replaces
+	 * the earlier registration of the same document.
+	 *
+	 * @param document the document root, e.g. of a unit loaded from a store
+	 */
+	void registerCompleteOclDocument(CompleteOclDocument document);
+
+	/**
+	 * Takes back what {@link #registerCompleteOclDocument(CompleteOclDocument)} put into effect.
+	 *
+	 * @param document the document to take back out
+	 */
+	void unregisterCompleteOclDocument(CompleteOclDocument document);
+
+	/**
+	 * Puts a prepared Complete OCL document into effect — the OCL counterpart of the other
+	 * engines' {@code execute(prepared, name, …)}: prepare ends the unit lifecycle here, because
+	 * a document is installed, not executed (#209).
+	 *
+	 * @param prepared the context the unit was prepared in
+	 * @param qualifiedName the unit's qualified name
+	 * @throws IllegalArgumentException if the context holds no unit of that name, or the unit is
+	 *             not a compiled Complete OCL document
+	 */
+	void registerCompleteOclDocument(PreparedContext prepared, String qualifiedName);
+
+	/**
+	 * The language's half of preparing a unit — what a {@code UnitPreparer} takes.
+	 *
+	 * @return the binder for the language tag {@code ocl}, never {@code null}
+	 */
+	UnitBinder unitBinder();
 
 	/**
 	 * Unregisters a previously registered Complete OCL document contribution.

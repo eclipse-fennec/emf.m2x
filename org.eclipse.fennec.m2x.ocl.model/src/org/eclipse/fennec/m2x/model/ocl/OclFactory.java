@@ -406,6 +406,15 @@ public interface OclFactory extends EFactory {
 	StateExp createStateExp();
 
 	/**
+	 * Returns a new object of class '<em>Complete Ocl Document</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>Complete Ocl Document</em>'.
+	 * @generated
+	 */
+	CompleteOclDocument createCompleteOclDocument();
+
+	/**
 	 * Returns the package supported by this factory.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->

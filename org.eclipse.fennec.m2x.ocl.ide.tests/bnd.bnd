@@ -11,6 +11,7 @@ src=${^src}
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.ocl.ide;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.parser;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\

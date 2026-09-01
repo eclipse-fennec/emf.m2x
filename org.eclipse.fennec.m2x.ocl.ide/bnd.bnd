@@ -21,4 +21,5 @@ Bundle-ActivationPolicy: lazy
 	org.eclipse.fennec.m2x.ocl.api;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.parser;version=snapshot

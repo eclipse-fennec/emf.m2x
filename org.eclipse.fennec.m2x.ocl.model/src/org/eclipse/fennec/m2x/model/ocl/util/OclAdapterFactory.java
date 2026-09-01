@@ -24,6 +24,7 @@ import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EModelElement;
 import org.eclipse.emf.ecore.ENamedElement;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
 
 import org.eclipse.fennec.m2x.model.ocl.*;
 
@@ -284,6 +285,10 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 				return createStateExpAdapter();
 			}
 			@Override
+			public Adapter caseCompleteOclDocument(CompleteOclDocument object) {
+				return createCompleteOclDocumentAdapter();
+			}
+			@Override
 			public Adapter caseEModelElement(EModelElement object) {
 				return createEModelElementAdapter();
 			}
@@ -298,6 +303,10 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 			@Override
 			public Adapter caseEDataType(EDataType object) {
 				return createEDataTypeAdapter();
+			}
+			@Override
+			public Adapter caseEPackage(EPackage object) {
+				return createEPackageAdapter();
 			}
 			@Override
 			public Adapter defaultCase(EObject object) {
@@ -1020,6 +1029,20 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 	}
 
 	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument <em>Complete Ocl Document</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument
+	 * @generated
+	 */
+	public Adapter createCompleteOclDocumentAdapter() {
+		return null;
+	}
+
+	/**
 	 * Creates a new adapter for an object of class '{@link org.eclipse.emf.ecore.EModelElement <em>EModel Element</em>}'.
 	 * <!-- begin-user-doc -->
 	 * This default implementation returns null so that we can easily ignore cases;
@@ -1072,6 +1095,20 @@ public class OclAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createEDataTypeAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.emf.ecore.EPackage <em>EPackage</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.emf.ecore.EPackage
+	 * @generated
+	 */
+	public Adapter createEPackageAdapter() {
 		return null;
 	}
 

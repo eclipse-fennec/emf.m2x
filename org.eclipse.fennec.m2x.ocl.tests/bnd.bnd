@@ -26,4 +26,5 @@ src=${^src},src-gen
 	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
 	org.eclipse.fennec.m2x;version=snapshot,\
 	org.eclipse.fennec.m2x.ocl.example.model;version=snapshot,\
-	org.eclipse.fennec.m2x.unit;version=snapshot
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest

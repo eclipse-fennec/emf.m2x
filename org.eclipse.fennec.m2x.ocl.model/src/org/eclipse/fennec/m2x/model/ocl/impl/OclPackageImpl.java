@@ -33,6 +33,7 @@ import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralPart;
 import org.eclipse.fennec.m2x.model.ocl.CollectionRange;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
+import org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.EnumLiteralExp;
@@ -433,6 +434,13 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	private EClass stateExpEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EClass completeOclDocumentEClass = null;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -1664,6 +1672,26 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
+	public EClass getCompleteOclDocument() {
+		return completeOclDocumentEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getCompleteOclDocument_Constraints() {
+		return (EReference)completeOclDocumentEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EEnum getCollectionKind() {
 		return collectionKindEEnum;
 	}
@@ -1872,6 +1900,9 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		stateExpEClass = createEClass(STATE_EXP);
 		createEReference(stateExpEClass, STATE_EXP__REFERRED_STATE);
 
+		completeOclDocumentEClass = createEClass(COMPLETE_OCL_DOCUMENT);
+		createEReference(completeOclDocumentEClass, COMPLETE_OCL_DOCUMENT__CONSTRAINTS);
+
 		// Create enums
 		collectionKindEEnum = createEEnum(COLLECTION_KIND);
 		constraintKindEEnum = createEEnum(CONSTRAINT_KIND);
@@ -1949,6 +1980,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		collectionItemEClass.getESuperTypes().add(this.getCollectionLiteralPart());
 		collectionRangeEClass.getESuperTypes().add(this.getCollectionLiteralPart());
 		stateExpEClass.getESuperTypes().add(this.getOclExpression());
+		completeOclDocumentEClass.getESuperTypes().add(ecorePackage.getEPackage());
 
 		// Initialize classes, features, and operations; add parameters
 		initEClass(oclTypeEClass, OclType.class, "OclType", IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
@@ -2115,6 +2147,9 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 
 		initEClass(stateExpEClass, StateExp.class, "StateExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getStateExp_ReferredState(), ecorePackage.getEObject(), null, "referredState", null, 0, 1, StateExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
+		initEClass(completeOclDocumentEClass, CompleteOclDocument.class, "CompleteOclDocument", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEReference(getCompleteOclDocument_Constraints(), this.getConstraint(), null, "constraints", null, 0, -1, CompleteOclDocument.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		// Initialize enums and add enum literals
 		initEEnum(collectionKindEEnum, CollectionKind.class, "CollectionKind");
