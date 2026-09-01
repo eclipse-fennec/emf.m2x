@@ -31,13 +31,12 @@ import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
+import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
-import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
-import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

@@ -15,7 +15,6 @@
 package org.eclipse.fennec.m2x.unit.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,7 +41,6 @@ import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
-import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
 import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
