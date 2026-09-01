@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.ocl.engine.internal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -103,6 +104,9 @@ public class OclEngineImpl implements OclDelegateSupport {
 	private final Map<CompleteOclContribution, LoadedDefs> contributions = new ConcurrentHashMap<>();
 	private final Map<CompleteOclDocument, LoadedDefs> documentContributions = new ConcurrentHashMap<>();
 	private final Map<DefKey, DefEntry> defProperties = new ConcurrentHashMap<>();
+	private final Map<DefKey, DefEntry> deriveProperties = new ConcurrentHashMap<>();
+	private final Map<DefKey, DefEntry> documentBodies = new ConcurrentHashMap<>();
+	private final Map<EClassifier, List<Constraint>> documentInvariants = new ConcurrentHashMap<>();
 	private volatile OclEvaluationOptions delegateOptions;
 
 	/**
@@ -196,7 +200,43 @@ public class OclEngineImpl implements OclDelegateSupport {
 	private LoadedDefs load(List<Constraint> constraints) {
 		Set<DefKey> keys = new LinkedHashSet<>();
 		List<OclOperationProvider> providers = new ArrayList<>();
+		Set<DefKey> derivations = new LinkedHashSet<>();
+		Set<DefKey> bodies = new LinkedHashSet<>();
+		List<Constraint> invariants = new ArrayList<>();
 		for (Constraint c : constraints) {
+			// inv: feeds the document validator (#204) — EMF's Diagnostician reaches it through
+			// OclDocumentValidator, never through the annotation-driven delegates
+			if (c.getKind() == ConstraintKind.INV && c.getContextClassifier() != null
+					&& c.getSpecification() != null) {
+				documentInvariants.computeIfAbsent(c.getContextClassifier(),
+						key -> Collections.synchronizedList(new ArrayList<>())).add(c);
+				invariants.add(c);
+				continue;
+			}
+			// derive: becomes visible to OCL evaluation — a navigation prefers it over the
+			// stored value; EMF's eGet stays untouched, that boundary is the annotations' (#204)
+			if (c.getKind() == ConstraintKind.DERIVE && c.getContextClassifier() != null
+					&& c.getContextProperty() != null && c.getSpecification() != null) {
+				DefKey key = new DefKey(c.getContextClassifier(), c.getContextProperty().getName());
+				deriveProperties.put(key, new DefEntry(c.getSpecification(), List.of(), false));
+				derivations.add(key);
+				continue;
+			}
+			// body: answers the operation call for OCL evaluation — before eInvoke, which for a
+			// dynamic class has nothing to answer with; eInvoke itself stays the annotations' (#204)
+			if (c.getKind() == ConstraintKind.BODY && c.getContextClassifier() != null
+					&& c.getContextOperation() != null && c.getSpecification() != null) {
+				List<String> paramNames = new ArrayList<>();
+				for (EParameter p : c.getContextOperation().getEParameters()) {
+					paramNames.add(p.getName());
+				}
+				DefKey key = new DefKey(c.getContextClassifier(), c.getContextOperation().getName());
+				documentBodies.put(key, new DefEntry(c.getSpecification(), paramNames, false));
+				bodies.add(key);
+				continue;
+			}
+			// init: has no place at evaluation time — it speaks about object creation, which
+			// only EMF's setting delegates see, and those read annotations (documented boundary)
 			if (c.getKind() == ConstraintKind.DEF && c.getContextClassifier() != null
 					&& c.getName() != null && c.getSpecification() != null) {
 				EClassifier ctx = c.getContextClassifier();
@@ -222,11 +262,12 @@ public class OclEngineImpl implements OclDelegateSupport {
 				}
 			}
 		}
-		return new LoadedDefs(keys, providers);
+		return new LoadedDefs(keys, providers, derivations, bodies, invariants);
 	}
 
 	/** What one Complete OCL document put into effect, so that it can be taken out again. */
-	private record LoadedDefs(Set<DefKey> properties, List<OclOperationProvider> providers) {
+	private record LoadedDefs(Set<DefKey> properties, List<OclOperationProvider> providers,
+			Set<DefKey> derivations, Set<DefKey> bodies, List<Constraint> invariants) {
 	}
 
 	private OclOperationProvider registerDefOperation(EClassifier ctx, String opName,
@@ -287,6 +328,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 		OclEvalEnvironment env = OclEvalEnvironment.root(context);
 		OclEvaluator evaluator = new OclEvaluator(env, options, getOperationProviders(options), accessorCache);
 		evaluator.setDefProperties(defProperties);
+		evaluator.setDeriveProperties(deriveProperties);
+		evaluator.setDocumentBodies(documentBodies);
 		return evaluator.evaluate(expression);
 	}
 
@@ -332,6 +375,14 @@ public class OclEngineImpl implements OclDelegateSupport {
 		}
 		loaded.properties().forEach(defProperties::remove);
 		defProviders.removeAll(loaded.providers());
+		loaded.derivations().forEach(deriveProperties::remove);
+		loaded.bodies().forEach(documentBodies::remove);
+		for (Constraint invariant : loaded.invariants()) {
+			List<Constraint> registered = documentInvariants.get(invariant.getContextClassifier());
+			if (registered != null) {
+				registered.remove(invariant);
+			}
+		}
 	}
 
 	@Override
@@ -368,6 +419,14 @@ public class OclEngineImpl implements OclDelegateSupport {
 		}
 		loaded.properties().forEach(defProperties::remove);
 		defProviders.removeAll(loaded.providers());
+		loaded.derivations().forEach(deriveProperties::remove);
+		loaded.bodies().forEach(documentBodies::remove);
+		for (Constraint invariant : loaded.invariants()) {
+			List<Constraint> registered = documentInvariants.get(invariant.getContextClassifier());
+			if (registered != null) {
+				registered.remove(invariant);
+			}
+		}
 	}
 
 	@Override
@@ -389,6 +448,18 @@ public class OclEngineImpl implements OclDelegateSupport {
 		return new OclUnitBinder();
 	}
 
+	@Override
+	public List<Constraint> documentInvariants(EClassifier classifier) {
+		Objects.requireNonNull(classifier, "classifier must not be null");
+		List<Constraint> registered = documentInvariants.get(classifier);
+		if (registered == null) {
+			return List.of();
+		}
+		synchronized (registered) {
+			return List.copyOf(registered);
+		}
+	}
+
 	// --- Postcondition Evaluation ---
 
 	/**
@@ -402,6 +473,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 		OclEvalEnvironment env = OclEvalEnvironment.root(context);
 		OclEvaluator evaluator = new OclEvaluator(env, delegateOptions, getOperationProviders(delegateOptions), accessorCache);
 		evaluator.setDefProperties(defProperties);
+		evaluator.setDeriveProperties(deriveProperties);
+		evaluator.setDocumentBodies(documentBodies);
 		evaluator.setPreStateSnapshot(snapshot);
 		OclResult result = evaluator.evaluate(expression);
 		return narrowResult(result.value());
