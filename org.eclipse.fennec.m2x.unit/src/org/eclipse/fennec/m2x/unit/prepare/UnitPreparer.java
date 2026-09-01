@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.unit.prepare;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
@@ -61,8 +62,10 @@ import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
  * dependencies, so this record is the only way to reconstruct what a run computed. Under
  * {@code embed} there is nothing to load. Two units pinning different versions of one name are
  * a conflict, not a silent choice.</li>
- * <li><b>Verify.</b> Every {@link PackageEntry} is checked against the runtime registry: a
- * runtime instance with the same fingerprint is what the unit's references resolve to —
+ * <li><b>Verify.</b> Every {@link PackageEntry} is checked against the context's registry —
+ * the same tiers the references resolved through, so verification and resolution cannot
+ * disagree: a runtime instance with the same fingerprint is what the unit's references
+ * resolve to —
  * generated code wins, blackboxes keep working with generated types; a missing instance is served
  * from the copy the unit carries; an instance with a <em>differing</em> fingerprint is a hard
  * failure naming the nsURI and both values. The same nsURI recorded with two fingerprints by two
@@ -87,39 +90,35 @@ public final class UnitPreparer {
 	private static final String SOURCE_STORE = "store";
 
 	private final UnitStore store;
-	private final EPackage.Registry runtime;
 	private final FingerprintService fingerprints;
 	private final UnitMaterializer materializer;
 	private final Map<String, UnitBinder> binders = new HashMap<>();
+	private final List<EPackage> contributions = new ArrayList<>();
 
 	/**
-	 * Creates a preparer with the default materializer — every loaded document passes the
-	 * validation funnel (#142).
+	 * Creates a preparer with the default fingerprint service and materializer — every loaded
+	 * document passes the validation funnel (#142). Contexts are built per prepare run: a local
+	 * registry that falls back to the global one, plus what {@link #registerPackage} contributed.
 	 *
 	 * @param store where units come from
-	 * @param runtime the runtime's package registry — what generated code and the caller registered
-	 * @param fingerprints the service package fingerprints are compared with
 	 * @param binders one binder per language the units may be written in
 	 */
-	public UnitPreparer(UnitStore store, EPackage.Registry runtime, FingerprintService fingerprints,
-			Collection<UnitBinder> binders) {
-		this(store, runtime, fingerprints, binders, UnitMaterializer.defaults());
+	public UnitPreparer(UnitStore store, Collection<UnitBinder> binders) {
+		this(store, FingerprintHelper.getDefaultFingerprintService(), binders, UnitMaterializer.defaults());
 	}
 
 	/**
 	 * Creates a preparer with every collaborator given.
 	 *
 	 * @param store where units come from
-	 * @param runtime the runtime's package registry — what generated code and the caller registered
 	 * @param fingerprints the service package fingerprints are compared with
 	 * @param binders one binder per language the units may be written in
 	 * @param materializer what binds a loaded document in the context — the place to switch the
 	 *            validation funnel off for a trusted, hot store
 	 */
-	public UnitPreparer(UnitStore store, EPackage.Registry runtime, FingerprintService fingerprints,
+	public UnitPreparer(UnitStore store, FingerprintService fingerprints,
 			Collection<UnitBinder> binders, UnitMaterializer materializer) {
 		this.store = Objects.requireNonNull(store, "store must not be null");
-		this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
 		this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints must not be null");
 		this.materializer = Objects.requireNonNull(materializer, "materializer must not be null");
 		for (UnitBinder binder : Objects.requireNonNull(binders, "binders must not be null")) {
@@ -128,15 +127,28 @@ public final class UnitPreparer {
 	}
 
 	/**
-	 * A preparer for a plain JVM: the global registry as runtime, the default fingerprint service.
+	 * A preparer for a plain JVM: the default fingerprint service, contexts over the global
+	 * registry.
 	 *
 	 * @param store where units come from
 	 * @param binders one binder per language
 	 * @return the preparer, never {@code null}
 	 */
 	public static UnitPreparer withDefaults(UnitStore store, UnitBinder... binders) {
-		return new UnitPreparer(store, EPackage.Registry.INSTANCE, FingerprintHelper.getDefaultFingerprintService(),
-				List.of(binders));
+		return new UnitPreparer(store, List.of(binders));
+	}
+
+	/**
+	 * Contributes a metamodel to every context this preparer builds — the caller's dynamic
+	 * packages, instead of assembling a registry (#212). A context handed to
+	 * {@link #prepare(Collection, UnitResourceSet)} is the caller's own and receives nothing.
+	 *
+	 * @param ePackage the metamodel
+	 * @return this, for chaining
+	 */
+	public UnitPreparer registerPackage(EPackage ePackage) {
+		contributions.add(Objects.requireNonNull(ePackage, "ePackage must not be null"));
+		return this;
 	}
 
 	/**
@@ -159,8 +171,29 @@ public final class UnitPreparer {
 	 * @throws UnitPrepareException see {@link #prepare(UnitKey...)}
 	 */
 	public PreparedContext prepare(Collection<UnitKey> roots) throws UnitPrepareException {
+		UnitResourceSet resourceSet = new UnitResourceSet();
+		for (EPackage contribution : contributions) {
+			resourceSet.registerPackage(contribution);
+		}
+		return prepare(roots, resourceSet);
+	}
+
+	/**
+	 * Prepares the given units and their dependency closure in the caller's context — the
+	 * injection point for a managed resource set (an OSGi-provided one, a pipeline's own). The
+	 * context is given exactly once: it decides which metamodel instance every reference binds
+	 * to, it is what the package entries are verified against, and it is what the returned
+	 * {@link PreparedContext} carries (#212).
+	 *
+	 * @param roots the units to prepare
+	 * @param resourceSet the context to prepare into
+	 * @return the context, never {@code null}
+	 * @throws UnitPrepareException see {@link #prepare(UnitKey...)}
+	 */
+	public PreparedContext prepare(Collection<UnitKey> roots, UnitResourceSet resourceSet)
+			throws UnitPrepareException {
 		Objects.requireNonNull(roots, "roots must not be null");
-		UnitResourceSet resourceSet = new UnitResourceSet(runtime);
+		Objects.requireNonNull(resourceSet, "resourceSet must not be null");
 		Map<String, PackagedUnit> loaded = new LinkedHashMap<>();
 		Map<String, String> packageFingerprints = new HashMap<>();
 		Deque<UnitKey> pending = new ArrayDeque<>(roots);
@@ -241,7 +274,7 @@ public final class UnitPreparer {
 				throw new UnitPrepareException("'" + unitName + "' was compiled against " + nsURI + " with fingerprint "
 						+ recorded + ", another unit of this run against " + other);
 			}
-			EPackage runtimeInstance = runtime.getEPackage(nsURI);
+			EPackage runtimeInstance = resourceSet.getPackageRegistry().getEPackage(nsURI);
 			if (runtimeInstance == null) {
 				EPackage carried = resourceSet.packageFor(nsURI);
 				if (carried == null) {

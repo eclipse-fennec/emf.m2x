@@ -296,7 +296,13 @@ class QvtoPreparedExecutionTest {
 	// ==== helpers ====
 
 	private UnitPreparer preparer(EPackage.Registry runtime, UnitBinder binder) {
-		return new UnitPreparer(store, runtime, FingerprintHelper.getDefaultFingerprintService(), List.of(binder));
+		UnitPreparer preparer = new UnitPreparer(store, List.of(binder));
+		runtime.forEach((nsURI, value) -> {
+			if (value instanceof EPackage contributed) {
+				preparer.registerPackage(contributed);
+			}
+		});
+		return preparer;
 	}
 
 	private static OclConfiguration oclConfig() {

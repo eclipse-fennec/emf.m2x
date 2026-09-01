@@ -308,7 +308,8 @@ Under `embed` the question does not arise — the dependency travels inside the 
 
 ### Metamodels: the runtime instance wins, on equality
 
-Every `PackageEntry` of every unit is checked against the runtime's package registry:
+Every `PackageEntry` of every unit is checked against the context's registry — the same tiers
+its references resolved through, so verification and resolution cannot disagree:
 
 | Runtime has | Fingerprints | What the unit's types resolve to |
 |---|---|---|
@@ -374,16 +375,16 @@ shelf.setName("shelf");
 shelf.setNsURI("http://example.org/m2x/guide/shelf/1.0");
 shelf.setNsPrefix("shelf");
 // … plus an EClass Book with an EAttribute title : EString
-
-EPackage.Registry registry = new EPackageRegistryImpl();
-registry.put(shelf.getNsURI(), shelf);
 ```
 
-Compile instead of parse — one call, and the result is a document rather than an object graph:
+No registry to assemble: a dynamic metamodel is *contributed* — local to the configuration,
+nothing leaks into the global registry; `packageRegistry(…)` and a resource set stay the
+injection points for a managed registry (#212). Compile instead of parse — one call, and the
+result is a document rather than an object graph:
 
 ```java
 QvtoEngine engine = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
-        .packageRegistry(registry).build());
+        .registerPackage(shelf).build());
 
 CompiledUnit unit = engine.compile("""
         modeltype SHELF uses 'http://example.org/m2x/guide/shelf/1.0';
@@ -428,10 +429,10 @@ QvtoUnitResolver forbidden = name -> {
     throw new AssertionError("a resolver was asked for '" + name + "' after prepare");
 };
 QvtoEngine runner = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
-        .packageRegistry(registry).addUnitResolver(forbidden).unitResolverEnabled(true).build());
+        .addUnitResolver(forbidden).unitResolverEnabled(true).build());
 
-UnitPreparer preparer = new UnitPreparer(store, registry,
-        FingerprintHelper.getDefaultFingerprintService(), List.of(runner.unitBinder()));
+UnitPreparer preparer = new UnitPreparer(store, List.of(runner.unitBinder()))
+        .registerPackage(shelf);
 PreparedContext prepared = preparer.prepare(key);
 
 EObject book = /* a Book of the shelf metamodel, title "moby dick" */;
@@ -439,9 +440,14 @@ runner.execute(prepared, "Uppercase", QvtoExecutionContext.of(new BasicQvtoModel
 // title: "MOBY DICK"
 ```
 
-`UnitPreparer.withDefaults(store, runner.unitBinder())` is the short form for a plain JVM, where
-the metamodels are in the global registry — which is where generated code puts itself. The explicit
-constructor above is what a private registry needs.
+`UnitPreparer.withDefaults(store, runner.unitBinder())` is the short form where every metamodel
+is generated code — which registers itself globally, and the preparer's contexts fall back to the
+global registry on their own. `registerPackage(…)` contributes what is not: the caller's dynamic
+metamodels, one call each, no registry assembled. The runner engine needs no resolution context of
+its own for stored execution: the context is given exactly once, to the preparer, the
+`PreparedContext` carries it, and `execute(prepared, …)` uses only that. For a managed context —
+an OSGi-provided resource set, a pipeline's own — pass it explicitly:
+`preparer.prepare(List.of(key), theResourceSet)` (#212).
 
 ### 7.2 Three scripts, and what travels with them
 
@@ -485,7 +491,7 @@ QvtoUnitResolver libraries = name -> Optional.ofNullable(sources.get(name))
         .map(source -> new QvtoUnit.SourceUnit(name, URI.createURI("mem:/" + name + ".qvto"), source));
 
 QvtoEngine compiler = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
-        .packageRegistry(registry).addUnitResolver(libraries).unitResolverEnabled(true).build());
+        .registerPackage(shelf).addUnitResolver(libraries).unitResolverEnabled(true).build());
 ```
 
 #### Everything inside — `embed`
@@ -502,14 +508,13 @@ One document, and it is the whole delivery. On the other side nothing is registe
 resolvable, and no source of either library exists anywhere:
 
 ```java
-EPackage.Registry nothing = new EPackageRegistryImpl();
 UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 UnitKey key = transported.put(archive);
 
+// zero registry lines: the preparer builds its context internally, the document carries the rest
 QvtoEngine runner = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
-        .packageRegistry(nothing).addUnitResolver(forbidden).unitResolverEnabled(true).build());
-PreparedContext prepared = new UnitPreparer(transported, nothing,
-        FingerprintHelper.getDefaultFingerprintService(), List.of(runner.unitBinder())).prepare(key);
+        .addUnitResolver(forbidden).unitResolverEnabled(true).build());
+PreparedContext prepared = new UnitPreparer(transported, List.of(runner.unitBinder())).prepare(key);
 
 prepared.units();          // one unit: "Announce" — the libraries are inside it, not beside it
 ```
@@ -556,8 +561,8 @@ Each unit now lives in the store once, and prepare needs the ones the manifest n
 
 ```java
 UnitKey key = store.put(main);
-UnitPreparer preparer = new UnitPreparer(store, registry,
-        FingerprintHelper.getDefaultFingerprintService(), List.of(runner.unitBinder()));
+UnitPreparer preparer = new UnitPreparer(store, List.of(runner.unitBinder()))
+        .registerPackage(shelf);
 
 preparer.prepare(key);
 // UnitPrepareException: the store has no compiled unit 'shelf.Titles'
@@ -652,7 +657,7 @@ goes through — prepare uses it internally, on by default:
 ```java
 UnitMaterializer checking = UnitMaterializer.defaults();          // validates
 UnitMaterializer trusting = UnitMaterializer.withoutValidation(); // for a trusted, hot medium
-new UnitPreparer(store, registry, fingerprints, binders, trusting);
+new UnitPreparer(store, fingerprints, binders, trusting);
 ```
 
 The language's half runs in prepare, before binding: the root is a unit of the language, every

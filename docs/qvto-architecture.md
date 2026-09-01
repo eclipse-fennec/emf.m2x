@@ -584,12 +584,12 @@ the language bind them, and hands the engine a `PreparedContext`. Per unit:
   was bound into the unit's `resolvedClosure` (name, fingerprint, `store`), because under rebind the
   unit fingerprint says nothing about the dependencies. `embed` has nothing to load. Two units
   pinning different versions of one name are a conflict, not a silent choice.
-- **Verify.** Every `PackageEntry` against the runtime registry: an instance with the same
+- **Verify.** Every `PackageEntry` against the context's registry: an instance with the same
   fingerprint is what the unit's references resolve to — generated code wins, blackboxes keep working
   with generated types; a missing instance is served from the copy the unit carries; a *differing*
   fingerprint is a hard failure naming the nsURI and both values. The same nsURI recorded with two
   fingerprints by two units of one run is a failure too. The resolution happens as the resource set
-  resolves the document — runtime registry, then global, then copy — and the check comes after; the
+  resolves the document — the context's registry, then global, then copy — and the check comes after; the
   order is sound because no decision changes: equal → the runtime instance the document already
   resolved to, different → failure and the context is discarded, absent → the copy.
 - **Bind.** The language's `UnitBinder` — `QvtoEngine.unitBinder()` and its QVT-R/M2T twins, so the

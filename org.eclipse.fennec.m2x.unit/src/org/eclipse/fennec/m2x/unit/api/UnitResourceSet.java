@@ -90,6 +90,22 @@ public class UnitResourceSet extends ResourceSetImpl {
 	}
 
 	/**
+	 * Contributes a metamodel to this context: the package answers for its nsURI ahead of the
+	 * global registry. This is the "contribute, don't build a registry" face of the context —
+	 * what a caller with a dynamic metamodel uses instead of assembling an
+	 * {@link EPackage.Registry} (#212).
+	 *
+	 * @param ePackage the metamodel, must not be {@code null} and must carry an nsURI
+	 * @return this, for chaining
+	 */
+	public UnitResourceSet registerPackage(EPackage ePackage) {
+		Objects.requireNonNull(ePackage, "ePackage must not be null");
+		Objects.requireNonNull(ePackage.getNsURI(), "the package carries no nsURI");
+		getPackageRegistry().put(ePackage.getNsURI(), ePackage);
+		return this;
+	}
+
+	/**
 	 * Lets a package copy a document carries answer for its nsURI, for as long as the registry
 	 * has nothing of its own. The first copy registered for an nsURI stays — every unit of one
 	 * context sees the same instance.
