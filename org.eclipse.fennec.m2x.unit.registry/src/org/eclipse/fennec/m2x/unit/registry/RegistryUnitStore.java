@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.unit.registry;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -75,6 +76,8 @@ public final class RegistryUnitStore implements UnitStore {
 	public static final String PROP_QUALIFIED_NAME = "unit.qualifiedName";
 	/** Entry property: the unit or source fingerprint the key pins. */
 	public static final String PROP_FINGERPRINT = "unit.fingerprint";
+	/** Entry property: the unit's nature, {@code transformation} or {@code library} (#224). */
+	public static final String PROP_NATURE = "unit.nature";
 
 	/** The default source name this store writes under. */
 	public static final String DEFAULT_SOURCE = "m2x-unit-store";
@@ -126,7 +129,14 @@ public final class RegistryUnitStore implements UnitStore {
 		// One round trip normalizes into the transport state: references the producer's context
 		// had bound come back unresolved, so the registry never carries the producer's bindings
 		EObject detached = UnitXmi.read(UnitXmi.write(sealed.document(), sealed.key()), sealed.key());
-		requireWriter().put(source, entryKey(sealed.key()), detached, propertiesOf(sealed.key()));
+		Map<String, Object> properties = new HashMap<>(propertiesOf(sealed.key()));
+		if (detached instanceof CompiledUnit stored && stored.getManifest() != null
+				&& stored.getManifest().getNature() != null) {
+			// The whole point of the manifest attribute: a registry consumer — an atlas UI —
+			// filters startable transformations from libraries without opening a document (#224)
+			properties.put(PROP_NATURE, stored.getManifest().getNature().getLiteral());
+		}
+		requireWriter().put(source, entryKey(sealed.key()), detached, properties);
 		return sealed.key();
 	}
 

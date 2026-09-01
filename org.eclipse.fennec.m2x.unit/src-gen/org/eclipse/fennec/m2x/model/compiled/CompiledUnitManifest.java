@@ -40,6 +40,7 @@ import org.osgi.annotation.versioning.ProviderType;
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getUnitFingerprint <em>Unit Fingerprint</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getSourceFingerprint <em>Source Fingerprint</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getDependencyMode <em>Dependency Mode</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getNature <em>Nature</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getPackageEntry <em>Package Entry</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getDependencyEntry <em>Dependency Entry</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getBlackboxRequirement <em>Blackbox Requirement</em>}</li>
@@ -229,6 +230,34 @@ public interface CompiledUnitManifest extends EObject {
 	 * @generated
 	 */
 	void setDependencyMode(DependencyMode value);
+
+	/**
+	 * Returns the value of the '<em><b>Nature</b></em>' attribute.
+	 * The literals are from the enumeration {@link org.eclipse.fennec.m2x.model.compiled.UnitNature}.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * Whether this unit is a startable transformation or a library others import (#224). Derived by the compiling language at package time — for QVT-O a standalone library source compiles into a library, everything else is a transformation — so a holder of the document decides without loading the AST.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Nature</em>' attribute.
+	 * @see org.eclipse.fennec.m2x.model.compiled.UnitNature
+	 * @see #setNature(UnitNature)
+	 * @see org.eclipse.fennec.m2x.model.compiled.CompiledPackage#getCompiledUnitManifest_Nature()
+	 * @model
+	 * @generated
+	 */
+	UnitNature getNature();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getNature <em>Nature</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Nature</em>' attribute.
+	 * @see org.eclipse.fennec.m2x.model.compiled.UnitNature
+	 * @see #getNature()
+	 * @generated
+	 */
+	void setNature(UnitNature value);
 
 	/**
 	 * Returns the value of the '<em><b>Package Entry</b></em>' containment reference list.

@@ -111,6 +111,7 @@ m.getQualifiedName();        // the name it is imported by
 m.getUnitFingerprint();      // m2x1:… — what this unit is
 m.getSourceFingerprint();    // m2x1:… — the text it was compiled from
 m.getDependencyMode();       // how imports were bound
+m.getNature();               // TRANSFORMATION — startable — or LIBRARY, without loading the AST
 m.getDependencyEntry();      // the units it needs
 m.getPackageEntry();         // the metamodels it was compiled against, with fp1 fingerprints
 m.getBlackboxRequirement();  // the blackbox implementations the runtime has to bring
@@ -615,6 +616,13 @@ main.getEmbedded();                              // empty — nothing carried
 main.getManifest().getDependencyEntry();         // shelf.Titles and text.Case,
                                                  //   each with mode PIN and an m2x1 fingerprint
 ```
+
+The two libraries and the transformation are told apart by the manifest, not by inspecting
+the AST: `text.Case` and `shelf.Titles` carry `nature = LIBRARY`, `Announce` carries
+`TRANSFORMATION` — a standalone library source parses into a synthetic transformation wrapper,
+and the compiler records the unwrapped truth at package time (#224). A store, a registry entry
+(`unit.nature`) or an authoring UI answers "startable or dependency?" without opening a
+document.
 
 Each unit now lives in the store once, and prepare needs the ones the manifest names — as
 **compiled** units, because prepare loads documents and has no parser:

@@ -140,7 +140,7 @@ class CompiledUnitManifestModelTest {
 	void manifest_carriesTheEntriesPrepareNeeds() {
 		EClass manifest = classifier("CompiledUnitManifest");
 		assertFeatures(manifest, "formatVersion", "producedBy", "language", "qualifiedName",
-				"unitFingerprint", "sourceFingerprint", "dependencyMode", "packageEntry",
+				"unitFingerprint", "sourceFingerprint", "dependencyMode", "nature", "packageEntry",
 				"dependencyEntry", "blackboxRequirement", "resolvedClosure");
 	}
 

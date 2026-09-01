@@ -17,6 +17,10 @@
       <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//PackageRole/referenced"/>
       <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//PackageRole/embedded"/>
     </genEnums>
+    <genEnums typeSafeEnumCompatible="false" ecoreEnum="compiledunit.ecore#//UnitNature">
+      <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//UnitNature/transformation"/>
+      <genEnumLiterals ecoreEnumLiteral="compiledunit.ecore#//UnitNature/library"/>
+    </genEnums>
     <genClasses ecoreClass="compiledunit.ecore#//CompiledUnit">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnit/id"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnit/namespace"/>
@@ -36,6 +40,7 @@
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/unitFingerprint"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/sourceFingerprint"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/dependencyMode"/>
+      <genFeatures createChild="false" ecoreFeature="ecore:EAttribute compiledunit.ecore#//CompiledUnitManifest/nature"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/packageEntry"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/dependencyEntry"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference compiledunit.ecore#//CompiledUnitManifest/blackboxRequirement"/>
