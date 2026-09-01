@@ -40,11 +40,14 @@ import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
+import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
+import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
+import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
@@ -143,32 +146,35 @@ class UnitIntegrityTest {
 	// ==== prepare holds a carried copy to its entry ====
 
 	@Test
-	void aTamperedCopy_isRefusedWhenTheUnitIsLoaded() throws Exception {
-		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+	void aTamperedCopy_isRefusedWhenTheUnitIsMaterialized() throws Exception {
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		CompiledUnit compiled = compiled("gen.Books");
 		((EClass) compiled.getPackages().get(0).getEClassifier("Book")).setAbstract(true);
 		compiled.getManifest().setUnitFingerprint(DefaultUnitFingerprintService.INSTANCE.fingerprint(compiled));
 
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled));
-		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.load(key),
-				"the validator sees it before anything else does");
+		UnitKey key = store.put(compiled);
+		PackagedUnit loaded = (PackagedUnit) store.get(key).orElseThrow();
+		UnitMaterializeException failure = assertThrows(UnitMaterializeException.class,
+				() -> UnitMaterializer.defaults().materialize(loaded, new UnitResourceSet(registry)),
+				"the funnel sees it before any consumer does");
 		assertTrue(failure.getMessage().contains(NS_URI), failure.getMessage());
 	}
 
 	@Test
 	void prepare_refusesACarriedCopyThatDoesNotMatchItsEntry() throws Exception {
-		// Past the store's own validator — a backend that does not validate, which is what
-		// withoutValidation() is for — prepare is the second place that holds the copy to its entry
+		// Past the funnel — a consumer that skips validation, which is what
+		// UnitMaterializer.withoutValidation() is for — prepare still holds the copy to its entry
 		InMemoryUnitStoreBackend backend = new InMemoryUnitStoreBackend();
-		UnitStore writing = DefaultUnitStore.withoutValidation(backend, registry);
+		UnitStore writing = new DefaultUnitStore(backend);
 		CompiledUnit compiled = compiled("gen.Books");
 		((EClass) compiled.getPackages().get(0).getEClassifier("Book")).setAbstract(true);
 		compiled.getManifest().setUnitFingerprint(DefaultUnitFingerprintService.INSTANCE.fingerprint(compiled));
-		UnitKey key = writing.store("m2t", new PackagedUnit(compiled));
+		UnitKey key = writing.put(compiled);
 
 		// A runtime that has no such metamodel: the carried copy is what would serve it
-		UnitPreparer preparer = new UnitPreparer(DefaultUnitStore.withoutValidation(backend, new EPackageRegistryImpl()),
-				new EPackageRegistryImpl(), FingerprintHelper.getDefaultFingerprintService(), List.of(noopBinder()));
+		UnitPreparer preparer = new UnitPreparer(new DefaultUnitStore(backend),
+				new EPackageRegistryImpl(), FingerprintHelper.getDefaultFingerprintService(), List.of(noopBinder()),
+				UnitMaterializer.withoutValidation());
 		UnitPrepareException failure = assertThrows(UnitPrepareException.class, () -> preparer.prepare(key));
 		assertTrue(failure.getMessage().contains(NS_URI), failure.getMessage());
 		assertTrue(failure.getMessage().contains("the copy the unit carries"), failure.getMessage());
@@ -176,8 +182,8 @@ class UnitIntegrityTest {
 
 	@Test
 	void prepare_acceptsACarriedCopyThatMatches() throws Exception {
-		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Books")));
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+		UnitKey key = store.put(compiled("gen.Books"));
 
 		UnitPreparer preparer = new UnitPreparer(store, new EPackageRegistryImpl(),
 				FingerprintHelper.getDefaultFingerprintService(), List.of(noopBinder()));
@@ -189,8 +195,8 @@ class UnitIntegrityTest {
     @Test
 	void aDoctypeInTheStoredBytes_isRefused() throws Exception {
 		InMemoryUnitStoreBackend backend = new InMemoryUnitStoreBackend();
-		UnitStore store = new DefaultUnitStore(backend, registry);
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Books")));
+		UnitStore store = new DefaultUnitStore(backend);
+		UnitKey key = store.put(compiled("gen.Books"));
 
 		// What a tampered backend would hand back. Without disallow-doctype-decl the parser
 		// resolves this before the validator ever sees the result.
@@ -200,7 +206,7 @@ class UnitIntegrityTest {
 						+ "<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>");
 		backend.put(key, withDoctype.getBytes(StandardCharsets.UTF_8));
 
-		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.load(key));
+		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.get(key));
 		assertTrue(failure.getMessage().contains("cannot read") || failure.getMessage().contains("rejected"),
 				failure.getMessage());
 	}
@@ -208,49 +214,42 @@ class UnitIntegrityTest {
 	@Test
 	void garbageBytes_areAnError_notAnEmptyOptional() throws Exception {
 		InMemoryUnitStoreBackend backend = new InMemoryUnitStoreBackend();
-		UnitStore store = new DefaultUnitStore(backend, registry);
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Books")));
+		UnitStore store = new DefaultUnitStore(backend);
+		UnitKey key = store.put(compiled("gen.Books"));
 		backend.put(key, "this is not XMI".getBytes(StandardCharsets.UTF_8));
 
-		assertThrows(UnitStoreException.class, () -> store.load(key),
+		assertThrows(UnitStoreException.class, () -> store.get(key),
 				"a store that cannot read what it holds says so; it does not report 'not found'");
 	}
 
 	// ==== what the store refuses (#174) ====
 
 	@Test
-	void aBareAst_isRefused_withTheAdviceToCompileFirst() {
-		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
-		CompiledUnit compiled = compiled("gen.Books");
-		Module bare = (Module) compiled.getUnit();
-
+	void anUnsealedDocument_isRefused_withTheAdviceToCompileFirst() {
+		// A bare AST no longer fits through the API at all — put() takes the document form.
+		// The document that LOOKS compiled but carries no manifest is the case that remains.
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		UnitStoreException failure = assertThrows(UnitStoreException.class,
-				() -> store.store("m2t", new BareAst(bare.getName(), bare)));
-
-		assertTrue(failure.getMessage().contains("bare AST"), failure.getMessage());
+				() -> store.put(CompiledFactory.eINSTANCE.createCompiledUnit()));
 		assertTrue(failure.getMessage().contains("compile()"), failure.getMessage());
 	}
 
 	@Test
 	void emptyContent_isAnError_notAnEmptyDocument() throws Exception {
 		InMemoryUnitStoreBackend backend = new InMemoryUnitStoreBackend();
-		UnitStore store = new DefaultUnitStore(backend, registry);
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Books")));
+		UnitStore store = new DefaultUnitStore(backend);
+		UnitKey key = store.put(compiled("gen.Books"));
 		// Well-formed XMI holding nothing — a truncated write looks like this
 		backend.put(key, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<empty/>"
 				.getBytes(StandardCharsets.UTF_8));
 
-		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.load(key));
+		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.get(key));
 
 		assertTrue(failure.getMessage().contains("cannot read")
 				|| failure.getMessage().contains("is empty")
 				|| failure.getMessage().contains("did not come back"), failure.getMessage());
 	}
 
-	/** A unit that is a parsed script and nothing more — what compile() takes, not what a store does. */
-	private record BareAst(String qualifiedName, org.eclipse.emf.ecore.EObject root)
-			implements Unit.Compiled {
-	}
 
 	// ==== helpers ====
 

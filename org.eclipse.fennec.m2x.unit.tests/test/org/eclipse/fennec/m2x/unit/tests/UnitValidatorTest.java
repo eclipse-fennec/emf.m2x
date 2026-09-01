@@ -39,10 +39,13 @@ import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
+import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
+import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
+import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
@@ -148,24 +151,28 @@ class UnitValidatorTest {
 	}
 
 	@Test
-	void theStore_rejectsAUnitThatFails_andCanBeToldNotToCheck() throws Exception {
+	void theMaterializer_rejectsAUnitThatFails_andCanBeToldNotToCheck() throws Exception {
 		InMemoryUnitStoreBackend backend = new InMemoryUnitStoreBackend();
-		UnitStore checking = new DefaultUnitStore(backend, registry);
+		UnitStore store = new DefaultUnitStore(backend);
 		CompiledUnit compiled = compiled("gen.Books");
-		UnitKey key = checking.store("m2t", new PackagedUnit(compiled));
-		assertTrue(checking.load(key).isPresent(), "a sealed unit loads");
+		UnitKey key = store.put(compiled);
+		UnitMaterializer.defaults().materialize((PackagedUnit) store.get(key).orElseThrow(),
+				new UnitResourceSet(registry));
 
 		// Corrupt the stored bytes the way a backend might: rename the module inside the XMI
 		byte[] bytes = backend.get(key).orElseThrow();
 		String xmi = new String(bytes, StandardCharsets.UTF_8).replace("gen.Books", "gen.Other");
 		backend.put(key, xmi.getBytes(StandardCharsets.UTF_8));
 
-		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> checking.load(key));
+		// The store is dumb and reads them; the funnel is the materializer (#211)
+		PackagedUnit tampered = (PackagedUnit) store.get(key).orElseThrow();
+		UnitMaterializeException failure = assertThrows(UnitMaterializeException.class,
+				() -> UnitMaterializer.defaults().materialize(tampered, new UnitResourceSet(registry)));
 		assertTrue(failure.getMessage().contains("rejected"), failure.getMessage());
 		assertTrue(failure.getMessage().contains("changed after it was sealed"), failure.getMessage());
 
-		UnitStore trusting = DefaultUnitStore.withoutValidation(backend, registry);
-		assertFalse(trusting.load(key).isEmpty(), "without validation the same bytes load");
+		PackagedUnit again = (PackagedUnit) store.get(key).orElseThrow();
+		UnitMaterializer.withoutValidation().materialize(again, new UnitResourceSet(registry));
 	}
 
 	// ==== bypasses that had no guard (#174) ====

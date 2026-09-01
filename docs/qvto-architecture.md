@@ -555,9 +555,10 @@ package the resource EMF gives a generated one: `createResource(nsURI)`.
 **Store.** `DefaultUnitStore` (package `unit.store`) implements the `UnitStore` contract over a
 `UnitStoreBackend` — bytes by key, keys by name — with `InMemoryUnitStoreBackend` as the one that
 needs nothing; a file system, a bundle or emf.osgi's `ArtifactStore` with an index beside it are
-other backends. The store owns the serialization: a compiled unit goes in as the XMI of a *copy* of
-its document (`Unit.Packaged` only — a bare AST has no manifest to be stored by, `compile()` first)
-under `UnitKey.pinned(language, name, COMPILED, manifest.unitFingerprint)`, a source as a
+other backends. The store is dumb — key ↔ document (#211): it owns the serialization and nothing
+else. A compiled unit goes in as the XMI of a *copy* of its document (a document without a
+manifest is refused, `compile()` first) under
+`UnitKey.pinned(language, name, COMPILED, manifest.unitFingerprint)`, a source as a
 `SourceUnit` document under its source fingerprint. Both come back as independent copies loaded into
 a fresh resource set: `PackagedUnit` or `StoredSource`. On the way in, a referenced metamodel without
 a resource gets `createResource(nsURI)`, as EMF gives a generated one. On the way out the store's
@@ -617,9 +618,9 @@ route goes through the package's resource and a package built in memory has none
 
 A unit loaded from a store bypasses the parser and every check it enforces by construction. The
 evaluator's runtime limits still hold; the shape of the document does not check itself. `UnitValidator`
-(`unit.validate`) does, on every `DefaultUnitStore.load` — on by default,
-`DefaultUnitStore.withoutValidation(…)` for a trusted, hot backend — and rejects a unit with every
-finding named by its object path:
+(`unit.validate`) does, in the `UnitMaterializer` every consumer's load goes through — on by
+default, `UnitMaterializer.withoutValidation()` for a trusted, hot medium — and rejects a unit with
+every finding named by its object path:
 
 | Check | What it catches |
 |---|---|

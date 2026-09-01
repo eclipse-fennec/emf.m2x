@@ -44,7 +44,7 @@ import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
-import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
+import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
@@ -168,11 +168,11 @@ class QvtdLoadValidationTest {
 	}
 
 	@Test
-	@DisplayName("a tampered document is rejected by the store, before prepare sees it")
+	@DisplayName("a tampered document is rejected by the materializer, before prepare hands it on")
 	void aTamperedDocument_isRejectedByTheStore() throws Exception {
 		InMemoryUnitStoreBackend backend = new InMemoryUnitStoreBackend();
-		UnitStore store = new DefaultUnitStore(backend, registry);
-		UnitKey key = store.store("qvtr", new PackagedUnit(engine.compile(TRANSFORMATION, "copy")));
+		UnitStore store = new DefaultUnitStore(backend);
+		UnitKey key = store.put(engine.compile(TRANSFORMATION, "copy"));
 
 		byte[] bytes = backend.get(key).orElseThrow();
 		String original = new String(bytes, StandardCharsets.UTF_8);
@@ -184,7 +184,7 @@ class QvtdLoadValidationTest {
 		UnitPrepareException failure = assertThrows(UnitPrepareException.class,
 				() -> preparer.prepare(key));
 
-		assertTrue(failure.getCause() instanceof UnitStoreException, String.valueOf(failure.getCause()));
+		assertTrue(failure.getCause() instanceof UnitMaterializeException, String.valueOf(failure.getCause()));
 		assertTrue(failure.getMessage().contains("changed after it was sealed"), failure::getMessage);
 	}
 

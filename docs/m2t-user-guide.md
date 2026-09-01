@@ -389,7 +389,7 @@ A compiled module can be stored and generated from somewhere else:
 
 ```java
 UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
-UnitKey key = store.store("m2t", new PackagedUnit(engine.compile(source, "my.module")));
+UnitKey key = store.put(engine.compile(source, "my.module"));
 
 PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder()).prepare(key);
 M2tResult result = engine.execute(prepared, "my.module", M2tContext.of(input));

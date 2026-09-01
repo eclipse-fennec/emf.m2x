@@ -74,7 +74,7 @@ class M2tCompiledUnitBenchmarkTest {
 		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		for (int i = 0; i < JIT_WARMUP; i++) {
 			assertTrue(engine.execute(engine.parse(MODULE, "bench"), M2tContext.of(input)).generatedFiles().containsKey("Book.txt"));
-			UnitKey key = store.store("m2t", new PackagedUnit(engine.compile(MODULE, "bench")));
+			UnitKey key = store.put(engine.compile(MODULE, "bench"));
 			PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder()).prepare(key);
 			assertTrue(engine.execute(prepared, "bench", M2tContext.of(input)).generatedFiles().containsKey("Book.txt"));
 		}
@@ -95,8 +95,8 @@ class M2tCompiledUnitBenchmarkTest {
 		long storeStart = System.nanoTime();
 		UnitKey key = null;
 		for (int i = 0; i < ITERATIONS; i++) {
-			key = store.store("m2t", new PackagedUnit(compiled));
-			store.load(key).orElseThrow();
+			key = store.put(compiled);
+			store.get(key).orElseThrow();
 		}
 		long storeNanos = System.nanoTime() - storeStart;
 

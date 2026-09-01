@@ -91,14 +91,14 @@ class QvtdCompiledUnitBenchmarkTest {
 
 		OclConfiguration ocl = OclConfiguration.builder(new OclParserSupport()).build();
 		QvtdEngine engine = QvtdEngines.create(QvtdConfiguration.builder(ocl).packageRegistry(registry).build());
-		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		UnitPreparer preparer = new UnitPreparer(store, registry, FingerprintHelper.getDefaultFingerprintService(),
 				List.of(engine.unitBinder()));
 		List<EObject> books = books(bookClass, MODEL_SIZE);
 
 		for (int i = 0; i < JIT_WARMUP; i++) {
 			assertTrue(engine.execute(engine.parse(TRANSFORMATION, "copy"), context(books)).isSuccess());
-			UnitKey key = store.store("qvtr", new PackagedUnit(engine.compile(TRANSFORMATION, "copy")));
+			UnitKey key = store.put(engine.compile(TRANSFORMATION, "copy"));
 			assertTrue(engine.execute(preparer.prepare(key), "copy", context(books)).isSuccess());
 		}
 
@@ -118,8 +118,8 @@ class QvtdCompiledUnitBenchmarkTest {
 		long storeStart = System.nanoTime();
 		UnitKey key = null;
 		for (int i = 0; i < ITERATIONS; i++) {
-			key = store.store("qvtr", new PackagedUnit(compiled));
-			store.load(key).orElseThrow();
+			key = store.put(compiled);
+			store.get(key).orElseThrow();
 		}
 		long storeNanos = System.nanoTime() - storeStart;
 

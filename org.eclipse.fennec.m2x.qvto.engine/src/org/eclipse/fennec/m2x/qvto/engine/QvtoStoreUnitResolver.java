@@ -17,15 +17,20 @@ package org.eclipse.fennec.m2x.qvto.engine;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.eclipse.emf.ecore.EPackage;
+
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitKind;
+import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
+import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
+import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 
 /**
@@ -34,7 +39,10 @@ import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
  * <p>Asked for a name, the resolver looks for a compiled unit first and for a source second: a
  * compiled unit carries its manifest and its fingerprint, which is what a {@code pin} needs
  * without compiling again; a source is parsed by the caller. The store hands out independent
- * copies, so the AST this resolver lends is nobody else's.
+ * copies with their references unresolved; this resolver materializes each one in a context
+ * of its own — the given packages first, the global registry as fallback, the copies the
+ * document carries for what neither knows — so the AST it lends is nobody else's and carries
+ * no proxy (#211).
  *
  * <p>A store that cannot answer is not "not found": a {@link UnitStoreException} surfaces as a
  * {@link UnitResolutionException} instead of an empty result, so a broken store does not let a
@@ -48,14 +56,29 @@ public final class QvtoStoreUnitResolver implements QvtoUnitResolver {
 	private static final String LANGUAGE = "qvto";
 
 	private final UnitStore store;
+	private final EPackage.Registry packages;
+	private final UnitMaterializer materializer = UnitMaterializer.defaults();
 
 	/**
-	 * Creates a resolver over a store.
+	 * Creates a resolver over a store; documents are materialized against the global registry
+	 * and the copies they carry.
 	 *
 	 * @param store the store to resolve from
 	 */
 	public QvtoStoreUnitResolver(UnitStore store) {
+		this(store, null);
+	}
+
+	/**
+	 * Creates a resolver over a store, with the caller's metamodels answering first when a
+	 * resolved document is materialized.
+	 *
+	 * @param store the store to resolve from
+	 * @param packages the registry that answers first, or {@code null} for the global one alone
+	 */
+	public QvtoStoreUnitResolver(UnitStore store, EPackage.Registry packages) {
 		this.store = Objects.requireNonNull(store, "store must not be null");
+		this.packages = packages;
 	}
 
 	@Override
@@ -64,18 +87,23 @@ public final class QvtoStoreUnitResolver implements QvtoUnitResolver {
 			return Optional.empty();
 		}
 		try {
-			Optional<Unit> compiled = store.load(UnitKey.of(LANGUAGE, qualifiedName, UnitKind.COMPILED));
+			Optional<Unit> compiled = store.get(UnitKey.of(LANGUAGE, qualifiedName, UnitKind.COMPILED));
 			if (compiled.isPresent() && compiled.get() instanceof PackagedUnit packaged
 					&& packaged.document().getUnit() instanceof OperationalTransformation root) {
+				materializer.materialize(packaged,
+						packages == null ? new UnitResourceSet() : new UnitResourceSet(packages));
 				return Optional.of(new QvtoUnit.CompiledUnit(qualifiedName, root));
 			}
-			Optional<Unit> source = store.load(UnitKey.of(LANGUAGE, qualifiedName, UnitKind.SOURCE));
+			Optional<Unit> source = store.get(UnitKey.of(LANGUAGE, qualifiedName, UnitKind.SOURCE));
 			if (source.isPresent() && source.get() instanceof Unit.Source text) {
 				return Optional.of(new QvtoUnit.SourceUnit(qualifiedName, text.uri(), text.source()));
 			}
 			return Optional.empty();
 		} catch (UnitStoreException e) {
 			throw new UnitResolutionException("the unit store could not answer for '" + qualifiedName + "': "
+					+ e.getMessage(), e);
+		} catch (UnitMaterializeException e) {
+			throw new UnitResolutionException("the unit '" + qualifiedName + "' cannot be materialized: "
 					+ e.getMessage(), e);
 		}
 	}

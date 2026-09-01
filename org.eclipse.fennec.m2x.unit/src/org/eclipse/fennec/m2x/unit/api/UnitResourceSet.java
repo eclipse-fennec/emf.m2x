@@ -54,6 +54,14 @@ public class UnitResourceSet extends ResourceSetImpl {
 	private final Map<String, EPackage> copies = new HashMap<>();
 
 	/**
+	 * Creates a resource set over a fresh local registry that falls back to the global one —
+	 * what a consumer that has nothing to contribute starts from.
+	 */
+	public UnitResourceSet() {
+		this(new EPackageRegistryImpl());
+	}
+
+	/**
 	 * Creates a resource set whose registry falls back from the given one to the global one.
 	 *
 	 * @param packages the registry that answers first, e.g. the user's metamodels

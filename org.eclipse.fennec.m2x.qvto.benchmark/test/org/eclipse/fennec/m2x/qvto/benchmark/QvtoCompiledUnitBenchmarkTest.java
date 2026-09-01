@@ -118,7 +118,7 @@ class QvtoCompiledUnitBenchmarkTest {
 			OperationalTransformation t = engine.parse(TRANSFORM_SOURCE, "bench.qvto");
 			assertTrue(engine.execute(t, context(source)).isSuccess());
 			CompiledUnit c = engine.compile(TRANSFORM_SOURCE, "bench");
-			UnitKey key = store.store("qvto", new PackagedUnit(c));
+			UnitKey key = store.put(c);
 			PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder()).prepare(key);
 			assertTrue(engine.execute(prepared, "bench", context(source)).isSuccess());
 		}
@@ -148,8 +148,8 @@ class QvtoCompiledUnitBenchmarkTest {
 		long storeStart = System.nanoTime();
 		UnitKey key = null;
 		for (int i = 0; i < ITERATIONS; i++) {
-			key = store.store("qvto", new PackagedUnit(compiled));
-			store.load(key).orElseThrow();
+			key = store.put(compiled);
+			store.get(key).orElseThrow();
 		}
 		long storeNanos = System.nanoTime() - storeStart;
 

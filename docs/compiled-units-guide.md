@@ -213,24 +213,25 @@ engine, so a compiled module never carries a requirement.
 ## 5. The unit store
 
 `UnitStore` holds sources and compiled units, keyed by language, qualified name, kind and
-fingerprint. `DefaultUnitStore` implements it over a `UnitStoreBackend` — bytes by key, keys by
-name. The in-memory backend needs nothing:
+fingerprint — and that is all it does: key ↔ document (#211). `DefaultUnitStore` implements it
+over a `UnitStoreBackend` — bytes by key, keys by name. The in-memory backend needs nothing:
 
 ```java
 UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 
-// a compiled unit goes in as a document; the key carries its fingerprint
-UnitKey key = store.store("qvto", new PackagedUnit(engine.compile(source, "Main")));
+// a compiled unit goes in as its document; language and name are the manifest's
+UnitKey key = store.put(engine.compile(source, "Main"));
 
-// … and comes back as an independent copy
-PackagedUnit loaded = (PackagedUnit) store.load(key).orElseThrow();
+// … and comes back as an independent copy — references unresolved, see below
+PackagedUnit loaded = (PackagedUnit) store.get(key).orElseThrow();
+UnitMaterializer.defaults().materialize(loaded, new UnitResourceSet());
 engine.execute((OperationalTransformation) loaded.document().getUnit(), context);
 ```
 
-A source is stored the same way, under its source fingerprint:
+A source is stored under its language tag and its source fingerprint:
 
 ```java
-store.store("qvto", new QvtoUnit.SourceUnit("HelperLib", URI.createURI("file:/lib.qvto"), text));
+store.put("qvto", new QvtoUnit.SourceUnit("HelperLib", URI.createURI("file:/lib.qvto"), text));
 ```
 
 Both kinds live side by side under one name and are told apart by kind:
@@ -238,16 +239,21 @@ Both kinds live side by side under one name and are told apart by kind:
 ```java
 store.versions("qvto", "HelperLib", UnitKind.SOURCE);     // every stored version, newest first
 store.versions("qvto", "HelperLib", UnitKind.COMPILED);
-store.load(UnitKey.of("qvto", "HelperLib", UnitKind.COMPILED));                    // the newest
-store.load(UnitKey.pinned("qvto", "HelperLib", UnitKind.COMPILED, "m2x1:9f86…"));  // exactly that one
+store.get(UnitKey.of("qvto", "HelperLib", UnitKind.COMPILED));                    // the newest
+store.get(UnitKey.pinned("qvto", "HelperLib", UnitKind.COMPILED, "m2x1:9f86…"));  // exactly that one
 ```
 
 Three properties worth knowing:
 
-- **Only documents.** A bare AST has no manifest to be stored by — `compile()` first. Handing one
-  in is a `UnitStoreException` saying so.
+- **Only documents.** A bare AST has no manifest to be stored by — `compile()` first. A document
+  without one is a `UnitStoreException` saying so.
 - **Copies both ways.** What you store is copied on the way in, what you load is a fresh copy: a
   later write cannot change what an earlier caller holds.
+- **Unresolved on the way out.** A document leaves the store with its references unresolved —
+  proxies are the transport state. `UnitMaterializer` binds it in a consumer's context
+  (`UnitResourceSet`), serves the copies it carries, and runs the validation funnel; prepare does
+  all of that for you. Which metamodel instance a reference binds to is a property of that
+  context, never of the store.
 - **A missing version is not "not found".** A pinned key the store does not have is an error that
   names the versions it does have. `Optional.empty()` means the name is unknown, nothing else.
 
@@ -288,8 +294,8 @@ unit; a *source* under that name serves the compiler (through a store resolver, 
 not prepare. Storing the library compiled is the step that is easy to forget:
 
 ```java
-store.store("qvto", new PackagedUnit(engine.compile(libSource, "HelperLib")));  // prepare finds this
-store.store("qvto", new QvtoUnit.SourceUnit("HelperLib", uri, libSource));     // the compiler finds this
+store.put(engine.compile(libSource, "HelperLib"));                          // prepare finds this
+store.put("qvto", new QvtoUnit.SourceUnit("HelperLib", uri, libSource));    // the compiler finds this
 ```
 
 Without it, prepare says so rather than guessing:
@@ -408,8 +414,8 @@ unit.getPackages().size();                    // 1 — and here it is
 Store it. The key carries the fingerprint, and that is the version anything else pins:
 
 ```java
-UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
-UnitKey key = store.store("qvto", new PackagedUnit(unit));
+UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+UnitKey key = store.put(unit);
 
 key.fingerprint().orElseThrow();              // == unit.getManifest().getUnitFingerprint()
 ```
@@ -497,8 +503,8 @@ resolvable, and no source of either library exists anywhere:
 
 ```java
 EPackage.Registry nothing = new EPackageRegistryImpl();
-UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend(), nothing);
-UnitKey key = transported.store("qvto", new PackagedUnit(archive));
+UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+UnitKey key = transported.put(archive);
 
 QvtoEngine runner = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
         .packageRegistry(nothing).addUnitResolver(forbidden).unitResolverEnabled(true).build());
@@ -549,15 +555,15 @@ Each unit now lives in the store once, and prepare needs the ones the manifest n
 **compiled** units, because prepare loads documents and has no parser:
 
 ```java
-UnitKey key = store.store("qvto", new PackagedUnit(main));
+UnitKey key = store.put(main);
 UnitPreparer preparer = new UnitPreparer(store, registry,
         FingerprintHelper.getDefaultFingerprintService(), List.of(runner.unitBinder()));
 
 preparer.prepare(key);
 // UnitPrepareException: the store has no compiled unit 'shelf.Titles'
 
-store.store("qvto", new PackagedUnit(compiler.compile(CASE_LIB, "text.Case")));
-store.store("qvto", new PackagedUnit(compiler.compile(TITLES_LIB, "shelf.Titles")));
+store.put(compiler.compile(CASE_LIB, "text.Case"));
+store.put(compiler.compile(TITLES_LIB, "shelf.Titles"));
 
 PreparedContext prepared = preparer.prepare(key);
 prepared.units();     // three: Announce, shelf.Titles, text.Case — the closure, each once
@@ -631,8 +637,9 @@ therefore hand out the same instance again and again.
 
 ## 9. Validation on load
 
-A unit from a store bypasses the parser and every check it enforces. `DefaultUnitStore` validates
-what it loads — on by default:
+A unit from a store bypasses the parser and every check it enforces. The store itself is dumb and
+does not judge what it reads; the funnel is the `UnitMaterializer`, which every consumer's load
+goes through — prepare uses it internally, on by default:
 
 | Check | Catches |
 |---|---|
@@ -643,8 +650,9 @@ what it loads — on by default:
 | Size | depth ≤ 1 000, objects ≤ 1 000 000 (configurable) |
 
 ```java
-UnitStore checking = new DefaultUnitStore(backend);                        // validates
-UnitStore trusting = DefaultUnitStore.withoutValidation(backend, packages); // for a trusted, hot backend
+UnitMaterializer checking = UnitMaterializer.defaults();          // validates
+UnitMaterializer trusting = UnitMaterializer.withoutValidation(); // for a trusted, hot medium
+new UnitPreparer(store, registry, fingerprints, binders, trusting);
 ```
 
 The language's half runs in prepare, before binding: the root is a unit of the language, every
@@ -718,6 +726,7 @@ runs as a plain Java library (D39).
 | `…unit.api` | `Unit` (+`Source`, `Compiled`, `Packaged`), `UnitKey`, `UnitKind`, `UnitStore`, `UnitCompileOptions`, `UnitBinder`, `PreparedContext`, `UnitResourceSet`, the exceptions |
 | `…unit.compile` | `UnitPackager`, `ReferencedPackages`, `SignatureFingerprint` |
 | `…unit.store` | `DefaultUnitStore`, `UnitStoreBackend`, `InMemoryUnitStoreBackend`, `PackagedUnit`, `StoredSource` |
+| `…unit.materialize` | `UnitMaterializer` — binds a stored document in a consumer's context |
 | `…unit.prepare` | `UnitPreparer` |
 | `…unit.resolve` | `ResolutionPolicy`, `ServiceLoaderUnitResolver` (the class-path half of discovery) |
 | `…unit.validate` | `UnitValidator` |

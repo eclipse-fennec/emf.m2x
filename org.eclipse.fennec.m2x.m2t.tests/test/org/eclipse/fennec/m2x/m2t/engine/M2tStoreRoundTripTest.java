@@ -73,20 +73,20 @@ class M2tStoreRoundTripTest {
 
 	@Test
 	void pinnedFromTheStore_roundTrips_andIsLinkedByAFreshEngineOverTheStore() throws Exception {
-		UnitKey libraryKey = store.store("m2t", new PackagedUnit(bare.compile(LIBRARY, "base")));
+		UnitKey libraryKey = store.put(bare.compile(LIBRARY, "base"));
 		CompiledUnit main = engine.compile(EXTENDING, "main");
 		assertEquals(libraryKey.fingerprint().orElseThrow(),
 				main.getManifest().getDependencyEntry().get(0).getFingerprint());
 
-		PackagedUnit loaded = (PackagedUnit) store.load(store.store("m2t", new PackagedUnit(main))).orElseThrow();
+		PackagedUnit loaded = (PackagedUnit) store.get(store.put(main)).orElseThrow();
 		assertEquals("hello from the library", generate(engineOver(store), (Module) loaded.document().getUnit()));
 	}
 
 	@Test
 	void embeddedFromTheStore_generatesWithoutTheStore() throws Exception {
-		store.store("m2t", new PackagedUnit(bare.compile(LIBRARY, "base")));
+		store.put(bare.compile(LIBRARY, "base"));
 		CompiledUnit main = engine.compile(EXTENDING, "main", UnitCompileOptions.of(DependencyMode.EMBED));
-		PackagedUnit loaded = (PackagedUnit) store.load(store.store("m2t", new PackagedUnit(main))).orElseThrow();
+		PackagedUnit loaded = (PackagedUnit) store.get(store.put(main)).orElseThrow();
 		assertEquals("hello from the library", generate(bare, (Module) loaded.document().getUnit()));
 	}
 

@@ -41,7 +41,9 @@ import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdStoreUnitResolver;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
+import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
+import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
@@ -95,29 +97,31 @@ class QvtdStoreRoundTripTest {
 		bookshelf.getEClassifiers().add(bookClass);
 		registry = new EPackageRegistryImpl();
 		registry.put(NS_URI, bookshelf);
-		store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		OclConfiguration ocl = OclConfiguration.builder(new OclParserSupport()).build();
 		engine = QvtdEngines.create(QvtdConfiguration.builder(ocl).packageRegistry(registry)
-				.addUnitResolver(new QvtdStoreUnitResolver(store)).unitResolverEnabled(true).build());
+				.addUnitResolver(new QvtdStoreUnitResolver(store, registry)).unitResolverEnabled(true).build());
 		bare = QvtdEngines.create(QvtdConfiguration.builder(ocl).packageRegistry(registry).build());
 	}
 
 	@Test
 	void pinnedFromTheStore_roundTrips_andRunsWhereTheStoreIs() throws Exception {
-		UnitKey libraryKey = store.store("qvtr", new PackagedUnit(bare.compile(LIBRARY, "shared.Library")));
+		UnitKey libraryKey = store.put(bare.compile(LIBRARY, "shared.Library"));
 		CompiledUnit importer = engine.compile(IMPORTER, "importer");
 		assertEquals(libraryKey.fingerprint().orElseThrow(),
 				importer.getManifest().getDependencyEntry().get(0).getFingerprint());
 
-		PackagedUnit loaded = (PackagedUnit) store.load(store.store("qvtr", new PackagedUnit(importer))).orElseThrow();
+		PackagedUnit loaded = (PackagedUnit) store.get(store.put(importer)).orElseThrow();
+		UnitMaterializer.defaults().materialize(loaded, new UnitResourceSet(registry));
 		assertEquals("Moby Dick", runOn(engine, (RelationalTransformation) loaded.document().getUnit()));
 	}
 
 	@Test
 	void embeddedFromTheStore_runsWithoutTheStore() throws Exception {
-		store.store("qvtr", new PackagedUnit(bare.compile(LIBRARY, "shared.Library")));
+		store.put(bare.compile(LIBRARY, "shared.Library"));
 		CompiledUnit importer = engine.compile(IMPORTER, "importer", UnitCompileOptions.of(DependencyMode.EMBED));
-		PackagedUnit loaded = (PackagedUnit) store.load(store.store("qvtr", new PackagedUnit(importer))).orElseThrow();
+		PackagedUnit loaded = (PackagedUnit) store.get(store.put(importer)).orElseThrow();
+		UnitMaterializer.defaults().materialize(loaded, new UnitResourceSet(registry));
 		assertEquals("Moby Dick", runOn(bare, (RelationalTransformation) loaded.document().getUnit()));
 	}
 
