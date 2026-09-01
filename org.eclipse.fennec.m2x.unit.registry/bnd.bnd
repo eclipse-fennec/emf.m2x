@@ -1,0 +1,21 @@
+Bundle-Name: Fennec M2X Unit Registry Store
+Bundle-Description: The object medium of the unit store: a UnitStore over the emf.osgi \
+ EObjectRegistry, holding live compiled-unit documents. The bridge bundle that keeps m2x core \
+ free of emf.osgi beyond the api (#213).
+
+-library: enableEMF
+
+src=${^src}
+
+-buildpath: \
+	org.eclipse.fennec.m2x.unit;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.api;version=latest,\
+	org.eclipse.fennec.emf.osgi.eobject.registry;version=latest,\
+	org.osgi.service.component;version=latest,\
+	org.osgi.service.component.annotations;version=latest,\
+	org.osgi.service.condition;version=latest
+
+-testpath: \
+	org.eclipse.fennec.m2x.ocl.model;version=snapshot,\
+	org.eclipse.fennec.m2x.m2t.model;version=snapshot,\
+	org.eclipse.fennec.emf.osgi.component.minimal;version=latest
