@@ -17,7 +17,6 @@ package org.eclipse.fennec.m2x.m2t.engine;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.eclipse.emf.ecore.EPackage;
 
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.m2t.api.M2tUnit;
@@ -25,12 +24,9 @@ import org.eclipse.fennec.m2x.m2t.api.M2tUnitResolver;
 import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitKind;
-import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
-import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
-import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 
 /**
@@ -39,10 +35,9 @@ import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
  * <p>Asked for a name, the resolver looks for a compiled unit first and for a source second: a
  * compiled unit carries its manifest and its fingerprint, which is what a {@code pin} needs
  * without compiling again; a source is parsed by the caller. The store hands out independent
- * copies with their references unresolved; this resolver materializes each one in a context
- * of its own — the given packages first, the global registry as fallback, the copies the
- * document carries for what neither knows — so the AST it lends is nobody else's and carries
- * no proxy (#211).
+ * copies with their references unresolved — the consumer's linker binds them in its own
+ * context at the moment it takes the unit in, the same place a {@code ResourceUnit} is
+ * loaded (#211, #214). This resolver reads; it decides nothing about type identity.
  *
  * <p>A store that cannot answer is not "not found": a {@link UnitStoreException} surfaces as a
  * {@link UnitResolutionException} instead of an empty result, so a broken store does not let a
@@ -56,29 +51,14 @@ public final class M2tStoreUnitResolver implements M2tUnitResolver {
 	private static final String LANGUAGE = "m2t";
 
 	private final UnitStore store;
-	private final EPackage.Registry packages;
-	private final UnitMaterializer materializer = UnitMaterializer.defaults();
 
 	/**
-	 * Creates a resolver over a store; documents are materialized against the global registry
-	 * and the copies they carry.
+	 * Creates a resolver over a store.
 	 *
 	 * @param store the store to resolve from
 	 */
 	public M2tStoreUnitResolver(UnitStore store) {
-		this(store, null);
-	}
-
-	/**
-	 * Creates a resolver over a store, with the caller's metamodels answering first when a
-	 * resolved document is materialized.
-	 *
-	 * @param store the store to resolve from
-	 * @param packages the registry that answers first, or {@code null} for the global one alone
-	 */
-	public M2tStoreUnitResolver(UnitStore store, EPackage.Registry packages) {
 		this.store = Objects.requireNonNull(store, "store must not be null");
-		this.packages = packages;
 	}
 
 	@Override
@@ -90,8 +70,6 @@ public final class M2tStoreUnitResolver implements M2tUnitResolver {
 			Optional<Unit> compiled = store.get(UnitKey.of(LANGUAGE, qualifiedName, UnitKind.COMPILED));
 			if (compiled.isPresent() && compiled.get() instanceof PackagedUnit packaged
 					&& packaged.document().getUnit() instanceof Module root) {
-				materializer.materialize(packaged,
-						packages == null ? new UnitResourceSet() : new UnitResourceSet(packages));
 				return Optional.of(new M2tUnit.CompiledUnit(qualifiedName, root));
 			}
 			Optional<Unit> source = store.get(UnitKey.of(LANGUAGE, qualifiedName, UnitKind.SOURCE));
@@ -101,9 +79,6 @@ public final class M2tStoreUnitResolver implements M2tUnitResolver {
 			return Optional.empty();
 		} catch (UnitStoreException e) {
 			throw new UnitResolutionException("the unit store could not answer for '" + qualifiedName + "': "
-					+ e.getMessage(), e);
-		} catch (UnitMaterializeException e) {
-			throw new UnitResolutionException("the unit '" + qualifiedName + "' cannot be materialized: "
 					+ e.getMessage(), e);
 		}
 	}

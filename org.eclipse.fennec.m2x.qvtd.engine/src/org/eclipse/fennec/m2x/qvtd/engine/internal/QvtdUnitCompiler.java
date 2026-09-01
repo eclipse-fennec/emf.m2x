@@ -86,6 +86,7 @@ final class QvtdUnitCompiler {
 	private final Set<String> allowedUnitModules;
 	private final UnitPackager packager;
 	private final DependencyMode mode;
+	private QvtdReferencedUnits referencedUnits;
 
 	QvtdUnitCompiler(QvtrParserSupport parserSupport, EPackage.Registry packageRegistry,
 			List<QvtdUnitResolver> unitResolvers, Set<String> allowedUnitModules,
@@ -164,6 +165,9 @@ final class QvtdUnitCompiler {
 				yield compile((RelationalTransformation) UnitPackager.detach(compiled.transformation()),
 						qualifiedName, null, path);
 			}
+			// dereferenced at resolution; kept for exhaustiveness, and for a caller that hands one in
+			case QvtdUnit.ResourceUnit reference -> compileDependency(referencedUnits().dereference(reference),
+					qualifiedName, path);
 		};
 	}
 
@@ -177,16 +181,29 @@ final class QvtdUnitCompiler {
 		return compileDependency(unit, qualifiedName, path).getManifest().getUnitFingerprint();
 	}
 
+	private QvtdReferencedUnits referencedUnits() {
+		if (referencedUnits == null) {
+			referencedUnits = new QvtdReferencedUnits(packageRegistry);
+		}
+		return referencedUnits;
+	}
+
 	private Optional<QvtdUnit> resolveUnit(String qualifiedName) throws QvtdParseException {
 		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(qualifiedName)) {
 			return Optional.empty();
 		}
+		Optional<QvtdUnit> unit;
 		try {
-			return ResolutionPolicy.resolve(qualifiedName, QvtdLinker.sources(unitResolvers));
+			unit = ResolutionPolicy.resolve(qualifiedName, QvtdLinker.sources(unitResolvers));
 		} catch (UnitResolutionException failure) {
 			throw new QvtdParseException("Cannot resolve import '" + qualifiedName + "': " + failure.getMessage(),
 					failure);
 		}
+		if (unit.isPresent()) {
+			// a reference is loaded here, in this compile's context, before any switch sees it
+			unit = Optional.of(referencedUnits().dereference(unit.get()));
+		}
+		return unit;
 	}
 
 	static List<String> importedNames(RelationalTransformation transformation) {

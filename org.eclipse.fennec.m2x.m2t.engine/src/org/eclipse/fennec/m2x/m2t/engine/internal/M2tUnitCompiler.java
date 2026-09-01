@@ -80,10 +80,12 @@ final class M2tUnitCompiler {
 	private final Set<String> allowedUnitModules;
 	private final UnitPackager packager;
 	private final DependencyMode mode;
+	private final M2tReferencedUnits referencedUnits;
 
 	M2tUnitCompiler(Parser parser, Function<Module, M2tParseResult> knownResults,
 			List<M2tUnitResolver> unitResolvers, Set<String> allowedUnitModules,
-			UnitPackager packager, UnitCompileOptions options) {
+			UnitPackager packager, UnitCompileOptions options, M2tReferencedUnits referencedUnits) {
+		this.referencedUnits = Objects.requireNonNull(referencedUnits, "referencedUnits must not be null");
 		this.parser = Objects.requireNonNull(parser, "parser must not be null");
 		this.knownResults = Objects.requireNonNull(knownResults, "knownResults must not be null");
 		this.unitResolvers = Objects.requireNonNull(unitResolvers, "unitResolvers must not be null");
@@ -175,6 +177,9 @@ final class M2tUnitCompiler {
 						: new M2tParseResult(copy, known.extendsNames(), known.importNames(), Map.of(), Map.of());
 				yield compile(result, name, null, path);
 			}
+			// dereferenced at resolution; kept for exhaustiveness, and for a caller that hands one in
+			case M2tUnit.ResourceUnit reference -> compileDependency(referencedUnits.dereference(reference),
+					name, path);
 		};
 	}
 
@@ -191,12 +196,18 @@ final class M2tUnitCompiler {
 		if (!allowedUnitModules.isEmpty() && !allowedUnitModules.contains(name)) {
 			return Optional.empty();
 		}
+		Optional<M2tUnit> unit;
 		try {
-			return ResolutionPolicy.resolve(name, M2tEngineImpl.sources(unitResolvers));
+			unit = ResolutionPolicy.resolve(name, M2tEngineImpl.sources(unitResolvers));
 		} catch (UnitResolutionException failure) {
 			throw new M2tParseException("Cannot resolve import '" + name + "': " + failure.getMessage(), failure,
 					List.of());
 		}
+		if (unit.isPresent()) {
+			// a reference is loaded here, in this compile's context, before any switch sees it
+			unit = Optional.of(referencedUnits.dereference(unit.get()));
+		}
+		return unit;
 	}
 
 	private static M2tParseResult leaf(Module module) {

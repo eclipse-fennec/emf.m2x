@@ -305,6 +305,30 @@ QvtoEngine engine = QvtoEngines.create(QvtoConfiguration.builder(oclConfig)
 
 `QvtdStoreUnitResolver` and `M2tStoreUnitResolver` are the same for their languages.
 
+### Units by reference
+
+A resolver does not have to hand the unit over — it may answer with where it lives:
+
+```java
+QvtoUnitResolver byLocation = name -> "shelf.Titles".equals(name)
+        ? Optional.of(new QvtoUnit.ResourceUnit(name, URI.createFileURI("titles.xmi")))
+        : Optional.empty();
+```
+
+Loading happens at consumption, in the consumer's context, through the same materializer as a
+store load (#214): a URI holding a compiled-unit document gets the full treatment — safe parse,
+carried copies served, everything resolved, validation funnel — and a pin records the fingerprint
+its manifest carries. A URI holding a bare AST — the pre-unit shape — loads too: it binds in the
+consumer's context and no proxy is handed on, but there is no manifest to check and no copy to
+serve. A URI holding neither is a link-time error naming the import.
+
+The same holds for what a store resolver answers: since #214 the resolvers read and decide
+nothing — a document-backed unit is bound by the consumer's linker at the moment it takes the
+unit in. Which metamodel instance a reference binds to is always the consumer's business.
+`QvtdUnit.ResourceUnit` and `M2tUnit.ResourceUnit` are the same for their languages.
+
+
+
 ---
 
 ## 6. Prepare and execute
@@ -764,10 +788,10 @@ runs as a plain Java library (D39).
 
 | Package | What is in it |
 |---|---|
-| `…unit.api` | `Unit` (+`Source`, `Compiled`, `Packaged`), `UnitKey`, `UnitKind`, `UnitStore`, `UnitCompileOptions`, `UnitBinder`, `PreparedContext`, `UnitResourceSet`, the exceptions |
+| `…unit.api` | `Unit` (+`Source`, `Compiled`, `Packaged`, `Referenced`), `UnitKey`, `UnitKind`, `UnitStore`, `UnitCompileOptions`, `UnitBinder`, `PreparedContext`, `UnitResourceSet`, the exceptions |
 | `…unit.compile` | `UnitPackager`, `ReferencedPackages`, `SignatureFingerprint` |
 | `…unit.store` | `DefaultUnitStore`, `UnitStoreBackend`, `InMemoryUnitStoreBackend`, `PackagedUnit`, `StoredSource`, `UnitXmi`, `UnitDocuments` |
-| `…unit.materialize` | `UnitMaterializer` — binds a stored document in a consumer's context |
+| `…unit.materialize` | `UnitMaterializer` — binds a stored document in a consumer's context, loads units named by reference |
 | `…unit.prepare` | `UnitPreparer` |
 | `…unit.resolve` | `ResolutionPolicy`, `ServiceLoaderUnitResolver` (the class-path half of discovery) |
 | `…unit.validate` | `UnitValidator` |

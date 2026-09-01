@@ -27,6 +27,9 @@ import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
+import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
+import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
+import org.eclipse.fennec.m2x.unit.store.UnitXmi;
 import org.eclipse.fennec.m2x.unit.validate.UnitValidator;
 
 /**
@@ -125,5 +128,45 @@ public final class UnitMaterializer {
 			}
 		}
 		return unit;
+	}
+
+	/**
+	 * Loads a unit named by reference ({@code Unit.Referenced}, #214) and materializes it in the
+	 * given context — the second consumer of this class beside the store path.
+	 *
+	 * <p>The URI is expected to hold a compiled-unit document; then this is a store load without
+	 * the store — safe parse, carried copies served, everything resolved, the validation funnel
+	 * run — and the returned root is the document. A bare AST — the pre-unit shape — loads too:
+	 * it binds in this context, no proxy is handed on, but there is no manifest to check and no
+	 * copy to serve.
+	 *
+	 * @param uri where the unit lives
+	 * @param context the consumer's context
+	 * @return the loaded root — a {@code CompiledUnit} document, or the bare AST
+	 * @throws UnitMaterializeException if the content cannot be read, resolves to nothing here,
+	 *             or a document does not pass validation
+	 */
+	public EObject load(URI uri, UnitResourceSet context) throws UnitMaterializeException {
+		Objects.requireNonNull(uri, "uri must not be null");
+		Objects.requireNonNull(context, "context must not be null");
+		Resource resource = context.createResource(uri);
+		try {
+			UnitXmi.loadSafely(resource);
+		} catch (UnitStoreException e) {
+			throw new UnitMaterializeException(e.getMessage(), e);
+		}
+		EObject root = resource.getContents().get(0);
+		if (root instanceof CompiledUnit document) {
+			materialize(new PackagedUnit(document), context);
+			return document;
+		}
+		EcoreUtil.resolveAll(resource);
+		Map<EObject, ?> unresolved = EcoreUtil.UnresolvedProxyCrossReferencer.find(resource);
+		if (!unresolved.isEmpty()) {
+			EObject first = unresolved.keySet().iterator().next();
+			throw new UnitMaterializeException("the unit at " + uri + " refers to " + unresolved.size()
+					+ " object(s) that resolve to nothing here, first: " + EcoreUtil.getURI(first));
+		}
+		return root;
 	}
 }
