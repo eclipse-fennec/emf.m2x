@@ -1,0 +1,4 @@
+/*
+ * No additional Gradle configuration needed.
+ * Build dependencies are managed via bnd.bnd.
+ */

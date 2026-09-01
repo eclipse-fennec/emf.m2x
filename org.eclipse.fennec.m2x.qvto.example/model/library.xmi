@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<library:Library xmi:version="2.0" xmlns:xmi="http://www.omg.org/XMI"
+    xmlns:library="http://example.org/fennec/m2x/library/1.0" name="City Library">
+  <books title="Moby Dick" author="Melville" year="1851" copies="2"/>
+  <books title="Structure and Interpretation of Computer Programs" author="Abelson" year="1985" copies="1"/>
+  <books title="A Lost Manuscript" author="Unknown" year="1600" copies="0"/>
+</library:Library>
