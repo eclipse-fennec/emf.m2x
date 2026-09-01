@@ -555,7 +555,9 @@ package the resource EMF gives a generated one: `createResource(nsURI)`.
 **Store.** `DefaultUnitStore` (package `unit.store`) implements the `UnitStore` contract over a
 `UnitStoreBackend` — bytes by key, keys by name — with `InMemoryUnitStoreBackend` as the one that
 needs nothing; a file system, a bundle or emf.osgi's `ArtifactStore` with an index beside it are
-other backends. The store is dumb — key ↔ document (#211): it owns the serialization and nothing
+other backends. The object medium is a store of its own: `RegistryUnitStore` (bridge bundle
+`…unit.registry`, #213) over an emf.osgi `EObjectRegistry` of live compiled-unit documents —
+normalized into the transport state on the way in, an independent copy on the way out. The store is dumb — key ↔ document (#211): it owns the serialization and nothing
 else. A compiled unit goes in as the XMI of a *copy* of its document (a document without a
 manifest is refused, `compile()` first) under
 `UnitKey.pinned(language, name, COMPILED, manifest.unitFingerprint)`, a source as a

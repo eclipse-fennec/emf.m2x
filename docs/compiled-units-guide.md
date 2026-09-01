@@ -257,6 +257,42 @@ Three properties worth knowing:
 - **A missing version is not "not found".** A pinned key the store does not have is an error that
   names the versions it does have. `Optional.empty()` means the name is unknown, nothing else.
 
+
+### The object medium: units from an `EObjectRegistry`
+
+`RegistryUnitStore` (bundle `org.eclipse.fennec.m2x.unit.registry`) is the same contract over a
+different medium: an emf.osgi `EObjectRegistry` holding live compiled-unit documents — the rail a
+model atlas delivers on, and the pre-unit pattern (a parsed AST handed around as a loaded EMF
+object) with the envelope that made it sound.
+
+```java
+EObjectRegistryWriter writer = EObjectRegistries.createRegistry("units");
+UnitStore store = new RegistryUnitStore(writer);                    // read-write
+UnitStore readOnly = new RegistryUnitStore(writer.getRegistry());   // get/contains/versions only
+```
+
+The contract does not change with the medium. What goes in is normalized into the transport
+state — one XMI round trip on the way in, so a document whose references were bound in the
+producer's context arrives with them unresolved, exactly as the byte medium delivers. What comes
+out is an independent copy; the registry's live instance never leaves. Entries carry the key as
+properties (`unit.language`, `unit.kind`, `unit.qualifiedName`, `unit.fingerprint` — deliberately
+no `emf.fingerprint`: that property is a plain model fingerprint, the metadata-bridge join key,
+and a unit references several packages). Entries another source filed — unit XMIs on disk behind
+a `FileEObjectProvider`, an atlas — answer by what their manifest says, whatever their entry key
+looks like; removing is limited to what the store's own source wrote.
+
+Under OSGi, one component publishes the store over a named registry:
+
+```json
+"M2xRegistryUnitStore": {
+    "registry.target": "(emf.eobject.registry.name=units)",
+    "writer.target": "(emf.eobject.registry.name=units)"
+}
+```
+
+Without the writer reference the published store is read-only — the registry is the delivery,
+writing is the content source's business.
+
 ### Resolving from a store
 
 Each language has a resolver that reads from a store — compiled unit first, source second:
@@ -730,7 +766,7 @@ runs as a plain Java library (D39).
 |---|---|
 | `…unit.api` | `Unit` (+`Source`, `Compiled`, `Packaged`), `UnitKey`, `UnitKind`, `UnitStore`, `UnitCompileOptions`, `UnitBinder`, `PreparedContext`, `UnitResourceSet`, the exceptions |
 | `…unit.compile` | `UnitPackager`, `ReferencedPackages`, `SignatureFingerprint` |
-| `…unit.store` | `DefaultUnitStore`, `UnitStoreBackend`, `InMemoryUnitStoreBackend`, `PackagedUnit`, `StoredSource` |
+| `…unit.store` | `DefaultUnitStore`, `UnitStoreBackend`, `InMemoryUnitStoreBackend`, `PackagedUnit`, `StoredSource`, `UnitXmi`, `UnitDocuments` |
 | `…unit.materialize` | `UnitMaterializer` — binds a stored document in a consumer's context |
 | `…unit.prepare` | `UnitPreparer` |
 | `…unit.resolve` | `ResolutionPolicy`, `ServiceLoaderUnitResolver` (the class-path half of discovery) |
@@ -738,6 +774,7 @@ runs as a plain Java library (D39).
 | `…unit.satellite` | `SatelliteCollector` |
 | `…unit.fingerprint` | `DefaultUnitFingerprintService`, `AstCanonicalizer` |
 | `…model.compiled` | the `CompiledUnit` metamodel (nsURI `http://www.eclipse.org/fennec/m2x/compiled/1.0`) |
+| `…unit.registry` (own bundle) | `RegistryUnitStore`, `RegistryUnitStoreComponent` — the object medium over the emf.osgi `EObjectRegistry`; a bridge bundle, so m2x core stays free of emf.osgi beyond the api |
 | `…unit.osgi` | `OsgiServiceUnitResolver` — the whiteboard half of discovery, one for all three languages (in the separate `unit.osgi` bundle) |
 
 Per language, in the engine bundle: `QvtoStoreUnitResolver`, `QvtdStoreUnitResolver`,
