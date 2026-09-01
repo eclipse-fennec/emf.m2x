@@ -1,0 +1,7 @@
+-- A helper library of its own: the importing transformation resolves it by name —
+-- ad hoc through a source resolver, compiled through the store (#206).
+library catalog.Format {
+    helper formatLabel(title : String, author : String) : String {
+        return author + ': ' + title;
+    }
+}

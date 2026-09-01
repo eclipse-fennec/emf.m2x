@@ -1,0 +1,26 @@
+-- Library → Catalog: an imported helper library, a guarded mapping, and ordering —
+-- deliberately more than the minimal case (#206).
+modeltype LIB uses 'http://example.org/fennec/m2x/library/1.0';
+modeltype CAT uses 'http://example.org/fennec/m2x/catalog/1.0';
+
+import catalog.Format;
+
+transformation Library2Catalog(in lib : LIB, out cat : CAT) {
+
+    main() {
+        lib.objectsOfType(Library)->map toCatalog();
+    }
+
+    mapping Library::toCatalog() : Catalog {
+        title := self.name;
+        entries := self.books->select(b | b.copies > 0)->sortedBy(b | b.year)->map toEntry();
+    }
+
+    -- the select mirrors the when-guard below: a guarded-out mapping currently leaves a
+    -- null in the mapped collection (#228), and a containment assignment refuses nulls
+    mapping Book::toEntry() : Entry
+        when { self.copies > 0 } {
+        label := formatLabel(self.title, self.author);
+        year := self.year;
+    }
+}
