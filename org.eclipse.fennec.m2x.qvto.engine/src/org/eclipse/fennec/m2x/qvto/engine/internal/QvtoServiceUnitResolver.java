@@ -45,7 +45,7 @@ import org.osgi.service.component.annotations.Component;
  *
  * @since 1.0
  */
-@Component(name = "QvtoServiceUnitResolver", service = QvtoUnitResolver.class,
+@Component(name = "QvtoServiceUnitResolver",
 		property = QvtoServiceUnitResolver.RESOLVER_KIND + "=discovery")
 public class QvtoServiceUnitResolver implements QvtoUnitResolver {
 
