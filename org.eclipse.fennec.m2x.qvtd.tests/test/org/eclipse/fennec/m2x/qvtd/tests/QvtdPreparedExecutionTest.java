@@ -28,7 +28,6 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
-import org.eclipse.fennec.emf.osgi.fingerprint.util.FingerprintHelper;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
@@ -45,7 +44,6 @@ import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
-import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

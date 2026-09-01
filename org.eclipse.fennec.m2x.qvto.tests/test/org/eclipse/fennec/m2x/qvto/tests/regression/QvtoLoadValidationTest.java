@@ -22,8 +22,8 @@ import java.util.Iterator;
 import java.util.List;
 
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
@@ -32,13 +32,12 @@ import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
+import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
-import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
-import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 import org.junit.jupiter.api.Test;
 
 /**

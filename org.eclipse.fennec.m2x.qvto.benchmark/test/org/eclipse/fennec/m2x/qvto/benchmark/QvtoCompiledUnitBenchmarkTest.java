@@ -40,7 +40,6 @@ import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
-import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;

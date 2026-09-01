@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -43,16 +44,15 @@ import org.eclipse.fennec.m2x.model.compiled.CompiledPackage;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
 import org.eclipse.fennec.m2x.model.m2t.Module;
+import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import java.util.ArrayList;
-import org.eclipse.fennec.m2x.model.m2t.Template;
-import org.eclipse.fennec.m2x.model.ocl.Variable;
-import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 
 /**
  * A compiled MOFM2T module is one self-contained document: it saves, loads in a fresh resource

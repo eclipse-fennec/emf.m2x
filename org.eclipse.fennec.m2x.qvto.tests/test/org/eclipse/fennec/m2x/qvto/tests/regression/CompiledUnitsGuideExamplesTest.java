@@ -15,8 +15,8 @@
 package org.eclipse.fennec.m2x.qvto.tests.regression;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -37,7 +37,6 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
-import org.eclipse.fennec.emf.osgi.fingerprint.util.FingerprintHelper;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest;
 import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
