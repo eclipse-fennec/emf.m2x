@@ -67,8 +67,8 @@ class M2tPreparedExecutionTest {
 		M2tEngine runner = M2tEngines.create(M2tConfiguration.builder(ocl)
 				.addUnitResolver(forbidden).unitResolverEnabled(true).build());
 
-		store.store("m2t", new PackagedUnit(compiler.compile(LIBRARY, "base")));
-		UnitKey key = store.store("m2t", new PackagedUnit(compiler.compile(EXTENDING, "main")));
+		store.put(compiler.compile(LIBRARY, "base"));
+		UnitKey key = store.put(compiler.compile(EXTENDING, "main"));
 		PreparedContext prepared = UnitPreparer.withDefaults(store, runner.unitBinder()).prepare(key);
 
 		EClass input = EcoreFactory.eINSTANCE.createEClass();

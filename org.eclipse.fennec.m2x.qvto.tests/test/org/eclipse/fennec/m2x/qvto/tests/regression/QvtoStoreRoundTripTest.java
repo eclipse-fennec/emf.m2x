@@ -96,15 +96,15 @@ class QvtoStoreRoundTripTest {
 
 	@Test
 	void compiledLibraryInTheStore_isPinnedByItsStoredFingerprint_andTheUnitRoundTrips() throws Exception {
-		UnitKey libraryKey = store.store("qvto", new PackagedUnit(bare.compile(HELPER_LIB, "HelperLib")));
+		UnitKey libraryKey = store.put(bare.compile(HELPER_LIB, "HelperLib"));
 
 		CompiledUnit main = engine.compile(MAIN, "Main");
 		assertEquals(libraryKey.fingerprint().orElseThrow(),
 				main.getManifest().getDependencyEntry().get(0).getFingerprint(),
 				"the pin names the fingerprint the store holds the library under");
 
-		UnitKey mainKey = store.store("qvto", new PackagedUnit(main));
-		PackagedUnit loaded = (PackagedUnit) store.load(mainKey).orElseThrow();
+		UnitKey mainKey = store.put(main);
+		PackagedUnit loaded = (PackagedUnit) store.get(mainKey).orElseThrow();
 		assertEquals(runOn(engine, (OperationalTransformation) main.getUnit()),
 				runOn(engine, (OperationalTransformation) loaded.document().getUnit()));
 		assertEquals("hello", runOn(engine, (OperationalTransformation) loaded.document().getUnit()));
@@ -112,15 +112,15 @@ class QvtoStoreRoundTripTest {
 
 	@Test
 	void embeddedFromTheStore_runsWithoutTheStore() throws Exception {
-		store.store("qvto", new PackagedUnit(bare.compile(HELPER_LIB, "HelperLib")));
+		store.put(bare.compile(HELPER_LIB, "HelperLib"));
 		CompiledUnit main = engine.compile(MAIN, "Main", UnitCompileOptions.of(DependencyMode.EMBED));
-		PackagedUnit loaded = (PackagedUnit) store.load(store.store("qvto", new PackagedUnit(main))).orElseThrow();
+		PackagedUnit loaded = (PackagedUnit) store.get(store.put(main)).orElseThrow();
 		assertEquals("hello", runOn(bare, (OperationalTransformation) loaded.document().getUnit()));
 	}
 
 	@Test
 	void sourceInTheStore_isResolvedToo() throws Exception {
-		store.store("qvto", new QvtoUnit.SourceUnit("HelperLib", URI.createURI("mem:/HelperLib.qvto"), HELPER_LIB));
+		store.put("qvto", new QvtoUnit.SourceUnit("HelperLib", URI.createURI("mem:/HelperLib.qvto"), HELPER_LIB));
 		CompiledUnit main = engine.compile(MAIN, "Main");
 		assertEquals(bare.compile(HELPER_LIB, "HelperLib").getManifest().getUnitFingerprint(),
 				main.getManifest().getDependencyEntry().get(0).getFingerprint(),
@@ -130,9 +130,9 @@ class QvtoStoreRoundTripTest {
 
 	@Test
 	void aCompiledUnit_isPreferredOverASourceOfTheSameName() throws Exception {
-		store.store("qvto", new QvtoUnit.SourceUnit("HelperLib", URI.createURI("mem:/HelperLib.qvto"),
+		store.put("qvto", new QvtoUnit.SourceUnit("HelperLib", URI.createURI("mem:/HelperLib.qvto"),
 				HELPER_LIB.replace("'hello'", "'from source'")));
-		store.store("qvto", new PackagedUnit(bare.compile(HELPER_LIB, "HelperLib")));
+		store.put(bare.compile(HELPER_LIB, "HelperLib"));
 		assertEquals("hello", runOn(engine, (OperationalTransformation) engine.compile(MAIN, "Main").getUnit()));
 	}
 

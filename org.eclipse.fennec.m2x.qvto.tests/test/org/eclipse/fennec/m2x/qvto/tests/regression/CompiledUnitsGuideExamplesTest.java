@@ -64,7 +64,9 @@ import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitKind;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
+import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
+import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
@@ -183,21 +185,24 @@ class CompiledUnitsGuideExamplesTest {
 		QvtoEngine engine = engineWithLibrary();
 		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 
-		UnitKey key = store.store("qvto", new PackagedUnit(engine.compile(MAIN, "Main")));
-		PackagedUnit loaded = (PackagedUnit) store.load(key).orElseThrow();
+		UnitKey key = store.put(engine.compile(MAIN, "Main"));
+		PackagedUnit loaded = (PackagedUnit) store.get(key).orElseThrow();
 		assertEquals("Main", loaded.qualifiedName());
+		// §5: a document comes back unresolved; materializing binds it in the consumer's context
+		UnitMaterializer.defaults().materialize(loaded, new UnitResourceSet());
+		assertEquals("hello", runOn(engine, (OperationalTransformation) loaded.document().getUnit()));
 
 		// a source and a compiled unit of one name live side by side, told apart by kind
-		store.store("qvto", new QvtoUnit.SourceUnit("HelperLib", URI.createURI("mem:/lib.qvto"), LIB_SOURCE));
-		store.store("qvto", new PackagedUnit(engine.compile(LIB_SOURCE, "HelperLib")));
+		store.put("qvto", new QvtoUnit.SourceUnit("HelperLib", URI.createURI("mem:/lib.qvto"), LIB_SOURCE));
+		store.put(engine.compile(LIB_SOURCE, "HelperLib"));
 		assertEquals(1, store.versions("qvto", "HelperLib", UnitKind.SOURCE).size());
 		assertEquals(1, store.versions("qvto", "HelperLib", UnitKind.COMPILED).size());
-		assertTrue(store.load(UnitKey.of("qvto", "HelperLib", UnitKind.SOURCE)).isPresent());
+		assertTrue(store.get(UnitKey.of("qvto", "HelperLib", UnitKind.SOURCE)).isPresent());
 
 		QvtoEngine overStore = QvtoEngines.create(QvtoConfiguration.builder(oclConfig())
 				.addUnitResolver(new QvtoStoreUnitResolver(store))
 				.unitResolverEnabled(true).build());
-		UnitKey pinned = store.store("qvto", new PackagedUnit(overStore.compile(MAIN, "Main")));
+		UnitKey pinned = store.put(overStore.compile(MAIN, "Main"));
 
 		PreparedContext prepared = UnitPreparer.withDefaults(store, overStore.unitBinder()).prepare(pinned);
 		EObject pkg = ecorePackage("Original");
@@ -212,10 +217,10 @@ class CompiledUnitsGuideExamplesTest {
 	void section6_oneContextManyExecutions() throws Exception {
 		QvtoEngine engine = engineWithLibrary();
 		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
-		store.store("qvto", new PackagedUnit(engine.compile(LIB_SOURCE, "HelperLib")));
+		store.put(engine.compile(LIB_SOURCE, "HelperLib"));
 		QvtoEngine overStore = QvtoEngines.create(QvtoConfiguration.builder(oclConfig())
 				.addUnitResolver(new QvtoStoreUnitResolver(store)).unitResolverEnabled(true).build());
-		UnitKey key = store.store("qvto", new PackagedUnit(overStore.compile(MAIN, "Main")));
+		UnitKey key = store.put(overStore.compile(MAIN, "Main"));
 
 		PreparedContext prepared = UnitPreparer.withDefaults(store, overStore.unitBinder()).prepare(key);
 		for (int i = 0; i < 3; i++) {
@@ -231,11 +236,11 @@ class CompiledUnitsGuideExamplesTest {
 	void section6_rebindRecordsTheClosure() throws Exception {
 		QvtoEngine engine = engineWithLibrary();
 		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
-		store.store("qvto", new PackagedUnit(engine.compile(LIB_SOURCE, "HelperLib")));
+		store.put(engine.compile(LIB_SOURCE, "HelperLib"));
 		QvtoEngine overStore = QvtoEngines.create(QvtoConfiguration.builder(oclConfig())
 				.addUnitResolver(new QvtoStoreUnitResolver(store)).unitResolverEnabled(true).build());
-		UnitKey key = store.store("qvto", new PackagedUnit(
-				overStore.compile(MAIN, "Main", UnitCompileOptions.of(DependencyMode.REBIND))));
+		UnitKey key = store.put(
+				overStore.compile(MAIN, "Main", UnitCompileOptions.of(DependencyMode.REBIND)));
 
 		PreparedContext prepared = UnitPreparer.withDefaults(store, overStore.unitBinder()).prepare(key);
 		CompiledUnit ran = ((PackagedUnit) prepared.unit("Main").orElseThrow()).document();
@@ -267,8 +272,8 @@ class CompiledUnitsGuideExamplesTest {
 		assertTrue(entry.getFingerprint().startsWith("fp1:"));
 		assertEquals(1, unit.getPackages().size());
 
-		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
-		UnitKey key = store.store("qvto", new PackagedUnit(unit));
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+		UnitKey key = store.put(unit);
 		assertEquals(unit.getManifest().getUnitFingerprint(), key.fingerprint().orElseThrow());
 
 		QvtoEngine runner = engineOver(registry, forbiddenResolver());
@@ -301,8 +306,8 @@ class CompiledUnitsGuideExamplesTest {
 
 		// Machine B: an empty registry, no resolver, no source of either library anywhere
 		EPackage.Registry nothing = new EPackageRegistryImpl();
-		UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend(), nothing);
-		UnitKey key = transported.store("qvto", new PackagedUnit(archive));
+		UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+		UnitKey key = transported.put(archive);
 		QvtoEngine runner = engineOver(nothing, forbiddenResolver());
 
 		PreparedContext prepared = preparer(transported, nothing, runner.unitBinder()).prepare(key);
@@ -337,8 +342,8 @@ class CompiledUnitsGuideExamplesTest {
 		CompiledUnit archive = engineOver(registry, sourceResolver())
 				.compile(ANNOUNCE, "Announce", UnitCompileOptions.of(DependencyMode.EMBED));
 		EPackage.Registry nothing = new EPackageRegistryImpl();
-		UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend(), nothing);
-		UnitKey key = transported.store("qvto", new PackagedUnit(archive));
+		UnitStore transported = new DefaultUnitStore(new InMemoryUnitStoreBackend());
+		UnitKey key = transported.put(archive);
 		QvtoEngine runner = engineOver(nothing, forbiddenResolver());
 		PreparedContext prepared = preparer(transported, nothing, runner.unitBinder()).prepare(key);
 
@@ -357,7 +362,7 @@ class CompiledUnitsGuideExamplesTest {
 		EPackage shelf = shelf();
 		EPackage.Registry registry = new EPackageRegistryImpl();
 		registry.put(SHELF_NS, shelf);
-		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		QvtoEngine compiler = engineOver(registry, sourceResolver());
 
 		CompiledUnit main = compiler.compile(ANNOUNCE, "Announce");   // pin is the default
@@ -372,15 +377,15 @@ class CompiledUnitsGuideExamplesTest {
 
 		// prepare loads documents by key, so every pinned dependency has to be in the store as a
 		// compiled unit — a source there serves the compiler, which parses it
-		UnitKey key = store.store("qvto", new PackagedUnit(main));
+		UnitKey key = store.put(main);
 		QvtoEngine runner = engineOver(registry, forbiddenResolver());
 		UnitPrepareException missing = assertThrows(UnitPrepareException.class,
 				() -> preparer(store, registry, runner.unitBinder()).prepare(key));
 		assertTrue(missing.getMessage().contains("no compiled unit 'shelf.Titles'")
 				|| missing.getMessage().contains("no compiled unit 'text.Case'"), missing.getMessage());
 
-		store.store("qvto", new PackagedUnit(compiler.compile(CASE_LIB, "text.Case")));
-		store.store("qvto", new PackagedUnit(compiler.compile(TITLES_LIB, "shelf.Titles")));
+		store.put(compiler.compile(CASE_LIB, "text.Case"));
+		store.put(compiler.compile(TITLES_LIB, "shelf.Titles"));
 		PreparedContext prepared = preparer(store, registry, runner.unitBinder()).prepare(key);
 		assertEquals(List.of("Announce", "shelf.Titles", "text.Case"),
 				prepared.units().stream().map(Unit::qualifiedName).sorted().toList(),

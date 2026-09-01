@@ -37,10 +37,12 @@ import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitKind;
+import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
+import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
 import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
 
 /**
@@ -70,7 +72,8 @@ import org.eclipse.fennec.m2x.unit.store.PackagedUnit;
  * checks the blackbox requirements against the runtime. Afterwards nothing is left to resolve.</li>
  * </ul>
  *
- * <p>The resolution itself happens as the resource set resolves the loaded document — tier by
+ * <p>The resolution itself is the materializer's: a document leaves the store with its
+ * references unresolved, and materializing it into the run's resource set binds them — tier by
  * tier, runtime registry, then global, then copy ({@link UnitResourceSet}). Verification comes
  * after, and that order is sound: where the runtime has an instance the document resolved to it,
  * and it is either equal — fine — or different — failure, context discarded; where it has none
@@ -86,10 +89,12 @@ public final class UnitPreparer {
 	private final UnitStore store;
 	private final EPackage.Registry runtime;
 	private final FingerprintService fingerprints;
+	private final UnitMaterializer materializer;
 	private final Map<String, UnitBinder> binders = new HashMap<>();
 
 	/**
-	 * Creates a preparer.
+	 * Creates a preparer with the default materializer — every loaded document passes the
+	 * validation funnel (#142).
 	 *
 	 * @param store where units come from
 	 * @param runtime the runtime's package registry — what generated code and the caller registered
@@ -98,9 +103,25 @@ public final class UnitPreparer {
 	 */
 	public UnitPreparer(UnitStore store, EPackage.Registry runtime, FingerprintService fingerprints,
 			Collection<UnitBinder> binders) {
+		this(store, runtime, fingerprints, binders, UnitMaterializer.defaults());
+	}
+
+	/**
+	 * Creates a preparer with every collaborator given.
+	 *
+	 * @param store where units come from
+	 * @param runtime the runtime's package registry — what generated code and the caller registered
+	 * @param fingerprints the service package fingerprints are compared with
+	 * @param binders one binder per language the units may be written in
+	 * @param materializer what binds a loaded document in the context — the place to switch the
+	 *            validation funnel off for a trusted, hot store
+	 */
+	public UnitPreparer(UnitStore store, EPackage.Registry runtime, FingerprintService fingerprints,
+			Collection<UnitBinder> binders, UnitMaterializer materializer) {
 		this.store = Objects.requireNonNull(store, "store must not be null");
 		this.runtime = Objects.requireNonNull(runtime, "runtime must not be null");
 		this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints must not be null");
+		this.materializer = Objects.requireNonNull(materializer, "materializer must not be null");
 		for (UnitBinder binder : Objects.requireNonNull(binders, "binders must not be null")) {
 			this.binders.put(binder.language(), binder);
 		}
@@ -183,7 +204,7 @@ public final class UnitPreparer {
 	private PackagedUnit load(UnitKey key, UnitResourceSet resourceSet) throws UnitPrepareException {
 		Optional<Unit> unit;
 		try {
-			unit = store.load(key, resourceSet);
+			unit = store.get(key);
 		} catch (UnitStoreException e) {
 			throw new UnitPrepareException("cannot load '" + key.qualifiedName() + "': " + e.getMessage(), e);
 		}
@@ -193,7 +214,11 @@ public final class UnitPreparer {
 		if (!(unit.get() instanceof PackagedUnit packaged)) {
 			throw new UnitPrepareException("'" + key.qualifiedName() + "' did not come back as a compiled document");
 		}
-		return packaged;
+		try {
+			return materializer.materialize(packaged, resourceSet);
+		} catch (UnitMaterializeException e) {
+			throw new UnitPrepareException("cannot materialize '" + key.qualifiedName() + "': " + e.getMessage(), e);
+		}
 	}
 
 	private static void requireSameVersion(UnitKey requested, PackagedUnit loaded) throws UnitPrepareException {

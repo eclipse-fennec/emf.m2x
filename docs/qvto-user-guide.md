@@ -889,7 +889,7 @@ loaded elsewhere and executed there — with its dependencies embedded, pinned o
 CompiledUnit unit = engine.compile(source, "Main", UnitCompileOptions.of(DependencyMode.EMBED));
 
 UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
-UnitKey key = store.store("qvto", new PackagedUnit(unit));
+UnitKey key = store.put(unit);
 
 // somewhere else: load, prepare, run — no resolver is asked during execution
 PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder()).prepare(key);

@@ -42,32 +42,27 @@ import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
 import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
-import org.eclipse.fennec.m2x.unit.validate.UnitValidator;
 
 /**
- * The unit store: sources and compiled units over a {@link UnitStoreBackend}.
+ * The unit store over the byte medium: key ↔ document, carried by a {@link UnitStoreBackend}.
  *
- * <p>The store owns what goes over the wire. A compiled unit is stored as the XMI of its
- * document and comes back as an independent copy, loaded into a fresh resource set — a later
- * write cannot change what an earlier caller holds, and a caller's mutation cannot change the
- * store. A source is stored as a {@link SourceUnit} document around the text. The key of
- * either carries its fingerprint: the manifest's {@code unitFingerprint} for a compiled unit,
- * the source fingerprint of the m2x mechanism for a source.
+ * <p>This store is dumb by design (#210, #211). It serializes on the way in and parses on the
+ * way out, and that is all: a compiled unit comes back as an independent document in a resource
+ * set of its own, its references <em>unresolved</em> — proxies are the transport state. Binding
+ * the document in a consumer's context, checking the metamodels and running the validation
+ * funnel is the {@link org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer}'s job, not
+ * this class's. No registry is consulted here and none is taken: which metamodel instance a
+ * reference resolves to is a property of the consumer's context.
  *
- * <p><b>What a compiled unit needs to be stored.</b> Only the document form,
- * {@link Unit.Packaged}: a bare AST has no manifest, no satellite container and no fingerprint
- * to be stored by — {@code compile()} first. The document is copied on the way in, so a unit
- * that already sits in a resource stays there.
+ * <p><b>What a compiled unit needs to be stored.</b> Only the document form: a bare AST has no
+ * manifest, no satellite container and no fingerprint to be stored by — {@code compile()}
+ * first. The document is copied on the way in, so a unit that already sits in a resource stays
+ * there, and a document that reaches the store unsealed is stamped on the copy (#183).
  *
  * <p><b>Metamodels.</b> A document refers to its metamodels by URI. XMI can only write such a
- * reference for a package that lives in a resource, and a package built in memory does not;
- * the store gives it the resource EMF gives a generated package in {@code createResource}: one
- * named by its nsURI. On the way out the copies a document carries
- * ({@code CompiledUnit.packages}) are registered in the loading resource set for every nsURI
- * the store's package registry does not know, so a unit compiled against a dynamic metamodel
- * loads where that metamodel is absent — the compare-and-adopt against the runtime instance is
- * prepare's business (#140). A reference that still resolves to nothing afterwards is an error,
- * not a proxy handed on.
+ * reference for a package that lives in a resource, and a package built in memory does not; the
+ * store lends it one for the length of the save — the resource EMF gives a generated package in
+ * {@code createResource}: one named by its nsURI.
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -75,92 +70,42 @@ import org.eclipse.fennec.m2x.unit.validate.UnitValidator;
 public final class DefaultUnitStore implements UnitStore {
 
 	private final UnitStoreBackend backend;
-	private final EPackage.Registry packages;
 	private final UnitFingerprintService fingerprints;
-	private final UnitValidator validator;
 
 	/**
-	 * Creates a store over a backend, resolving metamodels through the global registry.
+	 * Creates a store over a backend.
 	 *
 	 * @param backend what carries the content
 	 */
 	public DefaultUnitStore(UnitStoreBackend backend) {
-		this(backend, EPackage.Registry.INSTANCE);
+		this(backend, DefaultUnitFingerprintService.INSTANCE);
 	}
 
 	/**
-	 * Creates a store over a backend, resolving metamodels through the given registry.
+	 * Creates a store over a backend, with the service that stamps an unsealed document.
 	 *
 	 * @param backend what carries the content
-	 * @param packages where a loaded unit's metamodels are looked up
+	 * @param fingerprints where an unstamped document's fingerprint comes from
 	 */
-	public DefaultUnitStore(UnitStoreBackend backend, EPackage.Registry packages) {
-		this(backend, packages, DefaultUnitFingerprintService.INSTANCE);
-	}
-
-	/**
-	 * Creates a store with every collaborator given.
-	 *
-	 * @param backend what carries the content
-	 * @param packages where a loaded unit's metamodels are looked up
-	 * @param fingerprints where a source's fingerprint comes from
-	 */
-	public DefaultUnitStore(UnitStoreBackend backend, EPackage.Registry packages,
-			UnitFingerprintService fingerprints) {
-		this(backend, packages, fingerprints, UnitValidator.defaults());
-	}
-
-	/**
-	 * Creates a store with every collaborator given, including the validator every loaded
-	 * compiled unit passes — or {@code null} for none.
-	 *
-	 * <p>Validation is on by default (#142): a unit from a store never passed the parser, and this is
-	 * where its shape is checked. Switching it off is for a backend that is trusted and hot — the
-	 * check costs a walk over the document and a fingerprint per load.
-	 *
-	 * @param backend what carries the content
-	 * @param packages where a loaded unit's metamodels are looked up
-	 * @param fingerprints where a source's fingerprint comes from
-	 * @param validator what every loaded compiled unit has to pass, or {@code null} to load unchecked
-	 */
-	public DefaultUnitStore(UnitStoreBackend backend, EPackage.Registry packages,
-			UnitFingerprintService fingerprints, UnitValidator validator) {
+	public DefaultUnitStore(UnitStoreBackend backend, UnitFingerprintService fingerprints) {
 		this.backend = Objects.requireNonNull(backend, "backend must not be null");
-		this.packages = Objects.requireNonNull(packages, "packages must not be null");
 		this.fingerprints = Objects.requireNonNull(fingerprints, "fingerprints must not be null");
-		this.validator = validator;
-	}
-
-	/**
-	 * A store that loads without validation — for a trusted, hot backend.
-	 *
-	 * @param backend what carries the content
-	 * @param packages where a loaded unit's metamodels are looked up
-	 * @return the store, never {@code null}
-	 */
-	public static DefaultUnitStore withoutValidation(UnitStoreBackend backend, EPackage.Registry packages) {
-		return new DefaultUnitStore(backend, packages, DefaultUnitFingerprintService.INSTANCE, null);
 	}
 
 	@Override
-	public UnitKey store(String language, Unit unit) throws UnitStoreException {
-		Objects.requireNonNull(language, "language must not be null");
-		Objects.requireNonNull(unit, "unit must not be null");
-		return switch (unit) {
-			case Unit.Packaged packaged -> storeCompiled(language, packaged);
-			case Unit.Source source -> storeSource(language, source);
-			case Unit.Compiled compiled -> throw new UnitStoreException("the unit '" + unit.qualifiedName()
-					+ "' is a bare AST; a store takes the compiled document — compile() first");
-			default -> throw new UnitStoreException("unknown kind of unit: " + unit.getClass().getName());
-		};
-	}
-
-	private UnitKey storeCompiled(String language, Unit.Packaged packaged) throws UnitStoreException {
-		CompiledUnit document = packaged.document();
-		String declared = document.getManifest().getLanguage();
-		if (declared != null && !declared.equals(language)) {
-			throw new UnitStoreException("the unit '" + packaged.qualifiedName() + "' declares language '"
-					+ declared + "', not '" + language + "'");
+	public UnitKey put(CompiledUnit document) throws UnitStoreException {
+		Objects.requireNonNull(document, "document must not be null");
+		if (document.getManifest() == null) {
+			throw new UnitStoreException("the document carries no manifest; a store takes the compiled"
+					+ " document — compile() first");
+		}
+		String language = document.getManifest().getLanguage();
+		String qualifiedName = document.getManifest().getQualifiedName();
+		if (language == null || language.isBlank()) {
+			throw new UnitStoreException("the unit '" + qualifiedName + "' declares no language");
+		}
+		if (qualifiedName == null || qualifiedName.isBlank()) {
+			throw new UnitStoreException("the document declares no qualified name");
 		}
 		// The copy is what is stored, so the copy is what is stamped: a document that reaches the
 		// store unsealed used to be written without a fingerprint and rejected by its own load()
@@ -171,12 +116,15 @@ public final class DefaultUnitStore implements UnitStore {
 			fingerprint = fingerprints.fingerprint(stored);
 			stored.getManifest().setUnitFingerprint(fingerprint);
 		}
-		UnitKey key = UnitKey.pinned(language, packaged.qualifiedName(), UnitKind.COMPILED, fingerprint);
+		UnitKey key = UnitKey.pinned(language, qualifiedName, UnitKind.COMPILED, fingerprint);
 		backend.put(key, serialize(stored, key));
 		return key;
 	}
 
-	private UnitKey storeSource(String language, Unit.Source source) throws UnitStoreException {
+	@Override
+	public UnitKey put(String language, Unit.Source source) throws UnitStoreException {
+		Objects.requireNonNull(language, "language must not be null");
+		Objects.requireNonNull(source, "source must not be null");
 		String fingerprint = fingerprints.fingerprint(source);
 		SourceUnit document = CompiledFactory.eINSTANCE.createSourceUnit();
 		document.setLanguage(language);
@@ -190,14 +138,8 @@ public final class DefaultUnitStore implements UnitStore {
 	}
 
 	@Override
-	public Optional<Unit> load(UnitKey key) throws UnitStoreException {
-		return load(key, new UnitResourceSet(packages));
-	}
-
-	@Override
-	public Optional<Unit> load(UnitKey key, UnitResourceSet target) throws UnitStoreException {
+	public Optional<Unit> get(UnitKey key) throws UnitStoreException {
 		Objects.requireNonNull(key, "key must not be null");
-		Objects.requireNonNull(target, "target must not be null");
 		UnitKey pinned;
 		if (key.fingerprint().isPresent()) {
 			pinned = key;
@@ -219,14 +161,7 @@ public final class DefaultUnitStore implements UnitStore {
 		if (bytes.isEmpty()) {
 			return Optional.empty();
 		}
-		EObject root = deserialize(bytes.get(), pinned, target);
-		if (root instanceof CompiledUnit document && validator != null) {
-			List<String> findings = validator.validate(document);
-			if (!findings.isEmpty()) {
-				throw new UnitStoreException("the unit '" + pinned.qualifiedName() + "' is rejected: "
-						+ String.join("; ", findings));
-			}
-		}
+		EObject root = deserialize(bytes.get(), pinned);
 		return Optional.of(switch (root) {
 			case CompiledUnit document -> new PackagedUnit(document);
 			case SourceUnit source -> new StoredSource(source.getQualifiedName(),
@@ -300,7 +235,7 @@ public final class DefaultUnitStore implements UnitStore {
 
 	private byte[] serialize(EObject document, UnitKey key) throws UnitStoreException {
 		synchronized (borrowedMetamodels) {
-			ResourceSet resourceSet = new UnitResourceSet(packages);
+			ResourceSet resourceSet = new UnitResourceSet();
 			List<EPackage> borrowed = giveResourcelessMetamodelsAResource(document, resourceSet);
 			Resource resource = resourceSet.createResource(uriOf(key));
 			resource.getContents().add(document);
@@ -322,7 +257,13 @@ public final class DefaultUnitStore implements UnitStore {
 		}
 	}
 
-	private EObject deserialize(byte[] bytes, UnitKey key, UnitResourceSet resourceSet) throws UnitStoreException {
+	/**
+	 * Parses the bytes into a resource set of the document's own — no registry beyond the global
+	 * one answers there, nothing is resolved, nothing is validated. The proxies the document
+	 * comes back with are the transport state the materializer ends.
+	 */
+	private EObject deserialize(byte[] bytes, UnitKey key) throws UnitStoreException {
+		UnitResourceSet resourceSet = new UnitResourceSet();
 		Resource resource = resourceSet.createResource(uriOf(key));
 		try {
 			resource.load(new ByteArrayInputStream(bytes), SAFE_PARSER_OPTIONS);
@@ -332,21 +273,7 @@ public final class DefaultUnitStore implements UnitStore {
 		if (resource.getContents().isEmpty()) {
 			throw new UnitStoreException("the content under " + key + " is empty");
 		}
-		EObject root = resource.getContents().get(0);
-		if (root instanceof CompiledUnit document) {
-			// A copy carried by the unit serves where the registry has nothing for the nsURI
-			for (EPackage copy : document.getPackages()) {
-				resourceSet.serveFromCopy(copy);
-			}
-		}
-		EcoreUtil.resolveAll(resource);
-		Map<EObject, ?> unresolved = EcoreUtil.UnresolvedProxyCrossReferencer.find(resource);
-		if (!unresolved.isEmpty()) {
-			EObject first = unresolved.keySet().iterator().next();
-			throw new UnitStoreException("the unit '" + key.qualifiedName() + "' refers to " + unresolved.size()
-					+ " object(s) that resolve to nothing here, first: " + EcoreUtil.getURI(first));
-		}
-		return root;
+		return resource.getContents().get(0);
 	}
 
 	/**

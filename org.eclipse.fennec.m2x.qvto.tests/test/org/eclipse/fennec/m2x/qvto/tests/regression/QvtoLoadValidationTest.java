@@ -34,7 +34,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
-import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
+import org.eclipse.fennec.m2x.unit.api.UnitMaterializeException;
 import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
@@ -95,10 +95,10 @@ class QvtoLoadValidationTest {
 	}
 
 	@Test
-	void aTamperedDocument_isRejectedByTheStore_beforePrepareSeesIt() throws Exception {
+	void aTamperedDocument_isRejectedByTheMaterializer_beforePrepareHandsItOn() throws Exception {
 		InMemoryUnitStoreBackend backend = new InMemoryUnitStoreBackend();
 		UnitStore store = new DefaultUnitStore(backend);
-		var key = store.store("qvto", new PackagedUnit(engine.compile(MAIN, "Main")));
+		var key = store.put(engine.compile(MAIN, "Main"));
 		byte[] bytes = backend.get(key).orElseThrow();
 		String xmi = new String(bytes, StandardCharsets.UTF_8).replace("\"!\"", "\"?\"");
 		assertTrue(!xmi.equals(new String(bytes, StandardCharsets.UTF_8)), "the tampering changed something");
@@ -106,7 +106,7 @@ class QvtoLoadValidationTest {
 
 		UnitPreparer preparer = UnitPreparer.withDefaults(store, engine.unitBinder());
 		UnitPrepareException failure = assertThrows(UnitPrepareException.class, () -> preparer.prepare(key));
-		assertTrue(failure.getCause() instanceof UnitStoreException, String.valueOf(failure.getCause()));
+		assertTrue(failure.getCause() instanceof UnitMaterializeException, String.valueOf(failure.getCause()));
 		assertTrue(failure.getMessage().contains("changed after it was sealed"), failure.getMessage());
 	}
 

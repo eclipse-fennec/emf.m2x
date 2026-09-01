@@ -70,8 +70,8 @@ class QvtoCompiledUnitArrowSemanticsTest {
 		assertEquals("1", run((OperationalTransformation) compiled.getUnit()), "fresh: p->size() is Set{p}->size()");
 
 		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
-		UnitKey key = store.store("qvto", new PackagedUnit(compiled));
-		PackagedUnit loaded = (PackagedUnit) store.load(key).orElseThrow();
+		UnitKey key = store.put(compiled);
+		PackagedUnit loaded = (PackagedUnit) store.get(key).orElseThrow();
 		assertEquals("1", run((OperationalTransformation) loaded.document().getUnit()),
 				"loaded: the arrow must still mean oclAsSet — it is semantics of the unit, not of the parse");
 	}

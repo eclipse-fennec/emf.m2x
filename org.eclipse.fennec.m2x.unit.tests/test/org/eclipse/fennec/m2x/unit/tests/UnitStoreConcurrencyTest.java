@@ -82,17 +82,17 @@ class UnitStoreConcurrencyTest {
 		shelf.getEClassifiers().add(bookClass);
 		EPackage.Registry registry = new EPackageRegistryImpl();
 		registry.put(NS_URI, shelf);
-		store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 	}
 
 	@Test
 	@Timeout(value = 60, unit = TimeUnit.SECONDS)
 	@DisplayName("loading one unit from several threads gives every thread the same unit")
 	void loadingFromSeveralThreads() throws Exception {
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Books")));
+		UnitKey key = store.put(compiled("gen.Books"));
 
 		List<String> results = inParallel(() -> {
-			CompiledUnit loaded = ((PackagedUnit) store.load(key).orElseThrow()).document();
+			CompiledUnit loaded = ((PackagedUnit) store.get(key).orElseThrow()).document();
 			return loaded.getManifest().getQualifiedName() + "/"
 					+ loaded.getManifest().getUnitFingerprint() + "/"
 					+ ((Module) loaded.getUnit()).getOwnedModuleElement().size();
@@ -109,13 +109,13 @@ class UnitStoreConcurrencyTest {
 	@DisplayName("storing different units from several threads keeps all of them")
 	void storingFromSeveralThreads() throws Exception {
 		List<String> names = inParallelIndexed(index -> {
-			UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Unit" + index)));
+			UnitKey key = store.put(compiled("gen.Unit" + index));
 			return key.qualifiedName();
 		});
 
 		assertEquals(THREADS * RUNS_PER_THREAD, names.size());
 		for (String name : names.stream().distinct().toList() ) {
-			assertTrue(store.load(UnitKey.of("m2t", name,
+			assertTrue(store.get(UnitKey.of("m2t", name,
 					org.eclipse.fennec.m2x.unit.api.UnitKind.COMPILED)).isPresent(),
 					() -> name + " was stored and has to be there");
 		}

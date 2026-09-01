@@ -143,7 +143,7 @@ class QvtoPreparedExecutionTest {
 		bookClass = (EClass) shelf.getEClassifier("Book");
 		registry = new EPackageRegistryImpl();
 		registry.put(NS_URI, shelf);
-		store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		compiler = QvtoEngines.create(QvtoConfiguration.builder(oclConfig()).packageRegistry(registry)
 				.addUnitResolver(new QvtoStoreUnitResolver(store)).unitResolverEnabled(true).build());
 		QvtoUnitResolver forbidden = name -> {
@@ -155,8 +155,8 @@ class QvtoPreparedExecutionTest {
 
 	@Test
 	void preparedUnit_runsWithoutAskingAnyResolver() throws Exception {
-		store.store("qvto", new PackagedUnit(compiler.compile(HELPER_LIB, "HelperLib")));
-		UnitKey key = store.store("qvto", new PackagedUnit(compiler.compile(RENAME, "Rename")));
+		store.put(compiler.compile(HELPER_LIB, "HelperLib"));
+		UnitKey key = store.put(compiler.compile(RENAME, "Rename"));
 
 		PreparedContext prepared = preparer(registry, runner.unitBinder()).prepare(key);
 		EObject book = book("Moby Dick");
@@ -168,8 +168,8 @@ class QvtoPreparedExecutionTest {
 
 	@Test
 	void oneContext_manyExecutions() throws Exception {
-		store.store("qvto", new PackagedUnit(compiler.compile(HELPER_LIB, "HelperLib")));
-		UnitKey key = store.store("qvto", new PackagedUnit(compiler.compile(RENAME, "Rename")));
+		store.put(compiler.compile(HELPER_LIB, "HelperLib"));
+		UnitKey key = store.put(compiler.compile(RENAME, "Rename"));
 		PreparedContext prepared = preparer(registry, runner.unitBinder()).prepare(key);
 		for (int i = 0; i < 3; i++) {
 			EObject book = book("run " + i);
@@ -180,9 +180,9 @@ class QvtoPreparedExecutionTest {
 
 	@Test
 	void pipeline_sharesOneContext_andTheRuntimeMetamodelWinsOnEquality() throws Exception {
-		store.store("qvto", new PackagedUnit(compiler.compile(HELPER_LIB, "HelperLib")));
-		UnitKey rename = store.store("qvto", new PackagedUnit(compiler.compile(RENAME, "Rename")));
-		UnitKey duplicate = store.store("qvto", new PackagedUnit(compiler.compile(DUPLICATE, "Duplicate")));
+		store.put(compiler.compile(HELPER_LIB, "HelperLib"));
+		UnitKey rename = store.put(compiler.compile(RENAME, "Rename"));
+		UnitKey duplicate = store.put(compiler.compile(DUPLICATE, "Duplicate"));
 
 		PreparedContext prepared = preparer(registry, runner.unitBinder()).prepare(rename, duplicate);
 		OperationalTransformation duplicateAst = (OperationalTransformation) ((PackagedUnit) prepared.unit("Duplicate")
@@ -201,8 +201,8 @@ class QvtoPreparedExecutionTest {
 
 	@Test
 	void modelLoadedInTheContext_carriesTheContextsTypes(@TempDir Path dir) throws Exception {
-		store.store("qvto", new PackagedUnit(compiler.compile(HELPER_LIB, "HelperLib")));
-		UnitKey key = store.store("qvto", new PackagedUnit(compiler.compile(RENAME, "Rename")));
+		store.put(compiler.compile(HELPER_LIB, "HelperLib"));
+		UnitKey key = store.put(compiler.compile(RENAME, "Rename"));
 		Path file = dir.resolve("shelf.xmi");
 		saveBooks(file, "Moby Dick");
 
@@ -223,7 +223,7 @@ class QvtoPreparedExecutionTest {
 		OclPackage.eINSTANCE.getNsURI();
 		QvtoEngine plain = QvtoEngines.create(QvtoConfiguration.builder(oclConfig()).build());
 		UnitStore global = new DefaultUnitStore(new InMemoryUnitStoreBackend());
-		UnitKey key = global.store("qvto", new PackagedUnit(plain.compile(OVER_OCL, "Count")));
+		UnitKey key = global.put(plain.compile(OVER_OCL, "Count"));
 
 		PreparedContext prepared = UnitPreparer.withDefaults(global, plain.unitBinder()).prepare(key);
 		OperationalTransformation ast = (OperationalTransformation) ((PackagedUnit) prepared.unit("Count").orElseThrow())
@@ -237,7 +237,7 @@ class QvtoPreparedExecutionTest {
 
 	@Test
 	void differingMetamodel_failsAtPrepare_namingTheNsUriAndBothValues() throws Exception {
-		UnitKey key = store.store("qvto", new PackagedUnit(compiler.compile(DUPLICATE, "Duplicate")));
+		UnitKey key = store.put(compiler.compile(DUPLICATE, "Duplicate"));
 		EPackage changed = shelf(true);
 		EPackage.Registry other = new EPackageRegistryImpl();
 		other.put(NS_URI, changed);
@@ -255,7 +255,7 @@ class QvtoPreparedExecutionTest {
 		blackboxes.register(new QvtoCompiledUnitDependencyTest.TrimLibrary());
 		QvtoEngine withBlackbox = QvtoEngines.create(QvtoConfiguration.builder(oclConfig()).packageRegistry(registry)
 				.blackboxRegistry(blackboxes).blackboxEnabled(true).build());
-		UnitKey key = store.store("qvto", new PackagedUnit(withBlackbox.compile(WITH_BLACKBOX, "Boxed")));
+		UnitKey key = store.put(withBlackbox.compile(WITH_BLACKBOX, "Boxed"));
 
 		UnitPrepareException failure = assertThrows(UnitPrepareException.class,
 				() -> preparer(registry, runner.unitBinder()).prepare(key));
@@ -269,8 +269,8 @@ class QvtoPreparedExecutionTest {
 
 	@Test
 	void unboundUnit_isRefusedByExecute() throws Exception {
-		store.store("qvto", new PackagedUnit(compiler.compile(HELPER_LIB, "HelperLib")));
-		UnitKey key = store.store("qvto", new PackagedUnit(compiler.compile(RENAME, "Rename")));
+		store.put(compiler.compile(HELPER_LIB, "HelperLib"));
+		UnitKey key = store.put(compiler.compile(RENAME, "Rename"));
 		UnitBinder doesNothing = new UnitBinder() {
 			@Override
 			public String language() {

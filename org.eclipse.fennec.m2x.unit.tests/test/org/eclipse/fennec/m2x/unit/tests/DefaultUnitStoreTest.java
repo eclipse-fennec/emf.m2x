@@ -35,21 +35,23 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.model.compiled.CompiledFactory;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
-import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.unit.api.Unit;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitKind;
+import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStore;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.fennec.m2x.unit.fingerprint.DefaultUnitFingerprintService;
+import org.eclipse.fennec.m2x.unit.materialize.UnitMaterializer;
 import org.eclipse.fennec.m2x.unit.satellite.SatelliteCollector;
 import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
 import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
@@ -60,7 +62,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The store holds sources and compiled units, tells them apart by kind, hands out independent
- * copies and says what it has when a version is missing (#139, concept §5.5).
+ * copies with their references unresolved — proxies are the transport state, materializing binds
+ * them in a consumer's context — and says what it has when a version is missing (#139, #211,
+ * concept §5.5).
  *
  * <p>Language-neutral: the units here are built from the factories, not parsed. A template with a
  * variable typed by a dynamic metamodel is enough to exercise satellites, package copies and the
@@ -95,7 +99,7 @@ class DefaultUnitStoreTest {
 		registry = new EPackageRegistryImpl();
 		registry.put(NS_URI, metamodel);
 		backend = new InMemoryUnitStoreBackend();
-		store = new DefaultUnitStore(backend, registry);
+		store = new DefaultUnitStore(backend);
 	}
 
 	// ==== sources ====
@@ -104,12 +108,12 @@ class DefaultUnitStoreTest {
 	void source_isStoredByItsFingerprint_andComesBackAsText() throws Exception {
 		Unit.Source source = new QvtoUnit.SourceUnit("lib.Strings", URI.createURI("file:/lib/Strings.qvto"),
 				"library Strings { }\n");
-		UnitKey key = store.store("qvto", source);
+		UnitKey key = store.put("qvto", source);
 
 		assertEquals(UnitKind.SOURCE, key.kind());
 		assertEquals("lib.Strings", key.qualifiedName());
 		assertEquals(DefaultUnitFingerprintService.INSTANCE.fingerprint(source), key.fingerprint().orElseThrow());
-		Unit loaded = store.load(key).orElseThrow();
+		Unit loaded = store.get(key).orElseThrow();
 		StoredSource text = assertInstanceOf(StoredSource.class, loaded);
 		assertEquals("library Strings { }\n", text.source());
 		assertEquals(URI.createURI("file:/lib/Strings.qvto"), text.uri());
@@ -118,14 +122,14 @@ class DefaultUnitStoreTest {
 
 	@Test
 	void sourceVersions_areListedNewestFirst_andTheUnpinnedKeyLoadsTheNewest() throws Exception {
-		UnitKey v1 = store.store("qvto", source("lib.Strings", "library Strings { helper a() : String { return 'a'; } }"));
-		UnitKey v2 = store.store("qvto", source("lib.Strings", "library Strings { helper a() : String { return 'b'; } }"));
+		UnitKey v1 = store.put("qvto", source("lib.Strings", "library Strings { helper a() : String { return 'a'; } }"));
+		UnitKey v2 = store.put("qvto", source("lib.Strings", "library Strings { helper a() : String { return 'b'; } }"));
 
 		assertNotEquals(v1, v2);
 		assertEquals(List.of(v2, v1), store.versions("qvto", "lib.Strings", UnitKind.SOURCE));
-		StoredSource newest = (StoredSource) store.load(UnitKey.of("qvto", "lib.Strings", UnitKind.SOURCE)).orElseThrow();
+		StoredSource newest = (StoredSource) store.get(UnitKey.of("qvto", "lib.Strings", UnitKind.SOURCE)).orElseThrow();
 		assertTrue(newest.source().contains("'b'"), "the unpinned key is whatever the store holds newest");
-		assertTrue(((StoredSource) store.load(v1).orElseThrow()).source().contains("'a'"), "the pinned key is that version");
+		assertTrue(((StoredSource) store.get(v1).orElseThrow()).source().contains("'a'"), "the pinned key is that version");
 	}
 
 	// ==== compiled units ====
@@ -133,38 +137,53 @@ class DefaultUnitStoreTest {
 	@Test
 	void compiledUnit_isStoredByItsManifestFingerprint_andComesBackAsAnIndependentCopy() throws Exception {
 		CompiledUnit compiled = compiledTemplate("gen.Books");
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled));
+		UnitKey key = store.put(compiled);
 
 		assertEquals(UnitKind.COMPILED, key.kind());
 		assertEquals(compiled.getManifest().getUnitFingerprint(), key.fingerprint().orElseThrow());
 		assertNull(compiled.eResource(), "storing did not move the caller's document");
 
-		PackagedUnit loaded = (PackagedUnit) store.load(key).orElseThrow();
+		PackagedUnit loaded = (PackagedUnit) store.get(key).orElseThrow();
 		assertNotSame(compiled, loaded.document());
 		assertEquals("gen.Books", loaded.qualifiedName());
 		assertEquals("m2t", loaded.language());
 		assertEquals(compiled.getId(), loaded.document().getId());
+		UnitMaterializer.defaults().materialize(loaded, new UnitResourceSet(registry));
 		assertEquals(List.of(), SatelliteCollector.find(loaded.document()), "the copy is self-contained");
 		assertEquals(0, referencesInto(loaded.document(), compiled), "and points at nothing of the original");
 	}
 
 	@Test
-	void loadedUnit_resolvesItsMetamodelInTheStoresRegistry() throws Exception {
-		UnitKey key = store.store("m2t", new PackagedUnit(compiledTemplate("gen.Books")));
-		PackagedUnit loaded = (PackagedUnit) store.load(key).orElseThrow();
-		assertSame(bookClass, variableType(loaded.document()),
-				"the registry knows the nsURI, so the type is the registry's very instance");
+	void storedUnit_comesBackUnresolved_untilMaterialized() throws Exception {
+		UnitKey key = store.put(compiledTemplate("gen.Books"));
+		PackagedUnit loaded = (PackagedUnit) store.get(key).orElseThrow();
+		Module module = (Module) loaded.document().getUnit();
+		Template template = (Template) module.getOwnedModuleElement().get(0);
+		Object raw = template.getParameter().get(0).eGet(
+				template.getParameter().get(0).eClass().getEStructuralFeature("type"), false);
+		assertTrue(((org.eclipse.emf.ecore.EObject) raw).eIsProxy(),
+				"a document leaves the store with its references unresolved — the transport state");
 	}
 
 	@Test
-	void loadedUnit_isServedFromItsPackageCopy_whereTheRegistryHasNothing() throws Exception {
-		UnitKey key = store.store("m2t", new PackagedUnit(compiledTemplate("gen.Books")));
-		// A store over the same backend, but with a registry that never heard of the metamodel
+	void materializedUnit_resolvesItsMetamodelInTheConsumersContext() throws Exception {
+		UnitKey key = store.put(compiledTemplate("gen.Books"));
+		PackagedUnit loaded = (PackagedUnit) store.get(key).orElseThrow();
+		UnitMaterializer.defaults().materialize(loaded, new UnitResourceSet(registry));
+		assertSame(bookClass, variableType(loaded.document()),
+				"the context knows the nsURI, so the type is the context's very instance");
+	}
+
+	@Test
+	void materializedUnit_isServedFromItsPackageCopy_whereTheContextHasNothing() throws Exception {
+		UnitKey key = store.put(compiledTemplate("gen.Books"));
+		// The same bytes on another machine, materialized in a context that never heard of the metamodel
 		InMemoryUnitStoreBackend other = new InMemoryUnitStoreBackend();
 		other.put(key, backend.get(key).orElseThrow());
-		UnitStore elsewhere = new DefaultUnitStore(other, new EPackageRegistryImpl());
+		UnitStore elsewhere = new DefaultUnitStore(other);
 
-		PackagedUnit loaded = (PackagedUnit) elsewhere.load(key).orElseThrow();
+		PackagedUnit loaded = (PackagedUnit) elsewhere.get(key).orElseThrow();
+		UnitMaterializer.defaults().materialize(loaded, new UnitResourceSet(new EPackageRegistryImpl()));
 		EClass type = variableType(loaded.document());
 		assertEquals("Book", type.getName());
 		assertNotSame(bookClass, type);
@@ -172,52 +191,51 @@ class DefaultUnitStoreTest {
 	}
 
 	@Test
-	void bareAst_isRefused_compileFirst() {
-		QvtoUnit.CompiledUnit bare = new QvtoUnit.CompiledUnit("t",
-				QvtOperationalFactory.eINSTANCE.createOperationalTransformation());
-		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.store("qvto", bare));
+	void documentWithoutManifest_isRefused_compileFirst() {
+		CompiledUnit unsealed = CompiledFactory.eINSTANCE.createCompiledUnit();
+		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.put(unsealed));
 		assertTrue(failure.getMessage().contains("compile()"), failure.getMessage());
 	}
 
 	@Test
-	void languageMismatch_isRefused() throws Exception {
+	void documentWithoutLanguage_isRefused() throws Exception {
 		CompiledUnit compiled = compiledTemplate("gen.Books");
-		UnitStoreException failure = assertThrows(UnitStoreException.class,
-				() -> store.store("qvto", new PackagedUnit(compiled)));
-		assertTrue(failure.getMessage().contains("m2t"), failure.getMessage());
+		compiled.getManifest().setLanguage(null);
+		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.put(compiled));
+		assertTrue(failure.getMessage().contains("language"), failure.getMessage());
 	}
 
 	// ==== kinds, versions, keys ====
 
 	@Test
 	void sourceAndCompiledUnit_ofOneName_coexistAndAreToldApartByKind() throws Exception {
-		UnitKey sourceKey = store.store("m2t", source("gen.Books", "[module Books(Ecore)/]"));
-		UnitKey compiledKey = store.store("m2t", new PackagedUnit(compiledTemplate("gen.Books")));
+		UnitKey sourceKey = store.put("m2t", source("gen.Books", "[module Books(Ecore)/]"));
+		UnitKey compiledKey = store.put(compiledTemplate("gen.Books"));
 
 		assertEquals(List.of(sourceKey), store.versions("m2t", "gen.Books", UnitKind.SOURCE));
 		assertEquals(List.of(compiledKey), store.versions("m2t", "gen.Books", UnitKind.COMPILED));
-		assertInstanceOf(StoredSource.class, store.load(UnitKey.of("m2t", "gen.Books", UnitKind.SOURCE)).orElseThrow());
-		assertInstanceOf(PackagedUnit.class, store.load(UnitKey.of("m2t", "gen.Books", UnitKind.COMPILED)).orElseThrow());
+		assertInstanceOf(StoredSource.class, store.get(UnitKey.of("m2t", "gen.Books", UnitKind.SOURCE)).orElseThrow());
+		assertInstanceOf(PackagedUnit.class, store.get(UnitKey.of("m2t", "gen.Books", UnitKind.COMPILED)).orElseThrow());
 		assertTrue(store.contains(sourceKey));
 		assertTrue(store.contains(UnitKey.of("m2t", "gen.Books", UnitKind.COMPILED)));
 	}
 
 	@Test
 	void unknownName_isEmpty_butAMissingVersionOfAKnownNameIsAnError() throws Exception {
-		assertEquals(Optional.empty(), store.load(UnitKey.of("qvto", "nobody.Home", UnitKind.SOURCE)));
+		assertEquals(Optional.empty(), store.get(UnitKey.of("qvto", "nobody.Home", UnitKind.SOURCE)));
 		assertFalse(store.contains(UnitKey.of("qvto", "nobody.Home", UnitKind.SOURCE)));
 
-		UnitKey present = store.store("qvto", source("lib.Strings", "library Strings { }"));
+		UnitKey present = store.put("qvto", source("lib.Strings", "library Strings { }"));
 		UnitKey wrongVersion = UnitKey.pinned("qvto", "lib.Strings", UnitKind.SOURCE, "m2x1:0000");
-		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.load(wrongVersion));
+		UnitStoreException failure = assertThrows(UnitStoreException.class, () -> store.get(wrongVersion));
 		assertTrue(failure.getMessage().contains(present.fingerprint().orElseThrow()),
 				"the message names the versions that are there: " + failure.getMessage());
 	}
 
 	@Test
 	void remove_takesOneVersionOrAll() throws Exception {
-		UnitKey v1 = store.store("qvto", source("lib.Strings", "library Strings { helper a() : String { return 'a'; } }"));
-		UnitKey v2 = store.store("qvto", source("lib.Strings", "library Strings { helper a() : String { return 'b'; } }"));
+		UnitKey v1 = store.put("qvto", source("lib.Strings", "library Strings { helper a() : String { return 'a'; } }"));
+		UnitKey v2 = store.put("qvto", source("lib.Strings", "library Strings { helper a() : String { return 'b'; } }"));
 
 		assertTrue(store.remove(v1));
 		assertEquals(List.of(v2), store.versions("qvto", "lib.Strings", UnitKind.SOURCE));
@@ -228,8 +246,8 @@ class DefaultUnitStoreTest {
 
 	@Test
 	void storingTheSameContentTwice_isOneVersion() throws Exception {
-		UnitKey first = store.store("qvto", source("lib.Strings", "library Strings { }"));
-		UnitKey second = store.store("qvto", source("lib.Strings", "library Strings { }"));
+		UnitKey first = store.put("qvto", source("lib.Strings", "library Strings { }"));
+		UnitKey second = store.put("qvto", source("lib.Strings", "library Strings { }"));
 		assertEquals(first, second);
 		assertEquals(List.of(first), store.versions("qvto", "lib.Strings", UnitKind.SOURCE));
 	}

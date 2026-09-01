@@ -95,7 +95,7 @@ class QvtdPreparedExecutionTest {
 		bookshelf.getEClassifiers().add(bookClass);
 		registry = new EPackageRegistryImpl();
 		registry.put(NS_URI, bookshelf);
-		store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		OclConfiguration ocl = OclConfiguration.builder(new OclParserSupport()).build();
 		compiler = QvtdEngines.create(QvtdConfiguration.builder(ocl).packageRegistry(registry)
 				.addUnitResolver(new QvtdStoreUnitResolver(store)).unitResolverEnabled(true).build());
@@ -108,8 +108,8 @@ class QvtdPreparedExecutionTest {
 
 	@Test
 	void preparedUnit_runsWithoutAskingAnyResolver() throws Exception {
-		store.store("qvtr", new PackagedUnit(compiler.compile(LIBRARY, "shared.Library")));
-		UnitKey key = store.store("qvtr", new PackagedUnit(compiler.compile(IMPORTER, "importer")));
+		store.put(compiler.compile(LIBRARY, "shared.Library"));
+		UnitKey key = store.put(compiler.compile(IMPORTER, "importer"));
 
 		PreparedContext prepared = new UnitPreparer(store, registry, FingerprintHelper.getDefaultFingerprintService(),
 				List.of(runner.unitBinder())).prepare(key);

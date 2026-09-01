@@ -84,7 +84,7 @@ class UnitPreparerTest {
 		bookClass = (EClass) metamodel.getEClassifier("Book");
 		registry = new EPackageRegistryImpl();
 		registry.put(NS_URI, metamodel);
-		store = new DefaultUnitStore(new InMemoryUnitStoreBackend(), registry);
+		store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		binder = new RecordingBinder();
 	}
 
@@ -93,9 +93,9 @@ class UnitPreparerTest {
 	@Test
 	void prepare_loadsTheUnitAndItsPinnedDependency_andBindsThem() throws Exception {
 		CompiledUnit library = compiled("gen.Lib");
-		UnitKey libraryKey = store.store("m2t", new PackagedUnit(library));
+		UnitKey libraryKey = store.put(library);
 		CompiledUnit main = compiled("gen.Main", pin("gen.Lib", libraryKey.fingerprint().orElseThrow()));
-		UnitKey mainKey = store.store("m2t", new PackagedUnit(main));
+		UnitKey mainKey = store.put(main);
 
 		PreparedContext prepared = preparer(registry).prepare(mainKey);
 
@@ -110,7 +110,7 @@ class UnitPreparerTest {
 
 	@Test
 	void prepare_resolvesTheMetamodelToTheRuntimeInstance_whereTheFingerprintMatches() throws Exception {
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Main")));
+		UnitKey key = store.put(compiled("gen.Main"));
 		PreparedContext prepared = preparer(registry).prepare(key);
 		assertSame(bookClass, variableType(prepared, "gen.Main"), "the runtime instance wins on equality");
 		assertSame(metamodel, prepared.packageRegistry().getEPackage(NS_URI));
@@ -118,7 +118,7 @@ class UnitPreparerTest {
 
 	@Test
 	void prepare_servesTheMetamodelFromTheCopy_whereTheRuntimeHasNone() throws Exception {
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Main")));
+		UnitKey key = store.put(compiled("gen.Main"));
 		PreparedContext prepared = preparer(new EPackageRegistryImpl()).prepare(key);
 		EClass type = variableType(prepared, "gen.Main");
 		assertEquals("Book", type.getName());
@@ -130,7 +130,7 @@ class UnitPreparerTest {
 
 	@Test
 	void prepare_failsOnAMetamodelWithADifferingFingerprint_namingBothValues() throws Exception {
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Main")));
+		UnitKey key = store.put(compiled("gen.Main"));
 		EPackage.Registry other = new EPackageRegistryImpl();
 		EPackage changed = shelf(true);
 		other.put(NS_URI, changed);
@@ -146,9 +146,9 @@ class UnitPreparerTest {
 	@Test
 	void prepare_failsOnAPinnedVersionTheStoreNoLongerHas() throws Exception {
 		CompiledUnit library = compiled("gen.Lib");
-		store.store("m2t", new PackagedUnit(library));
+		store.put(library);
 		CompiledUnit main = compiled("gen.Main", pin("gen.Lib", "m2x1:0000"));
-		UnitKey mainKey = store.store("m2t", new PackagedUnit(main));
+		UnitKey mainKey = store.put(main);
 
 		UnitPrepareException failure = assertThrows(UnitPrepareException.class, () -> preparer(registry).prepare(mainKey));
 		assertTrue(failure.getMessage().contains("gen.Lib"), failure.getMessage());
@@ -158,10 +158,10 @@ class UnitPreparerTest {
 
 	@Test
 	void prepare_failsWhenTwoUnitsPinDifferentVersionsOfOneName() throws Exception {
-		UnitKey v1 = store.store("m2t", new PackagedUnit(compiled("gen.Lib")));
-		UnitKey v2 = store.store("m2t", new PackagedUnit(compiled("gen.Lib", extraTemplate())));
-		UnitKey a = store.store("m2t", new PackagedUnit(compiled("gen.A", pin("gen.Lib", v1.fingerprint().orElseThrow()))));
-		UnitKey b = store.store("m2t", new PackagedUnit(compiled("gen.B", pin("gen.Lib", v2.fingerprint().orElseThrow()))));
+		UnitKey v1 = store.put(compiled("gen.Lib"));
+		UnitKey v2 = store.put(compiled("gen.Lib", extraTemplate()));
+		UnitKey a = store.put(compiled("gen.A", pin("gen.Lib", v1.fingerprint().orElseThrow())));
+		UnitKey b = store.put(compiled("gen.B", pin("gen.Lib", v2.fingerprint().orElseThrow())));
 
 		UnitPrepareException failure = assertThrows(UnitPrepareException.class, () -> preparer(registry).prepare(a, b));
 		assertTrue(failure.getMessage().contains("different versions"), failure.getMessage());
@@ -169,13 +169,13 @@ class UnitPreparerTest {
 
 	@Test
 	void prepare_refusesASource_andAMissingUnit_andALanguageWithoutBinder() throws Exception {
-		UnitKey sourceKey = store.store("m2t", new StoredSourceUnit("gen.Src", "[module x(Ecore)/]"));
+		UnitKey sourceKey = store.put("m2t", new StoredSourceUnit("gen.Src", "[module x(Ecore)/]"));
 		assertTrue(assertThrows(UnitPrepareException.class, () -> preparer(registry).prepare(sourceKey))
 				.getMessage().contains("compile()"));
 		assertTrue(assertThrows(UnitPrepareException.class,
 				() -> preparer(registry).prepare(UnitKey.of("m2t", "nobody.Home", UnitKind.COMPILED)))
 				.getMessage().contains("nobody.Home"));
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Main")));
+		UnitKey key = store.put(compiled("gen.Main"));
 		UnitPreparer noBinder = new UnitPreparer(store, registry, FingerprintHelper.getDefaultFingerprintService(), List.of());
 		assertTrue(assertThrows(UnitPrepareException.class, () -> noBinder.prepare(key))
 				.getMessage().contains("no binder for language 'm2t'"));
@@ -185,9 +185,9 @@ class UnitPreparerTest {
 
 	@Test
 	void rebind_takesTheNewestVersion_andRecordsWhatWasBound() throws Exception {
-		store.store("m2t", new PackagedUnit(compiled("gen.Lib")));
-		UnitKey newest = store.store("m2t", new PackagedUnit(compiled("gen.Lib", extraTemplate())));
-		UnitKey mainKey = store.store("m2t", new PackagedUnit(compiled("gen.Main", rebind("gen.Lib"))));
+		store.put(compiled("gen.Lib"));
+		UnitKey newest = store.put(compiled("gen.Lib", extraTemplate()));
+		UnitKey mainKey = store.put(compiled("gen.Main", rebind("gen.Lib")));
 
 		PreparedContext prepared = preparer(registry).prepare(mainKey);
 
@@ -210,7 +210,7 @@ class UnitPreparerTest {
 		CompiledUnit main = compiled("gen.Main", embed("gen.Lib",
 				library.getManifest().getUnitFingerprint()));
 		main.getEmbedded().add(library);
-		UnitKey mainKey = store.store("m2t", new PackagedUnit(reseal(main)));
+		UnitKey mainKey = store.put(reseal(main));
 
 		PreparedContext prepared = preparer(registry).prepare(mainKey);
 
@@ -222,7 +222,7 @@ class UnitPreparerTest {
 	@Test
 	@DisplayName("what the binder rejects ends the prepare, before anything is bound")
 	void prepare_propagatesWhatTheBinderRefuses() throws Exception {
-		UnitKey key = store.store("m2t", new PackagedUnit(compiled("gen.Main")));
+		UnitKey key = store.put(compiled("gen.Main"));
 		RecordingBinder refusing = new RecordingBinder();
 		refusing.refuse = true;
 
@@ -245,9 +245,9 @@ class UnitPreparerTest {
 		// A cycle of *pinned* units cannot be built at all: a pin names the fingerprint of the
 		// other unit, and each fingerprint would then have to be part of the other's content.
 		// Rebind names only the qualified name, which is what makes the cycle possible.
-		store.store("m2t", new PackagedUnit(compiled("gen.A", rebind("gen.B"))));
-		store.store("m2t", new PackagedUnit(compiled("gen.B", rebind("gen.A"))));
-		UnitKey aKey = store.store("m2t", new PackagedUnit(compiled("gen.A", rebind("gen.B"))));
+		store.put(compiled("gen.A", rebind("gen.B")));
+		store.put(compiled("gen.B", rebind("gen.A")));
+		UnitKey aKey = store.put(compiled("gen.A", rebind("gen.B")));
 
 		PreparedContext prepared = assertTimeoutPreemptively(Duration.ofSeconds(10),
 				() -> preparer(registry).prepare(aKey));

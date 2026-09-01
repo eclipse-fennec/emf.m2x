@@ -439,7 +439,7 @@ elsewhere and executed there:
 CompiledUnit unit = engine.compile(source, "T");   // dependencies pinned by default
 
 UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
-UnitKey key = store.store("qvtr", new PackagedUnit(unit));
+UnitKey key = store.put(unit);
 
 PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder()).prepare(key);
 QvtdExecutionResult result = engine.execute(prepared, "T", QvtdExecutionContext.enforce("target", extents));
