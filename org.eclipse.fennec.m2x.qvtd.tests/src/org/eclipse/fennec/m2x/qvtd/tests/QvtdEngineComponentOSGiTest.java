@@ -70,6 +70,12 @@ class QvtdEngineComponentOSGiTest {
 	@Test
 	@DisplayName("there is an engine without configuring anything")
 	void engineIsThereByDefault(@InjectService(timeout = 5000) QvtdEngine engine) {
+		// No filter here, deliberately, and it is not an oversight: an unconfigured instance
+		// cannot be selected. Metatype defaults are set as component properties, so
+		// qvtd.maxRelationDepth is always present (200 when nobody configured anything) and
+		// (!(qvtd.maxRelationDepth=*)) matches nothing at all — tried, and it timed out.
+		// Filtering on the default value instead would tie this test to a number it does not
+		// own. It only asserts that an engine exists, which no stale instance can falsify.
 		assertNotNull(engine);
 		assertNotNull(engine.getOclEngine(),
 				"the engine has to run on the OCL service, not on one it built itself");
@@ -102,7 +108,12 @@ class QvtdEngineComponentOSGiTest {
 	@WithConfiguration(pid = "DefaultQvtdEngine", properties = {
 			@Property(key = "qvtd.maxRelationDepth", value = "64", scalar = Scalar.Integer)
 	})
-	void configuredEngineIsStillTheEngine(@InjectService(timeout = 5000) QvtdEngine engine) {
+	void configuredEngineIsStillTheEngine(
+			@InjectService(timeout = 5000, filter = "(qvtd.maxRelationDepth=64)") QvtdEngine engine) {
+		// The filter is what makes this test about the configured engine. Without it the
+		// injection waits for any QvtdEngine, and ConfigAdmin delivers asynchronously — so the
+		// instance handed over can be the unconfigured one that was there first, and the
+		// assertions below would pass without the configuration ever being involved.
 		assertNotNull(engine);
 		assertNotNull(engine.getOclEngine());
 	}
