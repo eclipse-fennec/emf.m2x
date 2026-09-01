@@ -124,6 +124,8 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	private PreStateSnapshot preStateSnapshot = PreStateSnapshot.EMPTY;
 	private Map<DefRegistry.DefKey, DefRegistry.DefEntry> defProperties = Map.of();
+	private Map<DefRegistry.DefKey, DefRegistry.DefEntry> deriveProperties = Map.of();
+	private Map<DefRegistry.DefKey, DefRegistry.DefEntry> documentBodies = Map.of();
 	private int depth;
 
 	/** Deadline for timeout enforcement (nanoseconds), or 0 if no timeout. */
@@ -182,6 +184,25 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 */
 	public void setDefProperties(Map<DefRegistry.DefKey, DefRegistry.DefEntry> defProperties) {
 		this.defProperties = Objects.requireNonNull(defProperties, "defProperties must not be null");
+	}
+
+	/**
+	 * The {@code derive:} constraints of registered Complete OCL documents, by (classifier,
+	 * feature name). Inside OCL evaluation a derivation wins over the stored value; EMF's own
+	 * {@code eGet} stays untouched — that boundary belongs to the annotations (#204).
+	 */
+	public void setDeriveProperties(Map<DefRegistry.DefKey, DefRegistry.DefEntry> deriveProperties) {
+		this.deriveProperties = Objects.requireNonNull(deriveProperties, "deriveProperties must not be null");
+	}
+
+	/**
+	 * The {@code body:} constraints of registered Complete OCL documents, by (classifier,
+	 * operation name). For OCL evaluation such a body answers the call — before EMF's
+	 * {@code eInvoke}, which for a dynamic class has nothing to answer with; {@code eInvoke}
+	 * itself stays the annotations' business (#204).
+	 */
+	public void setDocumentBodies(Map<DefRegistry.DefKey, DefRegistry.DefEntry> documentBodies) {
+		this.documentBodies = Objects.requireNonNull(documentBodies, "documentBodies must not be null");
 	}
 
 	/**
@@ -390,6 +411,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 					Object intercepted = tryPropertyInterceptor(elemObj, sf.getName());
 					if (intercepted != OclContext.PROPERTY_NOT_HANDLED) {
 						result.add(intercepted == null ? OCL_NULL : widenInteger(intercepted));
+					} else if (!deriveProperties.isEmpty()
+							&& lookupDeriveProperty(elemObj.eClass(), sf.getName()) != null) {
+						// A document's derive: wins over the stored value here too (#204)
+						Object derivedResult = evaluateDefBody(
+								lookupDeriveProperty(elemObj.eClass(), sf.getName()).body(), elemObj);
+						result.add(derivedResult == null ? OCL_NULL : widenInteger(derivedResult));
 					} else {
 						// Check for def-property if real feature doesn't exist
 						EStructuralFeature realFeat = elemObj.eClass().getEStructuralFeature(sf.getName());
@@ -426,6 +453,15 @@ public class OclEvaluator extends OclSwitch<Object> {
 		Object intercepted = tryPropertyInterceptor(eo, sf.getName());
 		if (intercepted != OclContext.PROPERTY_NOT_HANDLED) {
 			return intercepted == null ? OCL_NULL : widenInteger(intercepted);
+		}
+
+		// A document's derive: wins over the stored value — inside OCL evaluation only (#204)
+		if (!deriveProperties.isEmpty()) {
+			DefRegistry.DefEntry derived = lookupDeriveProperty(eo.eClass(), sf.getName());
+			if (derived != null) {
+				Object derivedResult = evaluateDefBody(derived.body(), eo);
+				return derivedResult == null ? OCL_NULL : widenInteger(derivedResult);
+			}
 		}
 
 		// Check if the feature actually exists on the runtime EClass
@@ -540,6 +576,25 @@ public class OclEvaluator extends OclSwitch<Object> {
 			for (Object arg : args) {
 				if (arg == null) {
 					return OclInvalid.INSTANCE;
+				}
+			}
+		}
+
+		// A document's body: answers the call for OCL evaluation (#204) — checked before
+		// eInvoke, which for a dynamic class has no implementation to offer
+		if (!documentBodies.isEmpty() && source instanceof EObject bodyTarget) {
+			DefRegistry.DefEntry bodyEntry = lookupIn(documentBodies, bodyTarget.eClass(), opName);
+			if (bodyEntry != null && bodyEntry.parameterNames().size() == args.length) {
+				Map<String, Object> arguments = new LinkedHashMap<>();
+				for (int i = 0; i < args.length; i++) {
+					arguments.put(bodyEntry.parameterNames().get(i), args[i]);
+				}
+				OclEvalEnvironment previousEnv = env;
+				env = OclEvalEnvironment.root(OclContext.of(bodyTarget, arguments));
+				try {
+					return wrapNull(widenInteger(eval(bodyEntry.body())));
+				} finally {
+					env = previousEnv;
 				}
 			}
 		}
@@ -1562,6 +1617,27 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 		for (EClass superType : eClass.getEAllSuperTypes()) {
 			entry = defProperties.get(new DefRegistry.DefKey(superType, featureName));
+			if (entry != null) {
+				return entry;
+			}
+		}
+		return null;
+	}
+
+	/** {@link #lookupDefProperty(EClass, String)} for the derive map. */
+	private DefRegistry.DefEntry lookupDeriveProperty(EClass eClass, String featureName) {
+		return lookupIn(deriveProperties, eClass, featureName);
+	}
+
+	/** Entry lookup by (classifier, name), supertypes included. */
+	private static DefRegistry.DefEntry lookupIn(Map<DefRegistry.DefKey, DefRegistry.DefEntry> entries,
+			EClass eClass, String name) {
+		DefRegistry.DefEntry entry = entries.get(new DefRegistry.DefKey(eClass, name));
+		if (entry != null) {
+			return entry;
+		}
+		for (EClass superType : eClass.getEAllSuperTypes()) {
+			entry = entries.get(new DefRegistry.DefKey(superType, name));
 			if (entry != null) {
 				return entry;
 			}

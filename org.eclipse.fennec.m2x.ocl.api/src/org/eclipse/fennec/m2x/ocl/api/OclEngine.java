@@ -270,6 +270,16 @@ public interface OclEngine {
 	void registerCompleteOclDocument(PreparedContext prepared, String qualifiedName);
 
 	/**
+	 * The {@code inv:} constraints registered Complete OCL documents state for exactly this
+	 * classifier (#204). Supertypes are the caller's walk — {@code OclDocumentValidator} does it
+	 * for EMF validation. What a registration put into effect, its removal takes back out.
+	 *
+	 * @param classifier the context classifier
+	 * @return the invariants, never {@code null}
+	 */
+	List<Constraint> documentInvariants(EClassifier classifier);
+
+	/**
 	 * The language's half of preparing a unit — what a {@code UnitPreparer} takes.
 	 *
 	 * @return the binder for the language tag {@code ocl}, never {@code null}

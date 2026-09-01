@@ -873,14 +873,31 @@ List<Constraint> constraints = engine.parseDocument(
 
 ### 10.2 Load and Register
 
-`loadDocument()` parses the document and registers all definitions (def:, inv:) with the engine:
+`loadDocument()` parses the document and puts its constraints into effect (#204):
 
 ```java
 engine.loadDocument(oclDocumentText);
 
-// Now def:-operations are available in subsequent evaluations
+// def: — new properties and operations for evaluation
 Object fullName = engine.evaluate("self.fullName", OclContext.of(personObject));
+
+// derive:/body: — visible to evaluation too: a navigation prefers the derivation over the
+// stored value, an operation call is answered by the document's body
+engine.evaluate("self.name", context);      // the derive: applies
+engine.evaluate("self.greet()", context);   // the body: answers
+
+// inv: — feeds the document validator, EMF-integrable via Diagnostician or directly
+OclDocumentValidator validator = new OclDocumentValidator(engine);
+validator.validate(personObject, diagnostics, null);
 ```
+
+**The boundary, on purpose:** what a document registers reaches OCL *evaluation* and the
+*document validator* — never EMF's own `eGet`/`eInvoke`/`EObjectValidator` machinery. Those run
+off the delegate annotations in the `.ecore` (§9), and only off them: `person.eGet(name)` keeps
+answering the stored value however many derivations a document states, and `init:` — which only
+ever meant something at object creation, a setting-delegate affair — has no document-side effect
+at all. Registering a document mutates no shared `EPackage`; unregistering takes everything back
+out.
 
 ### 10.3 With ResourceSet
 
