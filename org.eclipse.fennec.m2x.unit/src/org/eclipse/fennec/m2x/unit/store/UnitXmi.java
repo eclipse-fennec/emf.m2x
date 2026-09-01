@@ -27,7 +27,10 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.xmi.XMLResource;
+import org.eclipse.emf.ecore.xmi.impl.XMIResourceFactoryImpl;
+import org.eclipse.emf.ecore.xmi.impl.XMIResourceImpl;
 import org.eclipse.fennec.m2x.unit.api.UnitKey;
 import org.eclipse.fennec.m2x.unit.api.UnitResourceSet;
 import org.eclipse.fennec.m2x.unit.api.UnitStoreException;
@@ -97,7 +100,8 @@ public final class UnitXmi {
 			resource.getContents().add(document);
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
 			try {
-				resource.save(out, Map.of(XMLResource.OPTION_ENCODING, "UTF-8"));
+				resource.save(out, Map.of(XMLResource.OPTION_ENCODING, "UTF-8",
+						XMLResource.OPTION_URI_HANDLER, new MetamodelsByNsURI(document)));
 			} catch (IOException | RuntimeException e) {
 				throw new UnitStoreException("cannot serialize '" + key.qualifiedName() + "': " + e.getMessage(), e);
 			} finally {
@@ -181,6 +185,97 @@ public final class UnitXmi {
 			borrowed.add(root);
 		}
 		return borrowed;
+	}
+
+	/**
+	 * The resource a unit document is written to and read from: intra-document references are
+	 * serialized as reflective {@code @feature.index} segments instead of the name segments
+	 * XMI derives for EPackage-derived roots (#230).
+	 *
+	 * <p>The unit roots inherit {@code EPackage}, and {@code EPackageImpl} answers name
+	 * segments from a cached name map that goes stale while a document loads: the first
+	 * resolution attempt for a forward reference — a {@code where} clause calling a relation
+	 * declared later — computes the cache before the later children exist, nothing invalidates
+	 * it when they arrive, and the end-of-document retry reads the same stale map. Reflective
+	 * segments resolve through {@code BasicEObjectImpl} with no cache, for every language
+	 * uniformly. Metamodel hrefs ({@code nsURI#//Classifier}) are untouched — they are written
+	 * by the borrowed metamodel resources, which keep EMF's default fragments.
+	 */
+	private static final class ReflectiveFragmentResource extends XMIResourceImpl {
+
+		ReflectiveFragmentResource(URI uri) {
+			super(uri);
+		}
+
+		@Override
+		public String getURIFragment(EObject eObject) {
+			if (eObject.eResource() != this) {
+				return super.getURIFragment(eObject);
+			}
+			StringBuilder fragment = new StringBuilder();
+			EObject current = eObject;
+			for (EObject container = current.eContainer(); container != null;
+					current = container, container = current.eContainer()) {
+				fragment.insert(0, reflectiveSegment(current, container));
+			}
+			int rootIndex = getContents().indexOf(current);
+			fragment.insert(0, rootIndex > 0 ? "/" + rootIndex : "/");
+			return fragment.toString();
+		}
+
+		private static String reflectiveSegment(EObject child, EObject container) {
+			EStructuralFeature feature = child.eContainingFeature();
+			StringBuilder segment = new StringBuilder("/@").append(feature.getName());
+			if (feature.isMany()) {
+				segment.append('.').append(((List<?>) container.eGet(feature)).indexOf(child));
+			}
+			return segment.toString();
+		}
+	}
+
+	/** The factory the {@code unit:} protocol maps to — see {@link ReflectiveFragmentResource}. */
+	public static final Resource.Factory FACTORY = new XMIResourceFactoryImpl() {
+		@Override
+		public Resource createResource(URI uri) {
+			return new ReflectiveFragmentResource(uri);
+		}
+	};
+
+	/**
+	 * Writes every metamodel href by nsURI, wherever the package was loaded from (#231).
+	 *
+	 * <p>A package loaded from an {@code .ecore} file has a file resource, so XMI would bake the
+	 * absolute file path into the unit — and a reader would demand-load a fresh instance from
+	 * that path, past the consumer context's registry and contributions. The borrowed-resource
+	 * mechanism (#183) already gives a resource-less package a resource named by its nsURI; this
+	 * handler gives a file-loaded package the same face on the way out. Which instance answers
+	 * for the nsURI stays the consumer's decision, exactly as materialization promises — and no
+	 * machine path travels inside a unit.
+	 */
+	private static final class MetamodelsByNsURI extends org.eclipse.emf.ecore.xmi.impl.URIHandlerImpl {
+
+		private final Map<URI, URI> metamodelResourceToNsURI = new java.util.HashMap<>();
+
+		MetamodelsByNsURI(EObject document) {
+			for (EObject target : EcoreUtil.ExternalCrossReferencer.find(document).keySet()) {
+				if (target.eIsProxy() || !SatelliteCollector.isMetamodelElement(target)) {
+					continue;
+				}
+				EPackage root = SatelliteCollector.metamodelOf(target);
+				if (root.eResource() != null && root.getNsURI() != null) {
+					metamodelResourceToNsURI.put(root.eResource().getURI(), URI.createURI(root.getNsURI()));
+				}
+			}
+		}
+
+		@Override
+		public URI deresolve(URI uri) {
+			URI nsURI = metamodelResourceToNsURI.get(uri.trimFragment());
+			if (nsURI != null) {
+				return uri.hasFragment() ? nsURI.appendFragment(uri.fragment()) : nsURI;
+			}
+			return super.deresolve(uri);
+		}
 	}
 
 	private static URI uriOf(UnitKey key) {
