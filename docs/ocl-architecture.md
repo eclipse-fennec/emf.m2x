@@ -56,7 +56,7 @@ workspace/
           └──────────┘
 ```
 
-**Cross-component consumers** (future):
+**Cross-component consumers:**
 - `qvto.model/engine` depends on `ocl.model/engine`
 - `qvtd.model/engine` depends on `ocl.model/engine`
 - `m2t.model/engine` depends on `ocl.model/engine`
@@ -236,10 +236,11 @@ public interface OclOperationProvider {
 }
 ```
 
-**OSGi wiring:** `OclEngineComponent` injects exactly one `OclOperationProvider` via
-`@Reference(name="operationProvider")`. The default is `NoOpOclOperationProvider` (empty list).
-To use a custom provider, register it as a DS component and configure
-`operationProvider.target` on the engine (see [User Guide §11.3](ocl-user-guide.md#113-osgi-registration)).
+**OSGi wiring:** `OclEngineComponent` binds **every** registered `OclOperationProvider` via
+`@Reference(name="operationProvider", cardinality = MULTIPLE)`. There is no placeholder provider and
+none is needed: with nothing registered the list is simply empty. To contribute operations, register
+a provider as a DS component; narrow the set with `operationProvider.target` if a given engine should
+see only some of them (see [User Guide §11.3](ocl-user-guide.md#113-osgi-registration)).
 The D29 `customOperationsEnabled` gate must also be enabled.
 
 ```java
@@ -880,20 +881,19 @@ engine.installDelegates();
                │ @Reference(name="expressionCache")
                │
 ┌──────────────────────────────────────────────────────────────┐
-│  NoOpOclOperationProvider (SINGLETON, default)               │
-│  → OclOperationProvider service (returns empty list)         │
-│  Bound by default when no custom provider is registered     │
+│  OclOperationProvider services (any number, optional)        │
+│  Every registered provider is bound; none is required        │
 └──────────────┬──────────────────────────────────────────────┘
-               │ @Reference(name="operationProvider")
+               │ @Reference(name="operationProvider", MULTIPLE)
 ┌──────────────▼──────────────────────────────────────────────┐
 │  OclEngineComponent (PROTOTYPE)                             │
-│  → OclEngine + OclEngine services                       │
+│  → OclEngine + OclDelegateSupport services                  │
 │  @Designate(ocd = OclEngineConfiguration.class)             │
 │  Each consumer gets its own engine instance with:           │
 │  - own PropertyAccessorCache (per-engine, not shared)       │
 │  - own OclParserSupport instance (PROTOTYPE_REQUIRED)       │
 │  - shared OclExpressionCache (via @Reference target)        │
-│  - single OclOperationProvider (via @Reference target)      │
+│  - every OclOperationProvider (MULTIPLE, target-filterable)  │
 │  Engine-wide defaults from ConfigAdmin (ocl.* properties)   │
 └──────────────┬──────────────────────────────────────────────┘
                │ @Reference OclEngine
@@ -907,7 +907,6 @@ engine.installDelegates();
 | Component | Scope | Instances | Rationale |
 |-----------|-------|-----------|-----------|
 | `OclParserSupport` | PROTOTYPE | One per engine | ANTLR4 parser is lightweight; each engine gets its own instance via `PROTOTYPE_REQUIRED` |
-| `NoOpOclOperationProvider` | SINGLETON | One (default) | No-op default; replaced by custom provider via `operationProvider.target` |
 | `OclEngineComponent` | PROTOTYPE | One per consumer | Each `@Reference OclEngine` injection creates a fresh engine with isolated `PropertyAccessorCache` |
 | `DefaultOclExpressionCacheComponent` | SINGLETON | One per config (shared) | Parse cache is thread-safe and expensive to warm; shared across all engines by default |
 
@@ -919,7 +918,6 @@ engine.installDelegates();
 - `OclEngineConfiguration` — `@ObjectClassDefinition` annotation with `ocl.*` prefixed properties
 - `OclConfigurationHelper` — maps `OclEngineConfiguration` to `OclConfiguration`
 - `DefaultOclExpressionCacheComponent` — SINGLETON, provides default LRU cache (1024 entries)
-- `NoOpOclOperationProvider` — SINGLETON default `OclOperationProvider` (empty operations list)
 - Delegate factories — separate `@Component` services with emf.osgi properties, inject `OclEngine`
 
 ### 9.4 Engine-Wide Defaults via ConfigAdmin
@@ -1318,7 +1316,7 @@ Results documented but not gating — the goal is awareness, not hard thresholds
 **Accepted gaps (not requiring tests):**
 - `OclEngineComponent` (0%) — OSGi DS adapter, requires itest bundle
 - `dispatchBoolean` (0%) — dead path; all booleans route through `evaluateThreeValuedBoolean`
-- `validate()` (0%) — TODO stub, no implementation yet
+- `validate()` (0%) — not implemented; the method refuses with `UnsupportedOperationException` (#186) rather than returning silently
 
 **Gaps to close:**
 - `@pre` postcondition integration (45% → target 85%)
@@ -1414,7 +1412,7 @@ Static well-formedness checking visitor over entire AST.
 |---|-----|----------|--------|
 | GAP-1 | Complete OCL document parsing | Critical | Done |
 | GAP-2 | `@pre` parsed but never evaluated | Critical | **Done** ✅ (PreStateSnapshot) |
-| GAP-3 | `validate()` no-op stub | Critical | Open (= S-10 in spec-compliance) |
+| GAP-3 | `validate()` not implemented — refuses loudly since #186 | Critical | Open (= S-10 in spec-compliance) |
 | GAP-6 | MessageExp has no evaluator case | Medium | Deferred (Eclipse also doesn't implement) |
 | GAP-7 | `oclIsNew` absent | Medium | **Done** ✅ (compares against PreStateSnapshot) |
 

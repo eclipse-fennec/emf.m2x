@@ -31,7 +31,7 @@ The Fennec M2T Engine provides:
 - **MOFM2T v1.0** template parsing and execution
 - **Acceleo 3.7 compatible** — existing `.mtl` templates work out of the box
 - **Standalone operation** — works as a plain Java library without OSGi
-- **OSGi-optional** — designed for future Declarative Services support
+- **OSGi-optional** — full Declarative Services support when running in OSGi (see §3.6)
 - **ANTLR4-based parser** — fast, reliable parsing with precise error locations
 - **Built on Fennec OCL** — full OCL v2.5 expression support within templates
 - **Protected area merging** — hash-based smart merge (D31) for user-code preservation

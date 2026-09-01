@@ -187,10 +187,11 @@ What the numbers say:
   small plus comes from the context's registry chain (`UnitResourceSet`: given → global → copies)
   standing between `objectsOfType` and the package.
 - **M2T is 20–33 % faster from the prepared context, in two runs.** This is not the prepared path
-  being clever; it is the parsed path carrying weight it should not: `M2tEngineImpl` keeps a
-  `globalPositions` map with strong identity keys for every AST node of every module it ever
-  parsed, and `release(module)` does not remove them. A loaded module has no entries there. The
-  effect is a finding for the engine (see the code-quality epic), not a property of compiled units.
+  being clever; it is the parsed path carrying weight it should not: at the time of measurement the
+  engine kept source positions for every AST node of every module it had ever parsed, and releasing
+  a module did not remove them, while a loaded module has no entries there at all. The positions
+  have since moved into `M2tLinkRegistry`, whose `release(Module)` drops a module's entries — the
+  numbers below predate that fix, so the gap they show is smaller today.
 
 ### 5.3 Reading
 
