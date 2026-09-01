@@ -19,6 +19,7 @@ header:
   paths-ignore:
     - 'dist'
     - 'licenses'
+    - 'DEPENDENCIES'
     - '**/package-info.java'
     - '**/packageinfo'
     - '**/module-info.java'
