@@ -30,6 +30,7 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.compiled.BlackboxRequirement;
 import org.eclipse.fennec.m2x.model.compiled.CompiledFactory;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.compiled.UnitNature;
 import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
 import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
 import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
@@ -118,6 +119,13 @@ final class QvtoUnitCompiler {
 			document = packager.begin(LANGUAGE, qualifiedName, transformation, mode, source);
 		} catch (IllegalArgumentException e) {
 			throw new QvtoParseException("Cannot compile '" + qualifiedName + "': " + e.getMessage(), e);
+		}
+		// What kind of unit this is, answerable without loading the AST (#224): a standalone
+		// library source parses into a synthetic transformation wrapper, and the unwrap telling
+		// them apart happens here, once, where the compiler knows — never again by a consumer
+		// mirroring the heuristic.
+		if (QvtoLinker.unwrapLibrary(transformation) != transformation) {
+			document.getManifest().setNature(UnitNature.LIBRARY);
 		}
 		Map<Module, Module> stubToResolved = new HashMap<>();
 		resolveImports(transformation, document, stubToResolved, new HashSet<>(), path);

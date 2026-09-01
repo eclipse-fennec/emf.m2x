@@ -37,6 +37,7 @@ import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
 import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
 import org.eclipse.fennec.m2x.model.compiled.PackageEntry;
 import org.eclipse.fennec.m2x.model.compiled.ResolvedDependency;
+import org.eclipse.fennec.m2x.model.compiled.UnitNature;
 
 /**
  * <!-- begin-user-doc -->
@@ -53,6 +54,7 @@ import org.eclipse.fennec.m2x.model.compiled.ResolvedDependency;
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getUnitFingerprint <em>Unit Fingerprint</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getSourceFingerprint <em>Source Fingerprint</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getDependencyMode <em>Dependency Mode</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getNature <em>Nature</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getPackageEntry <em>Package Entry</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getDependencyEntry <em>Dependency Entry</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.compiled.impl.CompiledUnitManifestImpl#getBlackboxRequirement <em>Blackbox Requirement</em>}</li>
@@ -201,6 +203,26 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 	 * @ordered
 	 */
 	protected DependencyMode dependencyMode = DEPENDENCY_MODE_EDEFAULT;
+
+	/**
+	 * The default value of the '{@link #getNature() <em>Nature</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getNature()
+	 * @generated
+	 * @ordered
+	 */
+	protected static final UnitNature NATURE_EDEFAULT = UnitNature.TRANSFORMATION;
+
+	/**
+	 * The cached value of the '{@link #getNature() <em>Nature</em>}' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getNature()
+	 * @generated
+	 * @ordered
+	 */
+	protected UnitNature nature = NATURE_EDEFAULT;
 
 	/**
 	 * The cached value of the '{@link #getPackageEntry() <em>Package Entry</em>}' containment reference list.
@@ -428,6 +450,29 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 	 * @generated
 	 */
 	@Override
+	public UnitNature getNature() {
+		return nature;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setNature(UnitNature newNature) {
+		UnitNature oldNature = nature;
+		nature = newNature == null ? NATURE_EDEFAULT : newNature;
+		if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, CompiledPackage.COMPILED_UNIT_MANIFEST__NATURE, oldNature, nature));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EList<PackageEntry> getPackageEntry() {
 		if (packageEntry == null) {
 			packageEntry = new EObjectContainmentEList<PackageEntry>(PackageEntry.class, this, CompiledPackage.COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY);
@@ -516,6 +561,8 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 				return getSourceFingerprint();
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE:
 				return getDependencyMode();
+			case CompiledPackage.COMPILED_UNIT_MANIFEST__NATURE:
+				return getNature();
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY:
 				return getPackageEntry();
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_ENTRY:
@@ -557,6 +604,9 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 				return;
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE:
 				setDependencyMode((DependencyMode)newValue);
+				return;
+			case CompiledPackage.COMPILED_UNIT_MANIFEST__NATURE:
+				setNature((UnitNature)newValue);
 				return;
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY:
 				getPackageEntry().clear();
@@ -607,6 +657,9 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE:
 				setDependencyMode(DEPENDENCY_MODE_EDEFAULT);
 				return;
+			case CompiledPackage.COMPILED_UNIT_MANIFEST__NATURE:
+				setNature(NATURE_EDEFAULT);
+				return;
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY:
 				getPackageEntry().clear();
 				return;
@@ -645,6 +698,8 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 				return SOURCE_FINGERPRINT_EDEFAULT == null ? sourceFingerprint != null : !SOURCE_FINGERPRINT_EDEFAULT.equals(sourceFingerprint);
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE:
 				return dependencyMode != DEPENDENCY_MODE_EDEFAULT;
+			case CompiledPackage.COMPILED_UNIT_MANIFEST__NATURE:
+				return nature != NATURE_EDEFAULT;
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY:
 				return packageEntry != null && !packageEntry.isEmpty();
 			case CompiledPackage.COMPILED_UNIT_MANIFEST__DEPENDENCY_ENTRY:
@@ -681,6 +736,8 @@ public class CompiledUnitManifestImpl extends MinimalEObjectImpl.Container imple
 		result.append(sourceFingerprint);
 		result.append(", dependencyMode: ");
 		result.append(dependencyMode);
+		result.append(", nature: ");
+		result.append(nature);
 		result.append(')');
 		return result.toString();
 	}

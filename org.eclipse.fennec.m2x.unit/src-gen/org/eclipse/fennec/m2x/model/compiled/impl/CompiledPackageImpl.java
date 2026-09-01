@@ -33,6 +33,7 @@ import org.eclipse.fennec.m2x.model.compiled.PackageEntry;
 import org.eclipse.fennec.m2x.model.compiled.PackageRole;
 import org.eclipse.fennec.m2x.model.compiled.ResolvedDependency;
 import org.eclipse.fennec.m2x.model.compiled.SourceUnit;
+import org.eclipse.fennec.m2x.model.compiled.UnitNature;
 
 /**
  * <!-- begin-user-doc -->
@@ -103,6 +104,13 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	private EEnum packageRoleEEnum = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EEnum unitNatureEEnum = null;
 
 	/**
 	 * Creates an instance of the model <b>Package</b>, registered with
@@ -350,8 +358,8 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EReference getCompiledUnitManifest_PackageEntry() {
-		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(7);
+	public EAttribute getCompiledUnitManifest_Nature() {
+		return (EAttribute)compiledUnitManifestEClass.getEStructuralFeatures().get(7);
 	}
 
 	/**
@@ -360,7 +368,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EReference getCompiledUnitManifest_DependencyEntry() {
+	public EReference getCompiledUnitManifest_PackageEntry() {
 		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(8);
 	}
 
@@ -370,7 +378,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EReference getCompiledUnitManifest_BlackboxRequirement() {
+	public EReference getCompiledUnitManifest_DependencyEntry() {
 		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(9);
 	}
 
@@ -380,8 +388,18 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
-	public EReference getCompiledUnitManifest_ResolvedClosure() {
+	public EReference getCompiledUnitManifest_BlackboxRequirement() {
 		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(10);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getCompiledUnitManifest_ResolvedClosure() {
+		return (EReference)compiledUnitManifestEClass.getEStructuralFeatures().get(11);
 	}
 
 	/**
@@ -640,6 +658,16 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 	 * @generated
 	 */
 	@Override
+	public EEnum getUnitNature() {
+		return unitNatureEEnum;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public CompiledFactory getCompiledFactory() {
 		return (CompiledFactory)getEFactoryInstance();
 	}
@@ -682,6 +710,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__UNIT_FINGERPRINT);
 		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__SOURCE_FINGERPRINT);
 		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE);
+		createEAttribute(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__NATURE);
 		createEReference(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY);
 		createEReference(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__DEPENDENCY_ENTRY);
 		createEReference(compiledUnitManifestEClass, COMPILED_UNIT_MANIFEST__BLACKBOX_REQUIREMENT);
@@ -718,6 +747,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 		// Create enums
 		dependencyModeEEnum = createEEnum(DEPENDENCY_MODE);
 		packageRoleEEnum = createEEnum(PACKAGE_ROLE);
+		unitNatureEEnum = createEEnum(UNIT_NATURE);
 	}
 
 	/**
@@ -769,6 +799,7 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 		initEAttribute(getCompiledUnitManifest_UnitFingerprint(), ecorePackage.getEString(), "unitFingerprint", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getCompiledUnitManifest_SourceFingerprint(), ecorePackage.getEString(), "sourceFingerprint", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getCompiledUnitManifest_DependencyMode(), this.getDependencyMode(), "dependencyMode", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEAttribute(getCompiledUnitManifest_Nature(), this.getUnitNature(), "nature", null, 0, 1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnitManifest_PackageEntry(), this.getPackageEntry(), null, "packageEntry", null, 0, -1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnitManifest_DependencyEntry(), this.getDependencyEntry(), null, "dependencyEntry", null, 0, -1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCompiledUnitManifest_BlackboxRequirement(), this.getBlackboxRequirement(), null, "blackboxRequirement", null, 0, -1, CompiledUnitManifest.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
@@ -811,6 +842,10 @@ public class CompiledPackageImpl extends EPackageImpl implements CompiledPackage
 		initEEnum(packageRoleEEnum, PackageRole.class, "PackageRole");
 		addEEnumLiteral(packageRoleEEnum, PackageRole.REFERENCED);
 		addEEnumLiteral(packageRoleEEnum, PackageRole.EMBEDDED);
+
+		initEEnum(unitNatureEEnum, UnitNature.class, "UnitNature");
+		addEEnumLiteral(unitNatureEEnum, UnitNature.TRANSFORMATION);
+		addEEnumLiteral(unitNatureEEnum, UnitNature.LIBRARY);
 
 		// Create resource
 		createResource(eNS_URI);

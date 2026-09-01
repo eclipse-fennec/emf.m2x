@@ -93,6 +93,8 @@ public class CompiledFactoryImpl extends EFactoryImpl implements CompiledFactory
 				return createDependencyModeFromString(eDataType, initialValue);
 			case CompiledPackage.PACKAGE_ROLE:
 				return createPackageRoleFromString(eDataType, initialValue);
+			case CompiledPackage.UNIT_NATURE:
+				return createUnitNatureFromString(eDataType, initialValue);
 			default:
 				throw new IllegalArgumentException("The datatype '" + eDataType.getName() + "' is not a valid classifier");
 		}
@@ -110,6 +112,8 @@ public class CompiledFactoryImpl extends EFactoryImpl implements CompiledFactory
 				return convertDependencyModeToString(eDataType, instanceValue);
 			case CompiledPackage.PACKAGE_ROLE:
 				return convertPackageRoleToString(eDataType, instanceValue);
+			case CompiledPackage.UNIT_NATURE:
+				return convertUnitNatureToString(eDataType, instanceValue);
 			default:
 				throw new IllegalArgumentException("The datatype '" + eDataType.getName() + "' is not a valid classifier");
 		}
@@ -229,6 +233,26 @@ public class CompiledFactoryImpl extends EFactoryImpl implements CompiledFactory
 	 * @generated
 	 */
 	public String convertPackageRoleToString(EDataType eDataType, Object instanceValue) {
+		return instanceValue == null ? null : instanceValue.toString();
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public UnitNature createUnitNatureFromString(EDataType eDataType, String initialValue) {
+		UnitNature result = UnitNature.get(initialValue);
+		if (result == null) throw new IllegalArgumentException("The value '" + initialValue + "' is not a valid enumerator of '" + eDataType.getName() + "'");
+		return result;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public String convertUnitNatureToString(EDataType eDataType, Object instanceValue) {
 		return instanceValue == null ? null : instanceValue.toString();
 	}
 

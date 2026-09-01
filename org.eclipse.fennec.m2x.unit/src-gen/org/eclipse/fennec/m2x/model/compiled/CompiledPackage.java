@@ -45,7 +45,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = CompiledPackage.eNS_URI, fingerprint = "fp1:fc1a27fd9fa5e8154363f6f6be948e2038ef3b59c911b319079812195e3f703a", genModel = "/model/compiledunit.genmodel", genModelSourceLocations = {"model/compiledunit.genmodel","org.eclipse.fennec.m2x.unit/model/compiledunit.genmodel"}, ecore = "/model/compiledunit.ecore", ecoreSourceLocations = "/model/compiledunit.ecore")
+@EPackage(uri = CompiledPackage.eNS_URI, fingerprint = "fp1:9d3a9b1665e2137db6f1c479d8bb9d84eabba451f9d67d9cb7216b528d5c6f28", genModel = "/model/compiledunit.genmodel", genModelSourceLocations = {"model/compiledunit.genmodel","org.eclipse.fennec.m2x.unit/model/compiledunit.genmodel"}, ecore = "/model/compiledunit.ecore", ecoreSourceLocations = "/model/compiledunit.ecore")
 public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -262,13 +262,22 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	int COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE = 6;
 
 	/**
+	 * The feature id for the '<em><b>Nature</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int COMPILED_UNIT_MANIFEST__NATURE = 7;
+
+	/**
 	 * The feature id for the '<em><b>Package Entry</b></em>' containment reference list.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY = 7;
+	int COMPILED_UNIT_MANIFEST__PACKAGE_ENTRY = 8;
 
 	/**
 	 * The feature id for the '<em><b>Dependency Entry</b></em>' containment reference list.
@@ -277,7 +286,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__DEPENDENCY_ENTRY = 8;
+	int COMPILED_UNIT_MANIFEST__DEPENDENCY_ENTRY = 9;
 
 	/**
 	 * The feature id for the '<em><b>Blackbox Requirement</b></em>' containment reference list.
@@ -286,7 +295,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__BLACKBOX_REQUIREMENT = 9;
+	int COMPILED_UNIT_MANIFEST__BLACKBOX_REQUIREMENT = 10;
 
 	/**
 	 * The feature id for the '<em><b>Resolved Closure</b></em>' containment reference list.
@@ -295,7 +304,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST__RESOLVED_CLOSURE = 10;
+	int COMPILED_UNIT_MANIFEST__RESOLVED_CLOSURE = 11;
 
 	/**
 	 * The number of structural features of the '<em>Unit Manifest</em>' class.
@@ -304,7 +313,7 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int COMPILED_UNIT_MANIFEST_FEATURE_COUNT = 11;
+	int COMPILED_UNIT_MANIFEST_FEATURE_COUNT = 12;
 
 	/**
 	 * The number of operations of the '<em>Unit Manifest</em>' class.
@@ -637,6 +646,16 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 */
 	int PACKAGE_ROLE = 8;
 
+	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.compiled.UnitNature <em>Unit Nature</em>}' enum.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2x.model.compiled.UnitNature
+	 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getUnitNature()
+	 * @generated
+	 */
+	int UNIT_NATURE = 9;
+
 
 	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnit <em>Unit</em>}'.
@@ -833,6 +852,17 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EAttribute getCompiledUnitManifest_DependencyMode();
+
+	/**
+	 * Returns the meta object for the attribute '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getNature <em>Nature</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the attribute '<em>Nature</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getNature()
+	 * @see #getCompiledUnitManifest()
+	 * @generated
+	 */
+	EAttribute getCompiledUnitManifest_Nature();
 
 	/**
 	 * Returns the meta object for the containment reference list '{@link org.eclipse.fennec.m2x.model.compiled.CompiledUnitManifest#getPackageEntry <em>Package Entry</em>}'.
@@ -1147,6 +1177,16 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 	EEnum getPackageRole();
 
 	/**
+	 * Returns the meta object for enum '{@link org.eclipse.fennec.m2x.model.compiled.UnitNature <em>Unit Nature</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for enum '<em>Unit Nature</em>'.
+	 * @see org.eclipse.fennec.m2x.model.compiled.UnitNature
+	 * @generated
+	 */
+	EEnum getUnitNature();
+
+	/**
 	 * Returns the factory that creates the instances of the model.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -1316,6 +1356,14 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EAttribute COMPILED_UNIT_MANIFEST__DEPENDENCY_MODE = eINSTANCE.getCompiledUnitManifest_DependencyMode();
+
+		/**
+		 * The meta object literal for the '<em><b>Nature</b></em>' attribute feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EAttribute COMPILED_UNIT_MANIFEST__NATURE = eINSTANCE.getCompiledUnitManifest_Nature();
 
 		/**
 		 * The meta object literal for the '<em><b>Package Entry</b></em>' containment reference list feature.
@@ -1562,6 +1610,16 @@ public interface CompiledPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EEnum PACKAGE_ROLE = eINSTANCE.getPackageRole();
+
+		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.compiled.UnitNature <em>Unit Nature</em>}' enum.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2x.model.compiled.UnitNature
+		 * @see org.eclipse.fennec.m2x.model.compiled.impl.CompiledPackageImpl#getUnitNature()
+		 * @generated
+		 */
+		EEnum UNIT_NATURE = eINSTANCE.getUnitNature();
 
 	}
 

@@ -222,6 +222,8 @@ class RegistryUnitStoreTest {
 		assertEquals("compiled", entry.properties().get(RegistryUnitStore.PROP_KIND));
 		assertEquals("gen.Books", entry.properties().get(RegistryUnitStore.PROP_QUALIFIED_NAME));
 		assertEquals(key.fingerprint().orElseThrow(), entry.properties().get(RegistryUnitStore.PROP_FINGERPRINT));
+		assertEquals("transformation", entry.properties().get(RegistryUnitStore.PROP_NATURE),
+				"the nature is filterable without opening a document (#224)");
 		assertFalse(entry.properties().containsKey("emf.fingerprint"),
 				"a unit references several packages; the model-fingerprint join key stays empty rather than wrong");
 	}
