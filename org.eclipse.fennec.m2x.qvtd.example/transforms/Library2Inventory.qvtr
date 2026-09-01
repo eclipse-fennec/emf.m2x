@@ -1,0 +1,66 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+-- Library ↔ Inventory: keys, a query, a where-chained relation and a when-guard —
+-- deliberately more than the minimal case (#207).
+transformation Library2Inventory(source : _'library', target : inventory) {
+
+    -- a Record's identity is its label: re-enforcing finds it instead of duplicating it
+    key inventory::Record {label};
+
+    query label(title : String, author : String) : String {
+        author + ': ' + title
+    }
+
+    query lendable(copies : Integer) : Boolean {
+        copies > 0
+    }
+
+    top relation LibraryToInventory {
+        n : String;
+        checkonly domain source l : Library {
+            name = n
+        };
+        enforce domain target i : Inventory {
+            name = n
+        };
+        where {
+            BookToRecord(l, i);
+        }
+    }
+
+    relation BookToRecord {
+        t : String;
+        a : String;
+        y : Integer;
+        c : Integer;
+        checkonly domain source l : Library {
+            books = b : Book {
+                title = t,
+                author = a,
+                year = y,
+                copies = c
+            }
+        };
+        enforce domain target i : Inventory {
+            records = r : Record {
+                label = label(t, a),
+                since = y
+            }
+        };
+        when {
+            lendable(c);
+        }
+    }
+}

@@ -70,6 +70,9 @@ public class UnitResourceSet extends ResourceSetImpl {
 		Objects.requireNonNull(packages, "packages must not be null");
 		getResourceFactoryRegistry().getExtensionToFactoryMap()
 				.put(Resource.Factory.Registry.DEFAULT_EXTENSION, new XMIResourceFactoryImpl());
+		// unit documents live under unit:/… and write reflective fragments (#230)
+		getResourceFactoryRegistry().getProtocolToFactoryMap()
+				.put("unit", org.eclipse.fennec.m2x.unit.store.UnitXmi.FACTORY);
 		EPackage.Registry registry = new EPackageRegistryImpl(packages) {
 			private static final long serialVersionUID = 1L;
 
