@@ -31,6 +31,7 @@ import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
 import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicyOption;
 
 /**
  * Publishes a {@link RegistryUnitStore} as a {@link UnitStore} service over a named
@@ -77,7 +78,8 @@ public class RegistryUnitStoreComponent implements UnitStore {
 	 */
 	@Activate
 	public RegistryUnitStoreComponent(@Reference(name = "registry") EObjectRegistry registry,
-			@Reference(name = "writer", cardinality = ReferenceCardinality.OPTIONAL) EObjectRegistryWriter writer,
+			@Reference(name = "writer", cardinality = ReferenceCardinality.OPTIONAL,
+					policyOption = ReferencePolicyOption.GREEDY) EObjectRegistryWriter writer,
 			Config config) {
 		this.store = new RegistryUnitStore(registry, writer, config.source(),
 				DefaultUnitFingerprintService.INSTANCE);
