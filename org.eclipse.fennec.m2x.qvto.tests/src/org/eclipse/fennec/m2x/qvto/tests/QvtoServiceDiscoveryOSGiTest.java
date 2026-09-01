@@ -63,6 +63,16 @@ import org.osgi.test.junit5.service.ServiceExtension;
 /**
  * A transformation reaches a unit that only the service registry knows about.
  *
+ * <p>Every {@code @InjectService} here carries a filter naming the configuration the test
+ * needs, and that is not decoration. The three configuration tests write the same
+ * ConfigAdmin pid with different values; injecting a bare {@code QvtoEngine} waits only for
+ * <em>an</em> engine, not for the one this test configured, so a test can be handed the
+ * instance the previous test left behind. That is what turned the Java 21 leg red on
+ * 2026-09-01: this class's first test ran right after the one that switches discovery off,
+ * got its engine, and reported "Cannot resolve import: registered.library" while both
+ * resolvers were registered. Because DS publishes configuration properties as service
+ * properties, a filter on them waits for the instance that actually carries the setting.
+ *
  * <p>{@link RegisteredTestUnitResolver} is a component nothing references. The engine finds
  * it because the name it looks up — taken from the {@code import} in the transformation —
  * matches the {@code qvto.unit.name} it publishes. That is the whole point of resolving at
@@ -101,7 +111,9 @@ class QvtoServiceDiscoveryOSGiTest {
 			@Property(key = "qvto.unitResolverEnabled", value = "true", scalar = Scalar.Boolean),
 			@Property(key = "qvto.discoverUnitResolvers", value = "true", scalar = Scalar.Boolean)
 	})
-	void registeredUnitResolves(@InjectService(timeout = 5000) QvtoEngine engine) throws Exception {
+	void registeredUnitResolves(
+			@InjectService(timeout = 5000, filter = "(qvto.discoverUnitResolvers=true)") QvtoEngine engine)
+			throws Exception {
 		QvtoExecutionResult result = run(engine);
 		assertTrue(result.isSuccess(), () -> whyItFailed(engine, result));
 	}
@@ -111,7 +123,9 @@ class QvtoServiceDiscoveryOSGiTest {
 	@WithConfiguration(pid = "DefaultQvtoEngine", properties = {
 			@Property(key = "qvto.unitResolverEnabled", value = "true", scalar = Scalar.Boolean)
 	})
-	void withoutDiscoveryTheRegistryIsNotConsulted(@InjectService(timeout = 5000) QvtoEngine engine)
+	void withoutDiscoveryTheRegistryIsNotConsulted(
+			@InjectService(timeout = 5000,
+					filter = "(&(qvto.unitResolverEnabled=true)(!(qvto.discoverUnitResolvers=true)))") QvtoEngine engine)
 			throws Exception {
 		QvtoExecutionResult result = run(engine);
 		assertFalse(result.isSuccess(),
@@ -126,7 +140,9 @@ class QvtoServiceDiscoveryOSGiTest {
 			@Property(key = "qvto.discoverUnitResolvers", value = "true", scalar = Scalar.Boolean),
 			@Property(key = "qvto.allowedUnitModules", value = "something.else")
 	})
-	void allowListStillNarrows(@InjectService(timeout = 5000) QvtoEngine engine) throws Exception {
+	void allowListStillNarrows(
+			@InjectService(timeout = 5000, filter = "(qvto.allowedUnitModules=something.else)") QvtoEngine engine)
+			throws Exception {
 		QvtoExecutionResult result = run(engine);
 		assertFalse(result.isSuccess(),
 				"the allow-list names something.else, so registered.library must stay out of"
