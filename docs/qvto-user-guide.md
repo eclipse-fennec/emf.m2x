@@ -105,6 +105,10 @@ if (result.isSuccess()) {
 }
 ```
 
+For a worked example over real files — two metamodels, an instance model and two `.qvto` files,
+run ad hoc and as compiled units — see the `org.eclipse.fennec.m2x.qvto.example` project. Its
+`main()` classes are the walkthrough.
+
 ---
 
 ## 3. Engine Setup

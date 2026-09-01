@@ -91,6 +91,10 @@ if (result.isSuccess()) {
 }
 ```
 
+For a worked example over real files — a `.qvtr` transformation with keys, queries, a
+where-chain and a when-guard, run ad hoc and as a compiled unit — see the
+`org.eclipse.fennec.m2x.qvtd.example` project. Its `main()` classes are the walkthrough.
+
 ---
 
 ## 3. Engine Setup

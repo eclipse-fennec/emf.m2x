@@ -89,6 +89,11 @@ if (result.isSuccess()) {
 
 Five lines of setup, one template, one generated file.
 
+For a worked example over real files — a module import, both file open modes and a protected
+area whose hand-edits survive regeneration — see the `org.eclipse.fennec.m2x.m2t.example`
+project. Its `main()` classes are the walkthrough; for templates run as a build step instead,
+see the [M2T bnd Generator Guide](m2t-generator-guide.md).
+
 ---
 
 ## 3. Engine Setup

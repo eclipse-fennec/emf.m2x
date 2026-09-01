@@ -53,6 +53,17 @@ The rule in the third column is the point of the whole mechanism, and it is asse
 rather than by convention: the engine that executes a prepared unit is configured with a resolver
 that throws if it is ever asked.
 
+All three phases are shown running over real files in the example projects — each one carries an
+`AdHocExample` (no units at all) and a `CompiledUnitExample` side by side, so the difference is
+readable as a diff:
+
+| Project | Unit lifecycle it shows |
+|---|---|
+| `org.eclipse.fennec.m2x.qvto.example` | compile → store → prepare → execute, with a second `.qvto` as a pinned dependency |
+| `org.eclipse.fennec.m2x.qvtd.example` | the same for a `.qvtr` transformation |
+| `org.eclipse.fennec.m2x.m2t.example` | the same for `.mtl` modules, with an imported module |
+| `org.eclipse.fennec.m2x.ocl.example` | compile → store → prepare → **register** — for OCL the lifecycle ends there (see section 11) |
+
 ---
 
 ## 3. `compile()` beside `parse()`
@@ -785,8 +796,11 @@ value in the test suite says so.
 
 ## 11. What this means for OCL
 
-OCL has no unit concept: an OCL expression is not something you import by name, so there is no
-`OclEngine.compile()` and no OCL entry in a store. Two things still touch OCL:
+A single OCL *expression* is not something you import by name, so there is no `OclEngine.compile()`
+for one. A Complete OCL *document* is a unit, though — `compileDocument()` seals it under the tag
+`ocl`, and its lifecycle ends at register rather than at execute (see
+[section 6](#6-prepare-and-execute)). Beyond that, two things touch OCL wherever it appears inside
+another language's unit:
 
 - **OCL expressions are inside every unit.** The `m2x1` canonicalization walks them, so what the
   fingerprint says about a QVT-O mapping includes the OCL it contains. The standard-library types

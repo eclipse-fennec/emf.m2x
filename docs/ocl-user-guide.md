@@ -68,7 +68,6 @@ Minimal example — parse and evaluate an OCL expression against an EMF object:
 ```java
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 
@@ -81,6 +80,10 @@ System.out.println(result); // true
 ```
 
 That's it. Three lines to set up, one line to evaluate.
+
+For a worked example over real files — a metamodel whose OCL sits in delegate annotations,
+a Complete OCL document beside it, and the same document as a compiled unit — see the
+`org.eclipse.fennec.m2x.ocl.example` project. Its `main()` classes are the walkthrough.
 
 ---
 
