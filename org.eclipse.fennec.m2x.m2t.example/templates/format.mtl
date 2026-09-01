@@ -1,0 +1,12 @@
+[module format(_'http://example.org/fennec/m2x/library/1.0')/]
+[comment]
+*******************************************************************
+Copyright (c) 2026 Contributors to the Eclipse Foundation.
+SPDX-License-Identifier: EPL-2.0
+*******************************************************************
+[/comment]
+[query public label(b : Book) : String = b.author + ': ' + b.title /]
+
+[template public shelfLine(b : Book)]
+- [label(b)/] ([b.year/])
+[/template]

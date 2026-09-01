@@ -1,0 +1,27 @@
+[module catalog(_'http://example.org/fennec/m2x/library/1.0')/]
+[import format/]
+[comment]
+*******************************************************************
+Copyright (c) 2026 Contributors to the Eclipse Foundation.
+SPDX-License-Identifier: EPL-2.0
+*******************************************************************
+[/comment]
+
+[template public main(l : Library)]
+[file ('catalog.md', false)]
+# [l.name/]
+
+[for (b : Book | l.books)]
+[if (b.copies > 0)]
+[shelfLine(b)/]
+[/if]
+[/for]
+
+[protected ('curator-notes')]
+_add curator notes here_
+[/protected]
+[/file]
+[file ('runs.log', true)]generated [l.books->size()/] entries for [l.name/]
+
+[/file]
+[/template]

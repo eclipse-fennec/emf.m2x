@@ -1,4 +1,10 @@
 /*
- * No additional Gradle configuration needed.
- * Build dependencies are managed via bnd.bnd.
+ * The example's model and template files are read from the project directory at run time,
+ * so they are inputs of the smoke test — without this, an edited file leaves the test
+ * up-to-date and green.
  */
+tasks.named("test") {
+	inputs.dir("model")
+	if (file("transforms").exists()) { inputs.dir("transforms") }
+	if (file("templates").exists()) { inputs.dir("templates") }
+}
