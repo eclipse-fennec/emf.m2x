@@ -92,8 +92,8 @@ class QvtdCompiledUnitBenchmarkTest {
 		OclConfiguration ocl = OclConfiguration.builder(new OclParserSupport()).build();
 		QvtdEngine engine = QvtdEngines.create(QvtdConfiguration.builder(ocl).packageRegistry(registry).build());
 		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
-		UnitPreparer preparer = new UnitPreparer(store, registry, FingerprintHelper.getDefaultFingerprintService(),
-				List.of(engine.unitBinder()));
+		UnitPreparer preparer = new UnitPreparer(store, List.of(engine.unitBinder()))
+				.registerPackage(bookshelf);
 		List<EObject> books = books(bookClass, MODEL_SIZE);
 
 		for (int i = 0; i < JIT_WARMUP; i++) {

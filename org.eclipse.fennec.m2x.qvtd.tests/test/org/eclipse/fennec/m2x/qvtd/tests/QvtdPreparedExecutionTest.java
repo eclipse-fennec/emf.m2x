@@ -111,8 +111,8 @@ class QvtdPreparedExecutionTest {
 		store.put(compiler.compile(LIBRARY, "shared.Library"));
 		UnitKey key = store.put(compiler.compile(IMPORTER, "importer"));
 
-		PreparedContext prepared = new UnitPreparer(store, registry, FingerprintHelper.getDefaultFingerprintService(),
-				List.of(runner.unitBinder())).prepare(key);
+		PreparedContext prepared = new UnitPreparer(store, List.of(runner.unitBinder()))
+				.registerPackage(registry.getEPackage(NS_URI)).prepare(key);
 
 		EObject book = EcoreUtil.create(bookClass);
 		book.eSet(bookClass.getEStructuralFeature("title"), "Moby Dick");

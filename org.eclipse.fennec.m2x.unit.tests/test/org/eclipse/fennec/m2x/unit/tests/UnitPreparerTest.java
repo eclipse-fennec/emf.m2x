@@ -176,7 +176,7 @@ class UnitPreparerTest {
 				() -> preparer(registry).prepare(UnitKey.of("m2t", "nobody.Home", UnitKind.COMPILED)))
 				.getMessage().contains("nobody.Home"));
 		UnitKey key = store.put(compiled("gen.Main"));
-		UnitPreparer noBinder = new UnitPreparer(store, registry, FingerprintHelper.getDefaultFingerprintService(), List.of());
+		UnitPreparer noBinder = new UnitPreparer(store, List.of());
 		assertTrue(assertThrows(UnitPrepareException.class, () -> noBinder.prepare(key))
 				.getMessage().contains("no binder for language 'm2t'"));
 	}
@@ -227,8 +227,7 @@ class UnitPreparerTest {
 		refusing.refuse = true;
 
 		UnitPrepareException failure = assertThrows(UnitPrepareException.class,
-				() -> new UnitPreparer(store, registry,
-						FingerprintHelper.getDefaultFingerprintService(), List.of(refusing))
+				() -> new UnitPreparer(store, List.of(refusing)).registerPackage(metamodel)
 						.prepare(key));
 
 		assertTrue(failure.getMessage().contains("the language says no"), failure::getMessage);
@@ -276,7 +275,13 @@ class UnitPreparerTest {
 	// ==== helpers ====
 
 	private UnitPreparer preparer(EPackage.Registry runtime) {
-		return new UnitPreparer(store, runtime, FingerprintHelper.getDefaultFingerprintService(), List.of(binder));
+		UnitPreparer preparer = new UnitPreparer(store, List.of(binder));
+		runtime.forEach((nsURI, value) -> {
+			if (value instanceof EPackage contributed) {
+				preparer.registerPackage(contributed);
+			}
+		});
+		return preparer;
 	}
 
 	private static EPackage shelf(boolean withAuthor) {

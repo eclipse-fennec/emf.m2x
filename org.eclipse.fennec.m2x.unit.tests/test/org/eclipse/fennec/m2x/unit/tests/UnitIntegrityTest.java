@@ -173,7 +173,7 @@ class UnitIntegrityTest {
 
 		// A runtime that has no such metamodel: the carried copy is what would serve it
 		UnitPreparer preparer = new UnitPreparer(new DefaultUnitStore(backend),
-				new EPackageRegistryImpl(), FingerprintHelper.getDefaultFingerprintService(), List.of(noopBinder()),
+				FingerprintHelper.getDefaultFingerprintService(), List.of(noopBinder()),
 				UnitMaterializer.withoutValidation());
 		UnitPrepareException failure = assertThrows(UnitPrepareException.class, () -> preparer.prepare(key));
 		assertTrue(failure.getMessage().contains(NS_URI), failure.getMessage());
@@ -185,8 +185,7 @@ class UnitIntegrityTest {
 		UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
 		UnitKey key = store.put(compiled("gen.Books"));
 
-		UnitPreparer preparer = new UnitPreparer(store, new EPackageRegistryImpl(),
-				FingerprintHelper.getDefaultFingerprintService(), List.of(noopBinder()));
+		UnitPreparer preparer = new UnitPreparer(store, List.of(noopBinder()));
 		assertEquals(1, preparer.prepare(key).units().size());
 	}
 

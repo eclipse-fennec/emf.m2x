@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
@@ -79,7 +80,7 @@ public final class M2tConfiguration {
 	private M2tConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
 		this.oclEngine = builder.oclEngine;
-		this.packageRegistry = builder.packageRegistry;
+		this.packageRegistry = withContributions(builder);
 		this.resourceSet = builder.resourceSet;
 		this.generationStrategy = builder.generationStrategy;
 		this.defaultCharset = builder.defaultCharset;
@@ -321,11 +322,32 @@ public final class M2tConfiguration {
 		return new Builder(oclConfiguration);
 	}
 
+
+	/**
+	 * The registry the builder's contributions make effective: a local registry holding the
+	 * contributed packages, falling back to what would have applied without them — the explicit
+	 * registry, the resource set's, the global one (#212).
+	 */
+	private static EPackage.Registry withContributions(Builder builder) {
+		if (builder.contributedPackages.isEmpty()) {
+			return builder.packageRegistry;
+		}
+		EPackage.Registry base = builder.packageRegistry != null ? builder.packageRegistry
+				: builder.resourceSet != null ? builder.resourceSet.getPackageRegistry()
+						: EPackage.Registry.INSTANCE;
+		EPackage.Registry local = new EPackageRegistryImpl(base);
+		for (EPackage contributed : builder.contributedPackages) {
+			local.put(contributed.getNsURI(), contributed);
+		}
+		return local;
+	}
+
 	public static final class Builder {
 
 		private final OclConfiguration oclConfiguration;
 		private final OclEngine oclEngine;
 		private EPackage.Registry packageRegistry;
+		private final List<EPackage> contributedPackages = new ArrayList<>();
 		private ResourceSet resourceSet;
 		private M2tGenerationStrategy generationStrategy;
 		private Charset defaultCharset = StandardCharsets.UTF_8;
@@ -394,6 +416,22 @@ public final class M2tConfiguration {
 
 		public Builder packageRegistry(EPackage.Registry registry) {
 			this.packageRegistry = Objects.requireNonNull(registry, "registry must not be null");
+			return this;
+		}
+
+		/**
+		 * Contributes a metamodel: it answers for its nsURI ahead of whatever registry applies —
+		 * local to this configuration, nothing leaks into the global registry (#212).
+		 * {@link #packageRegistry(EPackage.Registry)} and the resource set stay the injection
+		 * points for a managed registry.
+		 *
+		 * @param ePackage the metamodel, must carry an nsURI
+		 * @return this builder
+		 */
+		public Builder registerPackage(EPackage ePackage) {
+			Objects.requireNonNull(ePackage, "ePackage must not be null");
+			Objects.requireNonNull(ePackage.getNsURI(), "the package carries no nsURI");
+			this.contributedPackages.add(ePackage);
 			return this;
 		}
 
