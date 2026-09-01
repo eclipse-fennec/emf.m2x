@@ -238,7 +238,11 @@ class OclMetadataBridgeOSGiTest {
 	}
 
 	private static void await(BooleanSupplier condition, String what) {
-		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+		// 30s, not 5: the CI runner executes the whole workspace build in parallel around this
+		// framework, and under Java 25 the bridge pipeline's one-time startup exceeded 5s there
+		// while every local run stayed far below it (#219). A passing test is as fast as before —
+		// the poll returns the moment the condition holds; only a genuine failure waits this long.
+		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
 		while (System.nanoTime() < deadline) {
 			if (condition.getAsBoolean()) {
 				return;
