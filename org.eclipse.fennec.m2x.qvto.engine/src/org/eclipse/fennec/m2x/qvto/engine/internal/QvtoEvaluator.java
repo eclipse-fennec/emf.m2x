@@ -533,10 +533,19 @@ public class QvtoEvaluator {
 					try {
 						env.define(iterName, elem);
 						Object bodyVal = eval(body);
-						// collect flattens one level (OCL §11.9.1)
+						// In QVT-O, collect IS the imperative xcollect: an arrow call without
+						// brackets means the xcollect construct (§8.2.2.7 notation note), a
+						// collection mapping call is its shorthand (§8.2.1.21), and its
+						// semantics flattens the body and never lets null into the result —
+						// "if (target <> null) res += target" (§8.2.2.7 Semantics, #228). A
+						// guarded-out mapping therefore contributes nothing.
 						if (bodyVal instanceof Collection<?> nested) {
-							result.addAll(nested);
-						} else {
+							for (Object target : nested) {
+								if (target != null && target != WRAPPED_NULL) {
+									result.add(target);
+								}
+							}
+						} else if (bodyVal != null && bodyVal != WRAPPED_NULL) {
 							result.add(bodyVal);
 						}
 					} finally {
