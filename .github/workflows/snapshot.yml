@@ -65,7 +65,7 @@ jobs:
       branch: snapshot
 
   docs:
-    name: Assemble documentation site
+    name: Build docs slice
     # Central VitePress build, in slice mode: `deploy: false` uploads
     # `site/snapshot/` as the `pages-docs` artifact instead of publishing, which
     # is what this repo needs — a Pages deploy replaces the ENTIRE site and we
@@ -82,7 +82,7 @@ jobs:
       slice-artifact: pages-docs
 
   deploy:
-    name: Deploy to GitHub Pages
+    name: Publish merged Pages site
     needs: [p2, docs]
     uses: ./.github/workflows/pages-deploy.yml
     with:

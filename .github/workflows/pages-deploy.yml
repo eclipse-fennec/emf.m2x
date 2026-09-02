@@ -1,4 +1,4 @@
-name: Deploy GitHub Pages (reusable)
+name: Publish merged Pages site (reusable)
 
 # Repo-local. The docs *build* is central — eclipse-fennec/.github's
 # `reusable-docs.yml` in slice mode — but the deploy cannot be.
@@ -37,7 +37,7 @@ defaults:
 
 jobs:
   deploy:
-    name: Deploy to GitHub Pages
+    name: Merge slices and deploy
     runs-on: ubuntu-latest
     permissions:
       contents: read
