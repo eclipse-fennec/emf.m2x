@@ -22,3 +22,5 @@ Bundle-Description: Builds an Eclipse p2 repository for the Fennec OCL bundles \
 -export: features.bnd; \
 	type=p2; \
 	name=org.eclipse.fennec.m2x.ocl.p2.jar
+	
+-maven-release: archive;path=generated/org.eclipse.fennec.m2x.ocl.p2.jar;classifier=p2
