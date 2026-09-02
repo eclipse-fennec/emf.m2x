@@ -30,7 +30,7 @@ concurrency:
 jobs:
   verify:
     name: Verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@4c8b1daf597d0ae439253b59c42d7e52049d5137 # v1.1.2
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@11841b15484440c9d03982aa33cf1188a2fa2e83 # v1.2.0
     with:
       # java-versions unset on purpose: the reusable default '["21","25"]' runs
       # both legs. m2x still targets Java 21; the 25 leg is a toolchain check.
@@ -41,7 +41,7 @@ jobs:
   release:
     name: Release to Maven Central
     needs: verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@4c8b1daf597d0ae439253b59c42d7e52049d5137 # v1.1.2
+    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@11841b15484440c9d03982aa33cf1188a2fa2e83 # v1.2.0
     with:
       do-release: true
       artifact-paths: org.eclipse.fennec.m2x.ocl.ide.p2/generated/org.eclipse.fennec.m2x.ocl.p2.jar
@@ -56,9 +56,20 @@ jobs:
 
   docs:
     name: Assemble documentation site
-    uses: ./.github/workflows/docs-pages.yml
+    # Central VitePress build, in slice mode: `deploy: false` uploads
+    # `site/latest/` as the `pages-docs` artifact instead of publishing, which
+    # is what this repo needs — a Pages deploy replaces the ENTIRE site and we
+    # publish the p2 update site next to the docs, so only pages-deploy.yml may
+    # deploy. It also gates the build on the shared docs theme (Eclipse Foundation
+    # footer, brand palette) matching eclipse-fennec/.github's docs-theme/.
+    uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@11841b15484440c9d03982aa33cf1188a2fa2e83 # v1.2.0
     with:
-      branch: latest
+      deploy: false
+      # `latest`/`snapshot` is a URL segment, not necessarily the ref name:
+      # release.yml runs on `main` but publishes the `latest` channel.
+      version: latest
+      # The name pages-deploy.yml globs as `pages-*`.
+      slice-artifact: pages-docs
 
   deploy:
     name: Deploy to GitHub Pages

@@ -20,3 +20,11 @@
   --vp-c-brand-2: #d4731f;
   --vp-c-brand-3: #c0631c;
 }
+
+/* The Eclipse Foundation footer is rendered in the layout-bottom slot (see
+   index.ts), which is not subject to `.VPFooter.has-sidebar { display: none }`.
+   VitePress' own footer would be a second one on pages without a sidebar, so
+   hide it and let themeConfig.footer stay in place, unused. */
+.VPFooter {
+  display: none;
+}
