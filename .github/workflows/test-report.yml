@@ -39,10 +39,14 @@ defaults:
 
 jobs:
   report:
-    # A check run needs `checks: write`, which GITHUB_TOKEN does not get on a pull
-    # request from a fork. Skip there instead of failing the run: the artifacts are
-    # still uploaded and the verify job is still the gate.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # A check run needs `checks: write`, and GITHUB_TOKEN is read-only for two
+    # kinds of pull request: one from a fork, and one opened by Dependabot. The
+    # API answers 403 there, which would paint an otherwise fine run red. Skip
+    # instead: the artifacts are still uploaded and verify is still the gate.
+    if: >-
+      (github.event_name != 'pull_request'
+        || github.event.pull_request.head.repo.full_name == github.repository)
+      && github.actor != 'dependabot[bot]'
     name: Test results (Java ${{ matrix.java-version }})
     runs-on: ubuntu-latest
     permissions:
