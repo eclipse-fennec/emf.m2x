@@ -36,3 +36,16 @@ jobs:
       # the Eclipse implementations is @Tag("benchmark") and has its own task,
       # which no workflow invokes.
       run-perf-tests: true
+
+  test-report:
+    name: Render test results
+    needs: verify
+    # Render whatever `verify` produced, red or green — a failing run is exactly
+    # when the per-test annotations are worth having.
+    if: ${{ !cancelled() }}
+    permissions:
+      contents: read
+      checks: write
+    uses: ./.github/workflows/test-report.yml
+    # java-versions deliberately unset: it defaults to the same '["21","25"]' as
+    # reusable-verify, so the two stay in step.
