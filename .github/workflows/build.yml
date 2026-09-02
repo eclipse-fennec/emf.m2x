@@ -1,15 +1,16 @@
 name: CI Build
 
 on:
-  push:
-    # Verify on every branch EXCEPT main and snapshot (those release/publish via
-    # their dedicated orchestrators). All other branches only verify.
-    branches-ignore:
-      - main
-      - snapshot
+  # Pull requests only. A branch with an open PR used to be built twice for every
+  # push — once for `push`, once for `pull_request` — two full matrix builds and
+  # two sets of test check runs per commit, with identical results. `main` and
+  # `snapshot` never reached this workflow anyway; they publish via their own
+  # orchestrators. What the `push` trigger uniquely covered was a branch with no
+  # PR yet, which workflow_dispatch now covers on demand.
   pull_request:
     branches:
       - '*'
+  workflow_dispatch:
 
 # Least privilege by default; verification only reads the repository.
 permissions:
