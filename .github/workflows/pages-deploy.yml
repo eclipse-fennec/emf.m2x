@@ -1,6 +1,7 @@
 name: Deploy GitHub Pages (reusable)
 
-# Repo-local, deliberately not eclipse-fennec/.github's `reusable-docs.yml`.
+# Repo-local. The docs *build* is central — eclipse-fennec/.github's
+# `reusable-docs.yml` in slice mode — but the deploy cannot be.
 #
 # GitHub Pages replaces the *entire* site on every deploy, but emf.m2x publishes
 # several independent slices: the OCL p2 update site (`ocl/<channel>/p2/`) and the
