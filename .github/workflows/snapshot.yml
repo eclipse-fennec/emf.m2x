@@ -34,7 +34,7 @@ concurrency:
 jobs:
   verify:
     name: Verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@11841b15484440c9d03982aa33cf1188a2fa2e83 # v1.2.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@5a1a919f7f7ca9dd4c13cbeb5bca6735c4d8ecb7 # v1.2.1
     with:
       # java-versions unset on purpose: the reusable default '["21","25"]' runs
       # both legs. m2x still targets Java 21; the 25 leg is a toolchain check.
@@ -48,7 +48,7 @@ jobs:
   release:
     name: Release snapshot
     needs: verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@11841b15484440c9d03982aa33cf1188a2fa2e83 # v1.2.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@5a1a919f7f7ca9dd4c13cbeb5bca6735c4d8ecb7 # v1.2.1
     with:
       do-release: false
       # The p2 repository jar is produced by the normal build (-export: type=p2
@@ -72,7 +72,7 @@ jobs:
     # publish the p2 update site next to the docs, so only pages-deploy.yml may
     # deploy. It also gates the build on the shared docs theme (Eclipse Foundation
     # footer, brand palette) matching eclipse-fennec/.github's docs-theme/.
-    uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@11841b15484440c9d03982aa33cf1188a2fa2e83 # v1.2.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@5a1a919f7f7ca9dd4c13cbeb5bca6735c4d8ecb7 # v1.2.1
     with:
       deploy: false
       # `latest`/`snapshot` is a URL segment, not necessarily the ref name:
