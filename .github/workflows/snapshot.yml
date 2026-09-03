@@ -2,11 +2,11 @@ name: Snapshot Build
 
 # Orchestrator for the snapshot branch (development branch -> Maven Snapshot).
 #
-# verify, release and the docs build all come from the central reusables in
-# eclipse-fennec/.github. The docs one runs in *slice* mode (deploy: false): the
-# central set knows nothing about p2, and emf.m2x publishes the p2 update site and
-# the docs in a single deploy, so assembling and deploying the Pages site stays
-# repo-local (see pages-deploy.yml for why).
+# verify, release, the test-result check runs and the docs build all come from
+# the central reusables in eclipse-fennec/.github. The docs one runs in *slice*
+# mode (deploy: false): the central set knows nothing about p2, and emf.m2x
+# publishes the p2 update site and the docs in a single deploy, so assembling and
+# deploying the Pages site stays repo-local (see pages-deploy.yml for why).
 #
 # The p2 update site is republished from the *exact* jar built by the release job
 # (artifact `release-jars`), never rebuilt.
@@ -34,7 +34,7 @@ concurrency:
 jobs:
   verify:
     name: Verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@5a1a919f7f7ca9dd4c13cbeb5bca6735c4d8ecb7 # v1.2.1
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0 (eclipse-fennec/.github#41, tag pending)
     with:
       # java-versions unset on purpose: the reusable default '["21","25"]' runs
       # both legs. m2x still targets Java 21; the 25 leg is a toolchain check.
@@ -48,7 +48,7 @@ jobs:
   release:
     name: Release snapshot
     needs: verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@5a1a919f7f7ca9dd4c13cbeb5bca6735c4d8ecb7 # v1.2.1
+    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0 (eclipse-fennec/.github#41, tag pending)
     with:
       do-release: false
       # The p2 repository jar is produced by the normal build (-export: type=p2
@@ -72,7 +72,7 @@ jobs:
     # publish the p2 update site next to the docs, so only pages-deploy.yml may
     # deploy. It also gates the build on the shared docs theme (Eclipse Foundation
     # footer, brand palette) matching eclipse-fennec/.github's docs-theme/.
-    uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@5a1a919f7f7ca9dd4c13cbeb5bca6735c4d8ecb7 # v1.2.1
+    uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0 (eclipse-fennec/.github#41, tag pending)
     with:
       deploy: false
       # `latest`/`snapshot` is a URL segment, not necessarily the ref name:
@@ -97,6 +97,11 @@ jobs:
     permissions:
       contents: read
       checks: write
-    uses: ./.github/workflows/test-report.yml
+    # Opt-in check runs from the central set (moved there from this repo's
+    # trial in #241, see eclipse-fennec/.github#34). verify already renders the
+    # same XML as a job summary with inline annotations; this job adds the one
+    # check run per JDK leg, which needs `checks: write` — granted on this job
+    # alone, so verify itself keeps running with `contents: read`.
+    uses: eclipse-fennec/.github/.github/workflows/reusable-test-report.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0 (eclipse-fennec/.github#41, tag pending)
     # java-versions deliberately unset: it defaults to the same '["21","25"]' as
     # reusable-verify, so the two stay in step.
