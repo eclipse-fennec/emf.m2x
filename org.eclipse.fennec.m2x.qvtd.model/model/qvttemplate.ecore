@@ -12,16 +12,16 @@
     <details key="resource" value="XMI"/>
     <details key="copyrightText" value="******************************************************************&#xA;Copyright (c) 2026 Contributors to the Eclipse Foundation.&#xA;&#xA;This program and the accompanying materials are made&#xA;available under the terms of the Eclipse Public License 2.0&#xA;which is available at https://www.eclipse.org/legal/epl-2.0/&#xA;&#xA;SPDX-License-Identifier: EPL-2.0&#xA;&#xA;Contributors:&#xA;  Data In Motion Consulting - initial implementation&#xA;******************************************************************"/>
   </eAnnotations>
-  <eClassifiers xsi:type="ecore:EClass" name="TemplateExp" abstract="true" eSuperTypes="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//LiteralExp">
+  <eClassifiers xsi:type="ecore:EClass" name="TemplateExp" abstract="true" eSuperTypes="http://www.eclipse.org/fennec/m2x/ocl/1.0#//LiteralExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A template expression specifies a pattern that matches model elements in a candidate model. The matched model element may be bound to a variable (QVT v1.3 §7.11.2.1)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="bindsTo" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="bindsTo" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//Variable">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The variable that refers to the model element matched by this template expression."/>
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="where" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="where" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="A boolean expression that must evaluate to true for the template expression to match."/>
@@ -56,13 +56,13 @@
       </eAnnotations>
     </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EReference" name="member" upperBound="-1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The expressions that the elements of the collection must have matches for."/>
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="rest" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable">
+    <eStructuralFeatures xsi:type="ecore:EReference" name="rest" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//Variable">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The variable that the rest of the collection (excluding elements matched by member expressions) must match."/>
       </eAnnotations>
@@ -84,7 +84,7 @@
         <details key="documentation" value="The EStructuralFeature that identifies the slot that is being constrained."/>
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="value" lowerBound="1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="value" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
         <details key="documentation" value="The value expression that the slot may take."/>
