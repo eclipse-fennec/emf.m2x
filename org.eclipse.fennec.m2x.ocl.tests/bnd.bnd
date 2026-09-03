@@ -18,6 +18,8 @@ src=${^src},src-gen
 -includeresource.model: model=model
 
 -buildpath: \
+	org.osgi.service.component;version=latest,\
+	org.osgi.dto;version=latest,\
 	org.osgi.test.junit5.cm;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.ocl.engine;version=snapshot;packages='*',\

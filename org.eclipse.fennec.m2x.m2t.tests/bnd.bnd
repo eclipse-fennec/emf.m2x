@@ -9,6 +9,8 @@ Bundle-Description: Unit and spec compliance tests for MOFM2T v1.0
 src=${^src}
 
 -buildpath: \
+	org.osgi.service.component;version=latest,\
+	org.osgi.dto;version=latest,\
 	org.eclipse.fennec.m2x.unit;version=snapshot,\
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
 	org.eclipse.fennec.emf.osgi.component.minimal;version=latest,\
