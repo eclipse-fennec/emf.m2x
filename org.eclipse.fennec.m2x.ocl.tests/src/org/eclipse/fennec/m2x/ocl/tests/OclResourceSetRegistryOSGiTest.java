@@ -14,10 +14,12 @@
  */
 package org.eclipse.fennec.m2x.ocl.tests;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.Arrays;
 import java.util.Dictionary;
 import java.util.Hashtable;
 import java.util.concurrent.TimeUnit;
@@ -27,6 +29,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.configurator.EPackageConfigurator;
 import org.eclipse.fennec.emf.osgi.constants.EMFNamespaces;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
@@ -37,6 +40,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
+import org.osgi.service.component.runtime.ServiceComponentRuntime;
+import org.osgi.service.component.runtime.dto.ComponentDescriptionDTO;
+import org.osgi.service.component.runtime.dto.ReferenceDTO;
 import org.osgi.test.common.annotation.InjectBundleContext;
 import org.osgi.test.common.annotation.InjectService;
 import org.osgi.test.junit5.context.BundleContextExtension;
@@ -94,6 +100,28 @@ class OclResourceSetRegistryOSGiTest {
 		} while (System.nanoTime() < deadline);
 		fail("the engine never resolved the resource-set-only metamodel: " + last);
 		return null;
+	}
+
+	@Test
+	@DisplayName("the resource set is a mandatory, prototype-required reference — there is no fallback parser")
+	void resourceSetReferenceIsMandatory(@InjectService(timeout = 5000) ServiceComponentRuntime scr) {
+		// The 'without a resource set' case: it does not exist, by construction. A mandatory
+		// reference means the component waits for the service instead of activating on the
+		// global registry — which is the whole point (#245), so the contract is asserted on the
+		// component description rather than on the absence of a service, which nothing could
+		// wait for deterministically.
+		ComponentDescriptionDTO description = scr.getComponentDescriptionDTOs().stream()
+				.filter(candidate -> "org.eclipse.fennec.m2x.ocl.parser.OclParserSupport".equals(candidate.name))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("component " + "org.eclipse.fennec.m2x.ocl.parser.OclParserSupport" + " is not there"));
+		ReferenceDTO reference = Arrays.stream(description.references)
+				.filter(candidate -> "resourceSet".equals(candidate.name))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("no reference named resourceSet in " + "org.eclipse.fennec.m2x.ocl.parser.OclParserSupport"));
+		assertEquals(ResourceSet.class.getName(), reference.interfaceName);
+		assertEquals("1..1", reference.cardinality, "mandatory — no optional fallback");
+		assertEquals("static", reference.policy);
+		assertEquals("prototype_required", reference.scope, "every parser gets its own resource set");
 	}
 
 	private static EPackage shelfPackage() {
