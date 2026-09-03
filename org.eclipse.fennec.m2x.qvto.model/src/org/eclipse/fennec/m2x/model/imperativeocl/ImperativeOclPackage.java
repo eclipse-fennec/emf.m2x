@@ -466,6 +466,15 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int IMPERATIVE_LOOP_EXP__IS_SAFE = OclPackage.LOOP_EXP__IS_SAFE;
 
 	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int IMPERATIVE_LOOP_EXP__IS_ARROW = OclPackage.LOOP_EXP__IS_ARROW;
+
+	/**
 	 * The feature id for the '<em><b>Owned Body</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -555,6 +564,15 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int FOR_EXP__IS_SAFE = IMPERATIVE_LOOP_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int FOR_EXP__IS_ARROW = IMPERATIVE_LOOP_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Owned Body</b></em>' containment reference.
@@ -655,6 +673,15 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int IMPERATIVE_ITERATE_EXP__IS_SAFE = IMPERATIVE_LOOP_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int IMPERATIVE_ITERATE_EXP__IS_ARROW = IMPERATIVE_LOOP_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Owned Body</b></em>' containment reference.
@@ -993,6 +1020,15 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int LOG_EXP__IS_SAFE = OclPackage.OPERATION_CALL_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int LOG_EXP__IS_ARROW = OclPackage.OPERATION_CALL_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.

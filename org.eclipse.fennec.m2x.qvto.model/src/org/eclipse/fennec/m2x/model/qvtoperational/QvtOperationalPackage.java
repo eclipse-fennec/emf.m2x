@@ -3622,6 +3622,15 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int IMPERATIVE_CALL_EXP__IS_SAFE = OclPackage.OPERATION_CALL_EXP__IS_SAFE;
 
 	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int IMPERATIVE_CALL_EXP__IS_ARROW = OclPackage.OPERATION_CALL_EXP__IS_ARROW;
+
+	/**
 	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -3729,6 +3738,15 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int MAPPING_CALL_EXP__IS_SAFE = IMPERATIVE_CALL_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int MAPPING_CALL_EXP__IS_ARROW = IMPERATIVE_CALL_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Is Pre</b></em>' attribute.
@@ -3931,6 +3949,15 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	int RESOLVE_EXP__IS_SAFE = OclPackage.CALL_EXP__IS_SAFE;
 
 	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int RESOLVE_EXP__IS_ARROW = OclPackage.CALL_EXP__IS_ARROW;
+
+	/**
 	 * The feature id for the '<em><b>Is Deferred</b></em>' attribute.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -4038,6 +4065,15 @@ public interface QvtOperationalPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @ordered
 	 */
 	int RESOLVE_IN_EXP__IS_SAFE = RESOLVE_EXP__IS_SAFE;
+
+	/**
+	 * The feature id for the '<em><b>Is Arrow</b></em>' attribute.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int RESOLVE_IN_EXP__IS_ARROW = RESOLVE_EXP__IS_ARROW;
 
 	/**
 	 * The feature id for the '<em><b>Is Deferred</b></em>' attribute.
