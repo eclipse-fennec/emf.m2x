@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.engine;
 import java.util.Objects;
 import java.util.Set;
 
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
@@ -65,6 +66,29 @@ public final class QvtdConfigurationHelper {
 	 */
 	public static QvtdConfiguration from(QvtdEngineConfiguration config, OclEngine oclEngine,
 			QvtdUnitResolver serviceResolver) {
+		return from(config, oclEngine, serviceResolver, null);
+	}
+
+	/**
+	 * Creates a {@link QvtdConfiguration} that evaluates on the given OCL engine, resolves
+	 * metamodels through the given resource set and, when the configuration asks for
+	 * discovery, resolves units through the given resolver.
+	 *
+	 * <p>The resource set is the seam the DS component uses (#245): under {@code emf.osgi} it
+	 * is the injected, configured stack, and its package registry is where a dynamically
+	 * registered metamodel lives. Only that registry is used; nothing is loaded through the
+	 * resource set here (D42).
+	 *
+	 * @param config          the OSGi configuration annotation, must not be {@code null}
+	 * @param oclEngine       the engine to evaluate with, must not be {@code null}
+	 * @param serviceResolver the resolver that looks units up in the service registry, or
+	 *                        {@code null} when there is none
+	 * @param resourceSet     the resource set whose package registry resolves metamodels, or
+	 *                        {@code null} to keep the plain-Java fallback to the global registry
+	 * @return the configuration
+	 */
+	public static QvtdConfiguration from(QvtdEngineConfiguration config, OclEngine oclEngine,
+			QvtdUnitResolver serviceResolver, ResourceSet resourceSet) {
 		Objects.requireNonNull(config, "config must not be null");
 		Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		QvtdConfiguration.Builder builder = QvtdConfiguration.builder(oclEngine)
@@ -78,6 +102,9 @@ public final class QvtdConfigurationHelper {
 				.maxBindings(config.maxBindings())
 				.timeoutMs(config.timeout())
 				.maxTraceRecords(config.maxTraceRecords());
+		if (resourceSet != null) {
+			builder.resourceSet(resourceSet);
+		}
 		if (config.discoverUnitResolvers() && serviceResolver != null) {
 			builder.addUnitResolver(serviceResolver);
 		}

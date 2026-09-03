@@ -201,6 +201,8 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 
 If both are set, the explicitly configured registry wins — the more specific setting beats the more general one. Only the resource set's package registry is used; nothing is loaded through it.
 
+Under OSGi you do not do this yourself: the DS component binds the `ResourceSet` that `emf.osgi` publishes, as a mandatory reference — see §3.6.
+
 The default is `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Supply your own when you hold the packages yourself — under OSGi, or wherever two versions of one nsURI can coexist. Nothing inside the engine reaches for the global registry on its own (D42), so what you pass in is what the parser sees. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
 
 **This matters more than it looks.** A declared type that resolves nowhere used to degrade to `EObject` without a word, and two things broke at once: `oclIsKindOf` answered for the wrong type, and MOFM2T §8.1.3 override dispatch selected no override at all, because `EObject` is not a supertype of a dynamic `EClass`.
@@ -269,8 +271,19 @@ public class MyGenerator {
 | `DefaultM2tEngine` | PROTOTYPE | Nothing — each consumer gets its own engine, module cache and linker state |
 | `DefaultOclEngine` | PROTOTYPE | Nothing — bound `prototype_required`, so each M2T engine evaluates on its own OCL engine |
 | `DefaultOclExpressionCacheComponent` | SINGLETON | The parsed-expression cache, shared by all OCL engines |
+| `ResourceSet` (from `emf.osgi`) | PROTOTYPE | Nothing — bound `prototype_required`, so each engine resolves metamodels through its own resource set |
 
 The engine takes its OCL engine as a **mandatory** service reference. That is door 2 from [§3.1](#31-three-ways-to-give-m2t-its-ocl-engine): the OCL engine a consumer configured — with its cache and its operation providers — is the one that evaluates the template expressions, rather than a second one built beside it.
+
+The **resource set** is a mandatory reference as well, and deliberately not an optional one with a fallback to the global registry. Under `emf.osgi` a metamodel registered for the resource set (`emf.model.scope=resourceset`) lives in the resource set's package registry and never in the global one — an engine built on the fallback would resolve a module's metamodel URI to the wrong package instance and match nothing, silently. And an optional reference cannot say *when* the service arrives, only that it was not there at activation. Mandatory means: the engine exists once the resource set does, and what §3.5 describes for plain Java happens by itself. Where several resource sets are published, pick one:
+
+```json
+{
+    "DefaultM2tEngine": { "resourceSet.target": "(emf.name=myapp)" }
+}
+```
+
+The fingerprint service `emf.osgi` provides is bound the same way, mandatory, for the same reason.
 
 ### 3.6.1 Configuration via ConfigAdmin
 

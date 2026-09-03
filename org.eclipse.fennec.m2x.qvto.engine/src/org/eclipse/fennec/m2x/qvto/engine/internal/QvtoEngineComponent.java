@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
@@ -25,7 +26,6 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -60,6 +60,20 @@ import org.osgi.service.metatype.annotations.Designate;
  * would restart this component, and drop its caches, whenever one came or went. It is only
  * consulted when {@code qvto.discoverUnitResolvers} is on.
  *
+ * <p>The resource set is a mandatory reference too — deliberately not an optional one with a
+ * fallback to the global registry. Under {@code emf.osgi} a metamodel registered for the
+ * resource set ({@code emf.model.scope=resourceset}) lands in the resource set's package
+ * registry and never in the global one. An engine built with the fallback would resolve a
+ * {@code modeltype} to the wrong package instance and match nothing, silently (#245); and an
+ * optional reference cannot say when the service arrives, only that it was not there at
+ * activation. A mandatory reference means the engine exists once the resource set does. It is
+ * bound prototype-required so that every engine has its own, and
+ * {@code "resourceSet.target"} picks one where several are published.
+ *
+ * <p>The fingerprint service is mandatory for the same reason: a constructor reference is
+ * either there or the component waits — there is no later moment at which an optional one
+ * could be re-bound without rebuilding the engine.
+ *
  * @since 1.0
  */
 @Designate(ocd = QvtoEngineConfiguration.class)
@@ -69,13 +83,13 @@ public class QvtoEngineComponent extends QvtoEngineImpl {
 	@Activate
 	public QvtoEngineComponent(
 			QvtoEngineConfiguration config,
+			@Reference(name = "resourceSet", scope = ReferenceScope.PROTOTYPE_REQUIRED) ResourceSet resourceSet,
 			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine,
 			@Reference(name = "unitDiscovery",
 					target = "(" + QvtoServiceUnitResolver.RESOLVER_KIND + "=discovery)")
 			QvtoUnitResolver unitDiscovery,
-			@Reference(name = "fingerprints", cardinality = ReferenceCardinality.OPTIONAL)
-			FingerprintService fingerprints) {
-		super(QvtoConfigurationHelper.from(config, oclEngine, unitDiscovery),
-				fingerprints == null ? UnitPackager.withDefaults() : new UnitPackager(fingerprints));
+			@Reference(name = "fingerprints") FingerprintService fingerprints) {
+		super(QvtoConfigurationHelper.from(config, oclEngine, unitDiscovery, resourceSet),
+				new UnitPackager(fingerprints));
 	}
 }
