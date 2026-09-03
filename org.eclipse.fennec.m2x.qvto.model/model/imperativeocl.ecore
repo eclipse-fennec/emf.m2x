@@ -21,7 +21,7 @@
     <eLiterals name="fatal" value="2"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ImperativeExpression" abstract="true"
-      eSuperTypes="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression">
+      eSuperTypes="http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base class for all imperative OCL expression AST nodes (QVT v1.3 Section 8.2.1)."/>
     </eAnnotations>
@@ -40,19 +40,19 @@
         <details key="documentation" value="If true, removes the value from the target collection (-= operator)."/>
       </eAnnotations>
     </eStructuralFeatures>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="left" lowerBound="1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="left" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="value" upperBound="-1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="defaultValue" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="defaultValue" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="BlockExp" eSuperTypes="#//ImperativeExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A block of sequentially executed expressions (QVT v1.3 Section 8.2.1.2)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="body" upperBound="-1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="body" upperBound="-1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="BreakExp" eSuperTypes="#//ImperativeExpression">
@@ -69,7 +69,7 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Return expression to exit from the current operation (QVT v1.3 Section 8.2.1.2)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="value" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="value" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="WhileExp" eSuperTypes="#//ImperativeExpression">
@@ -77,16 +77,16 @@
       <details key="documentation" value="While loop expression: while (condition) { body } (QVT v1.3 Section 8.2.1.4)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="condition" lowerBound="1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="body" lowerBound="1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="body" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="ImperativeLoopExp" abstract="true" eSuperTypes="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//LoopExp #//ImperativeExpression">
+  <eClassifiers xsi:type="ecore:EClass" name="ImperativeLoopExp" abstract="true" eSuperTypes="http://www.eclipse.org/fennec/m2x/ocl/1.0#//LoopExp #//ImperativeExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Abstract base for imperative loop expressions (forEach, forExp) that extend OCL LoopExp with an optional condition (QVT v1.3 Section 8.2.1.5)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="condition" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="condition" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ForExp" eSuperTypes="#//ImperativeLoopExp">
@@ -103,7 +103,7 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Imperative iterate expression with explicit target variable (QVT v1.3 Section 8.2.1.5)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="target" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="target" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//Variable"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="name" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -117,7 +117,7 @@
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="alternativePart" upperBound="-1"
         eType="#//AltExp" containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="elsePart" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="elsePart" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="AltExp" eSuperTypes="#//ImperativeExpression">
@@ -125,9 +125,9 @@
       <details key="documentation" value="An alternative (case) in a switch expression with a condition and body (QVT v1.3 Section 8.2.1.6)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="condition" lowerBound="1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="body" lowerBound="1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="body" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ComputeExp" eSuperTypes="#//ImperativeExpression">
@@ -135,9 +135,9 @@
       <details key="documentation" value="Compute expression: compute(var) { body } — evaluates body, returns var (QVT v1.3 Section 8.2.1.7)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="returnedElement" lowerBound="1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//Variable"
         containment="true"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="body" lowerBound="1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="body" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="AssertExp" eSuperTypes="#//ImperativeExpression">
@@ -147,23 +147,23 @@
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="severity" eType="#//SeverityKind"
         defaultValueLiteral="error"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="assertion" lowerBound="1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="log" eType="#//LogExp"
         containment="true"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="LogExp" eSuperTypes="../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OperationCallExp #//ImperativeExpression">
+  <eClassifiers xsi:type="ecore:EClass" name="LogExp" eSuperTypes="http://www.eclipse.org/fennec/m2x/ocl/1.0#//OperationCallExp #//ImperativeExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Log expression: log(message) with optional condition (QVT v1.3 Section 8.2.1.3). Extends OperationCallExp for the message arguments."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="condition" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="condition" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="RaiseExp" eSuperTypes="#//ImperativeExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Raise expression: raise exception with optional argument (QVT v1.3 Section 8.2.1.8)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="argument" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="argument" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="exception" lowerBound="1"
         eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClassifier"/>
@@ -173,7 +173,7 @@
       <details key="documentation" value="Try-catch expression for exception handling (QVT v1.3 Section 8.2.1.8)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="tryBody" upperBound="-1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="exceptClause" upperBound="-1"
         eType="#//CatchExp" containment="true"/>
@@ -182,7 +182,7 @@
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Catch clause in a try expression, catching specific exception types (QVT v1.3 Section 8.2.1.8)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="body" upperBound="-1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="body" upperBound="-1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="exception" upperBound="-1"
         eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClassifier"/>
@@ -192,11 +192,11 @@
       <details key="documentation" value="Object instantiation expression: new Class(args) (QVT v1.3 Section 8.2.1.9)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="argument" upperBound="-1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="instantiatedClass" lowerBound="1"
         eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClass"/>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="extent" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="extent" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//Variable"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="TransformationInstantiationExp" eSuperTypes="#//InstantiationExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
@@ -212,24 +212,24 @@
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="withResult" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
         defaultValueLiteral="false"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="referredVariable" lowerBound="1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//Variable"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//Variable"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="UnlinkExp" eSuperTypes="#//ImperativeExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Unlink expression to remove a reference between objects (QVT v1.3 Section 8.2.1.11)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="item" lowerBound="1" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="item" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="target" lowerBound="1"
-        eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Typedef" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EClass">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="Typedef: a named type alias with optional condition constraint (QVT v1.3 Section 8.2.1.12)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EReference" name="condition" eType="ecore:EClass ../../org.eclipse.fennec.m2x.ocl.model/model/ocl.ecore#//OclExpression"
+    <eStructuralFeatures xsi:type="ecore:EReference" name="condition" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="base" lowerBound="1" eType="ecore:EClass http://www.eclipse.org/emf/2002/Ecore#//EClassifier"/>
   </eClassifiers>
