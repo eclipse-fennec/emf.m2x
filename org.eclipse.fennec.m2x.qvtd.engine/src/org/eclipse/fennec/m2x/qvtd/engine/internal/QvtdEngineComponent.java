@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
+import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
@@ -25,7 +26,6 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
-import org.osgi.service.component.annotations.ReferenceCardinality;
 import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -58,6 +58,20 @@ import org.osgi.service.metatype.annotations.Designate;
  * what it imports, so the engine resolves those by name when it parses rather than having
  * them pushed in here (#90).
  *
+ * <p>The resource set is a mandatory reference too — deliberately not an optional one with a
+ * fallback to the global registry. Under {@code emf.osgi} a metamodel registered for the
+ * resource set ({@code emf.model.scope=resourceset}) lands in the resource set's package
+ * registry and never in the global one. An engine built with the fallback would resolve a
+ * {@code modeltype} to the wrong package instance and match nothing, silently (#245); and an
+ * optional reference cannot say when the service arrives, only that it was not there at
+ * activation. A mandatory reference means the engine exists once the resource set does. It is
+ * bound prototype-required so that every engine has its own, and
+ * {@code "resourceSet.target"} picks one where several are published.
+ *
+ * <p>The fingerprint service is mandatory for the same reason: a constructor reference is
+ * either there or the component waits — there is no later moment at which an optional one
+ * could be re-bound without rebuilding the engine.
+ *
  * @since 1.0
  */
 @Designate(ocd = QvtdEngineConfiguration.class)
@@ -67,13 +81,13 @@ public class QvtdEngineComponent extends QvtdEngineImpl {
 	@Activate
 	public QvtdEngineComponent(
 			QvtdEngineConfiguration config,
+			@Reference(name = "resourceSet", scope = ReferenceScope.PROTOTYPE_REQUIRED) ResourceSet resourceSet,
 			@Reference(name = "oclEngine", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclEngine oclEngine,
 			@Reference(name = "unitDiscovery",
 					target = "(" + QvtdServiceUnitResolver.RESOLVER_KIND + "=discovery)")
 			QvtdUnitResolver unitDiscovery,
-			@Reference(name = "fingerprints", cardinality = ReferenceCardinality.OPTIONAL)
-			FingerprintService fingerprints) {
-		super(QvtdConfigurationHelper.from(config, oclEngine, unitDiscovery),
-				fingerprints == null ? UnitPackager.withDefaults() : new UnitPackager(fingerprints));
+			@Reference(name = "fingerprints") FingerprintService fingerprints) {
+		super(QvtdConfigurationHelper.from(config, oclEngine, unitDiscovery, resourceSet),
+				new UnitPackager(fingerprints));
 	}
 }

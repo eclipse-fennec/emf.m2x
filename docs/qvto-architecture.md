@@ -532,9 +532,10 @@ code — a plain `EPackageImpl`, not a generated subclass — is *dynamic*: its 
 `seal()` copies its root package into `CompiledUnit.packages`, so a runtime that has nothing to
 offer for the nsURI can still serve the unit's types (#140 decides per package: equal fingerprint →
 the runtime instance wins, missing → the copy, differing → hard failure). A generated package is
-only `referenced`. The service arrives under OSGi as a reference of the engine component
-(`FingerprintService`, optional); a plain JVM uses `UnitPackager.withDefaults()`, which reaches the
-default implementation through `FingerprintHelper`.
+only `referenced`. The service arrives under OSGi as a mandatory reference of the engine component
+(`FingerprintService`, like the `ResourceSet` whose package registry resolves metamodels — no
+optional constructor references, #245); a plain JVM uses `UnitPackager.withDefaults()`, which reaches
+the default implementation through `FingerprintHelper`.
 
 **Nothing a resolver lends is mutated.** A `SourceUnit` is parsed afresh; a `CompiledUnit` whose
 AST sits in a compiled document is taken as a copy of that document (and its manifest fingerprint
@@ -1086,6 +1087,6 @@ expression (`QvtoImperativeIterateTest`).
 - **QVT-O Language Server:** LSP support (Phase 5)
 
 Both items that used to stand here are done: `QvtoEngineComponent` exists as a DS component with
-`@Reference` injection (oclEngine, unitDiscovery, fingerprints), and the QVT-O benchmarks against
+`@Reference` injection (resourceSet, oclEngine, unitDiscovery, fingerprints — all mandatory, #245), and the QVT-O benchmarks against
 Eclipse QVT-O live in `org.eclipse.fennec.m2x.qvto.benchmark` with their numbers in
 [benchmark-results.md](benchmark-results.md).

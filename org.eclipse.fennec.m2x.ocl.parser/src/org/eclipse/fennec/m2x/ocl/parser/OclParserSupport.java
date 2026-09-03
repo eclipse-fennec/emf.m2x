@@ -27,7 +27,10 @@ import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
 
 /**
@@ -82,8 +85,16 @@ public class OclParserSupport implements OclExpressionParser {
 	 * the given resource set.
 	 *
 	 * <p>This is the form to reach for: a {@link ResourceSet} is what EMF hands around,
-	 * and under OSGi it is what {@code emf.osgi} injects — a configured, isolated stack
+	 * and under OSGi it is what {@code emf.osgi} publishes — a configured, isolated stack
 	 * comes as a resource set, not as a bare registry (D42).
+	 *
+	 * <p>It is also the constructor Declarative Services uses. The component binds the
+	 * {@code ResourceSet} that {@code emf.osgi} registers as a prototype-scoped service, as a
+	 * <em>mandatory</em> reference: the parser exists once the resource set does, so a
+	 * metamodel registered for the resource set only ({@code emf.model.scope=resourceset})
+	 * resolves from the first expression on, and never falls back to the global registry
+	 * unnoticed (#245). Where several resource sets are published,
+	 * {@code "resourceSet.target"} picks one.
 	 *
 	 * <p>Only the resource set's {@linkplain ResourceSet#getPackageRegistry() package
 	 * registry} is used. Nothing is loaded through it: template and document sources are
@@ -92,7 +103,9 @@ public class OclParserSupport implements OclExpressionParser {
 	 * @param resourceSet the resource set whose package registry resolves classifier
 	 *        names, must not be {@code null}
 	 */
-	public OclParserSupport(ResourceSet resourceSet) {
+	@Activate
+	public OclParserSupport(
+			@Reference(name = "resourceSet", scope = ReferenceScope.PROTOTYPE_REQUIRED) ResourceSet resourceSet) {
 		this(Objects.requireNonNull(resourceSet, "resourceSet must not be null")
 				.getPackageRegistry());
 	}

@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvto.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,6 +23,9 @@ import java.lang.reflect.Proxy;
 import java.util.Map;
 import java.util.Set;
 
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -87,6 +91,26 @@ class QvtoConfigurationHelperTest {
 	 * A {@link QvtoEngineConfiguration} answering with the given overrides, and with the
 	 * attribute's declared default everywhere else — the same thing SCR hands the component.
 	 */
+	@Test
+	@DisplayName("the resource set it was given is what resolves metamodels")
+	void theSuppliedResourceSetDecidesTheRegistry() {
+		// The DS component hands in the emf.osgi resource set (#245). What has to hold is that
+		// the configuration resolves through exactly that resource set's registry — not a copy,
+		// not the global one — so a metamodel registered for the resource set only is seen.
+		ResourceSet resourceSet = new ResourceSetImpl();
+		QvtoConfiguration mapped = QvtoConfigurationHelper.from(config(Map.of()), OCL, null, resourceSet);
+		assertSame(resourceSet, mapped.resourceSet());
+		assertSame(resourceSet.getPackageRegistry(), mapped.packageRegistry());
+	}
+
+	@Test
+	@DisplayName("without a resource set the plain-Java fallback stays in place")
+	void withoutAResourceSetTheGlobalRegistryApplies() {
+		QvtoConfiguration mapped = QvtoConfigurationHelper.from(config(Map.of()), OCL, null, null);
+		assertNull(mapped.resourceSet());
+		assertSame(EPackage.Registry.INSTANCE, mapped.packageRegistry());
+	}
+
 	private static QvtoEngineConfiguration config(Map<String, Object> overrides) {
 		return (QvtoEngineConfiguration) Proxy.newProxyInstance(
 				QvtoEngineConfiguration.class.getClassLoader(),

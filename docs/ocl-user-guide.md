@@ -155,7 +155,7 @@ public class MyComponent {
 
 | Component | Scope | What's shared? |
 |-----------|-------|----------------|
-| `OclParserSupport` | PROTOTYPE | Nothing — each engine gets its own parser |
+| `OclParserSupport` | PROTOTYPE | Nothing — each engine gets its own parser, bound `prototype_required` to its own `ResourceSet` from `emf.osgi`, whose package registry resolves qualified names |
 | `OclEngineComponent` (`DefaultOclEngine`) | PROTOTYPE | Nothing — each consumer gets its own engine with isolated `PropertyAccessorCache`. Published as `OclEngine` and, for the EMF delegates in the same bundle, as the internal `OclDelegateSupport` |
 | `DefaultOclExpressionCacheComponent` | SINGLETON | **Shared by default** — all engines share the same LRU parse cache (1024 entries) |
 
@@ -296,7 +296,15 @@ OclEngine engine = OclEngines.create(new OclParserSupport(resourceSet));
 OclEngine engine = OclEngines.create(new OclParserSupport(registry));
 ```
 
-Under OSGi the resource set is what `emf.osgi` injects — a configured, isolated stack arrives as a `ResourceSetFactory`, never as a bare registry:
+Under OSGi you do not construct the parser. `OclParserSupport` is a DS component that binds the `ResourceSet` `emf.osgi` publishes as a prototype-scoped service — as a **mandatory** reference, deliberately not an optional one with a fallback to the global registry. A metamodel registered for the resource set only (`emf.model.scope=resourceset`) lives in that resource set's package registry and never in the global one, so a parser built on the fallback would report a valid qualified name as unknown; and an optional reference cannot say *when* the service arrives. Mandatory means the parser exists once the resource set does. Where several resource sets are published, pick one:
+
+```json
+{
+    "org.eclipse.fennec.m2x.ocl.parser.OclParserSupport": { "resourceSet.target": "(emf.name=myapp)" }
+}
+```
+
+Building an engine by hand under OSGi works the same way as in plain Java — the configured, isolated stack arrives as a `ResourceSetFactory`, never as a bare registry:
 
 ```java
 @Reference(target = "(rsf.name=myapp)")
