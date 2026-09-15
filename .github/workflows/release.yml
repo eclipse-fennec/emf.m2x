@@ -3,7 +3,7 @@ name: Release Build
 # Orchestrator for main (release branch -> Maven Central).
 #
 # Identical in shape to snapshot.yml; the only differences are do-release=true and
-# the `latest` Pages channel. Note that verify now gates the release: the previous
+# the `latest` channel (Pages docs and the p2 site on download.eclipse.org). Note that verify now gates the release: the previous
 # bespoke workflow called `./gradlew release` directly, and the bnd release task
 # does not depend on test/check, so main published without ever running a test.
 on:
@@ -48,19 +48,25 @@ jobs:
     secrets: inherit
 
   p2:
-    name: Assemble p2 update site
+    name: Publish p2 to download.eclipse.org
     needs: release
-    uses: ./.github/workflows/p2-pages.yml
+    # Independent of the Pages deploy: `deploy` does not wait for it, so the two
+    # publications never block each other.
+    uses: ./.github/workflows/p2-downloads.yml
     with:
-      branch: latest
+      channel: latest
+    secrets:
+      SCP_USERNAME: ${{ secrets.SCP_USERNAME }}
+      SCP_KEY: ${{ secrets.SCP_KEY }}
+      SCP_PASSPHRASE: ${{ secrets.SCP_PASSPHRASE }}
 
   docs:
     name: Build docs slice
     # Central VitePress build, in slice mode: `deploy: false` uploads
     # `site/latest/` as the `pages-docs` artifact instead of publishing, which
-    # is what this repo needs — a Pages deploy replaces the ENTIRE site and we
-    # publish the p2 update site next to the docs, so only pages-deploy.yml may
-    # deploy. It also gates the build on the shared docs theme (Eclipse Foundation
+    # is what this repo needs — a Pages deploy replaces the ENTIRE site and the
+    # `snapshot` and `latest` channels must not wipe each other, so only
+    # pages-deploy.yml may deploy. It also gates the build on the shared docs theme (Eclipse Foundation
     # footer, brand palette) matching eclipse-fennec/.github's docs-theme/.
     uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0
     with:
@@ -73,7 +79,7 @@ jobs:
 
   deploy:
     name: Publish merged Pages site
-    needs: [p2, docs]
+    needs: docs
     uses: ./.github/workflows/pages-deploy.yml
     with:
       channel: latest
