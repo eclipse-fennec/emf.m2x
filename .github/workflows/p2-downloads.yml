@@ -135,6 +135,7 @@ jobs:
           rm -rf site/META-INF
           p2url="${DOWNLOAD_URL}/${CHANNEL}/"
           sed -e "s|__BRANCH__|${CHANNEL}|g" -e "s|__P2_URL__|${p2url}|g" \
+              -e "s|__YEAR__|$(date -u +%Y)|g" \
             org.eclipse.fennec.m2x.ocl.ide.p2/p2-index.template.html > site/index.html
           echo "update site for ${p2url}:"; find site -type f | sort
 
