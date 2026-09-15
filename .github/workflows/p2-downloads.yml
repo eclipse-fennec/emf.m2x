@@ -1,0 +1,201 @@
+name: Publish p2 update site to download.eclipse.org
+
+# Publishes the OCL p2 update site to the Eclipse Foundation download server:
+#
+#   https://download.eclipse.org/fennec/m2x/ocl/p2/<channel>/
+#
+# This runs *in addition to* the GitHub Pages copy (p2-pages.yml + pages-deploy.yml)
+# while the mechanism is being proven; once it is, the Pages p2 slice can go and
+# Pages carries only the docs (see eclipse-fennec/.github#37/#38/#40 for why the
+# Pages full-replace model is a poor fit for update sites).
+#
+# Mechanism (CBI best practice, https://eclipse.dev/cbi/best-practices/github-actions/upload-to-downloads.eclipse.org/):
+# the org secrets SCP_USERNAME / SCP_KEY / SCP_PASSPHRASE grant the Fennec bot
+# ssh access to projects-storage.eclipse.org, which mounts
+# /home/data/httpd/download.eclipse.org. Instead of the scp action the guide shows
+# we use plain rsync over ssh:
+#   - rsync --delete keeps the channel directory an exact mirror of the built
+#     repository. scp only ever adds, and snapshot plugin jars carry a timestamp
+#     in their version, so they would pile up run after run - the Foundation
+#     expects projects to keep their download space tidy.
+#   - the upload goes to <channel>.new and is swapped in with mv, so a client
+#     never sees a half-written repository.
+#   - the host key is pinned (no StrictHostKeyChecking=no), and the passphrase
+#     is stripped from a runner-local copy of the key with ssh-keygen -p so ssh
+#     and rsync can run non-interactively.
+#
+# Two entry points:
+#   workflow_call    - from the snapshot/release orchestrators; the p2 jar comes
+#                      from the `release-jars` artifact of reusable-release, so
+#                      the published repository is the exact jar that was built,
+#                      tested and released to Maven.
+#   workflow_dispatch - manual run from any branch; builds the p2 jar itself
+#                      (`:org.eclipse.fennec.m2x.ocl.ide.p2:export`). Meant for
+#                      testing the upload path and for republishing a channel.
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: "URL segment under ocl/p2/, e.g. snapshot, latest or a release version"
+        required: true
+        type: string
+      artifact-name:
+        description: "artifact holding the p2 jar; reusable-release.yml uploads it as release-jars"
+        required: false
+        type: string
+        default: release-jars
+    secrets:
+      SCP_USERNAME:
+        required: true
+      SCP_KEY:
+        required: true
+      SCP_PASSPHRASE:
+        required: true
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "URL segment under ocl/p2/, e.g. snapshot, latest or a release version"
+        required: true
+        type: string
+        default: snapshot
+
+permissions:
+  contents: read
+
+# One upload per channel at a time; a later run waits for the earlier one so the
+# .new/.old swap is never interleaved.
+concurrency:
+  group: p2-downloads-${{ inputs.channel }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOWNLOAD_HOST: projects-storage.eclipse.org
+  # Directory on the download server that holds all channels of the OCL site.
+  DOWNLOAD_BASE: /home/data/httpd/download.eclipse.org/fennec/m2x/ocl/p2
+  # Public URL of the same directory.
+  DOWNLOAD_URL: https://download.eclipse.org/fennec/m2x/ocl/p2
+
+jobs:
+  publish:
+    name: rsync OCL p2 site (${{ inputs.channel }})
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate channel
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        # The channel becomes a remote path component; keep it to a plain name.
+        run: |
+          set -euo pipefail
+          if [[ ! "$CHANNEL" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "::error::channel '$CHANNEL' is not a plain path segment"; exit 1
+          fi
+
+      - name: Git Checkout
+        uses: actions/checkout@v7
+
+      # --- p2 jar: from the release build (workflow_call) or built here (dispatch) ---
+      - name: Download p2 jar from the release build
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: p2-in
+      - name: Set up Java
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Build p2 jar
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          LC_ALL: en_US.UTF-8
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon :org.eclipse.fennec.m2x.ocl.ide.p2:export
+          mkdir -p p2-in
+          cp org.eclipse.fennec.m2x.ocl.ide.p2/generated/org.eclipse.fennec.m2x.ocl.p2.jar p2-in/
+
+      - name: Assemble update site
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          rm -rf site && mkdir -p site
+          unzip -q -o p2-in/org.eclipse.fennec.m2x.ocl.p2.jar -d site
+          # Maven packaging metadata is not part of a p2 repository.
+          rm -rf site/META-INF
+          p2url="${DOWNLOAD_URL}/${CHANNEL}/"
+          sed -e "s|__BRANCH__|${CHANNEL}|g" -e "s|__P2_URL__|${p2url}|g" \
+            org.eclipse.fennec.m2x.ocl.ide.p2/p2-index.template.html > site/index.html
+          echo "update site for ${p2url}:"; find site -type f | sort
+
+      - name: Set up ssh
+        env:
+          SCP_USERNAME: ${{ secrets.SCP_USERNAME }}
+          SCP_KEY: ${{ secrets.SCP_KEY }}
+          SCP_PASSPHRASE: ${{ secrets.SCP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SCP_KEY" > ~/.ssh/p2-deploy
+          # Strip the passphrase from the runner-local copy so rsync/ssh can run
+          # without an agent or a tty. The file lives in the runner's home for the
+          # duration of this job only and is removed in the last step.
+          ssh-keygen -q -p -P "$SCP_PASSPHRASE" -N "" -f ~/.ssh/p2-deploy
+          # Pinned host keys of projects-storage.eclipse.org (ssh-keyscan, 2026-09-15).
+          cat > ~/.ssh/known_hosts <<'KEYS'
+          projects-storage.eclipse.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAsn6PO2Uemsr7wIUu5x0RnlRcuK36D2sbmYNe2LSKdb
+          projects-storage.eclipse.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBAOUQ8p0E/Ib3uchk+6wEZ8UtBHTBvyI2E+eA/sOXajLQPKP0XIbVyECy8x5OmrrlvOYs+LxxniGJ69UIjiYZqM=
+          KEYS
+          cat > ~/.ssh/config <<CONF
+          Host ${DOWNLOAD_HOST}
+            User ${SCP_USERNAME}
+            IdentityFile ~/.ssh/p2-deploy
+            IdentitiesOnly yes
+            BatchMode yes
+            StrictHostKeyChecking yes
+          CONF
+
+      - name: Upload and swap in
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          target="${DOWNLOAD_BASE}/${CHANNEL}"
+          # Connectivity check and parent directories in one go. A previous run
+          # that died mid-way may have left a .new behind; start it clean.
+          ssh "$DOWNLOAD_HOST" "set -e; mkdir -p '${DOWNLOAD_BASE}'; rm -rf '${target}.new' '${target}.old'"
+          rsync -rlptz --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r \
+            site/ "${DOWNLOAD_HOST}:${target}.new/"
+          # Atomic-enough swap: clients see either the old or the new repository.
+          ssh "$DOWNLOAD_HOST" "set -e; cd '${DOWNLOAD_BASE}'; \
+            if [ -d '${CHANNEL}' ]; then mv '${CHANNEL}' '${CHANNEL}.old'; fi; \
+            mv '${CHANNEL}.new' '${CHANNEL}'; rm -rf '${CHANNEL}.old'; \
+            echo 'published:'; ls -la '${CHANNEL}'"
+
+      - name: Verify over HTTP
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          url="${DOWNLOAD_URL}/${CHANNEL}"
+          for f in p2.index content.jar artifacts.jar index.html; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -L "${url}/${f}")
+            echo "${code}  ${url}/${f}"
+            [ "$code" = "200" ] || { echo "::error::${url}/${f} -> HTTP ${code}"; exit 1; }
+          done
+          echo "### OCL p2 update site" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published to ${url}/" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove ssh key
+        if: always()
+        run: rm -rf ~/.ssh

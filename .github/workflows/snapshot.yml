@@ -9,7 +9,9 @@ name: Snapshot Build
 # deploying the Pages site stays repo-local (see pages-deploy.yml for why).
 #
 # The p2 update site is republished from the *exact* jar built by the release job
-# (artifact `release-jars`), never rebuilt.
+# (artifact `release-jars`), never rebuilt - twice for now: to GitHub Pages (the
+# existing channel) and, additionally, to download.eclipse.org via p2-downloads.yml.
+# The second one is the candidate replacement; it is run alongside until proven.
 on:
   push:
     # This snapshot build should only happen on pushes to the snapshot branch.
@@ -63,6 +65,20 @@ jobs:
     uses: ./.github/workflows/p2-pages.yml
     with:
       branch: snapshot
+
+  p2-downloads:
+    name: Publish p2 to download.eclipse.org
+    needs: release
+    # Additional publishing channel under test (see p2-downloads.yml). Independent
+    # of the Pages deploy: `deploy` does not wait for it, so a failure here never
+    # blocks docs or the Pages p2 site.
+    uses: ./.github/workflows/p2-downloads.yml
+    with:
+      channel: snapshot
+    secrets:
+      SCP_USERNAME: ${{ secrets.SCP_USERNAME }}
+      SCP_KEY: ${{ secrets.SCP_KEY }}
+      SCP_PASSPHRASE: ${{ secrets.SCP_PASSPHRASE }}
 
   docs:
     name: Build docs slice
