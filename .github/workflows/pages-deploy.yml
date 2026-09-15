@@ -4,10 +4,12 @@ name: Publish merged Pages site (reusable)
 # `reusable-docs.yml` in slice mode — but the deploy cannot be.
 #
 # GitHub Pages replaces the *entire* site on every deploy, but emf.m2x publishes
-# several independent slices: the OCL p2 update site (`ocl/<channel>/p2/`) and the
-# VitePress docs (`<channel>/`), where <channel> is `snapshot` (from the snapshot
-# branch) or `latest` (from main). A naive deploy would delete the other channel,
-# so `latest` and `snapshot` would keep wiping each other.
+# the VitePress docs per channel (`<channel>/`), where <channel> is `snapshot`
+# (from the snapshot branch) or `latest` (from main). A naive deploy would delete
+# the other channel, so `latest` and `snapshot` would keep wiping each other.
+#
+# The OCL p2 update site is NOT part of the Pages site any more; it lives on
+# download.eclipse.org (p2-downloads.yml). Its former Pages path is retired below.
 #
 # This job therefore keeps the site cumulative:
 #   1. restore the full site published by the most recent successful deploy
@@ -83,6 +85,20 @@ jobs:
           set -euo pipefail
           # Disable Jekyll so paths like /.vitepress assets are served verbatim.
           touch _site/.nojekyll
+          # Retire the former p2 slice. The overlay never deletes, so the last
+          # published `ocl/<channel>/p2/` would otherwise linger, stale, forever.
+          # The one URL that was ever public gets a pointer to the new home; p2
+          # clients see a clean 404 on content.jar instead of an outdated site.
+          rm -rf _site/ocl
+          mkdir -p _site/ocl/snapshot/p2
+          cat > _site/ocl/snapshot/p2/index.html <<HTML
+          <!doctype html><meta charset="utf-8">
+          <title>Fennec OCL update site has moved</title>
+          <meta http-equiv="refresh" content="0; url=https://download.eclipse.org/fennec/m2x/ocl/p2/snapshot/">
+          <p>The Fennec OCL update site moved to
+          <a href="https://download.eclipse.org/fennec/m2x/ocl/p2/snapshot/">https://download.eclipse.org/fennec/m2x/ocl/p2/snapshot/</a>.
+          Please update the repository location in Eclipse.</p>
+          HTML
           # Root redirect. Deterministic regardless of which channel deployed
           # last: prefer the released docs, fall back to snapshot, so the root
           # never points at a channel that is not present.

@@ -27,19 +27,23 @@ JAR** (`org.eclipse.fennec.m2x.ocl.p2`). That JAR is published to Maven Central
 
 ## 2. Install from the update site (recommended)
 
-The p2 repository is published as a live **GitHub Pages update site** — a stable
-URL you simply add in Eclipse, with no download:
+The p2 repository is published as a live update site on the **Eclipse download
+server** — a stable URL you simply add in Eclipse, with no download:
 
 ```
-https://eclipse-fennec.github.io/emf.m2x/ocl/snapshot/p2/
+https://download.eclipse.org/fennec/m2x/ocl/p2/snapshot/
 ```
 
 In Eclipse: **Help → Install New Software… → Add… → Location:** paste the URL →
 tick **Fennec OCL** → install → restart.
 
-The path carries the branch/version: `…/ocl/<branch>/p2/`. Today the development
+The last path segment is the channel: `…/ocl/p2/<channel>/`. Today the development
 branch `snapshot` is published; once the first release is cut, a stable
-`…/ocl/latest/p2/` alias (tracking `main`) is added — prefer that for production.
+`…/ocl/p2/latest/` channel (tracking `main`) is added — prefer that for production.
+
+> The site used to live on GitHub Pages under
+> `https://eclipse-fennec.github.io/emf.m2x/ocl/snapshot/p2/`. That location is
+> retired; if you added it to Eclipse, replace it with the URL above.
 
 > This is the easiest option and supports normal *Check for Updates*. The Maven
 > archive below (§3) is an alternative for offline/pinned installs.
@@ -72,7 +76,7 @@ it with the `jar:…!/` URL (§3, Method B) — that works for snapshots too, e.
 jar:https://central.sonatype.com/repository/maven-snapshots/org/eclipse/fennec/m2x/org.eclipse.fennec.m2x.ocl.p2/0.1.1-SNAPSHOT/org.eclipse.fennec.m2x.ocl.p2-0.1.1-<timestamp>-<n>.jar!/
 ```
 Note the URL pins one timestamped build, so it doesn't auto‑update — use the
-GitHub Pages update site (§2) if you want *Check for Updates*.
+update site (§2) if you want *Check for Updates*.
 
 **Release (Maven Central)** — once a release is published:
 

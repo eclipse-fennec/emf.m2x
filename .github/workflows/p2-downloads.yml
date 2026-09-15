@@ -4,10 +4,12 @@ name: Publish p2 update site to download.eclipse.org
 #
 #   https://download.eclipse.org/fennec/m2x/ocl/p2/<channel>/
 #
-# This runs *in addition to* the GitHub Pages copy (p2-pages.yml + pages-deploy.yml)
-# while the mechanism is being proven; once it is, the Pages p2 slice can go and
-# Pages carries only the docs (see eclipse-fennec/.github#37/#38/#40 for why the
-# Pages full-replace model is a poor fit for update sites).
+# Until 2026-09-15 the site was a slice of the GitHub Pages deploy. Pages replaces
+# the whole site on every deploy, so p2 and docs had to be published in one run
+# and every version had to be carried forward artificially (see
+# eclipse-fennec/.github#37/#38/#40). On the download server each channel is just
+# a directory: it stays until someone removes it, and it is published without
+# touching the docs. pages-deploy.yml now carries docs only.
 #
 # Mechanism (CBI best practice, https://eclipse.dev/cbi/best-practices/github-actions/upload-to-downloads.eclipse.org/):
 # the org secrets SCP_USERNAME / SCP_KEY / SCP_PASSPHRASE grant the Fennec bot

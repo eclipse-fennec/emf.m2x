@@ -4,14 +4,12 @@ name: Snapshot Build
 #
 # verify, release, the test-result check runs and the docs build all come from
 # the central reusables in eclipse-fennec/.github. The docs one runs in *slice*
-# mode (deploy: false): the central set knows nothing about p2, and emf.m2x
-# publishes the p2 update site and the docs in a single deploy, so assembling and
-# deploying the Pages site stays repo-local (see pages-deploy.yml for why).
+# mode (deploy: false) and pages-deploy.yml publishes the merged, cumulative
+# Pages site (see there for why the deploy stays repo-local).
 #
-# The p2 update site is republished from the *exact* jar built by the release job
-# (artifact `release-jars`), never rebuilt - twice for now: to GitHub Pages (the
-# existing channel) and, additionally, to download.eclipse.org via p2-downloads.yml.
-# The second one is the candidate replacement; it is run alongside until proven.
+# The p2 update site does NOT go to Pages any more: p2-downloads.yml rsyncs the
+# *exact* jar built by the release job (artifact `release-jars`) to
+# download.eclipse.org, independently of the docs deploy.
 on:
   push:
     # This snapshot build should only happen on pushes to the snapshot branch.
@@ -60,18 +58,10 @@ jobs:
     secrets: inherit
 
   p2:
-    name: Assemble p2 update site
-    needs: release
-    uses: ./.github/workflows/p2-pages.yml
-    with:
-      branch: snapshot
-
-  p2-downloads:
     name: Publish p2 to download.eclipse.org
     needs: release
-    # Additional publishing channel under test (see p2-downloads.yml). Independent
-    # of the Pages deploy: `deploy` does not wait for it, so a failure here never
-    # blocks docs or the Pages p2 site.
+    # Independent of the Pages deploy: `deploy` does not wait for it, so the two
+    # publications never block each other.
     uses: ./.github/workflows/p2-downloads.yml
     with:
       channel: snapshot
@@ -84,9 +74,9 @@ jobs:
     name: Build docs slice
     # Central VitePress build, in slice mode: `deploy: false` uploads
     # `site/snapshot/` as the `pages-docs` artifact instead of publishing, which
-    # is what this repo needs — a Pages deploy replaces the ENTIRE site and we
-    # publish the p2 update site next to the docs, so only pages-deploy.yml may
-    # deploy. It also gates the build on the shared docs theme (Eclipse Foundation
+    # is what this repo needs — a Pages deploy replaces the ENTIRE site and the
+    # `snapshot` and `latest` channels must not wipe each other, so only
+    # pages-deploy.yml may deploy. It also gates the build on the shared docs theme (Eclipse Foundation
     # footer, brand palette) matching eclipse-fennec/.github's docs-theme/.
     uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0
     with:
@@ -99,7 +89,7 @@ jobs:
 
   deploy:
     name: Publish merged Pages site
-    needs: [p2, docs]
+    needs: docs
     uses: ./.github/workflows/pages-deploy.yml
     with:
       channel: snapshot

@@ -13,11 +13,15 @@ const base = `/emf.m2x/${version}/`
 const ref = process.env.DOCS_REF || 'snapshot'
 
 // Canonical published origin. Links that point OUTSIDE the current docs base
-// (the p2 update site, other doc versions) must be full URLs — VitePress
+// (other doc versions) must be full URLs — VitePress
 // auto-prepends `base` to any root-absolute (`/…`) link, which would otherwise
 // double the path (e.g. /emf.m2x/snapshot/emf.m2x/ocl/…). Links to pages WITHIN
 // this version stay base-relative (e.g. `/guides/ocl`).
 const SITE = 'https://eclipse-fennec.github.io/emf.m2x'
+
+// The OCL p2 update site lives on the Eclipse download server, one directory per
+// channel (`snapshot`, `latest`), published by .github/workflows/p2-downloads.yml.
+const P2_SITE = 'https://download.eclipse.org/fennec/m2x/ocl/p2'
 
 // Version selector. Only `snapshot` is deployed today; keep as data so adding
 // `latest` and tagged versions later is a one-liner.
@@ -83,7 +87,7 @@ export default defineConfig({
       { text: 'Guides', items: guideItems },
       {
         text: 'Eclipse Update Site',
-        link: `${SITE}/ocl/${version}/p2/`,
+        link: `${P2_SITE}/${version}/`,
       },
       { text: `version: ${version}`, items: versions },
     ],
