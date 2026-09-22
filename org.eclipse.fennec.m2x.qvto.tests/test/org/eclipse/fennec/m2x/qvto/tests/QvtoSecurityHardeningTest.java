@@ -243,6 +243,7 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 		QvtoEvaluationOptions opts = QvtoEvaluationOptions.defaults();
 
 		assertEquals(1000, opts.maxStackDepth());
+		assertEquals(Duration.ofSeconds(30), opts.timeout(), "an execution has a deadline by default (#261)");
 		assertEquals(1_000_000, opts.maxLoopIterations());
 		assertEquals(10_000, opts.maxDiagnostics());
 		assertEquals(1_000_000, opts.maxTraceRecords());

@@ -367,6 +367,48 @@ class M2tSecurityHardeningTest {
 	}
 
 	@Nested
+	@DisplayName("Execution Timeout (#261)")
+	class ExecutionTimeout {
+
+		@Test
+		@DisplayName("a generation past its deadline stops with one timeout diagnostic")
+		void generationPastTheDeadline_stopsWithOneDiagnostic() throws M2tParseException {
+			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
+			M2tEngine engine = createEngine(M2tConfiguration.builder(oclConfig).timeoutMs(1).build());
+
+			// A million iterations of work: past a one-millisecond deadline long before the end
+			String src = "[module m(Ecore)/]\n"
+					+ "[template public main(c : EClass)]\n"
+					+ "[for (i : Integer | Sequence{1..1000000})]\n"
+					+ "[i.toString().toUpper()/]\n"
+					+ "[/for]\n"
+					+ "[/template]\n";
+			Module m = engine.parse(src, "test");
+			M2tResult result = engine.execute(m, M2tContext.of(testClass));
+
+			assertFalse(result.isSuccess(), "a generation past its deadline is not a success");
+			assertEquals(1, result.diagnostics().stream()
+					.filter(d -> d.getMessage().contains("Execution timeout exceeded")).count(),
+					() -> "reported once, not per checkpoint: " + result.diagnostics());
+		}
+
+		@Test
+		@DisplayName("timeoutMs(0) removes the deadline")
+		void zero_meansNoDeadline() throws M2tParseException {
+			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
+			M2tEngine engine = createEngine(M2tConfiguration.builder(oclConfig).timeoutMs(0).build());
+
+			Module m = engine.parse("[module m(Ecore)/]\n"
+					+ "[template public main(c : EClass)]\n"
+					+ "[for (i : Integer | Sequence{1..1000})][i/][/for]\n"
+					+ "[/template]\n", "test");
+			M2tResult result = engine.execute(m, M2tContext.of(testClass));
+
+			assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+		}
+	}
+
+	@Nested
 	@DisplayName("Configuration Defaults")
 	class ConfigurationDefaults {
 
@@ -376,6 +418,7 @@ class M2tSecurityHardeningTest {
 			M2tConfiguration config = defaultConfig();
 			assertEquals(1_000, config.maxTemplateDepth(), "maxTemplateDepth default");
 			assertEquals(1_000_000, config.maxForIterations(), "maxForIterations default");
+			assertEquals(30_000L, config.timeoutMs(), "timeoutMs default: a generation has a deadline (#261)");
 			assertEquals(1_000_000, config.maxCrossProductSize(), "maxCrossProductSize default");
 			assertEquals(10_000_000L, config.maxOutputSize(), "maxOutputSize default");
 			assertEquals(10_000, config.maxDiagnostics(), "maxDiagnostics default");

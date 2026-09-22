@@ -59,6 +59,13 @@ public final class QvtdConfiguration {
 	private final int maxUnitResolvers;
 	private final int maxRelationDepth;
 	private final int maxBindings;
+	/**
+	 * Default execution timeout: 30,000 ms. The size limits bound what a transformation can
+	 * build in one step; what grows slowly is bounded by time only, so an execution has a
+	 * deadline unless the embedder sets {@code timeoutMs(0)} (#261).
+	 */
+	public static final long DEFAULT_TIMEOUT_MS = 30_000;
+
 	private final long timeoutMs;
 	private final int maxTraceRecords;
 
@@ -223,7 +230,7 @@ public final class QvtdConfiguration {
 
 	/**
 	 * Returns the execution timeout in milliseconds (M-R4).
-	 * Zero means no timeout (default).
+	 * Defaults to {@value #DEFAULT_TIMEOUT_MS}; zero means no timeout.
 	 */
 	public long timeoutMs() {
 		return timeoutMs;
@@ -303,7 +310,7 @@ public final class QvtdConfiguration {
 		private int maxUnitResolvers = 5;
 		private int maxRelationDepth = 200;
 		private int maxBindings = 10_000;
-		private long timeoutMs;
+		private long timeoutMs = DEFAULT_TIMEOUT_MS;
 		private int maxTraceRecords = 100_000;
 
 		private Builder(OclConfiguration oclConfiguration) {
@@ -500,7 +507,7 @@ public final class QvtdConfiguration {
 
 		/**
 		 * Sets the execution timeout in milliseconds (M-R4).
-		 * Zero means no timeout (default).
+		 * Defaults to {@value QvtdConfiguration#DEFAULT_TIMEOUT_MS}; zero means no timeout.
 		 */
 		public Builder timeoutMs(long ms) {
 			if (ms < 0) {

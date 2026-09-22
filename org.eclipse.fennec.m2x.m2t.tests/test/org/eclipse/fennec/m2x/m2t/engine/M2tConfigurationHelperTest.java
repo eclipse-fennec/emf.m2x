@@ -57,6 +57,7 @@ class M2tConfigurationHelperTest {
 		assertEquals(built.maxDiagnostics(), mapped.maxDiagnostics());
 		assertEquals(built.maxTemplateDepth(), mapped.maxTemplateDepth());
 		assertEquals(built.maxForIterations(), mapped.maxForIterations());
+		assertEquals(built.timeoutMs(), mapped.timeoutMs());
 		assertEquals(built.maxCrossProductSize(), mapped.maxCrossProductSize());
 		assertEquals(built.maxOutputSize(), mapped.maxOutputSize());
 		assertEquals(built.protectedAreaEnabled(), mapped.protectedAreaEnabled());
@@ -71,6 +72,7 @@ class M2tConfigurationHelperTest {
 				Map.entry("maxDiagnostics", 11),
 				Map.entry("maxTemplateDepth", 22),
 				Map.entry("maxForIterations", 33),
+				Map.entry("timeout", 66L),
 				Map.entry("maxCrossProductSize", 44),
 				Map.entry("maxOutputSize", 55L),
 				Map.entry("protectedAreaEnabled", false))), OCL);
@@ -80,6 +82,7 @@ class M2tConfigurationHelperTest {
 		assertEquals(11, mapped.maxDiagnostics());
 		assertEquals(22, mapped.maxTemplateDepth());
 		assertEquals(33, mapped.maxForIterations());
+		assertEquals(66L, mapped.timeoutMs());
 		assertEquals(44, mapped.maxCrossProductSize());
 		assertEquals(55L, mapped.maxOutputSize());
 		assertFalse(mapped.protectedAreaEnabled());

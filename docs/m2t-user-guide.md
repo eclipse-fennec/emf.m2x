@@ -178,6 +178,7 @@ M2tEngine engine = M2tEngines.create(config);
 | `maxDiagnostics(int)` | 10,000 | Maximum diagnostics before truncation |
 | `maxTemplateDepth(int)` | 1,000 | Maximum template invocation depth (recursion limit) |
 | `maxForIterations(int)` | 1,000,000 | Maximum for-block iterations |
+| `timeoutMs(long)` | 30,000 | Wall-clock deadline of one generation in ms, `0` for none |
 | `maxCrossProductSize(int)` | 1,000,000 | Maximum cross-product size for set-argument invocations |
 | `maxOutputSize(long)` | 10,000,000 | Maximum total output size in characters (~10 MB), `0` for unlimited |
 | `protectedAreaEnabled(boolean)` | `true` | Enable/disable protected area markers and merging (see [§10.5](#105-disabling-protected-areas)) |
@@ -312,6 +313,7 @@ All properties use the `m2t.` prefix. OCL limits are **not** repeated here; they
 | `m2t.maxDiagnostics` | int | 10,000 | Diagnostics collected before generation gives up (T-2) |
 | `m2t.maxTemplateDepth` | int | 1,000 | Nesting depth of template invocations (T-1 runaway recursion) |
 | `m2t.maxForIterations` | int | 1,000,000 | Iterations of a single `for` block (T-3) |
+| `m2t.timeout` | long | 30,000 | Wall-clock deadline of one generation in ms (0 = no timeout) |
 | `m2t.maxCrossProductSize` | int | 1,000,000 | Size of a `for` over several collections (T-3) |
 | `m2t.maxOutputSize` | long | 10,000,000 | Characters one generation may produce (T-4 output flooding) |
 | `m2t.protectedAreaEnabled` | boolean | `true` | Whether protected area markers in existing files are honoured (T-6) |

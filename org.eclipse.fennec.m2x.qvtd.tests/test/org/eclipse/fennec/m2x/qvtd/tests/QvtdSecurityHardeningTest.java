@@ -211,7 +211,7 @@ class QvtdSecurityHardeningTest {
 
 		assertEquals(200, config.maxRelationDepth());
 		assertEquals(10_000, config.maxBindings());
-		assertEquals(0, config.timeoutMs());
+		assertEquals(30_000, config.timeoutMs(), "an execution has a deadline by default (#261)");
 		assertEquals(100_000, config.maxTraceRecords());
 		assertFalse(config.blackboxEnabled());
 		assertEquals(Set.of(), config.allowedBlackboxModules());

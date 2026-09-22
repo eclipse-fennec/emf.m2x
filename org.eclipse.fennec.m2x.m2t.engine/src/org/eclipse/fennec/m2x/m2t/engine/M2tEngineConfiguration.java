@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.m2t.engine;
 
+import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
@@ -46,6 +47,9 @@ public @interface M2tEngineConfiguration {
 
 	@AttributeDefinition(name = "Max For Iterations", description = "Maximum iterations of a single for block")
 	int maxForIterations() default 1_000_000;
+
+	@AttributeDefinition(name = "Timeout (ms)", description = "Execution timeout of one generation in milliseconds (0 = no timeout)")
+	long timeout() default M2tConfiguration.DEFAULT_TIMEOUT_MS;
 
 	@AttributeDefinition(name = "Max Cross Product Size", description = "Maximum size of a for block over several collections")
 	int maxCrossProductSize() default 1_000_000;
