@@ -53,6 +53,7 @@ public final class OclConfiguration {
 	private static final int DEFAULT_MAX_CLOSURE_ITERATIONS =
 			OclEvaluationOptions.DEFAULT_MAX_CLOSURE_ITERATIONS;
 	private static final int DEFAULT_MAX_REGEX_LENGTH = OclEvaluationOptions.DEFAULT_MAX_REGEX_LENGTH;
+	private static final int DEFAULT_MAX_STRING_LENGTH = OclEvaluationOptions.DEFAULT_MAX_STRING_LENGTH;
 
 	private final OclExpressionParser parser;
 	private final OclExpressionCache expressionCache;
@@ -65,6 +66,7 @@ public final class OclConfiguration {
 	private final int maxCollectionSize;
 	private final int maxClosureIterations;
 	private final int maxRegexLength;
+	private final int maxStringLength;
 	private final boolean useEMFTypes;
 
 	private OclConfiguration(Builder builder) {
@@ -79,6 +81,7 @@ public final class OclConfiguration {
 		this.maxCollectionSize = builder.maxCollectionSize;
 		this.maxClosureIterations = builder.maxClosureIterations;
 		this.maxRegexLength = builder.maxRegexLength;
+		this.maxStringLength = builder.maxStringLength;
 		this.useEMFTypes = builder.useEMFTypes;
 	}
 
@@ -188,6 +191,15 @@ public final class OclConfiguration {
 	}
 
 	/**
+	 * Returns the maximum length of a string an operation may produce. Defaults to 10,000,000.
+	 *
+	 * @return the maximum string length
+	 */
+	public int maxStringLength() {
+		return maxStringLength;
+	}
+
+	/**
 	 * Returns whether {@code OclEngine.evaluate(...)} should return EMF
 	 * collection types ({@link org.eclipse.emf.common.util.EList},
 	 * {@link org.eclipse.emf.common.util.EMap}) at the top level instead of
@@ -227,6 +239,7 @@ public final class OclConfiguration {
 		private int maxCollectionSize = DEFAULT_MAX_COLLECTION_SIZE;
 		private int maxClosureIterations = DEFAULT_MAX_CLOSURE_ITERATIONS;
 		private int maxRegexLength = DEFAULT_MAX_REGEX_LENGTH;
+		private int maxStringLength = DEFAULT_MAX_STRING_LENGTH;
 		private boolean useEMFTypes;
 
 		private Builder(OclExpressionParser parser) {
@@ -369,6 +382,20 @@ public final class OclConfiguration {
 				throw new IllegalArgumentException("maxRegexLength must be positive: " + maxRegexLength);
 			}
 			this.maxRegexLength = maxRegexLength;
+			return this;
+		}
+
+		/**
+		 * Sets the maximum length of a string an operation may produce.
+		 *
+		 * @param maxStringLength the maximum length (must be positive)
+		 * @return this builder
+		 */
+		public Builder maxStringLength(int maxStringLength) {
+			if (maxStringLength <= 0) {
+				throw new IllegalArgumentException("maxStringLength must be positive: " + maxStringLength);
+			}
+			this.maxStringLength = maxStringLength;
 			return this;
 		}
 

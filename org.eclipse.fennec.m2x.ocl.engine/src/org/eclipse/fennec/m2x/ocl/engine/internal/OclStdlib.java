@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -82,7 +83,7 @@ class OclStdlib {
 	static Object dispatch(String name, Object source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
 		try {
-			return dispatchByType(name, source, args, options, locale);
+			return withinLimits(dispatchByType(name, source, args, options, locale), options);
 		} catch (ArrayIndexOutOfBoundsException wrongArity) {
 			// Operations are resolved by name at evaluation time, so `Set{1}->includes()` or
 			// `self.oclIsKindOf()` reach an implementation that indexes args[0]. Before #182 that
@@ -90,6 +91,29 @@ class OclStdlib {
 			// simply not applicable, which in OCL is `invalid` (v2.4 §11.2.3).
 			return OclInvalid.INSTANCE;
 		}
+	}
+
+	/**
+	 * The size limits, applied to what an operation produced.
+	 *
+	 * <p>The limits on ranges, products and {@code allInstances} bound what an expression can
+	 * <em>create</em>; this bounds what it can <em>grow</em>. {@code acc.concat(acc)} or
+	 * {@code acc->union(acc)} in an {@code iterate} doubles on every step, so thirty steps of a
+	 * sixty-character expression are a gigabyte, at a depth no limit notices. Operations whose
+	 * result can be far larger than the limit before this check runs — {@code replaceAll},
+	 * {@code joinfields}, {@code format} — bound themselves while producing it.
+	 *
+	 * @return the result, or {@code invalid} if it is a string longer than
+	 *         {@code maxStringLength} or a collection larger than {@code maxCollectionSize}
+	 */
+	private static Object withinLimits(Object result, OclEvaluationOptions options) {
+		if (result instanceof String s && s.length() > options.maxStringLength()) {
+			return OclInvalid.INSTANCE;
+		}
+		if (result instanceof Collection<?> c && c.size() > options.maxCollectionSize()) {
+			return OclInvalid.INSTANCE;
+		}
+		return result;
 	}
 
 	private static Object dispatchByType(String name, Object source, Object[] args,
@@ -702,9 +726,6 @@ class OclStdlib {
 	 * padding character by character into its {@link Appendable}. A sink that refuses to grow
 	 * past the limit therefore stops the call before the padding exists (#182).
 	 *
-	 * <p>The limit is the collection-size limit: the bound the caller already configured for
-	 * "how much may one expression produce".
-	 *
 	 * @return the formatted string, or {@code invalid} if the format string is malformed or
 	 *         the result would exceed the limit
 	 */
@@ -714,6 +735,53 @@ class OclStdlib {
 			formatter.format(format, args);
 			return out.toString();
 		} catch (RuntimeException malformedOrTooLarge) {
+			return OclInvalid.INSTANCE;
+		}
+	}
+
+	/**
+	 * {@code replaceAll} / {@code replaceFirst} with a bound on the size of the result.
+	 *
+	 * <p>A replacement can be larger than what it replaces, and a group reference in it
+	 * ({@code $0}) repeats the match: {@code 'a'.replaceAll('a', 'aaaaaaaaaa')} in an
+	 * {@code iterate} grows tenfold per step. The bound is checked per match before the
+	 * replacement is expanded, with the worst case for the expansion — the literal length plus
+	 * one match length per {@code $} in the replacement — so no chunk larger than the limit is
+	 * ever built.
+	 *
+	 * @return the result, or {@code invalid} if the pattern is malformed, the replacement refers
+	 *         to a group the pattern does not have, or the result would exceed the limit
+	 */
+	private static Object replaceBounded(String source, String pattern, String replacement,
+			boolean all, int maxSize) {
+		int references = 0;
+		for (int i = 0; i < replacement.length(); i++) {
+			if (replacement.charAt(i) == '$') references++;
+		}
+		try {
+			Matcher matcher = Pattern.compile(pattern).matcher(source);
+			StringBuilder out = new StringBuilder();
+			int copiedUpTo = 0;
+			while (matcher.find()) {
+				long worstCase = (long) out.length() + (matcher.start() - copiedUpTo)
+						+ replacement.length() + (long) references * (matcher.end() - matcher.start());
+				if (worstCase > maxSize) {
+					return OclInvalid.INSTANCE;
+				}
+				matcher.appendReplacement(out, replacement);
+				copiedUpTo = matcher.end();
+				if (!all) {
+					break;
+				}
+			}
+			if ((long) out.length() + (source.length() - copiedUpTo) > maxSize) {
+				return OclInvalid.INSTANCE;
+			}
+			matcher.appendTail(out);
+			return out.toString();
+		} catch (IllegalArgumentException | IndexOutOfBoundsException e) {
+			// A malformed pattern (PatternSyntaxException is an IllegalArgumentException) or a
+			// replacement naming a group the pattern does not have; String.replaceAll threw both
 			return OclInvalid.INSTANCE;
 		}
 	}
@@ -756,7 +824,7 @@ class OclStdlib {
 		 * A runtime exception leaves {@code format()} at once.
 		 */
 		private void reserve(int more) {
-			if (out.length() + more > limit) {
+			if ((long) out.length() + more > limit) {
 				throw new OutputLimitExceeded();
 			}
 		}
@@ -773,7 +841,7 @@ class OclStdlib {
 		private static final long serialVersionUID = 1L;
 
 		OutputLimitExceeded() {
-			super("formatted result exceeds the collection-size limit", null, false, false);
+			super("result exceeds the string-length limit", null, false, false);
 		}
 	}
 
@@ -829,7 +897,14 @@ class OclStdlib {
 			OclEvaluationOptions options, Locale locale) {
 		return switch (name) {
 			case "size" -> (long) source.length();
-			case "+" , "concat" -> source + asString(args[0]);
+			case "+" , "concat" -> {
+				String other = asString(args[0]);
+				// Checked before the allocation, not after: the sum is known
+				if ((long) source.length() + other.length() > options.maxStringLength()) {
+					yield OclInvalid.INSTANCE;
+				}
+				yield source + other;
+			}
 			case "substring" -> {
 				int lower = (int) asLong(args[0]);
 				int upper = (int) asLong(args[1]);
@@ -929,22 +1004,14 @@ class OclStdlib {
 				if (pattern.length() > options.maxRegexLength()) {
 					yield OclInvalid.INSTANCE;
 				}
-				try {
-					yield source.replaceAll(pattern, asString(args[1]));
-				} catch (PatternSyntaxException e) {
-					yield OclInvalid.INSTANCE;
-				}
+				yield replaceBounded(source, pattern, asString(args[1]), true, options.maxStringLength());
 			}
 			case "replaceFirst" -> {
 				String pattern = asString(args[0]);
 				if (pattern.length() > options.maxRegexLength()) {
 					yield OclInvalid.INSTANCE;
 				}
-				try {
-					yield source.replaceFirst(pattern, asString(args[1]));
-				} catch (PatternSyntaxException e) {
-					yield OclInvalid.INSTANCE;
-				}
+				yield replaceBounded(source, pattern, asString(args[1]), false, options.maxStringLength());
 			}
 			case "equalsIgnoreCase" -> source.equalsIgnoreCase(asString(args[0]));
 			case "startsWith" -> source.startsWith(asString(args[0]));
@@ -1085,7 +1152,7 @@ class OclStdlib {
 				// The width field of a format string is an allocation request, see formatBounded
 				Object arg = args[0];
 				Object[] formatArgs = arg instanceof Collection<?> c ? c.toArray() : new Object[] { arg };
-				yield formatBounded(source, formatArgs, options.maxCollectionSize());
+				yield formatBounded(source, formatArgs, options.maxStringLength());
 			}
 			default -> NOT_FOUND;
 		};
@@ -1409,14 +1476,19 @@ class OclStdlib {
 				String sep = args.length > 0 ? String.valueOf(args[0]) : "";
 				String begin = args.length > 1 ? String.valueOf(args[1]) : "";
 				String end = args.length > 2 ? String.valueOf(args[2]) : "";
-				StringBuilder sb = new StringBuilder(begin);
-				int pos = 0;
-				for (Object e : source) {
-					if (pos++ > 0) sb.append(sep);
-					sb.append(String.valueOf(e));
+				BoundedOutput out = new BoundedOutput(options.maxStringLength());
+				try {
+					out.append(begin);
+					int pos = 0;
+					for (Object e : source) {
+						if (pos++ > 0) out.append(sep);
+						out.append(String.valueOf(e));
+					}
+					out.append(end);
+				} catch (OutputLimitExceeded tooLarge) {
+					yield OclInvalid.INSTANCE;
 				}
-				sb.append(end);
-				yield sb.toString();
+				yield out.toString();
 			}
 			default -> NOT_FOUND;
 		};

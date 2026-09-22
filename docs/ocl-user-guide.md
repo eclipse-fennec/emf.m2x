@@ -198,6 +198,7 @@ The `OclEngineComponent` supports engine-wide defaults through OSGi Configuratio
         "ocl.maxCollectionSize": 100000,
         "ocl.maxClosureIterations": 10000,
         "ocl.maxRegexLength": 200,
+        "ocl.maxStringLength": 100000,
         "ocl.timeout": 5000,
         "ocl.nullHandling": "STRICT",
         "ocl.errorRecovery": "FAIL_FAST",
@@ -214,6 +215,7 @@ The `OclEngineComponent` supports engine-wide defaults through OSGi Configuratio
 | `ocl.maxCollectionSize` | int | 1,000,000 | Maximum collection elements |
 | `ocl.maxClosureIterations` | int | 100,000 | Maximum closure() iterations |
 | `ocl.maxRegexLength` | int | 1,000 | Maximum regex pattern length |
+| `ocl.maxStringLength` | int | 10,000,000 | Maximum length of a string an operation produces |
 | `ocl.timeout` | long | 0 | Evaluation timeout in ms (0 = no timeout) |
 | `ocl.nullHandling` | String | `STRICT` | `STRICT` or `LENIENT` |
 | `ocl.errorRecovery` | String | `FAIL_FAST` | `FAIL_FAST` or `COLLECT_ERRORS` |
@@ -265,6 +267,7 @@ OclConfiguration config = OclConfiguration.builder(new OclParserSupport())
     .maxCollectionSize(100_000)
     .maxClosureIterations(10_000)
     .maxRegexLength(200)
+    .maxStringLength(100_000)
     .build();
 
 OclEngine engine = OclEngines.create(config);
@@ -528,6 +531,7 @@ OclEvaluationOptions options = OclEvaluationOptions.strict()
 | `maxCollectionSize` | 1,000,000 | Maximum elements in a collection |
 | `maxClosureIterations` | 100,000 | Maximum closure() iterations |
 | `maxRegexLength` | 1,000 | Maximum regex pattern length |
+| `maxStringLength` | 10,000,000 | Maximum length of a string an operation produces (`concat`, `replaceAll`, `format`, …) |
 | `useEMFTypes` | `false` | Wrap top-level `Collection` as `EList`, top-level `Map` as `EMap` |
 
 ### 6.4 Return Types — Java vs. EMF
@@ -1346,9 +1350,10 @@ When evaluating OCL expressions from untrusted sources (user input, external Com
 | Field | Type | Default | Protects against |
 |-------|------|---------|-----------------|
 | `maxDepth` | int | 1,000 | Stack overflow via deeply nested expressions |
-| `maxCollectionSize` | int | 1,000,000 | Range explosion, product explosion, allInstances |
+| `maxCollectionSize` | int | 1,000,000 | Range explosion, product explosion, allInstances, collection growth (`union`, `including`, `collect`, …) |
 | `maxClosureIterations` | int | 100,000 | Unbounded closure traversal |
 | `maxRegexLength` | int | 1,000 | ReDoS via crafted regex patterns |
+| `maxStringLength` | int | 10,000,000 | String growth (`concat`, `replaceAll`, `joinfields`, `format`, …) |
 | `timeout` | Duration | none | Runaway evaluation (deadline-based enforcement) |
 
 All limits produce `OclInvalid` with a diagnostic error when exceeded.
@@ -1406,6 +1411,7 @@ In an OSGi environment, configure conservative defaults centrally via ConfigAdmi
         "ocl.maxCollectionSize": 10000,
         "ocl.maxClosureIterations": 1000,
         "ocl.maxRegexLength": 200,
+        "ocl.maxStringLength": 100000,
         "ocl.timeout": 5000,
         "ocl.nullHandling": "STRICT",
         "ocl.errorRecovery": "FAIL_FAST"

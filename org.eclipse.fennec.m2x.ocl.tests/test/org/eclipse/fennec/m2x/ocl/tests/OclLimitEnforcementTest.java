@@ -198,6 +198,8 @@ class OclLimitEnforcementTest extends AbstractOclTest {
 				() -> OclEvaluationOptions.strict().withMaxClosureIterations(0));
 		assertThrows(IllegalArgumentException.class,
 				() -> OclEvaluationOptions.strict().withMaxRegexLength(-5));
+		assertThrows(IllegalArgumentException.class,
+				() -> OclEvaluationOptions.strict().withMaxStringLength(0));
 	}
 
 	// ==== EMF delegates ====

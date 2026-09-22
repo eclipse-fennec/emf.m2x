@@ -866,6 +866,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 				} else {
 					result.add(bodyResult);
 				}
+				// Checked while collecting, not after: with a collection-valued body the result
+				// is source × body, which is the square of the limit before an after-check runs
+				if (result.size() > options.maxCollectionSize()) {
+					return addError("collect result size exceeds maximum allowed size: "
+							+ options.maxCollectionSize());
+				}
 			}
 			return result;
 		} finally {

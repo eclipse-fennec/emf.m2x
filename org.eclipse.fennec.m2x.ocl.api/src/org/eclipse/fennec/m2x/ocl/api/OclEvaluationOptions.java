@@ -38,6 +38,7 @@ public record OclEvaluationOptions(
 		int maxCollectionSize,
 		int maxClosureIterations,
 		int maxRegexLength,
+		int maxStringLength,
 		boolean customOperationsEnabled,
 		List<OclOperationProvider> additionalProviders,
 		boolean useEMFTypes) {
@@ -74,6 +75,9 @@ public record OclEvaluationOptions(
 	/** Default maximum length of a regular expression. */
 	public static final int DEFAULT_MAX_REGEX_LENGTH = 1000;
 
+	/** Default maximum length, in characters, of a string an operation may produce. */
+	public static final int DEFAULT_MAX_STRING_LENGTH = 10_000_000;
+
 	/**
 	 * Canonical constructor with validation.
 	 *
@@ -84,6 +88,8 @@ public record OclEvaluationOptions(
 	 * @param maxCollectionSize maximum collection size for ranges, products, allInstances (must be positive)
 	 * @param maxClosureIterations maximum iterations for closure (must be positive)
 	 * @param maxRegexLength maximum regex pattern length for matches/replaceAll/replaceFirst (must be positive)
+	 * @param maxStringLength maximum length of a string produced by an operation, such as
+	 *        {@code concat}, {@code replaceAll} or {@code format} (must be positive)
 	 * @param customOperationsEnabled whether config-registered custom operations are active
 	 * @param additionalProviders per-evaluation providers, always active regardless of enable flag
 	 * @param useEMFTypes when {@code true}, top-level {@link java.util.Collection} results are
@@ -106,6 +112,9 @@ public record OclEvaluationOptions(
 		if (maxRegexLength <= 0) {
 			throw new IllegalArgumentException("maxRegexLength must be positive: " + maxRegexLength);
 		}
+		if (maxStringLength <= 0) {
+			throw new IllegalArgumentException("maxStringLength must be positive: " + maxStringLength);
+		}
 		additionalProviders = List.copyOf(Objects.requireNonNull(additionalProviders,
 				"additionalProviders must not be null"));
 	}
@@ -120,7 +129,7 @@ public record OclEvaluationOptions(
 		return new OclEvaluationOptions(NullHandling.STRICT, ErrorRecovery.FAIL_FAST,
 				DEFAULT_MAX_DEPTH, null,
 				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
-				false, List.of(), false);
+				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false);
 	}
 
 	/**
@@ -133,7 +142,7 @@ public record OclEvaluationOptions(
 		return new OclEvaluationOptions(NullHandling.LENIENT, ErrorRecovery.COLLECT_ERRORS,
 				DEFAULT_MAX_DEPTH, null,
 				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
-				false, List.of(), false);
+				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false);
 	}
 
 	/**
@@ -190,6 +199,16 @@ public record OclEvaluationOptions(
 	 */
 	public OclEvaluationOptions withMaxRegexLength(int maxRegexLength) {
 		return toBuilder().maxRegexLength(maxRegexLength).build();
+	}
+
+	/**
+	 * Returns a copy with the given maximum string length.
+	 *
+	 * @param maxStringLength maximum length of a string produced by an operation (must be positive)
+	 * @return new options with the given string length limit
+	 */
+	public OclEvaluationOptions withMaxStringLength(int maxStringLength) {
+		return toBuilder().maxStringLength(maxStringLength).build();
 	}
 
 	/**
@@ -272,6 +291,7 @@ public record OclEvaluationOptions(
 		private int maxCollectionSize;
 		private int maxClosureIterations;
 		private int maxRegexLength;
+		private int maxStringLength;
 		private boolean customOperationsEnabled;
 		private List<OclOperationProvider> additionalProviders;
 		private boolean useEMFTypes;
@@ -284,6 +304,7 @@ public record OclEvaluationOptions(
 			this.maxCollectionSize = options.maxCollectionSize();
 			this.maxClosureIterations = options.maxClosureIterations();
 			this.maxRegexLength = options.maxRegexLength();
+			this.maxStringLength = options.maxStringLength();
 			this.customOperationsEnabled = options.customOperationsEnabled();
 			this.additionalProviders = options.additionalProviders();
 			this.useEMFTypes = options.useEMFTypes();
@@ -353,6 +374,17 @@ public record OclEvaluationOptions(
 		}
 
 		/**
+		 * Sets the maximum length of a string produced by an operation.
+		 *
+		 * @param maxStringLength the maximum string length
+		 * @return this builder
+		 */
+		public Builder maxStringLength(int maxStringLength) {
+			this.maxStringLength = maxStringLength;
+			return this;
+		}
+
+		/**
 		 * @param customOperationsEnabled whether config-registered custom operations are active
 		 * @return this builder
 		 */
@@ -384,7 +416,7 @@ public record OclEvaluationOptions(
 		 */
 		public OclEvaluationOptions build() {
 			return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
-					maxCollectionSize, maxClosureIterations, maxRegexLength,
+					maxCollectionSize, maxClosureIterations, maxRegexLength, maxStringLength,
 					customOperationsEnabled, additionalProviders, useEMFTypes);
 		}
 	}
