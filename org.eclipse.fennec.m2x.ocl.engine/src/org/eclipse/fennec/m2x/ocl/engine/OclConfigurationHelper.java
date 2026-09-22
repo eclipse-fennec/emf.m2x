@@ -85,6 +85,7 @@ public final class OclConfigurationHelper {
 				.timeoutMs(config.timeout())
 				.maxCollectionSize(config.maxCollectionSize())
 				.maxClosureIterations(config.maxClosureIterations())
-				.maxRegexLength(config.maxRegexLength());
+				.maxRegexLength(config.maxRegexLength())
+				.maxStringLength(config.maxStringLength());
 	}
 }

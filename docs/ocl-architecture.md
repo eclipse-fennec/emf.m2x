@@ -195,6 +195,7 @@ public record OclEvaluationOptions(
     int maxCollectionSize,              // Default 1,000,000
     int maxClosureIterations,           // Default 100,000
     int maxRegexLength,                 // Default 1,000
+    int maxStringLength,                // Default 10,000,000
     Duration timeout                    // Default: none
 ) {
     public static OclEvaluationOptions strict() { ... }
@@ -932,6 +933,7 @@ The `OclEngineComponent` supports engine-wide defaults through the `OclEngineCon
 | `ocl.maxCollectionSize` | int | 1,000,000 | Maximum collection elements |
 | `ocl.maxClosureIterations` | int | 100,000 | Maximum closure() iterations |
 | `ocl.maxRegexLength` | int | 1,000 | Maximum regex pattern length |
+| `ocl.maxStringLength` | int | 10,000,000 | Maximum length of a string an operation produces |
 | `ocl.timeout` | long | 0 | Evaluation timeout in ms (0 = no timeout) |
 | `ocl.nullHandling` | String | `STRICT` | `STRICT` or `LENIENT` |
 | `ocl.errorRecovery` | String | `FAIL_FAST` | `FAIL_FAST` or `COLLECT_ERRORS` |
@@ -1090,18 +1092,29 @@ All limits are configured via `OclEvaluationOptions`:
 | Field | Type | Default | Protects against |
 |-------|------|---------|-----------------|
 | `maxDepth` | int | 1,000 | S-9: Stack overflow via deep recursion |
-| `maxCollectionSize` | int | 1,000,000 | S-2: Range explosion, S-3: Product explosion, S-12: allInstances, S-15: `format` output |
+| `maxCollectionSize` | int | 1,000,000 | S-2: Range explosion, S-3: Product explosion, S-12: allInstances, S-16: collection growth |
 | `maxClosureIterations` | int | 100,000 | S-4: Unbounded closure traversal |
 | `maxRegexLength` | int | 1,000 | S-1: ReDoS via crafted regex patterns |
+| `maxStringLength` | int | 10,000,000 | S-11: string growth, S-15: `format` width |
 | `timeout` | Duration | none | S-13: Runaway evaluation (deadline-based) |
 
 Limits are per-evaluation (not global). Violations produce `OclInvalid` with diagnostic error.
 
-`maxCollectionSize` also bounds the result of the QVT-O string operations `format` and `%`
-(S-15). The width field of a format specifier is an allocation request, and it has several
-spellings (`%9s`, `%1$9s`, `%<9s`, `%-9s`), so the bound is enforced on the output: the
-`Formatter` writes into a sink that refuses to grow past the limit, and the call answers
-`invalid` before any padding is allocated.
+The limits on ranges, products and `allInstances` bound what one step of an expression can
+*create*. `maxStringLength` and `maxCollectionSize` also bound what an expression can *grow*
+(S-11, S-16): every standard-library result is checked against them, so `acc.concat(acc)` or
+`acc->union(acc)` in an `iterate` — or in a QVT-O `while` — stops at the limit instead of
+doubling thirty times at a depth no other limit notices. Operations whose result can be far
+larger than the limit before an after-check runs bound themselves while producing it:
+`concat` checks the sum of the lengths, `replaceAll`/`replaceFirst` check each match with the
+worst case of its expansion (a `$0` in the replacement repeats the match), `joinfields` and
+`format` write into a sink that refuses to grow past the limit (S-15: the width field of a
+format specifier is an allocation request with several spellings — `%9s`, `%1$9s`, `%<9s`), and
+`collect` counts while it collects (a collection-valued body squares the source size).
+
+What the limits do not bound is aggregate memory: a collection of a million strings of a
+million characters each is within both limits. Building it takes time, which is what
+`timeout` is for.
 
 ### 10.3 Attack Vectors
 
@@ -1117,11 +1130,12 @@ spellings (`%9s`, `%1$9s`, `%<9s`, `%-9s`), so the bound is enforced on the outp
 | S-8 | allInstances on large extent | Medium | Mitigated: size check (see S-12) |
 | S-9 | Stack overflow via deep recursion | High | Mitigated: depth counter |
 | S-10 | Integer overflow | Low | Documented: accepted risk |
-| S-11 | String concatenation amplification | Low | Partially mitigated: bounded by maxDepth |
+| S-11 | String growth — `Sequence{1..31}->iterate(i; s = 'x' \| s + s)` | Medium | Mitigated: maxStringLength on every result |
 | S-12 | allInstances result size | Medium | Mitigated: maxCollectionSize |
 | S-13 | Custom operation provider abuse | Low | Mitigated: D29 disabled by default |
 | S-14 | EMF delegate URI spoofing | Low | Documented: by design |
 | S-15 | Format width allocation — `'%1$999999999s'.format('x')` | Medium | Mitigated: bounded output sink |
+| S-16 | Collection growth — `Sequence{1..31}->iterate(i; c = Sequence{1} \| c->union(c))` | Medium | Mitigated: maxCollectionSize on every result |
 
 ### 10.4 Trust Boundaries
 
@@ -1144,6 +1158,7 @@ When evaluating OCL expressions from untrusted sources:
        .withMaxCollectionSize(10_000)
        .withMaxClosureIterations(1_000)
        .withMaxRegexLength(200)
+       .withMaxStringLength(100_000)
        .withTimeout(Duration.ofSeconds(5));
    ```
 
@@ -1153,7 +1168,7 @@ When evaluating OCL expressions from untrusted sources:
    OclConfiguration config = OclConfiguration.builder(parser)
        .maxDepth(100).maxCollectionSize(10_000)
        .maxClosureIterations(1_000).maxRegexLength(200)
-       .timeoutMs(5000).build();
+       .maxStringLength(100_000).timeoutMs(5000).build();
    ```
    ```json
    // OSGi Configurator
@@ -1164,6 +1179,7 @@ When evaluating OCL expressions from untrusted sources:
            "ocl.maxCollectionSize": 10000,
            "ocl.maxClosureIterations": 1000,
            "ocl.maxRegexLength": 200,
+           "ocl.maxStringLength": 100000,
            "ocl.timeout": 5000
        }
    }

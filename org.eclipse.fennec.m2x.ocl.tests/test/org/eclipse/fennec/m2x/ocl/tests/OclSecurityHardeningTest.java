@@ -274,6 +274,7 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 		assertEquals(1_000_000, strict.maxCollectionSize());
 		assertEquals(100_000, strict.maxClosureIterations());
 		assertEquals(1000, strict.maxRegexLength());
+		assertEquals(10_000_000, strict.maxStringLength());
 		assertEquals(OclEvaluationOptions.NullHandling.STRICT, strict.nullHandling());
 		assertEquals(OclEvaluationOptions.ErrorRecovery.FAIL_FAST, strict.errorRecovery());
 	}
@@ -285,6 +286,7 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 		assertEquals(1_000_000, lenient.maxCollectionSize());
 		assertEquals(100_000, lenient.maxClosureIterations());
 		assertEquals(1000, lenient.maxRegexLength());
+		assertEquals(10_000_000, lenient.maxStringLength());
 		assertEquals(OclEvaluationOptions.NullHandling.LENIENT, lenient.nullHandling());
 		assertEquals(OclEvaluationOptions.ErrorRecovery.COLLECT_ERRORS, lenient.errorRecovery());
 	}
@@ -297,12 +299,14 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 				.withMaxDepth(500)
 				.withMaxCollectionSize(50_000)
 				.withMaxClosureIterations(5_000)
-				.withMaxRegexLength(200);
+				.withMaxRegexLength(200)
+				.withMaxStringLength(4_000);
 
 		assertEquals(500, custom.maxDepth());
 		assertEquals(50_000, custom.maxCollectionSize());
 		assertEquals(5_000, custom.maxClosureIterations());
 		assertEquals(200, custom.maxRegexLength());
+		assertEquals(4_000, custom.maxStringLength());
 
 		// Original unchanged
 		assertEquals(1000, base.maxDepth());

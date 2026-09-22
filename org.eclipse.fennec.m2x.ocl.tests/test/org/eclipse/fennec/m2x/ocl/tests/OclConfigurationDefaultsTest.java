@@ -54,6 +54,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 		assertEquals(1_000_000, config.maxCollectionSize());
 		assertEquals(100_000, config.maxClosureIterations());
 		assertEquals(1000, config.maxRegexLength());
+		assertEquals(10_000_000, config.maxStringLength());
 		assertFalse(config.customOperationsEnabled());
 	}
 
@@ -69,6 +70,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 				.maxCollectionSize(10_000)
 				.maxClosureIterations(200)
 				.maxRegexLength(50)
+				.maxStringLength(5_000)
 				.customOperationsEnabled(true)
 				.build();
 
@@ -79,6 +81,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 		assertEquals(10_000, config.maxCollectionSize());
 		assertEquals(200, config.maxClosureIterations());
 		assertEquals(50, config.maxRegexLength());
+		assertEquals(5_000, config.maxStringLength());
 	}
 
 	// --- OclConfigurationHelper mapping ---
@@ -98,6 +101,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 		assertEquals(500, config.maxCollectionSize());
 		assertEquals(50, config.maxClosureIterations());
 		assertEquals(100, config.maxRegexLength());
+		assertEquals(2_000, config.maxStringLength());
 	}
 
 	// --- Engine uses config defaults for evaluate(expr, ctx) ---
@@ -178,6 +182,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 			@Override public int maxCollectionSize() { return maxCollectionSize; }
 			@Override public int maxClosureIterations() { return maxClosureIterations; }
 			@Override public int maxRegexLength() { return maxRegexLength; }
+			@Override public int maxStringLength() { return 2_000; }
 			@Override public long timeout() { return timeout; }
 			@Override public String nullHandling() { return nullHandling; }
 			@Override public String errorRecovery() { return errorRecovery; }

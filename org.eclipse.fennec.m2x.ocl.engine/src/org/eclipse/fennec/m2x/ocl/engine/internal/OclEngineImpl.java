@@ -706,6 +706,7 @@ public class OclEngineImpl implements OclDelegateSupport {
 				config.maxCollectionSize(),
 				config.maxClosureIterations(),
 				config.maxRegexLength(),
+				config.maxStringLength(),
 				config.customOperationsEnabled(),
 				List.of(),
 				config.useEMFTypes());
