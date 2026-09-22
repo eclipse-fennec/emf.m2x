@@ -1090,12 +1090,18 @@ All limits are configured via `OclEvaluationOptions`:
 | Field | Type | Default | Protects against |
 |-------|------|---------|-----------------|
 | `maxDepth` | int | 1,000 | S-9: Stack overflow via deep recursion |
-| `maxCollectionSize` | int | 1,000,000 | S-2: Range explosion, S-3: Product explosion, S-12: allInstances |
+| `maxCollectionSize` | int | 1,000,000 | S-2: Range explosion, S-3: Product explosion, S-12: allInstances, S-15: `format` output |
 | `maxClosureIterations` | int | 100,000 | S-4: Unbounded closure traversal |
 | `maxRegexLength` | int | 1,000 | S-1: ReDoS via crafted regex patterns |
 | `timeout` | Duration | none | S-13: Runaway evaluation (deadline-based) |
 
 Limits are per-evaluation (not global). Violations produce `OclInvalid` with diagnostic error.
+
+`maxCollectionSize` also bounds the result of the QVT-O string operations `format` and `%`
+(S-15). The width field of a format specifier is an allocation request, and it has several
+spellings (`%9s`, `%1$9s`, `%<9s`, `%-9s`), so the bound is enforced on the output: the
+`Formatter` writes into a sink that refuses to grow past the limit, and the call answers
+`invalid` before any padding is allocated.
 
 ### 10.3 Attack Vectors
 
@@ -1115,6 +1121,7 @@ Limits are per-evaluation (not global). Violations produce `OclInvalid` with dia
 | S-12 | allInstances result size | Medium | Mitigated: maxCollectionSize |
 | S-13 | Custom operation provider abuse | Low | Mitigated: D29 disabled by default |
 | S-14 | EMF delegate URI spoofing | Low | Documented: by design |
+| S-15 | Format width allocation — `'%1$999999999s'.format('x')` | Medium | Mitigated: bounded output sink |
 
 ### 10.4 Trust Boundaries
 
