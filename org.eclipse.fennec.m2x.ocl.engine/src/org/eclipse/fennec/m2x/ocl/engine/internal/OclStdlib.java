@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.ocl.engine.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Formatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -24,7 +25,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringTokenizer;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
@@ -692,28 +692,90 @@ class OclStdlib {
 	}
 
 	/**
-	 * Whether a format string asks for a field wider than the collection-size limit.
+	 * {@code String.format} with a bound on the size of the result.
 	 *
-	 * <p>{@code String.format} allocates the padding of a width field before anything else, so a
-	 * width taken from user data is an allocation taken from user data. The collection-size limit
-	 * is the bound the caller already configured for "how much may one expression produce".
+	 * <p>A format string is data — from the expression or from the model — and the width field
+	 * of a specifier is an allocation request: {@code '%1$999999999s'.format('x')} asks for a
+	 * gigabyte of padding. The bound is enforced where the output is written, not by inspecting
+	 * the format string, because the specifier grammar has more than one spelling for a width
+	 * ({@code %9s}, {@code %1$9s}, {@code %<9s}, {@code %-9s}) and {@link Formatter} writes the
+	 * padding character by character into its {@link Appendable}. A sink that refuses to grow
+	 * past the limit therefore stops the call before the padding exists (#182).
+	 *
+	 * <p>The limit is the collection-size limit: the bound the caller already configured for
+	 * "how much may one expression produce".
+	 *
+	 * @return the formatted string, or {@code invalid} if the format string is malformed or
+	 *         the result would exceed the limit
 	 */
-	private static boolean hasOversizedWidth(String format, int maxSize) {
-		Matcher widths = FORMAT_WIDTH.matcher(format);
-		while (widths.find()) {
-			try {
-				if (Long.parseLong(widths.group(1)) > maxSize) {
-					return true;
-				}
-			} catch (NumberFormatException tooLongToBeAnInt) {
-				return true;
-			}
+	private static Object formatBounded(String format, Object[] args, int maxSize) {
+		BoundedOutput out = new BoundedOutput(maxSize);
+		try (Formatter formatter = new Formatter(out)) {
+			formatter.format(format, args);
+			return out.toString();
+		} catch (RuntimeException malformedOrTooLarge) {
+			return OclInvalid.INSTANCE;
 		}
-		return false;
 	}
 
-	/** The width (and precision) fields of a format specifier: {@code %[flags][width][.precision]conv}. */
-	private static final Pattern FORMAT_WIDTH = Pattern.compile("%[-#+ 0,(]*(\\d+)(?:\\.(\\d+))?");
+	/** A {@link StringBuilder} sink that refuses to grow past its limit. */
+	private static final class BoundedOutput implements Appendable {
+
+		private final StringBuilder out = new StringBuilder();
+		private final int limit;
+
+		BoundedOutput(int limit) {
+			this.limit = limit;
+		}
+
+		@Override
+		public Appendable append(CharSequence csq) {
+			String text = String.valueOf(csq);
+			reserve(text.length());
+			out.append(text);
+			return this;
+		}
+
+		@Override
+		public Appendable append(CharSequence csq, int start, int end) {
+			reserve(end - start);
+			out.append(String.valueOf(csq), start, end);
+			return this;
+		}
+
+		@Override
+		public Appendable append(char c) {
+			reserve(1);
+			out.append(c);
+			return this;
+		}
+
+		/**
+		 * Unchecked on purpose: {@link Formatter} swallows {@link java.io.IOException} from its
+		 * sink and carries on with the next character, which for a huge width is a huge loop.
+		 * A runtime exception leaves {@code format()} at once.
+		 */
+		private void reserve(int more) {
+			if (out.length() + more > limit) {
+				throw new OutputLimitExceeded();
+			}
+		}
+
+		@Override
+		public String toString() {
+			return out.toString();
+		}
+	}
+
+	/** Thrown by {@link BoundedOutput} when a formatted result would exceed the limit. */
+	private static final class OutputLimitExceeded extends RuntimeException {
+
+		private static final long serialVersionUID = 1L;
+
+		OutputLimitExceeded() {
+			super("formatted result exceeds the collection-size limit", null, false, false);
+		}
+	}
 
 	// --- Real (OCL v2.4 Section 11.5) ---
 
@@ -1020,22 +1082,10 @@ class OclStdlib {
 			}
 			// QVT-O §8.3.16.1 + §8.4.4: format / % — placeholder substitution
 			case "format", "%" -> {
-				// A format string is data — from the expression or from the model — and Java's
-				// width field allocates eagerly: '%09999999999d'.format(1) is gigabytes, and the
-				// catch below does not catch OutOfMemoryError (#182)
-				if (hasOversizedWidth(source, options.maxCollectionSize())) {
-					yield OclInvalid.INSTANCE;
-				}
-				try {
-					Object arg = args[0];
-					if (arg instanceof Collection<?> c) {
-						yield String.format(source, c.toArray());
-					} else {
-						yield String.format(source, arg);
-					}
-				} catch (Exception e) {
-					yield OclInvalid.INSTANCE;
-				}
+				// The width field of a format string is an allocation request, see formatBounded
+				Object arg = args[0];
+				Object[] formatArgs = arg instanceof Collection<?> c ? c.toArray() : new Object[] { arg };
+				yield formatBounded(source, formatArgs, options.maxCollectionSize());
 			}
 			default -> NOT_FOUND;
 		};

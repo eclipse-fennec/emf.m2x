@@ -95,9 +95,50 @@ class OclStdlibHardeningTest extends AbstractOclTest {
 				"the width field of a format string is an allocation request");
 	}
 
+	/**
+	 * The specifier grammar has more spellings for a width than {@code %Ns}: an explicit argument
+	 * index ({@code %1$Ns}), the relative index ({@code %<Ns}), left-justification and precision.
+	 * Every one of them is the same allocation request.
+	 */
+	@Test
+	@Timeout(30)
+	void formatWithAnOversizedWidth_isInvalid_howeverTheWidthIsSpelled() throws OclParseException {
+		List<String> spellings = List.of(
+				"'%50000000s'.format('x')",
+				"'%1$50000000s'.format('x')",
+				"'%s%<50000000s'.format('x')",
+				"'%-50000000s'.format('x')",
+				"'%50000000.3s'.format('x')",
+				"'%1$50000000d'.format(Sequence{1})",
+				"'%1$50000000s'.format(Sequence{'x'})",
+				"'a%50000000sb%50000000sc'.format(Sequence{'x', 'y'})");
+		EObject person = createPerson("A", 1, 1.0, false);
+		for (String expression : spellings) {
+			Object value = engine.evaluate(engine.parse(expression, personClass), OclContext.of(person),
+					engine.getDefaultOptions().withMaxCollectionSize(100));
+			assertSame(OclInvalid.INSTANCE, value,
+					expression + ": a result past the collection limit is invalid, not an allocation");
+		}
+	}
+
 	@Test
 	void ordinaryFormat_stillWorks() throws OclParseException {
 		assertEquals("x=1", eval("'x=%d'.format(Sequence{1})", createPerson("A", 1, 1.0, false)));
+	}
+
+	@Test
+	void formatWithinTheLimit_stillWorks_howeverTheWidthIsSpelled() throws OclParseException {
+		EObject person = createPerson("A", 1, 1.0, false);
+		assertEquals("    x|x    |x", eval("'%1$5s|%<-5s|%<.1s'.format('x')", person));
+		assertEquals("  1|ab   ", eval("'%3d|%-5s'.format(Sequence{1, 'ab'})", person));
+	}
+
+	@Test
+	void formatFillingTheLimitExactly_stillWorks() throws OclParseException {
+		Object value = engine.evaluate(engine.parse("'%10s'.format('x')", personClass),
+				OclContext.of(createPerson("A", 1, 1.0, false)),
+				engine.getDefaultOptions().withMaxCollectionSize(10));
+		assertEquals("         x", value, "the limit is inclusive");
 	}
 
 	// ==== arity ====
