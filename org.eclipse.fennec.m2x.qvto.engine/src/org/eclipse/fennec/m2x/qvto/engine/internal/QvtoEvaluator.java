@@ -1526,7 +1526,16 @@ public class QvtoEvaluator {
 							@SuppressWarnings("unchecked")
 							Collection<Object> col = (Collection<Object>) current;
 							if (value instanceof Collection<?> rhs) {
-								col.addAll((Collection<?>) rhs);
+								// The operand is a navigation result, not a standard-library result,
+								// so the size limit of #257 never saw it: `t.items += t.items` in a
+								// loop doubled on every step (#260)
+								int limit = oclOptions().maxCollectionSize();
+								if ((long) col.size() + rhs.size() > limit) {
+									addError("Collection size " + ((long) col.size() + rhs.size())
+											+ " exceeds maximum allowed size: " + limit);
+								} else {
+									col.addAll(rhs);
+								}
 							} else {
 								col.add(value);
 							}
