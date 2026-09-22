@@ -94,6 +94,7 @@ public final class M2tConfigurationHelper {
 				.maxDiagnostics(config.maxDiagnostics())
 				.maxTemplateDepth(config.maxTemplateDepth())
 				.maxForIterations(config.maxForIterations())
+				.timeoutMs(config.timeout())
 				.maxCrossProductSize(config.maxCrossProductSize())
 				.maxOutputSize(config.maxOutputSize())
 				.protectedAreaEnabled(config.protectedAreaEnabled())

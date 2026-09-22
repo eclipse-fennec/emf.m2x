@@ -97,6 +97,10 @@ public class M2tEvaluator {
 	private final M2tLimits limits;
 	private int templateDepth;
 	private int queryDepth;
+	/** The deadline of this generation in {@link System#nanoTime()} terms, 0 for none (#261). */
+	private long deadlineNanos;
+	/** Set once the deadline was noticed, so it is reported once and stops everything after. */
+	private boolean timedOut;
 
 	/** Maps overridden template → list of overriding templates. */
 	private final Map<Template, List<Template>> overrideIndex = new IdentityHashMap<>();
@@ -213,6 +217,10 @@ public class M2tEvaluator {
 		Objects.requireNonNull(template, "template must not be null");
 
 		if (templateDepth == 0) {
+			deadlineNanos = limits.timeoutMs() > 0
+					? System.nanoTime() + limits.timeoutMs() * 1_000_000L
+					: 0;
+			timedOut = false;
 			// The outermost call is the one the caller started the generation with, so its
 			// arguments are the input elements — no second channel needed to learn them.
 			inputElements = List.copyOf(args);
@@ -221,6 +229,9 @@ public class M2tEvaluator {
 		if (templateDepth >= limits.maxTemplateDepth()) {
 			addError("Maximum template depth exceeded (" + limits.maxTemplateDepth()
 					+ ") — possible infinite recursion in template '" + template.getName() + "'");
+			return "";
+		}
+		if (pastDeadline()) {
 			return "";
 		}
 		templateDepth++;
@@ -330,6 +341,9 @@ public class M2tEvaluator {
 				if (i >= iterLimit) {
 					addError("Maximum for-block iterations exceeded (" + limits.maxForIterations()
 							+ ") — loop terminated early");
+					break;
+				}
+				if (pastDeadline()) {
 					break;
 				}
 				env.pushScope();
@@ -831,6 +845,9 @@ public class M2tEvaluator {
 					+ ") — possible recursion in query '" + query.getName() + "'");
 			return null;
 		}
+		if (pastDeadline()) {
+			return null;
+		}
 		queryDepth++;
 		env.pushScope();
 		try {
@@ -994,6 +1011,9 @@ public class M2tEvaluator {
 					+ ") — possible infinite recursion in template '" + target.getName() + "'");
 			return;
 		}
+		if (pastDeadline()) {
+			return;
+		}
 		templateDepth++;
 		Template enclosing = executing;
 		executing = target;
@@ -1113,6 +1133,23 @@ public class M2tEvaluator {
 	public void addGenerationError(String filePath, Exception cause) {
 		addError("Failed to write generated file '" + filePath + "' ["
 				+ cause.getClass().getSimpleName() + "]: " + cause.getMessage());
+	}
+
+	/**
+	 * Whether the deadline of this generation has passed — polled where the other limits are
+	 * polled: at every template and query invocation and every for-block iteration. The first
+	 * time it has, it is reported; from then on every checkpoint stops silently, so what was
+	 * generated so far travels with one diagnostic rather than thousands (#261).
+	 */
+	private boolean pastDeadline() {
+		if (deadlineNanos == 0) {
+			return false;
+		}
+		if (!timedOut && System.nanoTime() > deadlineNanos) {
+			timedOut = true;
+			addError("Execution timeout exceeded (" + limits.timeoutMs() + " ms) — generation stopped");
+		}
+		return timedOut;
 	}
 
 	private void addError(String message) {

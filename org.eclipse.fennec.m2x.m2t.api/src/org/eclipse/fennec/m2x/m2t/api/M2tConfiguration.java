@@ -51,6 +51,13 @@ public final class M2tConfiguration {
 	public static final int DEFAULT_MAX_TEMPLATE_DEPTH = 1_000;
 	/** Default maximum for-block iterations (T-2 protection). */
 	public static final int DEFAULT_MAX_FOR_ITERATIONS = 1_000_000;
+
+	/**
+	 * Default execution timeout: 30,000 ms. The size limits bound what a generation can build
+	 * in one step; what grows slowly is bounded by time only, so a generation has a deadline
+	 * unless the embedder sets {@code timeoutMs(0)} (#261).
+	 */
+	public static final long DEFAULT_TIMEOUT_MS = 30_000;
 	/** Default maximum cross-product size for set-argument invocations (T-3 protection). */
 	public static final int DEFAULT_MAX_CROSS_PRODUCT_SIZE = 1_000_000;
 	/** Default maximum total output size in characters (T-7 protection). 10 MB ~ 10,000,000 chars. */
@@ -66,6 +73,7 @@ public final class M2tConfiguration {
 	private final int maxDiagnostics;
 	private final int maxTemplateDepth;
 	private final int maxForIterations;
+	private final long timeoutMs;
 	private final int maxCrossProductSize;
 	private final long maxOutputSize;
 	private final boolean protectedAreaEnabled;
@@ -89,6 +97,7 @@ public final class M2tConfiguration {
 		this.maxDiagnostics = builder.maxDiagnostics;
 		this.maxTemplateDepth = builder.maxTemplateDepth;
 		this.maxForIterations = builder.maxForIterations;
+		this.timeoutMs = builder.timeoutMs;
 		this.maxCrossProductSize = builder.maxCrossProductSize;
 		this.maxOutputSize = builder.maxOutputSize;
 		this.protectedAreaEnabled = builder.protectedAreaEnabled;
@@ -208,6 +217,14 @@ public final class M2tConfiguration {
 	 */
 	public int maxForIterations() {
 		return maxForIterations;
+	}
+
+	/**
+	 * Returns the execution timeout of one generation in milliseconds.
+	 * Defaults to {@value #DEFAULT_TIMEOUT_MS}; zero means no timeout.
+	 */
+	public long timeoutMs() {
+		return timeoutMs;
 	}
 
 	/**
@@ -356,6 +373,7 @@ public final class M2tConfiguration {
 		private int maxDiagnostics = DEFAULT_MAX_DIAGNOSTICS;
 		private int maxTemplateDepth = DEFAULT_MAX_TEMPLATE_DEPTH;
 		private int maxForIterations = DEFAULT_MAX_FOR_ITERATIONS;
+		private long timeoutMs = DEFAULT_TIMEOUT_MS;
 		private int maxCrossProductSize = DEFAULT_MAX_CROSS_PRODUCT_SIZE;
 		private long maxOutputSize = DEFAULT_MAX_OUTPUT_SIZE;
 		private boolean protectedAreaEnabled = true;
@@ -518,6 +536,20 @@ public final class M2tConfiguration {
 				throw new IllegalArgumentException("maxForIterations must be positive: " + max);
 			}
 			this.maxForIterations = max;
+			return this;
+		}
+
+		/**
+		 * Sets the execution timeout of one generation in milliseconds.
+		 *
+		 * @param ms the timeout (must not be negative; default: {@value M2tConfiguration#DEFAULT_TIMEOUT_MS}, zero for none)
+		 * @return this builder
+		 */
+		public Builder timeoutMs(long ms) {
+			if (ms < 0) {
+				throw new IllegalArgumentException("timeoutMs must not be negative: " + ms);
+			}
+			this.timeoutMs = ms;
 			return this;
 		}
 

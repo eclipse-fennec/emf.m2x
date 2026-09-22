@@ -522,7 +522,7 @@ QvtoExecutionResult result = engine.execute(trafo, ctx, options);
 | Option | Default | Description |
 |--------|---------|-------------|
 | `maxStackDepth` | 1,000 | Maximum recursive mapping/helper call depth |
-| `timeout` | none | Maximum execution time (deadline-enforced) |
+| `timeout` | 30 s | Maximum execution time (deadline-enforced); `withTimeout(null)` removes it |
 | `maxLoopIterations` | 1,000,000 | Maximum iterations per while/for loop |
 | `maxDiagnostics` | 10,000 | Maximum diagnostic entries before truncation |
 | `maxTraceRecords` | 1,000,000 | Maximum trace records (0 = unlimited) |
@@ -1028,7 +1028,7 @@ QvtoEvaluationOptions opts = QvtoEvaluationOptions.defaults()
 
 | Option | Default | Purpose |
 |--------|---------|---------|
-| `timeout` | `null` (none) | Wall-clock deadline — terminates execution after elapsed time |
+| `timeout` | 30 s | Wall-clock deadline — terminates execution after elapsed time; `null` removes it |
 | `maxLoopIterations` | 1,000,000 | Per-loop iteration cap — applies to `while`, `forEach`, `forExp` |
 | `maxStackDepth` | 1,000 | Call stack depth — limits recursive helpers/mappings |
 | `maxDiagnostics` | 10,000 | Maximum diagnostic messages before truncation |

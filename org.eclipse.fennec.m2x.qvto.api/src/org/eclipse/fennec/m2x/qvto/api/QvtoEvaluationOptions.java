@@ -53,6 +53,14 @@ public record QvtoEvaluationOptions(
 		boolean tracingEnabled,
 		OclEvaluationOptions oclOptions) {
 
+	/**
+	 * Default execution timeout: 30 seconds. The size limits bound what a transformation can
+	 * build in one step or by doubling; what grows slowly — a loop creating a million objects —
+	 * is bounded by time only, so an execution has a deadline unless the caller removes it with
+	 * {@code withTimeout(null)} (#261).
+	 */
+	public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+
 	private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
 	private static final int DEFAULT_MAX_LOOP_ITERATIONS = 1_000_000;
 	private static final int DEFAULT_MAX_DIAGNOSTICS = 10_000;
@@ -75,12 +83,12 @@ public record QvtoEvaluationOptions(
 	}
 
 	/**
-	 * Returns default options: maxStackDepth=1000, no timeout,
+	 * Returns default options: maxStackDepth=1000, timeout=30 s,
 	 * maxLoopIterations=1,000,000, maxDiagnostics=10,000,
 	 * maxTraceRecords=1,000,000, tracing disabled, the OCL engine's own default options.
 	 */
 	public static QvtoEvaluationOptions defaults() {
-		return new QvtoEvaluationOptions(DEFAULT_MAX_STACK_DEPTH, null,
+		return new QvtoEvaluationOptions(DEFAULT_MAX_STACK_DEPTH, DEFAULT_TIMEOUT,
 				DEFAULT_MAX_LOOP_ITERATIONS, DEFAULT_MAX_DIAGNOSTICS,
 				DEFAULT_MAX_TRACE_RECORDS, false, null);
 	}

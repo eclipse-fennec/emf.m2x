@@ -29,6 +29,7 @@ import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
  * @param maxTemplateDepth maximum template invocation depth (T-1)
  * @param maxForIterations maximum for-block iterations (T-2)
  * @param maxCrossProductSize maximum cross-product size (T-3)
+ * @param timeoutMs execution timeout of one generation in milliseconds, zero for none (#261)
  * @param protectedAreaEnabled whether protected area markers are honoured (T-6)
  * @author Data In Motion Consulting
  * @since 1.0
@@ -38,6 +39,7 @@ public record M2tLimits(
 		int maxTemplateDepth,
 		int maxForIterations,
 		int maxCrossProductSize,
+		long timeoutMs,
 		boolean protectedAreaEnabled) {
 
 	/**
@@ -49,7 +51,7 @@ public record M2tLimits(
 	public static M2tLimits of(M2tConfiguration config) {
 		Objects.requireNonNull(config, "config must not be null");
 		return new M2tLimits(config.maxDiagnostics(), config.maxTemplateDepth(),
-				config.maxForIterations(), config.maxCrossProductSize(),
+				config.maxForIterations(), config.maxCrossProductSize(), config.timeoutMs(),
 				config.protectedAreaEnabled());
 	}
 
@@ -59,6 +61,6 @@ public record M2tLimits(
 	 * @return the default limits
 	 */
 	public static M2tLimits defaults() {
-		return new M2tLimits(10_000, 1_000, 1_000_000, 1_000_000, true);
+		return new M2tLimits(10_000, 1_000, 1_000_000, 1_000_000, M2tConfiguration.DEFAULT_TIMEOUT_MS, true);
 	}
 }

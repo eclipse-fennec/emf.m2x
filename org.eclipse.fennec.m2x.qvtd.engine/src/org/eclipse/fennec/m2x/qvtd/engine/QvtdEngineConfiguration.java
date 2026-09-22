@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine;
 
+import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.osgi.service.metatype.annotations.AttributeDefinition;
 import org.osgi.service.metatype.annotations.ObjectClassDefinition;
 
@@ -65,7 +66,7 @@ public @interface QvtdEngineConfiguration {
 	int maxBindings() default 10_000;
 
 	@AttributeDefinition(name = "Timeout (ms)", description = "Transformation timeout in milliseconds (0 = no timeout)")
-	long timeout() default 0;
+	long timeout() default QvtdConfiguration.DEFAULT_TIMEOUT_MS;
 
 	@AttributeDefinition(name = "Max Trace Records", description = "Maximum number of trace records one transformation may create")
 	int maxTraceRecords() default 100_000;
