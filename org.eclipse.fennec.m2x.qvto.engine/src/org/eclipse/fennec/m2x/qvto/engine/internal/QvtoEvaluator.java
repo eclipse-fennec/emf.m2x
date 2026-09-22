@@ -127,6 +127,8 @@ public class QvtoEvaluator {
 	private final OclEngine oclEngine;
 	private final QvtoEvalEnvironment env;
 	private final QvtoEvaluationOptions options;
+	/** Built on first use, see {@link #oclOptions()}. */
+	private OclEvaluationOptions oclOptions;
 	private final OperationalTransformation transformation;
 	private final QvtoExtentManager extentManager;
 	private final QvtoTraceManager traceManager;
@@ -428,8 +430,7 @@ public class QvtoEvaluator {
 		// The catch-all is remembered rather than invoked, so that an exact match wins and no
 		// operation with a side effect is invoked twice
 		OclOperation fallback = null;
-		for (var provider : oclEngine.getOperationProviders(
-				OclEvaluationOptions.lenient().withAdditionalProviders(additionalProviders()))) {
+		for (var provider : oclEngine.getOperationProviders(oclOptions())) {
 			for (var op : provider.getOperations()) {
 				if (!op.name().equals(opName)) {
 					continue;
@@ -642,11 +643,7 @@ public class QvtoEvaluator {
 					? OclContext.of(self, vars)
 					: OclContext.of(vars);
 		}
-		// Use LENIENT null handling for QVT-O — module-level operations have no self
-		// D29: Pass the QVT-O bridge providers so they are always active
-		OclEvaluationOptions oclOpts = OclEvaluationOptions.lenient()
-				.withAdditionalProviders(additionalProviders());
-		OclResult oclResult = oclEngine.evaluateWithDiagnostics(expr, oclCtx, oclOpts);
+		OclResult oclResult = oclEngine.evaluateWithDiagnostics(expr, oclCtx, oclOptions());
 		// Placed, not just copied: the OCL engine names the node it stumbled over, and the parser
 		// recorded where that node stood — including in an imported unit (#116).
 		oclResult.diagnostics().forEach(this::addOclDiagnostic);
@@ -1058,6 +1055,28 @@ public class QvtoEvaluator {
 					transformation, this, operationResolver, blackboxRegistry));
 		}
 		return additionalProviders;
+	}
+
+	/**
+	 * The options every OCL sub-expression is evaluated with.
+	 *
+	 * <p>The base is what the run asked for in {@link QvtoEvaluationOptions#oclOptions()}, else
+	 * the defaults of the OCL engine — what {@code OclConfiguration} or the {@code ocl.*}
+	 * configuration set. Until #258 the base was {@code OclEvaluationOptions.lenient()} built
+	 * here, so neither reached the OCL half of a transformation. On top: LENIENT null handling,
+	 * because module-level operations have no {@code self}, and the QVT-O bridge providers
+	 * (D29), so the transformation's own helpers and blackboxes are always in reach.
+	 */
+	private OclEvaluationOptions oclOptions() {
+		if (oclOptions == null) {
+			OclEvaluationOptions base = options.oclOptions() != null
+					? options.oclOptions()
+					: oclEngine.getDefaultOptions();
+			oclOptions = base
+					.withNullHandling(OclEvaluationOptions.NullHandling.LENIENT)
+					.withAdditionalProviders(additionalProviders());
+		}
+		return oclOptions;
 	}
 
 

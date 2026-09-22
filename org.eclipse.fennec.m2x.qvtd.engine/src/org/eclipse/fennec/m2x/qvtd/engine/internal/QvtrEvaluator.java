@@ -601,13 +601,16 @@ public class QvtrEvaluator {
 			// With diagnostics: what an expression reports is what tells an author why a relation
 			// did not match, and the node it came from is what places it (#116). Before this they
 			// were dropped, exactly as M2T dropped them until #114.
-			// LENIENT for the same reason QVT-O uses it: a relation's queries and blackboxes have
-			// no self, and a call on a null source has to proceed to the providers rather than
-			// fail (#112). The providers are the transformation's own queries and blackboxes —
-			// without them OCL reported "Unknown operation" for a nested query call and no error
-			// could be trusted (#118).
+			// The base is the OCL engine's defaults — what OclConfiguration or the ocl.*
+			// configuration set; until #258 it was lenient() built here, and no configured limit
+			// reached a relation's expressions. LENIENT for the same reason QVT-O uses it: a
+			// relation's queries and blackboxes have no self, and a call on a null source has to
+			// proceed to the providers rather than fail (#112). The providers are the
+			// transformation's own queries and blackboxes — without them OCL reported "Unknown
+			// operation" for a nested query call and no error could be trusted (#118).
 			OclResult result = oclEngine.evaluateWithDiagnostics(expression, ctx,
-					OclEvaluationOptions.lenient()
+					oclEngine.getDefaultOptions()
+							.withNullHandling(OclEvaluationOptions.NullHandling.LENIENT)
 							.withCustomOperationsEnabled(true)
 							.withAdditionalProviders(List.of(operationProvider())));
 			result.diagnostics().forEach(this::addOclDiagnostic);

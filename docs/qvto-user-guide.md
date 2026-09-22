@@ -527,11 +527,16 @@ QvtoExecutionResult result = engine.execute(trafo, ctx, options);
 | `maxDiagnostics` | 10,000 | Maximum diagnostic entries before truncation |
 | `maxTraceRecords` | 1,000,000 | Maximum trace records (0 = unlimited) |
 | `tracingEnabled` | false | Collect trace records for resolve operations |
-| `oclOptions` | strict | OCL evaluation options (null handling, limits) |
+| `oclOptions` | the OCL engine's defaults | OCL evaluation options (limits, providers) for the transformation's expressions; unset, the defaults of the OCL engine apply — what `OclConfiguration` or `ocl.*` configured |
 
 ### 7.3 OCL Options Within QVT-O
 
-The underlying OCL evaluator respects `OclEvaluationOptions`:
+Every OCL expression of a transformation — helper bodies, guards, initialisers — is evaluated
+with `oclOptions()` when the run sets them, else with the defaults of the OCL engine the QVT-O
+engine runs on. So a limit configured once on the OCL engine (`OclConfiguration`, or `ocl.*`
+under ConfigAdmin) holds inside QVT-O as well, and a run can tighten it further. Null handling
+is always LENIENT on top of that: module-level operations have no `self`, and QVT-O reads a
+null operand as empty rather than invalid.
 
 ```java
 OclEvaluationOptions oclOpts = OclEvaluationOptions.strict()

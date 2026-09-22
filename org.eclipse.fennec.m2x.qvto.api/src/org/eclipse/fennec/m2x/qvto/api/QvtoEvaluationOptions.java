@@ -15,7 +15,6 @@
 package org.eclipse.fennec.m2x.qvto.api;
 
 import java.time.Duration;
-import java.util.Objects;
 
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 
@@ -37,7 +36,11 @@ import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
  * @param maxDiagnostics maximum number of diagnostic entries before truncation (Q-7)
  * @param maxTraceRecords maximum number of trace records, or 0 for unlimited (Q-6)
  * @param tracingEnabled whether to generate a {@code Trace} model during execution
- * @param oclOptions options for the underlying OCL evaluator
+ * @param oclOptions options for the OCL expressions of the transformation — its limits and
+ *        providers; the evaluator forces LENIENT null handling on top, because module-level
+ *        operations have no {@code self} — or {@code null} to evaluate them with the defaults
+ *        of the OCL engine the QVT-O engine runs on (what {@code OclConfiguration} or the
+ *        {@code ocl.*} configuration set)
  * @author Data In Motion Consulting
  * @since 1.0
  */
@@ -68,18 +71,18 @@ public record QvtoEvaluationOptions(
 		if (maxTraceRecords < 0) {
 			throw new IllegalArgumentException("maxTraceRecords must be non-negative: " + maxTraceRecords);
 		}
-		Objects.requireNonNull(oclOptions, "oclOptions must not be null");
+		// oclOptions may be null: the OCL engine's defaults, see above
 	}
 
 	/**
 	 * Returns default options: maxStackDepth=1000, no timeout,
 	 * maxLoopIterations=1,000,000, maxDiagnostics=10,000,
-	 * maxTraceRecords=1,000,000, tracing disabled, strict OCL options.
+	 * maxTraceRecords=1,000,000, tracing disabled, the OCL engine's own default options.
 	 */
 	public static QvtoEvaluationOptions defaults() {
 		return new QvtoEvaluationOptions(DEFAULT_MAX_STACK_DEPTH, null,
 				DEFAULT_MAX_LOOP_ITERATIONS, DEFAULT_MAX_DIAGNOSTICS,
-				DEFAULT_MAX_TRACE_RECORDS, false, OclEvaluationOptions.strict());
+				DEFAULT_MAX_TRACE_RECORDS, false, null);
 	}
 
 	public QvtoEvaluationOptions withMaxStackDepth(int depth) {

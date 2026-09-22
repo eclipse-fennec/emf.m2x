@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvto.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -246,9 +247,7 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 		assertEquals(10_000, opts.maxDiagnostics());
 		assertEquals(1_000_000, opts.maxTraceRecords());
 		assertFalse(opts.tracingEnabled());
-		assertNotNull(opts.oclOptions());
-		assertEquals(OclEvaluationOptions.NullHandling.STRICT,
-				opts.oclOptions().nullHandling());
+		assertNull(opts.oclOptions(), "unset: the OCL engine's own defaults apply (#258)");
 	}
 
 	@Test
@@ -279,17 +278,16 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 		// The security-hardening section of the user guide reaches for this to tighten the OCL
 		// half of an execution — until #111 nothing exercised it, so a wither that dropped the
 		// QVT-O limits on the way would have gone unnoticed.
-		// The defaults already carry strict OCL options, so leniency is what makes the exchange
-		// observable at all.
+		// The defaults leave the OCL side to the engine (#258), so any explicit options make
+		// the exchange observable.
 		QvtoEvaluationOptions base = QvtoEvaluationOptions.defaults().withMaxStackDepth(42);
 
-		QvtoEvaluationOptions modified = base.withOclOptions(OclEvaluationOptions.lenient());
+		QvtoEvaluationOptions modified = base.withOclOptions(
+				OclEvaluationOptions.strict().withMaxCollectionSize(7));
 
-		assertEquals(OclEvaluationOptions.NullHandling.LENIENT,
-				modified.oclOptions().nullHandling());
+		assertEquals(7, modified.oclOptions().maxCollectionSize());
 		assertEquals(42, modified.maxStackDepth(), "the QVT-O limits survive the exchange");
-		assertEquals(OclEvaluationOptions.NullHandling.STRICT,
-				base.oclOptions().nullHandling(), "and the original is untouched");
+		assertNull(base.oclOptions(), "and the original is untouched");
 	}
 
 	@Test
