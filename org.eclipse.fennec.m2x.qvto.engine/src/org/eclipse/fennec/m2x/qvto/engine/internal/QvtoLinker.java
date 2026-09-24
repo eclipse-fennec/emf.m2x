@@ -37,6 +37,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
+import org.eclipse.fennec.m2x.ocl.api.LinkDiagnostics;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
@@ -81,6 +82,9 @@ public class QvtoLinker {
 	 * Links all unresolved module imports in the given transformation.
 	 * Recursively resolves imports of imported modules.
 	 *
+	 * <p>Every import that cannot be resolved is reported, each as a diagnostic at its
+	 * declaration, in one exception after all of them were tried (#264).
+	 *
 	 * @param transformation the transformation whose imports to resolve
 	 * @throws QvtoParseException if a required import cannot be resolved or parsed
 	 */
@@ -88,7 +92,7 @@ public class QvtoLinker {
 		Map<Module, Module> stubToResolved = new HashMap<>();
 		Set<String> visited = new HashSet<>();
 		visited.add(transformation.getName());
-		linkModule(transformation, visited, stubToResolved);
+		linkUnit(transformation, visited, stubToResolved);
 
 		// Update TransformationInstantiationExp references from stubs to resolved modules
 		if (!stubToResolved.isEmpty()) {
@@ -96,8 +100,21 @@ public class QvtoLinker {
 		}
 	}
 
-	private void linkModule(Module module, Set<String> visited,
+	/**
+	 * Links the modules of one unit: the given one and those defined inline beside it, whose
+	 * declarations stand in the same source and so are reported together.
+	 */
+	private void linkUnit(Module module, Set<String> visited,
 			Map<Module, Module> stubToResolved) throws QvtoParseException {
+		LinkDiagnostics failures = new LinkDiagnostics();
+		linkModule(module, visited, stubToResolved, failures);
+		if (failures.hasErrors()) {
+			throw new QvtoParseException(failures.message(), failures.cause(), failures.getDiagnostics());
+		}
+	}
+
+	private void linkModule(Module module, Set<String> visited,
+			Map<Module, Module> stubToResolved, LinkDiagnostics failures) {
 		// Build index of inline-defined (non-stub) modules for local resolution.
 		// When the parser encounters "library Foo() { ... }" and "access Foo" in
 		// the same compilation unit, it creates both an inline Library AND a stub.
@@ -122,7 +139,7 @@ public class QvtoLinker {
 				// Already resolved (e.g. inline library from same parse unit)
 				String name = imported.getName();
 				if (name != null && visited.add(name)) {
-					linkModule(imported, visited, stubToResolved);
+					linkModule(imported, visited, stubToResolved, failures);
 				}
 				continue;
 			}
@@ -134,36 +151,59 @@ public class QvtoLinker {
 
 			// Cycle detection
 			if (!visited.add(qualifiedName)) {
-				throw new QvtoParseException(
-						"Circular import detected: " + qualifiedName);
+				failures.add("Circular import detected: " + qualifiedName, policy.parserSupport().positionOf(imp),
+						null);
+				continue;
 			}
 
-			// Try inline-defined modules first (same compilation unit)
-			Module resolved = inlineModules.get(qualifiedName);
-
-			// Try unit resolvers
-			if (resolved == null) {
-				resolved = resolveModule(qualifiedName);
+			try {
+				linkImport(imp, imported, qualifiedName, inlineModules, visited, stubToResolved, failures);
+			} catch (QvtoParseException failure) {
+				// Placed at this declaration even when the failure lies deeper, in an imported
+				// unit's own imports: this is the line the unit being linked can change.
+				failures.add(failure.getMessage(), policy.parserSupport().positionOf(imp), failure);
 			}
+		}
+	}
 
-			// Fallback: try blackbox registry
-			if (resolved == null) {
-				resolved = resolveBlackboxModule(qualifiedName);
-			}
-
-			if (resolved == null) {
-				throw new QvtoParseException(
-						"Cannot resolve import: " + qualifiedName);
-			}
-
-			// Track stub→resolved mapping for TransformationInstantiationExp updates
-			stubToResolved.put(imported, resolved);
+	private void linkImport(ModuleImport imp, Module stub, String qualifiedName,
+			Map<String, Module> inlineModules, Set<String> visited, Map<Module, Module> stubToResolved,
+			LinkDiagnostics failures) throws QvtoParseException {
+		// Try inline-defined modules first (same compilation unit)
+		Module resolved = inlineModules.get(qualifiedName);
+		if (resolved != null) {
+			stubToResolved.put(stub, resolved);
 			imp.setImportedModule(resolved);
-
-			// Recursively link the imported module's own imports
-			// (blackbox modules have no own imports, but regular modules may)
 			if (!resolved.isIsBlackbox()) {
-				linkModule(resolved, visited, stubToResolved);
+				// the same source: its declarations are reported with this unit's own
+				linkModule(resolved, visited, stubToResolved, failures);
+			}
+			return;
+		}
+
+		// Try unit resolvers
+		resolved = resolveModule(qualifiedName);
+
+		// Fallback: try blackbox registry
+		if (resolved == null) {
+			resolved = resolveBlackboxModule(qualifiedName);
+		}
+
+		if (resolved == null) {
+			throw new QvtoParseException("Cannot resolve import: " + qualifiedName);
+		}
+
+		// Track stub→resolved mapping for TransformationInstantiationExp updates
+		stubToResolved.put(stub, resolved);
+		imp.setImportedModule(resolved);
+
+		// Recursively link the imported module's own imports
+		// (blackbox modules have no own imports, but regular modules may)
+		if (!resolved.isIsBlackbox()) {
+			try {
+				linkUnit(resolved, visited, stubToResolved);
+			} catch (QvtoParseException failure) {
+				throw new QvtoParseException("In import '" + qualifiedName + "': " + failure.getMessage(), failure);
 			}
 		}
 	}

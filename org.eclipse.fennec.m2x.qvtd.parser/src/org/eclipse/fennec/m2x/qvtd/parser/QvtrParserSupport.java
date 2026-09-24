@@ -21,6 +21,7 @@ import java.util.Objects;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
@@ -71,6 +72,28 @@ public class QvtrParserSupport {
 			SourcePosition position = nodePositions.get(current);
 			if (position != null) {
 				return position;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Where an {@code import} of the given name was written, for a link diagnostic (#264).
+	 *
+	 * @param transformation the transformation carrying the import, must not be {@code null}
+	 * @param importedName   the imported name as {@link #IMPORTS_ANNOTATION} records it
+	 * @return the position of its first declaration, or {@code null} when this support did not
+	 *         parse that transformation or it does not import the name
+	 */
+	public SourcePosition positionOfImport(RelationalTransformation transformation, String importedName) {
+		Objects.requireNonNull(transformation, "transformation must not be null");
+		EAnnotation annotation = transformation.getEAnnotation(IMPORTS_ANNOTATION);
+		if (annotation == null) {
+			return null;
+		}
+		for (Map.Entry<String, String> detail : annotation.getDetails()) {
+			if (Objects.equals(importedName, detail.getValue()) && detail instanceof EObject entry) {
+				return nodePositions.get(entry);
 			}
 		}
 		return null;

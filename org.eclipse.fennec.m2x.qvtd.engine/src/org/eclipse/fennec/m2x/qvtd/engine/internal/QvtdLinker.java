@@ -27,6 +27,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.qvtbase.Rule;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.ocl.api.LinkDiagnostics;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
@@ -72,23 +73,44 @@ public class QvtdLinker {
 	/**
 	 * Resolves every import of the given transformation and merges what they bring.
 	 *
+	 * <p>Every import is tried; all that fail are reported together, each as a diagnostic at
+	 * its declaration (#264).
+	 *
 	 * @param transformation the transformation to link, must not be {@code null}
 	 * @throws QvtdParseException if an import cannot be resolved
 	 */
 	public void link(RelationalTransformation transformation) throws QvtdParseException {
 		Objects.requireNonNull(transformation, "transformation must not be null");
+		LinkDiagnostics failures = new LinkDiagnostics();
 		for (String qualifiedName : importedNames(transformation)) {
 			if (!resolved.add(qualifiedName)) {
 				continue; // the same unit named twice, or reached again through a chain
 			}
-			RelationalTransformation imported = resolveUnit(qualifiedName);
-			if (imported == null) {
-				throw new QvtdParseException("Cannot resolve import: " + qualifiedName, List.of());
+			try {
+				linkImport(transformation, qualifiedName);
+			} catch (QvtdParseException failure) {
+				failures.add(failure.getMessage(), parserSupport.positionOfImport(transformation, qualifiedName),
+						failure);
 			}
-			// An imported unit may import in turn.
-			link(imported);
-			merge(transformation, imported);
 		}
+		if (failures.hasErrors()) {
+			throw new QvtdParseException(failures.message(), failures.cause(), failures.getDiagnostics());
+		}
+	}
+
+	private void linkImport(RelationalTransformation transformation, String qualifiedName)
+			throws QvtdParseException {
+		RelationalTransformation imported = resolveUnit(qualifiedName);
+		if (imported == null) {
+			throw new QvtdParseException("Cannot resolve import: " + qualifiedName, List.of());
+		}
+		// An imported unit may import in turn; what fails there is reported at this import.
+		try {
+			link(imported);
+		} catch (QvtdParseException failure) {
+			throw new QvtdParseException("In import '" + qualifiedName + "': " + failure.getMessage(), failure);
+		}
+		merge(transformation, imported);
 	}
 
 	/**

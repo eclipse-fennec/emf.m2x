@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.parser;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -120,6 +121,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
 	private final Map<String, Module> importedModuleStubs = new HashMap<>();
+
+	/**
+	 * Where each import declaration stood — the link phase resolves them after parsing and
+	 * places what it cannot resolve here (#264).
+	 */
+	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
 	/** What this unit knows so far, shared with every expression builder it creates. */
 	private final QvtoScope scope;
 	private String intermediatePackageUri;
@@ -371,6 +378,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	public ModuleImport visitQvtoImportDecl(QvtOParser.QvtoImportDeclContext ctx) {
 		ModuleImport imp = QVTO.createModuleImport();
 		imp.setKind(ImportKind.ACCESS);
+		recordImportPosition(imp, ctx);
 		// Store qualified name as stub library for link-time resolution
 		String qualifiedName = qualifiedNameText(ctx.qualifiedName());
 		Library stub = QVTO.createLibrary();
@@ -1898,6 +1906,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ModuleRefContext refCtx : ctx.moduleRefList().moduleRef()) {
 			ModuleImport imp = QVTO.createModuleImport();
 			imp.setKind("extends".equals(kind) ? ImportKind.EXTENSION : ImportKind.ACCESS);
+			recordImportPosition(imp, refCtx);
 			// Store qualified name as stub for link-time resolution
 			String qualifiedName = moduleRefNameText(refCtx.moduleRefName());
 			// Create OperationalTransformation stub so TransformationInstantiationExp
@@ -1924,6 +1933,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ModuleRefContext refCtx : ctx.moduleRefList().moduleRef()) {
 			ModuleImport imp = QVTO.createModuleImport();
 			imp.setKind(ImportKind.ACCESS);
+			recordImportPosition(imp, refCtx);
 			String qualifiedName = moduleRefNameText(refCtx.moduleRefName());
 			OperationalTransformation stub = QVTO.createOperationalTransformation();
 			stub.setName(qualifiedName);
@@ -1953,17 +1963,29 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	/**
-	 * Returns the diagnostics collected while building — unresolved metamodels (#66).
-	 */
-	/**
-	 * Where each expression node stood, for runtime diagnostics (#116).
+	 * Where each expression node stood, for runtime diagnostics (#116), and where each import
+	 * declaration stood, for link diagnostics (#264).
 	 *
 	 * @return the positions, by node identity
 	 */
 	Map<EObject, SourcePosition> getNodePositions() {
-		return expressionBuilder == null ? Map.of() : expressionBuilder.getNodePositions();
+		Map<EObject, SourcePosition> positions = new IdentityHashMap<>(importPositions);
+		if (expressionBuilder != null) {
+			positions.putAll(expressionBuilder.getNodePositions());
+		}
+		return positions;
 	}
 
+	private void recordImportPosition(ModuleImport imp, ParserRuleContext ctx) {
+		if (ctx.getStart() != null) {
+			importPositions.put(imp, new SourcePosition(ctx.getStart().getLine(),
+					ctx.getStart().getCharPositionInLine()));
+		}
+	}
+
+	/**
+	 * Returns the diagnostics collected while building — unresolved metamodels (#66).
+	 */
 	List<Resource.Diagnostic> getDiagnostics() {
 		return diagnostics;
 	}

@@ -35,6 +35,7 @@ import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
 import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
 import org.eclipse.fennec.m2x.model.m2t.Module;
+import org.eclipse.fennec.m2x.ocl.api.LinkDiagnostics;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
@@ -103,7 +104,6 @@ final class M2tUnitCompiler {
 		if (path.contains(unitName)) {
 			throw new M2tParseException("Circular import detected: " + unitName, List.of());
 		}
-		path.push(unitName);
 		Module module = result.module();
 		CompiledUnit document;
 		try {
@@ -115,28 +115,58 @@ final class M2tUnitCompiler {
 		linkSet.add(result);
 		Set<String> referenced = new LinkedHashSet<>(result.extendsNames());
 		referenced.addAll(result.importNames());
-		for (String name : referenced) {
-			M2tUnit unit = resolveUnit(name)
-					.orElseThrow(() -> new M2tParseException("Cannot resolve import: " + name, List.of()));
-			bind(name, unit, document, linkSet, path);
+		// Every reference is tried, and all that fail are reported together, each at its
+		// declaration (#264)
+		LinkDiagnostics failures = new LinkDiagnostics();
+		path.push(unitName);
+		try {
+			for (String name : referenced) {
+				try {
+					resolveReference(name, document, linkSet, path);
+				} catch (M2tParseException failure) {
+					failures.add(failure.getMessage(), result.referencePositions().get(name), failure);
+				}
+			}
+		} finally {
+			// popped on failure too: the siblings of a failed dependency are still tried
+			path.pop();
+		}
+		if (failures.hasErrors()) {
+			throw new M2tParseException(failures.message(), failures.cause(), failures.getDiagnostics());
 		}
 		if (mode == DependencyMode.EMBED) {
 			M2tModuleLinker linker = new M2tModuleLinker();
 			linker.link(linkSet);
-			List<String> unresolved = linker.unresolvedReferences().getOrDefault(module, List.of());
+			List<M2tModuleLinker.UnresolvedReference> unresolved = linker.unresolvedReferencesOf(module);
 			if (!unresolved.isEmpty()) {
-				throw new M2tParseException("Cannot compile '" + unitName + "': " + String.join("; ", unresolved),
-						List.of());
+				LinkDiagnostics references = new LinkDiagnostics();
+				unresolved.forEach(reference -> references.add(reference.message(), reference.position(), null));
+				throw new M2tParseException("Cannot compile '" + unitName + "': " + references.message(),
+						references.getDiagnostics());
 			}
 			M2tLinkInfo.strip(module);
 		} else {
 			M2tLinkInfo.record(result);
 		}
-		path.pop();
 		try {
 			return packager.seal(document);
 		} catch (IllegalStateException e) {
 			throw new M2tParseException("Cannot compile '" + unitName + "': " + e.getMessage(), e, List.of());
+		}
+	}
+
+	private void resolveReference(String name, CompiledUnit document, List<M2tParseResult> linkSet,
+			Deque<String> path) throws M2tParseException {
+		if (path.contains(name)) {
+			throw new M2tParseException("Circular import detected: " + name, List.of());
+		}
+		M2tUnit unit = resolveUnit(name)
+				.orElseThrow(() -> new M2tParseException("Cannot resolve import: " + name, List.of()));
+		try {
+			bind(name, unit, document, linkSet, path);
+		} catch (M2tParseException failure) {
+			// what failed lies in the dependency; it is reported here, at the import
+			throw new M2tParseException("In import '" + name + "': " + failure.getMessage(), failure, List.of());
 		}
 	}
 
