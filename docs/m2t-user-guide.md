@@ -402,6 +402,8 @@ annotations: the `extends`/`imports` names, pending `overrides` and invocations 
 those beside the AST, not in it), so an engine that never parsed the module can `link()` it from its
 own resolvers after a reload. A name nobody resolves fails `compile()` in every mode with
 `Cannot resolve import: <name>`; a cycle of `extends` is reported under `embed` and `pin`.
+`M2tParseException.getErrors()` holds one diagnostic per failed `extends`/`import`, at its
+declaration, and under `embed` one per unresolved override or invocation (#264).
 MOFM2T has no blackboxes — Java services arrive through the OCL operation providers of the engine —
 so a compiled module never carries a blackbox requirement.
 

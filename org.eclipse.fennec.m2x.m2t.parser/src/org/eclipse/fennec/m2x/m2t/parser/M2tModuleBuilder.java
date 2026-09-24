@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.antlr.v4.runtime.ParserRuleContext;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
@@ -75,6 +76,10 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	private final List<String> pendingImports = new ArrayList<>();
 	private final Map<Template, List<String>> pendingOverrides = new LinkedHashMap<>();
 	private final Map<TemplateInvocation, String> pendingInvocations = new LinkedHashMap<>();
+	/** Where each extends and import name was first written, for link diagnostics (#264). */
+	private final Map<String, SourcePosition> referencePositions = new LinkedHashMap<>();
+	/** Where each invocation stood — built here, not by the expression builder that records the rest. */
+	private final Map<EObject, SourcePosition> invocationPositions = new IdentityHashMap<>();
 
 	/**
 	 * Creates a new module builder.
@@ -112,7 +117,9 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		// Import declarations
 		for (M2tParser.ImportDeclContext importCtx : ctx.importDecl()) {
 			List<String> segments = M2tExpressionBuilder.pathNameSegments(importCtx.pathName());
-			pendingImports.add(String.join("::", segments));
+			String name = String.join("::", segments);
+			pendingImports.add(name);
+			recordReferencePosition(name, importCtx);
 		}
 
 		// Module elements (templates, queries, macros)
@@ -150,7 +157,9 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		if (ctx.extendsDecl() != null) {
 			for (M2tParser.PathNameContext pathCtx : ctx.extendsDecl().pathName()) {
 				List<String> segments = M2tExpressionBuilder.pathNameSegments(pathCtx);
-				pendingExtends.add(String.join("::", segments));
+				String name = String.join("::", segments);
+				pendingExtends.add(name);
+				recordReferencePosition(name, pathCtx);
 			}
 		}
 
@@ -627,6 +636,10 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		List<String> nameSegments = M2tExpressionBuilder.pathNameSegments(ctx.pathName());
 		String invocationName = String.join("::", nameSegments);
 		pendingInvocations.put(invocation, invocationName);
+		if (ctx.getStart() != null) {
+			invocationPositions.put(invocation, new SourcePosition(ctx.getStart().getLine(),
+					ctx.getStart().getCharPositionInLine()));
+		}
 
 		// Arguments
 		if (ctx.argumentList() != null) {
@@ -683,7 +696,18 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		Map<EObject, SourcePosition> positions = new IdentityHashMap<>();
 		exprBuilder.getPositions().forEach((node, position) ->
 				positions.put(node, position.inUnit(unitName)));
+		invocationPositions.forEach((node, position) ->
+				positions.putIfAbsent(node, position.inUnit(unitName)));
+		Map<String, SourcePosition> references = new LinkedHashMap<>();
+		referencePositions.forEach((name, position) -> references.put(name, position.inUnit(unitName)));
 		return new M2tParseResult(module, pendingExtends, pendingImports,
-				pendingOverrides, pendingInvocations, Map.of(), positions);
+				pendingOverrides, pendingInvocations, Map.of(), positions, references);
+	}
+
+	private void recordReferencePosition(String name, ParserRuleContext ctx) {
+		if (ctx.getStart() != null) {
+			referencePositions.putIfAbsent(name, new SourcePosition(ctx.getStart().getLine(),
+					ctx.getStart().getCharPositionInLine()));
+		}
 	}
 }

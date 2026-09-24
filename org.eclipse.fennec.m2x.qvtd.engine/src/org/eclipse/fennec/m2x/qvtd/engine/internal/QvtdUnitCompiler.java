@@ -37,6 +37,8 @@ import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
 import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
 import org.eclipse.fennec.m2x.model.qvtbase.Function;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.ocl.api.LinkDiagnostics;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
@@ -109,26 +111,55 @@ final class QvtdUnitCompiler {
 		if (path.contains(qualifiedName)) {
 			throw new QvtdParseException("Circular import detected: " + qualifiedName, List.of());
 		}
-		path.push(qualifiedName);
 		CompiledUnit document;
 		try {
 			document = packager.begin(LANGUAGE, qualifiedName, transformation, mode, source);
 		} catch (IllegalArgumentException e) {
 			throw new QvtdParseException("Cannot compile '" + qualifiedName + "': " + e.getMessage(), e);
 		}
-		for (String imported : importedNames(transformation)) {
-			QvtdUnit unit = resolveUnit(imported)
-					.orElseThrow(() -> new QvtdParseException("Cannot resolve import: " + imported, List.of()));
-			bind(transformation, imported, unit, document, path);
+		// Every import is tried, and all that fail are reported together, each at its
+		// declaration (#264)
+		LinkDiagnostics failures = new LinkDiagnostics();
+		path.push(qualifiedName);
+		try {
+			for (String imported : importedNames(transformation)) {
+				// taken before binding: an embedded import is struck from the declaration
+				SourcePosition position = parserSupport.positionOfImport(transformation, imported);
+				try {
+					resolveImport(transformation, imported, document, path);
+				} catch (QvtdParseException failure) {
+					failures.add(failure.getMessage(), position, failure);
+				}
+			}
+		} finally {
+			// popped on failure too: the siblings of a failed dependency are still tried
+			path.pop();
+		}
+		if (failures.hasErrors()) {
+			throw new QvtdParseException(failures.message(), failures.cause(), failures.getDiagnostics());
 		}
 		for (Function query : blackboxQueries(transformation)) {
 			document.getManifest().getBlackboxRequirement().add(requirement(query));
 		}
-		path.pop();
 		try {
 			return packager.seal(document);
 		} catch (IllegalStateException e) {
 			throw new QvtdParseException("Cannot compile '" + qualifiedName + "': " + e.getMessage(), e);
+		}
+	}
+
+	private void resolveImport(RelationalTransformation transformation, String imported, CompiledUnit document,
+			Deque<String> path) throws QvtdParseException {
+		if (path.contains(imported)) {
+			throw new QvtdParseException("Circular import detected: " + imported, List.of());
+		}
+		QvtdUnit unit = resolveUnit(imported)
+				.orElseThrow(() -> new QvtdParseException("Cannot resolve import: " + imported, List.of()));
+		try {
+			bind(transformation, imported, unit, document, path);
+		} catch (QvtdParseException failure) {
+			// what failed lies in the dependency; it is reported here, at the import
+			throw new QvtdParseException("In import '" + imported + "': " + failure.getMessage(), failure);
 		}
 	}
 

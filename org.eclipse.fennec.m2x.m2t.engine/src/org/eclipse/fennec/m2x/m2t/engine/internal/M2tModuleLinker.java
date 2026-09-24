@@ -23,6 +23,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
 import org.eclipse.fennec.m2x.model.m2t.Block;
@@ -43,6 +44,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 /**
  * Links parsed MOFM2T modules by resolving cross-module references.
@@ -67,7 +69,16 @@ public class M2tModuleLinker {
 	private final Map<String, M2tParseResult> parseResults = new LinkedHashMap<>();
 	private final Map<String, Module> moduleIndex = new LinkedHashMap<>();
 	private final List<String> warnings = new ArrayList<>();
-	private final Map<Module, List<String>> unresolvedReferences = new LinkedHashMap<>();
+	private final Map<Module, List<UnresolvedReference>> unresolvedReferences = new LinkedHashMap<>();
+
+	/**
+	 * A reference naming something that is not there, and where it was written.
+	 *
+	 * @param message  what is unresolved, in the words {@link #link(List)} warns with
+	 * @param position where the reference stands, or {@code null} when that is not known
+	 */
+	record UnresolvedReference(String message, SourcePosition position) {
+	}
 
 	/**
 	 * Links all provided parse results.
@@ -121,9 +132,28 @@ public class M2tModuleLinker {
 	 * whether they are a warning or an error is the caller's decision (#144) — the linker
 	 * itself always links what it can and says what it could not.
 	 */
-	private void unresolved(Module owner, String message) {
+	private void unresolved(Module owner, String message, SourcePosition position) {
 		warnings.add(message);
-		unresolvedReferences.computeIfAbsent(owner, key -> new ArrayList<>()).add(message);
+		unresolvedReferences.computeIfAbsent(owner, key -> new ArrayList<>())
+				.add(new UnresolvedReference(message, position));
+	}
+
+	/**
+	 * Where a node of the given module stood, as its parse result recorded it — or its nearest
+	 * container that has a position, the enclosing expression rather than none.
+	 */
+	private SourcePosition positionOf(Module module, EObject node) {
+		M2tParseResult result = parseResults.get(module.getName());
+		if (result == null) {
+			return null;
+		}
+		for (EObject current = node; current != null && current != module; current = current.eContainer()) {
+			SourcePosition position = result.positions().get(current);
+			if (position != null) {
+				return position;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -141,8 +171,20 @@ public class M2tModuleLinker {
 	 */
 	Map<Module, List<String>> unresolvedReferences() {
 		Map<Module, List<String>> copy = new LinkedHashMap<>();
-		unresolvedReferences.forEach((module, messages) -> copy.put(module, List.copyOf(messages)));
+		unresolvedReferences.forEach((module, references) -> copy.put(module,
+				references.stream().map(UnresolvedReference::message).toList()));
 		return copy;
+	}
+
+	/**
+	 * The unresolved references written in one module, each with where it stands — for a
+	 * compile that reports them as positioned diagnostics (#264).
+	 *
+	 * @param module the module the references are written in
+	 * @return the references in the order they were found, never {@code null}
+	 */
+	List<UnresolvedReference> unresolvedReferencesOf(Module module) {
+		return List.copyOf(unresolvedReferences.getOrDefault(module, List.of()));
 	}
 
 	/**
@@ -166,7 +208,7 @@ public class M2tModuleLinker {
 				module.getExtends().add(target);
 			} else {
 				unresolved(module, "Unresolved extends '" + extendsName
-						+ "' in module '" + module.getName() + "'");
+						+ "' in module '" + module.getName() + "'", result.referencePositions().get(extendsName));
 			}
 		}
 
@@ -179,7 +221,7 @@ public class M2tModuleLinker {
 				module.getImports().add(target);
 			} else {
 				unresolved(module, "Unresolved import '" + importName
-						+ "' in module '" + module.getName() + "'");
+						+ "' in module '" + module.getName() + "'", result.referencePositions().get(importName));
 			}
 		}
 	}
@@ -207,7 +249,7 @@ public class M2tModuleLinker {
 				} else {
 					unresolved(module, "Unresolved override '" + overrideName
 							+ "' in template '" + template.getName()
-							+ "' of module '" + module.getName() + "'");
+							+ "' of module '" + module.getName() + "'", result.positions().get(template));
 				}
 			}
 		}
@@ -225,7 +267,7 @@ public class M2tModuleLinker {
 			ModuleElement target = resolveModuleElement(name, module);
 			if (target == null) {
 				unresolved(module, "Unresolved invocation '" + name
-						+ "' in module '" + module.getName() + "'");
+						+ "' in module '" + module.getName() + "'", result.positions().get(invocation));
 				continue;
 			}
 
@@ -330,7 +372,8 @@ public class M2tModuleLinker {
 							// Standalone call (no explicit source) that doesn't match
 							// any module element — likely an unresolved invocation
 							unresolved(contextModule, "Unresolved invocation '" + opName
-									+ "' in module '" + contextModule.getName() + "'");
+									+ "' in module '" + contextModule.getName() + "'",
+									positionOf(contextModule, opCall));
 						}
 					}
 				}

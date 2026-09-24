@@ -307,7 +307,7 @@ The engine looks that up when it links the import — not before. Outside OSGi t
 }
 ```
 
-An import that nothing answers for is an error — `Cannot resolve import: shared.Library` — rather than a silently missing relation.
+An import that nothing answers for is an error — `Cannot resolve import: shared.Library` — rather than a silently missing relation. `QvtdParseException.getErrors()` carries one diagnostic per failed import, at the line and column of its name, all of them in one exception (#264).
 
 **Running on a specific OCL engine:** the reference is unfiltered by default, so the engine binds whichever `OclEngine` service is there. To pin it to one you configured yourself, set a target filter:
 

@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.parser;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,6 +111,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private final Map<String, TypedModel> typedModelMap = new HashMap<>();
 	/** Map of relation name → Relation object for RelationCallExp resolution. */
 	private final Map<String, Relation> relationMap = new HashMap<>();
+	/** Where each import was written, keyed by the annotation detail that carries it (#264). */
+	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
 	/** Current relation being processed (for variable scope). */
 	private Relation currentRelation;
 	/** ObjectTemplateExps marked with [?] optional multiplicity (transient). */
@@ -142,7 +145,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	@Override
 	public RelationalTransformation visitCompilationUnit(QvtRParser.CompilationUnitContext ctx) {
-		List<String> imports = importedUnitNames(ctx);
+		List<ImportedName> imports = importedUnitNames(ctx);
 		if (ctx.transformationDef().isEmpty()) {
 			RelationalTransformation empty = REL.createRelationalTransformation();
 			empty.setName("_unnamed");
@@ -201,14 +204,20 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * rather than naming a different unit — so the wildcard does not change what is asked
 	 * for here.
 	 */
-	private List<String> importedUnitNames(QvtRParser.CompilationUnitContext ctx) {
-		List<String> names = new ArrayList<>();
+	private List<ImportedName> importedUnitNames(QvtRParser.CompilationUnitContext ctx) {
+		List<ImportedName> names = new ArrayList<>();
 		for (QvtRParser.ImportDeclContext importCtx : ctx.importDecl()) {
 			for (QvtRParser.QualifiedNameContext nameCtx : importCtx.qualifiedName()) {
-				names.add(nameCtx.getText());
+				SourcePosition position = nameCtx.getStart() == null ? null
+						: new SourcePosition(nameCtx.getStart().getLine(), nameCtx.getStart().getCharPositionInLine());
+				names.add(new ImportedName(nameCtx.getText(), position));
 			}
 		}
 		return names;
+	}
+
+	/** An imported name and where it was written, for the link phase to report it at (#264). */
+	private record ImportedName(String name, SourcePosition position) {
 	}
 
 	/**
@@ -218,14 +227,19 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * (§7.11.1.1): the import is unresolved at this point, and a name is all there is to
 	 * record.
 	 */
-	private void recordImports(RelationalTransformation transformation, List<String> imports) {
+	private void recordImports(RelationalTransformation transformation, List<ImportedName> imports) {
 		if (imports.isEmpty()) {
 			return;
 		}
 		EAnnotation annotation = EcoreFactory.eINSTANCE.createEAnnotation();
 		annotation.setSource(QvtrParserSupport.IMPORTS_ANNOTATION);
 		for (int i = 0; i < imports.size(); i++) {
-			annotation.getDetails().put(String.valueOf(i), imports.get(i));
+			annotation.getDetails().put(String.valueOf(i), imports.get(i).name());
+			// the detail entry is the node that stands for the declaration
+			if (imports.get(i).position() != null
+					&& annotation.getDetails().get(i) instanceof EObject entry) {
+				importPositions.put(entry, imports.get(i).position());
+			}
 		}
 		transformation.getEAnnotations().add(annotation);
 	}
@@ -938,18 +952,23 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * Resolves an EPackage by name from the package registry.
 	 */
 	/**
-	 * Returns the diagnostics collected while building — unresolved typed model
-	 * packages and unresolved type names (#66).
-	 */
-	/**
-	 * Where each expression node stood, for runtime diagnostics (#116).
+	 * Where each expression node stood, for runtime diagnostics (#116), and where each import
+	 * was written, for link diagnostics (#264).
 	 *
 	 * @return the positions, by node identity
 	 */
 	Map<EObject, SourcePosition> getNodePositions() {
-		return expressionBuilder == null ? Map.of() : expressionBuilder.getNodePositions();
+		Map<EObject, SourcePosition> positions = new IdentityHashMap<>(importPositions);
+		if (expressionBuilder != null) {
+			positions.putAll(expressionBuilder.getNodePositions());
+		}
+		return positions;
 	}
 
+	/**
+	 * Returns the diagnostics collected while building — unresolved typed model
+	 * packages and unresolved type names (#66).
+	 */
 	List<Resource.Diagnostic> getDiagnostics() {
 		List<Resource.Diagnostic> all = new ArrayList<>(diagnostics);
 		if (expressionBuilder != null) {

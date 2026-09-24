@@ -49,6 +49,11 @@ public class QvtoParseException extends Exception {
 		this.errors = Collections.emptyList();
 	}
 
+	public QvtoParseException(String message, Throwable cause, List<Resource.Diagnostic> errors) {
+		super(Objects.requireNonNull(message, "message must not be null"), cause);
+		this.errors = List.copyOf(Objects.requireNonNull(errors, "errors must not be null"));
+	}
+
 	/**
 	 * Returns the parse errors with location information.
 	 *

@@ -37,6 +37,9 @@ import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
  * @param overrideNames templates mapped to the names of templates they override
  * @param invocationNames template invocations mapped to the invoked name
  * @param indentationMap standalone template invocations mapped to their indentation string (§8.4)
+ * @param positions where each AST node stood, by node identity (#116)
+ * @param referencePositions where each {@code extends} and {@code import} name was first written,
+ *        for a link diagnostic at the declaration (#264)
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -48,7 +51,8 @@ public record M2tParseResult(
 		Map<Template, List<String>> overrideNames,
 		Map<TemplateInvocation, String> invocationNames,
 		Map<TemplateInvocation, String> indentationMap,
-		Map<EObject, SourcePosition> positions
+		Map<EObject, SourcePosition> positions,
+		Map<String, SourcePosition> referencePositions
 ) {
 
 	/**
@@ -64,6 +68,7 @@ public record M2tParseResult(
 		// Not copied into a Map.of: the keys are identities of AST nodes, and the evaluator looks
 		// them up by identity when it places a runtime diagnostic (#116).
 		positions = positions == null ? Map.of() : Map.copyOf(positions);
+		referencePositions = referencePositions == null ? Map.of() : Map.copyOf(referencePositions);
 	}
 
 	/**
@@ -72,7 +77,7 @@ public record M2tParseResult(
 	public M2tParseResult(Module module, List<String> extendsNames,
 			List<String> importNames, Map<Template, List<String>> overrideNames,
 			Map<TemplateInvocation, String> invocationNames) {
-		this(module, extendsNames, importNames, overrideNames, invocationNames, Map.of(), Map.of());
+		this(module, extendsNames, importNames, overrideNames, invocationNames, Map.of(), Map.of(), Map.of());
 	}
 
 	/**
@@ -83,6 +88,6 @@ public record M2tParseResult(
 			Map<TemplateInvocation, String> invocationNames,
 			Map<TemplateInvocation, String> indentationMap) {
 		this(module, extendsNames, importNames, overrideNames, invocationNames, indentationMap,
-				Map.of());
+				Map.of(), Map.of());
 	}
 }

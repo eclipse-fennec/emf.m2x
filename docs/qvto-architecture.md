@@ -360,8 +360,11 @@ in the same compilation unit).
 3. **Blackbox registry** — `QvtoBlackboxRegistry.getLibrary(qualifiedName)`.
    Only consulted if `blackboxEnabled = true` (D29).
 
-If a stub cannot be resolved through any of these, the linker throws
-`QvtoParseException("Cannot resolve import: qualifiedName")` — **fail-fast at link time**.
+If a stub cannot be resolved through any of these, the linker fails with
+`QvtoParseException("Cannot resolve import: qualifiedName")` — at link time, after every import
+of the unit was tried. Each failed import is one positioned `Resource.Diagnostic` in `getErrors()`,
+at its `import`/`extends`/`access` declaration; the parser records those positions in the same
+side map as the expression positions (`QvtoParserSupport.positionOf`, #264).
 
 > **D29 Security:** The linker **always runs**, regardless of enable flags. When
 > `blackboxEnabled = false` and `unitResolverEnabled = false`, only inline modules can be

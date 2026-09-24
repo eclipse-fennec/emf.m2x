@@ -154,6 +154,14 @@ An import nobody can resolve fails the compile in **every** mode — `Cannot res
 cycle is reported under `embed` and `pin`, where the compiler follows the dependency; under
 `rebind` the closure is prepare's business.
 
+Like a syntax error, such a failure is a positioned `Resource.Diagnostic` in `getErrors()` of the
+parse exception (`QvtoParseException`, `QvtdParseException`, `M2tParseException`), placed at the
+declaration that asked for the unit (#264). Every import is tried first, so a unit missing three
+libraries yields three diagnostics in one exception; the exception message joins them with `; `.
+What fails *inside* a dependency — its own missing import, its parse errors — is reported at the
+import of that dependency (`In import 'Mid': Cannot resolve import: deep.X`), because that is the
+line the importing unit can change; a line number of another file would point at the wrong place.
+
 ### What each language binds
 
 **QVT-O** — `import`/`access` of a module. Under `embed` the dependency becomes an entry of

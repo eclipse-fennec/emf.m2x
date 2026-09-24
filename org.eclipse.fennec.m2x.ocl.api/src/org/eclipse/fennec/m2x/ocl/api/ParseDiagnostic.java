@@ -49,6 +49,21 @@ public final class ParseDiagnostic implements Resource.Diagnostic {
 		this.column = column;
 	}
 
+	/**
+	 * A diagnostic at a recorded position — for a problem found after parsing, by whoever kept
+	 * the position of the node it is about.
+	 *
+	 * <p>The position's unit is not carried over, see {@link #getLocation()}.
+	 *
+	 * @param message  what is wrong
+	 * @param position where, or {@code null} when nobody recorded it
+	 * @return the diagnostic, at {@link #UNKNOWN_POSITION} without a position
+	 */
+	public static ParseDiagnostic of(String message, SourcePosition position) {
+		return position == null ? new ParseDiagnostic(message, UNKNOWN_POSITION, UNKNOWN_POSITION)
+				: new ParseDiagnostic(message, position.line(), position.column());
+	}
+
 	@Override
 	public String getMessage() {
 		return message;

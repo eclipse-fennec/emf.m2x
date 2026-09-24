@@ -37,6 +37,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.Module;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.ocl.api.LinkDiagnostics;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
@@ -113,7 +114,6 @@ final class QvtoUnitCompiler {
 		if (path.contains(qualifiedName)) {
 			throw new QvtoParseException("Circular import detected: " + qualifiedName);
 		}
-		path.push(qualifiedName);
 		CompiledUnit document;
 		try {
 			document = packager.begin(LANGUAGE, qualifiedName, transformation, mode, source);
@@ -128,11 +128,22 @@ final class QvtoUnitCompiler {
 			document.getManifest().setNature(UnitNature.LIBRARY);
 		}
 		Map<Module, Module> stubToResolved = new HashMap<>();
-		resolveImports(transformation, document, stubToResolved, new HashSet<>(), path);
+		// Every import is tried, and all that fail are reported together, each at its
+		// declaration (#264)
+		LinkDiagnostics failures = new LinkDiagnostics();
+		path.push(qualifiedName);
+		try {
+			resolveImports(transformation, document, stubToResolved, new HashSet<>(), path, failures);
+		} finally {
+			// popped on failure too: the siblings of a failed dependency are still tried
+			path.pop();
+		}
+		if (failures.hasErrors()) {
+			throw new QvtoParseException(failures.message(), failures.cause(), failures.getDiagnostics());
+		}
 		if (!stubToResolved.isEmpty()) {
 			linker.updateTransformationInstantiationRefs(transformation, stubToResolved);
 		}
-		path.pop();
 		try {
 			return packager.seal(document);
 		} catch (IllegalStateException e) {
@@ -143,7 +154,7 @@ final class QvtoUnitCompiler {
 	}
 
 	private void resolveImports(Module module, CompiledUnit document, Map<Module, Module> stubToResolved,
-			Set<Module> visited, Deque<String> path) throws QvtoParseException {
+			Set<Module> visited, Deque<String> path, LinkDiagnostics failures) {
 		if (!visited.add(module)) {
 			return;
 		}
@@ -162,7 +173,7 @@ final class QvtoUnitCompiler {
 				continue;
 			}
 			if (!QvtoLinker.isLinkerStub(imported)) {
-				resolveImports(imported, document, stubToResolved, visited, path);
+				resolveImports(imported, document, stubToResolved, visited, path, failures);
 				continue;
 			}
 			String name = imported.getName();
@@ -175,18 +186,35 @@ final class QvtoUnitCompiler {
 				stubToResolved.put(imported, local);
 				continue;
 			}
-			Optional<QvtoUnit> unit = resolveUnit(name);
-			if (unit.isPresent()) {
-				bind(imp, imported, unit.get(), document, stubToResolved, path);
-				continue;
+			try {
+				resolveImport(imp, imported, name, document, stubToResolved, path);
+			} catch (QvtoParseException failure) {
+				failures.add(failure.getMessage(), policy.parserSupport().positionOf(imp), failure);
 			}
-			Optional<QvtoBlackboxLibrary> blackbox = resolveBlackbox(name);
-			if (blackbox.isPresent()) {
-				document.getManifest().getBlackboxRequirement().add(requirement(name, blackbox.get()));
-				continue;
-			}
-			throw new QvtoParseException("Cannot resolve import: " + name);
 		}
+	}
+
+	private void resolveImport(ModuleImport imp, Module stub, String name, CompiledUnit document,
+			Map<Module, Module> stubToResolved, Deque<String> path) throws QvtoParseException {
+		if (path.contains(name)) {
+			throw new QvtoParseException("Circular import detected: " + name);
+		}
+		Optional<QvtoUnit> unit = resolveUnit(name);
+		if (unit.isPresent()) {
+			try {
+				bind(imp, stub, unit.get(), document, stubToResolved, path);
+			} catch (QvtoParseException failure) {
+				// what failed lies in the dependency; it is reported here, at the import
+				throw new QvtoParseException("In import '" + name + "': " + failure.getMessage(), failure);
+			}
+			return;
+		}
+		Optional<QvtoBlackboxLibrary> blackbox = resolveBlackbox(name);
+		if (blackbox.isPresent()) {
+			document.getManifest().getBlackboxRequirement().add(requirement(name, blackbox.get()));
+			return;
+		}
+		throw new QvtoParseException("Cannot resolve import: " + name);
 	}
 
 	private void bind(ModuleImport imp, Module stub, QvtoUnit unit, CompiledUnit document,
