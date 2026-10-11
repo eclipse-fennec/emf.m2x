@@ -278,6 +278,10 @@ Object result = engine.evaluate("self.name", OclContext.of(obj));
 // LENIENT covers navigation, not calls:
 engine.evaluate("self.employer.name", OclContext.of(obj));   // employer unset → null
 engine.evaluate("self.employer.name.size()", OclContext.of(obj));   // → OclInvalid
+engine.evaluate("'at ' + self.employer.name", OclContext.of(obj));  // → OclInvalid
+
+// Neither invalid is quiet: evaluateWithDiagnostics() carries an error for each —
+// "Unknown operation: size on null" and "Null argument for operation '+'"
 
 // evaluate() with explicit options overrides the defaults
 Object sandboxed = engine.evaluate(expr, ctx,

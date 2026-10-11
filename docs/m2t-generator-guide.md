@@ -229,17 +229,40 @@ markers and nothing is merged.
 
 ## 8. Diagnostics
 
-Errors from configuration, parsing and execution are reported as bnd errors on the
-`-generate` instruction, all of them at once rather than one per run:
+Errors from configuration and execution are reported as bnd errors on the `-generate`
+instruction, all of them at once rather than one per run:
 
 ```
 bnd.bnd:0: error: fennecM2T : 'ecore': no such file …/model/missing.ecore
 'template': no such file …/templates/vcards.mtl
 ```
 
+A module that does not parse is reported per error, placed in the template file at its line,
+so that an IDE can put a marker where the text has to change; the column is in the message,
+and the instruction carries the count:
+
+```
+…/templates/vcard.mtl:2: error: fennecM2T: vcard.mtl:2:9 mismatched input 'short' expecting ']'
+…/templates/vcard.mtl:2: error: fennecM2T: vcard.mtl:2:19 token recognition error at: '['
+bnd.bnd:0: error: fennecM2T : 2 parse error(s) in …/templates/vcard.mtl
+```
+
+An expression that evaluates to `invalid` — a `null` argument, an operation nobody provides —
+fails the generation and names the expression with its line and the document it was writing:
+
+```
+bnd.bnd:0: error: fennecM2T : vcard.mtl:17:4 [template main → vcards/hopper.vcf] Null argument for operation '+'
+```
+
+Nothing is written for such a value; the word `OclInvalid` never reaches a generated file. What
+the rest of the template produced is still written, so the output can be inspected (#270).
+
 Runtime warnings — an unresolved `extends`, a navigation that found nothing, a namespace URI
-declared by two files — become bnd warnings and do not fail the build. Which nsURI was
-registered from which file is reported as bnd trace output.
+declared by two files — become bnd warnings and do not fail the build. So does an execution of
+`main` that wrote no file: a template may well decide that there is nothing to write for a
+model, but a build that quietly generates nothing deserves a line, so the warning names the
+model root it ran on (`'main' wrote no file for AddressBook from addressbook.xmi`). Which nsURI
+was registered from which file is reported as bnd trace output.
 
 ## 9. The Example Project
 

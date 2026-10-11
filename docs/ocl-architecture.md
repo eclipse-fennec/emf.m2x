@@ -215,6 +215,13 @@ so that the standard library and the registered operation providers still get to
 what none of them can handle ends as `OclInvalid` one step later. `null + 1` has no lenient
 reading, and `null.size()` none either.
 
+Neither of them is quiet. A `null` source is reported where it is refused (`Null source for
+operation …` under STRICT) or where no provider took it (`Unknown operation: size on null`
+under LENIENT); a `null` *argument* is reported in either mode, `Null argument for operation
+'+'`, and the value stays `invalid` (OCL v2.4 §11.2.3). The argument case was, until #270, the
+one path on which an expression turned invalid without a diagnostic — a generator then wrote
+the word `OclInvalid` into its document while the run counted as successful.
+
 That second half is not a leftover: QVT-O evaluates every expression leniently and resolves its
 module-level helpers — which have no `self` — through exactly that path (`QvtoEvaluator:587`).
 Making a call on `null` an error breaks 86 QVT-O tests, which is how the boundary was located.
