@@ -194,7 +194,7 @@ class M2tSpecExampleTest {
 		@DisplayName("template invoking another template — §7.0 (adapted)")
 		void templateInvocation() throws M2tParseException {
 			// Spec §7.0: classToJava invokes attributeToJava
-			// Indent propagation: indent added after newlines, not on first line
+			// Indent propagation: the indent goes before every line, the first included (#277)
 			String mtl =
 					"[module m(Ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
@@ -211,10 +211,11 @@ class M2tSpecExampleTest {
 					"[/template]\n";
 			M2tResult result = executeOnClass(mtl);
 			String content = getFile(result, "out");
-			// First line of invoked template not indented, subsequent lines get "  " indent
+			// Every line of the invoked template gets the "  " indent — the shape of the
+			// spec's own classToJava output in §7.0
 			assertEquals(
 					"class Employee {\n" +
-					"EString name;\n" +
+					"  EString name;\n" +
 					"  EDouble salary;\n" +
 					"}", content);
 		}

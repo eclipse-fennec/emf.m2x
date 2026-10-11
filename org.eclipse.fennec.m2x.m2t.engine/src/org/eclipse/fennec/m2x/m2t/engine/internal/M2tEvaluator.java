@@ -1261,7 +1261,11 @@ public class M2tEvaluator {
 		if (indentation.isEmpty() || source.isEmpty()) {
 			return source;
 		}
-		return source.replaceAll("(\r\n|\r|\n)", "$1" + Matcher.quoteReplacement(indentation));
+		// §8.4: "Add the whitespace preceding the invocation expression before each line of
+		// the text produced by the invoked template" — the first line included. The
+		// normalizer stripped that whitespace from the text in front of the invocation, so
+		// it is restored here, once per line (#277).
+		return indentation + source.replaceAll("(\r\n|\r|\n)", "$1" + Matcher.quoteReplacement(indentation));
 	}
 
 	/**
