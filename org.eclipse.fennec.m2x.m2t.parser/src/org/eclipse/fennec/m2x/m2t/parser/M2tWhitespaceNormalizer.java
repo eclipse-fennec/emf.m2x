@@ -89,8 +89,7 @@ public class M2tWhitespaceNormalizer {
 		}
 		for (ModuleElement element : module.getOwnedModuleElement()) {
 			if (element instanceof Template template) {
-				trimBody(template);
-				processBody(template.getBody());
+				processBody(template.getBody(), trimBody(template));
 			}
 		}
 		return Map.copyOf(indentationMap);
@@ -158,13 +157,23 @@ public class M2tWhitespaceNormalizer {
 
 	// --- Recursive body processing ---
 
-	private void processBody(EList<TemplateExpression> body) {
+	/**
+	 * Normalizes one body.
+	 *
+	 * @param body the body elements, already trimmed by {@link #trimBody(Block)}
+	 * @param multiLine whether the owning block is multi-line — then the first element
+	 *        starts on its own line and the last element ends before the tail line; in a
+	 *        single-line body both share the line with the head and the tail, which makes a
+	 *        block there an {@code <embedded-block-expression>} (§8.4, #272)
+	 */
+	private void processBody(EList<TemplateExpression> body, boolean multiLine) {
 		// First pass: process nested blocks (trim their bodies + recurse)
 		// Skip inline LetBlocks — they are expression wrappers, not structural blocks
 		for (TemplateExpression expr : body) {
 			if (expr instanceof Block nested && !isInlineLetBlock(nested)) {
-				multiLineBlocks.put(nested, trimBody(nested));
-				processBody(nested.getBody());
+				boolean nestedMultiLine = trimBody(nested);
+				multiLineBlocks.put(nested, nestedMultiLine);
+				processBody(nested.getBody(), nestedMultiLine);
 				processAlternatives(nested);
 			}
 		}
@@ -174,9 +183,9 @@ public class M2tWhitespaceNormalizer {
 		for (int i = 0; i < body.size(); i++) {
 			TemplateExpression expr = body.get(i);
 			if (expr instanceof Block block && !isInlineLetBlock(block)) {
-				processStandaloneBlock(body, i, block);
+				processStandaloneBlock(body, i, block, multiLine);
 			} else if (expr instanceof TemplateInvocation invocation && !invocation.isSuper()) {
-				processStandaloneInvocation(body, i, invocation);
+				processStandaloneInvocation(body, i, invocation, multiLine);
 			}
 		}
 
@@ -205,15 +214,13 @@ public class M2tWhitespaceNormalizer {
 	private void processAlternatives(Block block) {
 		if (block instanceof IfBlock ifBlock) {
 			for (IfBlock elseIf : ifBlock.getElseIf()) {
-				trimBody(elseIf);
-				processBody(elseIf.getBody());
+				processBody(elseIf.getBody(), trimBody(elseIf));
 				processAlternatives(elseIf);
 			}
 			processElse(ifBlock.getElse());
 		} else if (block instanceof LetBlock letBlock) {
 			for (LetBlock elseLet : letBlock.getElseLet()) {
-				trimBody(elseLet);
-				processBody(elseLet.getBody());
+				processBody(elseLet.getBody(), trimBody(elseLet));
 				processAlternatives(elseLet);
 			}
 			processElse(letBlock.getElse());
@@ -224,21 +231,21 @@ public class M2tWhitespaceNormalizer {
 		if (elseBlock == null) {
 			return;
 		}
-		trimBody(elseBlock);
-		processBody(elseBlock.getBody());
+		processBody(elseBlock.getBody(), trimBody(elseBlock));
 		processAlternatives(elseBlock);
 	}
 
 	// --- Standalone Block Detection (§8.4 Rule 3) ---
 
-	private void processStandaloneBlock(EList<TemplateExpression> body, int index, Block block) {
+	private void processStandaloneBlock(EList<TemplateExpression> body, int index, Block block,
+			boolean multiLine) {
 		// Check if block is standalone: only whitespace before on its line
 		// and only whitespace/newline after on its line
-		String leadingWs = getLeadingWhitespace(body, index);
+		String leadingWs = getLeadingWhitespace(body, index, multiLine);
 		if (leadingWs == null) {
 			return; // not standalone
 		}
-		if (!hasTrailingNewline(body, index)) {
+		if (!hasTrailingNewline(body, index, multiLine)) {
 			return; // not standalone
 		}
 
@@ -276,10 +283,15 @@ public class M2tWhitespaceNormalizer {
 	/**
 	 * Returns the leading whitespace before the element at {@code index}
 	 * if the element is standalone on its line, or {@code null} if not standalone.
+	 *
+	 * @param multiLine whether the owning block is multi-line, see
+	 *        {@link #processBody(EList, boolean)}
 	 */
-	private String getLeadingWhitespace(EList<TemplateExpression> body, int index) {
+	private String getLeadingWhitespace(EList<TemplateExpression> body, int index, boolean multiLine) {
 		if (index == 0) {
-			return ""; // first element — no leading text, counts as standalone
+			// First element: in a multi-line body it starts its own line; in a single-line
+			// body it follows the head on the head's line, which makes it embedded (§8.4).
+			return multiLine ? "" : null;
 		}
 		if (!(body.get(index - 1) instanceof TextExpression prev)) {
 			return null; // previous element is not text → not standalone
@@ -290,9 +302,11 @@ public class M2tWhitespaceNormalizer {
 		return afterNl.isBlank() ? afterNl : null;
 	}
 
-	private boolean hasTrailingNewline(EList<TemplateExpression> body, int index) {
+	private boolean hasTrailingNewline(EList<TemplateExpression> body, int index, boolean multiLine) {
 		if (index == body.size() - 1) {
-			return true; // last element — counts as standalone
+			// Last element: in a multi-line body its line ends before the tail line; in a
+			// single-line body the tail follows on the same line (§8.4).
+			return multiLine;
 		}
 		if (!(body.get(index + 1) instanceof TextExpression next)) {
 			return false;
@@ -300,8 +314,9 @@ public class M2tWhitespaceNormalizer {
 		String value = next.getValue();
 		int nlIdx = value.indexOf('\n');
 		if (nlIdx < 0) {
-			// No newline — standalone only if rest is all whitespace and it's the last text
-			return value.isBlank() && index + 1 == body.size() - 1;
+			// No newline — standalone only if the rest of the line is whitespace, it is the
+			// last text, and the tail does not share that line
+			return multiLine && value.isBlank() && index + 1 == body.size() - 1;
 		}
 		String beforeNl = value.substring(0, nlIdx);
 		return beforeNl.isBlank();
@@ -368,12 +383,12 @@ public class M2tWhitespaceNormalizer {
 	// --- Standalone Template Invocation + Indent Extraction (§8.4 Rule 4) ---
 
 	private void processStandaloneInvocation(EList<TemplateExpression> body, int index,
-			TemplateInvocation invocation) {
-		String indent = getLeadingWhitespace(body, index);
+			TemplateInvocation invocation, boolean multiLine) {
+		String indent = getLeadingWhitespace(body, index, multiLine);
 		if (indent == null || indent.isEmpty()) {
 			return; // not standalone or no indentation
 		}
-		if (!hasTrailingNewline(body, index)) {
+		if (!hasTrailingNewline(body, index, multiLine)) {
 			return; // not standalone
 		}
 
