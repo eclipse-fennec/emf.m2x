@@ -1494,7 +1494,7 @@ MOFM2T §8.4 defines precise whitespace normalization rules. The engine supports
 The whitespace normalizer applies these rules:
 
 1. **Body-trimming** — The first and last newlines of template and multi-line block bodies are stripped
-2. **Standalone block stripping** — When a block tag (`[for]`, `[if]`, `[/for]`, `[/if]`, etc.) is alone on a line, the whitespace in front of the tag is removed from the output. What happens to the newline that ends the tag line follows the shape of the block — see 16.2.2
+2. **Standalone block stripping** — When a block tag (`[for]`, `[if]`, `[/for]`, `[/if]`, etc.) is alone on a line, the whitespace in front of the tag is removed from the output. What happens to the newline that ends the tag line follows the shape of the block — see 16.2.2. A block that shares its head or tail line with other body elements is *embedded* and is output as is — see 16.2.3
 3. **Default separator injection** — Standalone `[for]` blocks without an explicit `separator()` get a `"\n"` separator
 4. **BOL indicator** (**SPEC mode only**) — The `^` character at the beginning of a line resets indentation to column 0. In ACCELEO mode, `^` is passed through as literal text (Acceleo 3.7 does not implement this feature)
 5. **Indent propagation** — When a template invocation is indented, that indent is propagated to all subsequent lines of the invoked template's output
@@ -1523,6 +1523,21 @@ Z
 produces `A\n  name;\n  salary;\nZ` — the `[for]` and `[/for]` tag lines are gone, every
 line the body wrote keeps its newline. Every branch of an `[if]` behaves the same way,
 whether the `if`, an `elseif` or the `else` is taken.
+
+### 16.2.3 Embedded Blocks
+
+A block is standalone only when nothing else stands on the lines of its head and its tail.
+Blocks nest to any depth, and an inner block whose head follows the enclosing block's head
+on the same line is *embedded* — §8.4 says its text is "output as is", so it gets neither
+the stripping nor the default separator:
+
+```mtl
+<[if (p.name = 'company')][for (c : EClass | p.eClassifiers)][c.name/] [/for][/if]>
+```
+
+produces `<Employee Manager Marker >`. Being the first or last element of the enclosing
+body does not make a block standalone; what counts is whether the enclosing block is
+multi-line, so that the inner block's line is its own (#272).
 
 ### 16.2.1 SPEC vs ACCELEO Differences
 
