@@ -297,7 +297,9 @@ class M2tWhitespaceTest {
 					"line2\n" +
 					"line3\n" +
 					"[/template]\n";
-			assertEquals("line1\n  line2\n  line3", execute(mtl));
+			// §8.4: the indentation goes "before each line of the text produced by the
+			// invoked template" — the first line included (#277).
+			assertEquals("  line1\n  line2\n  line3", execute(mtl));
 		}
 
 		@Test
@@ -318,8 +320,8 @@ class M2tWhitespaceTest {
 		}
 
 		@Test
-		@DisplayName("indent propagation does not indent first line")
-		void indentPropagationFirstLineNotIndented() throws M2tParseException {
+		@DisplayName("indent propagation indents the first line like every other (#277)")
+		void indentPropagationIndentsFirstLine() throws M2tParseException {
 			String mtl =
 					"[module m(Ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
@@ -333,7 +335,115 @@ class M2tWhitespaceTest {
 					"first\n" +
 					"second\n" +
 					"[/template]\n";
-			assertEquals("before\nfirst\n    second\nafter", execute(mtl));
+			// Before #277 the first line lost its indentation entirely: the normalizer had
+			// stripped it from the text and the evaluator only indented the lines after a
+			// newline. Acceleo 3.7 keeps the indentation in front of an invocation.
+			assertEquals("before\n    first\n    second\nafter", execute(mtl));
+		}
+
+		@Test
+		@DisplayName("an indented invocation of an empty template emits nothing")
+		void indentedInvocationOfEmptyTemplate() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"before\n" +
+					"    [helper(p)/]\n" +
+					"after\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public helper(p : EPackage)][/template]\n";
+			assertEquals("before\n\nafter", execute(mtl));
+		}
+	}
+
+	// ==================== Iterative Invocation (§8.4 default separator) ====================
+
+	@Nested
+	@DisplayName("Iterative Invocation — default separator (#276)")
+	class IterativeInvocationTests {
+
+		@Test
+		@DisplayName("a standalone invocation with a collection argument separates the iterations with a newline")
+		void standaloneIterativeInvocationHasNewlineSeparator() throws M2tParseException {
+			// §8.4, <stand-alone-template-invocation>: "In the case of an iterative template
+			// invocation (e.g., when the argument is a collection), if a separator character
+			// is not specified, use 'new line' as the default separator".
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"A\n" +
+					"[item(p.eClassifiers)/]\n" +
+					"Z\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public item(c : EClassifier)]\n" +
+					"- [c.name/]\n" +
+					"[/template]\n";
+			assertEquals("A\n- ClassA\n- ClassB\nZ", execute(mtl));
+		}
+
+		@Test
+		@DisplayName("an indented iterative invocation indents every line of every iteration")
+		void indentedIterativeInvocation() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"A\n" +
+					"  [item(p.eClassifiers)/]\n" +
+					"Z\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public item(c : EClassifier)]\n" +
+					"- [c.name/]\n" +
+					"  (x)\n" +
+					"[/template]\n";
+			assertEquals("A\n  - ClassA\n    (x)\n  - ClassB\n    (x)\nZ", execute(mtl));
+		}
+
+		@Test
+		@DisplayName("an explicit separator wins over the default")
+		void explicitSeparatorWins() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[item(p.eClassifiers) separator (', ')/]\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public item(c : EClassifier)][c.name/][/template]\n";
+			assertEquals("ClassA, ClassB", execute(mtl));
+		}
+
+		@Test
+		@DisplayName("an embedded iterative invocation is output as is")
+		void embeddedIterativeInvocation() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"<[item(p.eClassifiers)/]>\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public item(c : EClassifier)][c.name/][/template]\n";
+			assertEquals("<ClassAClassB>", execute(mtl));
+		}
+
+		@Test
+		@DisplayName("a single-object invocation is not iterative — no separator in play")
+		void singleObjectInvocation() throws M2tParseException {
+			String mtl =
+					"[module m(Ecore)/]\n" +
+					"[template public main(p : EPackage)]\n" +
+					"[file ('out', false)]\n" +
+					"[item(p.eClassifiers->first())/]\n" +
+					"[/file]\n" +
+					"[/template]\n" +
+					"[template public item(c : EClassifier)][c.name/][/template]\n";
+			assertEquals("ClassA", execute(mtl));
 		}
 	}
 

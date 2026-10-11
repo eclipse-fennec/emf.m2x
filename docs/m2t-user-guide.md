@@ -1497,7 +1497,8 @@ The whitespace normalizer applies these rules:
 2. **Standalone block stripping** — When a block tag (`[for]`, `[if]`, `[/for]`, `[/if]`, etc.) is alone on a line, the whitespace in front of the tag is removed from the output. What happens to the newline that ends the tag line follows the shape of the block — see 16.2.2. A block that shares its head or tail line with other body elements is *embedded* and is output as is — see 16.2.3
 3. **Default separator injection** — Standalone **multi-line** `[for]` blocks without an explicit `separator()` get a `"\n"` separator. A single-line `[for …]…[/for]` alone on its line runs its iterations together (`[for (c : EClass | p.eClassifiers)][i/][/for]` produces `123`), exactly as Acceleo 3.7 does
 4. **BOL indicator** (**SPEC mode only**) — The `^` character at the beginning of a line resets indentation to column 0. In ACCELEO mode, `^` is passed through as literal text (Acceleo 3.7 does not implement this feature)
-5. **Indent propagation** — When a template invocation is indented, that indent is propagated to all subsequent lines of the invoked template's output
+5. **Indent propagation** — When a template invocation stands on a line by itself and is indented, that indent is put in front of every line of the invoked template's output, the first line included
+6. **Iterative invocation separator** — A standalone template invocation whose argument is a collection separates the outputs of the iterations with `"\n"` unless it names a `separator()`, the same way a multi-line `[for]` does
 
 ### 16.2.2 The Newline After a Standalone Block
 

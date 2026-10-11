@@ -43,12 +43,14 @@ import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
  *   <li><b>Standalone-block detection</b>: Remove the leading whitespace of blocks that
  *       occupy a line by themselves. The newline ending the tail line stays — it is a
  *       whitespace body element of the enclosing body (#122).</li>
- *   <li><b>Default separator</b>: Set {@code "\n"} as default separator
- *       for standalone for-blocks without explicit separator.</li>
+ *   <li><b>Default separator</b>: Set {@code "\n"} as default separator for standalone
+ *       multi-line for-blocks and standalone template invocations without an explicit
+ *       separator (#273, #276).</li>
  *   <li><b>BOL indicator</b>: Process {@code ^} markers in text expressions
  *       to strip leading whitespace on that line.</li>
  *   <li><b>Indent extraction</b>: Detect standalone template invocations and
- *       extract their indentation for eval-time indent-propagation.</li>
+ *       extract their indentation for eval-time indent-propagation onto every line of
+ *       the invoked template's output (#277).</li>
  * </ol>
  *
  * @author Data In Motion Consulting
@@ -389,14 +391,29 @@ public class M2tWhitespaceNormalizer {
 	private void processStandaloneInvocation(EList<TemplateExpression> body, int index,
 			TemplateInvocation invocation, boolean multiLine) {
 		String indent = getLeadingWhitespace(body, index, multiLine);
-		if (indent == null || indent.isEmpty()) {
-			return; // not standalone or no indentation
+		if (indent == null) {
+			return; // not standalone
 		}
 		if (!hasTrailingNewline(body, index, multiLine)) {
 			return; // not standalone
 		}
 
-		// Extract indentation and strip leading whitespace only.
+		// §8.4, <stand-alone-template-invocation>: "In the case of an iterative template
+		// invocation (e.g., when the argument is a collection), if a separator character is
+		// not specified, use 'new line' as the default separator between the outputs
+		// produced by successive iterations" — the twin of the multi-line for block's rule.
+		// The evaluator reads it only when an argument is a collection (#276).
+		if (invocation.getEach() == null) {
+			StringLiteralExp newlineSep = OclFactory.eINSTANCE.createStringLiteralExp();
+			newlineSep.setStringSymbol("\n");
+			invocation.setEach(newlineSep);
+		}
+
+		if (indent.isEmpty()) {
+			return; // nothing to propagate
+		}
+		// Extract indentation and strip leading whitespace only — the evaluator puts the
+		// indentation in front of every line of the output, the first included (#277).
 		// Trailing newline is kept — it separates invocation output from following text.
 		indentationMap.put(invocation, indent);
 		stripLeadingWhitespace(body, index);
