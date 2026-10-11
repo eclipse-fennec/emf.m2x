@@ -28,6 +28,16 @@ lexer grammar M2tLexer;
 
 // ==================== DEFAULT_MODE (Text) ====================
 
+// [comment] ... [/comment] — the body is literal text and is discarded as a whole.
+// Lexed here, before BLOCK_OPEN, so that no '[' inside a comment ever opens a code block:
+// comment content is never tokenized as template code, never parsed, never evaluated
+// (Acceleo 3.x reads the body as a raw substring up to the next '[/comment]' as well).
+// ANTLR prefers the longest match, so a complete comment always wins over the single '['.
+// An unterminated '[comment]' falls back to BLOCK_OPEN and is reported by the parser.
+COMMENT_BLOCK
+    : '[' [ \t\r\n]* 'comment' [ \t\r\n]* ']' .*? '[' [ \t\r\n]* '/' [ \t\r\n]* 'comment' [ \t\r\n]* ']' -> skip
+    ;
+
 // The '[' delimiter opens a code block — switch to CODE_MODE
 BLOCK_OPEN
     : '[' -> pushMode(CODE_MODE)

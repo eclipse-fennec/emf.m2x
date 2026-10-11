@@ -60,13 +60,6 @@ public class M2tParserBaseVisitor<T> extends AbstractParseTreeVisitor<T> impleme
 	 * <p>The default implementation returns the result of calling
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
-	@Override public T visitCommentBlock(M2tParser.CommentBlockContext ctx) { return visitChildren(ctx); }
-	/**
-	 * {@inheritDoc}
-	 *
-	 * <p>The default implementation returns the result of calling
-	 * {@link #visitChildren} on {@code ctx}.</p>
-	 */
 	@Override public T visitTemplateDef(M2tParser.TemplateDefContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}

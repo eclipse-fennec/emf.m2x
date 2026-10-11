@@ -177,7 +177,6 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		} else if (ctx.macroDef() != null) {
 			visit(ctx.macroDef());
 		}
-		// commentBlock is discarded
 		return null;
 	}
 
@@ -403,7 +402,6 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		if (ctx.templateInvocation() != null) {
 			return buildTemplateInvocation(ctx.templateInvocation());
 		}
-		// commentBlock — discarded
 		return null;
 	}
 

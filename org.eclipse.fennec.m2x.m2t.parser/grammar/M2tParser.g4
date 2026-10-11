@@ -57,17 +57,12 @@ moduleElement
     : templateDef
     | queryDef
     | macroDef
-    | commentBlock
     ;
 
 // ==================== Comment ====================
 
-// [comment] ... [/comment]  — block comment (content is discarded)
-commentBlock
-    : BLOCK_OPEN KW_COMMENT CLOSE
-      body
-      BLOCK_OPEN SLASH KW_COMMENT CLOSE
-    ;
+// [comment] ... [/comment] is consumed and dropped by the lexer (COMMENT_BLOCK), so the body
+// is literal text that never reaches the parser. KW_COMMENT remains a keyword for `identifier`.
 
 // ==================== Template ====================
 
@@ -153,7 +148,6 @@ bodyElement
     | traceBlock
     | protectedBlock
     | templateInvocation
-    | commentBlock
     ;
 
 // Literal text (outside of [...] blocks)
