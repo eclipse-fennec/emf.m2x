@@ -605,7 +605,7 @@ Output: `Result: <Employee>`
 
 Only the paired form exists. MOFM2T v1.0 specifies comments as a macro — `[comment()] … [/comment]` — and the grammar follows that; the single-expression form `[comment]…[/comment]` is an Acceleo 3.x extension the parser does not know.
 
-A comment may not precede the `[module …/]` header.
+The body of a comment is literal text up to the first `[/comment]`. Square brackets and template code inside it are neither parsed nor evaluated, so `[comment]// see [:tlsPort][/comment]` or `[comment][c.oldName/][/comment]` are fine. Because the first `[/comment]` closes the comment, comments do not nest. An unterminated `[comment]` is a parse error.
 
 ---
 

@@ -47,12 +47,6 @@ public interface M2tParserVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitModuleElement(M2tParser.ModuleElementContext ctx);
 	/**
-	 * Visit a parse tree produced by {@link M2tParser#commentBlock}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitCommentBlock(M2tParser.CommentBlockContext ctx);
-	/**
 	 * Visit a parse tree produced by {@link M2tParser#templateDef}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
