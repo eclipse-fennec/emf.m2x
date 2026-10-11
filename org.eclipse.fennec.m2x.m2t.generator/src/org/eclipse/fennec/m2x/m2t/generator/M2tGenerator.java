@@ -30,9 +30,11 @@ import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
+import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
 import org.eclipse.fennec.m2x.m2t.engine.FileSystemGenerationStrategy;
@@ -92,6 +94,12 @@ import aQute.lib.strings.Strings;
  * unless the instruction says {@code clear=false}. A generation whose templates use
  * {@code [protected]} blocks has to set it, or the content that was to be preserved is
  * deleted before it can be read back.
+ *
+ * <p><b>Diagnostics.</b> Configuration and execution errors come back as the one string bnd
+ * reports on the instruction. Parse errors are placed in the template file at their line,
+ * through the context; so are the warnings. Messages reported on the context start with
+ * {@code ": "}, because bnd copies them to the project prefixed with the plugin's name and
+ * nothing else — that is what makes them read {@code fennecM2T: …} in a build log.
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -181,7 +189,7 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 			for (File model : inputs.models()) {
 				roots.addAll(loader.loadModel(model));
 			}
-			loader.getWarnings().forEach(w -> context.warning("fennecM2T: %s", w));
+			loader.getWarnings().forEach(w -> context.warning(": %s", w));
 
 			M2tConfiguration configuration = M2tConfiguration.builder()
 					.resourceSet(loader.getResourceSet())
@@ -192,21 +200,30 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 					.build();
 			M2tEngine engine = M2tEngines.create(configuration);
 
-			Module main = engine.parse(URI.createFileURI(inputs.template().getAbsolutePath()));
 			List<Module> linked = new ArrayList<>();
-			linked.add(main);
+			Module main = parse(context, engine, inputs.template(), errors);
+			if (main != null) {
+				linked.add(main);
+			}
 			for (File module : inputs.modules()) {
-				linked.add(engine.parse(URI.createFileURI(module.getAbsolutePath())));
+				Module parsed = parse(context, engine, module, errors);
+				if (parsed != null) {
+					linked.add(parsed);
+				}
+			}
+			String parseFailures = errors.toString();
+			if (!parseFailures.isEmpty()) {
+				return Optional.of(parseFailures.trim());
 			}
 			if (linked.size() > 1) {
 				engine.link(linked.toArray(Module[]::new))
-						.forEach(w -> context.warning("fennecM2T: %s", w));
+						.forEach(w -> context.warning(": %s", w));
 			}
 
 			Template mainTemplate = mainTemplate(main);
 			if (mainTemplate == null) {
 				return Optional.of("module '" + main.getName() + "' in " + inputs.template()
-						+ " has no [inputs.template() public main(...)] entry point");
+						+ " has no [template public main(...)] entry point");
 			}
 
 			int parameters = mainTemplate.getParameter().size();
@@ -215,13 +232,19 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 						+ "was configured");
 			}
 			if (parameters > 1 && roots.size() != parameters) {
-				context.warning("fennecM2T: inputs.template() 'main' takes %d parameters but %d model root(s) "
+				context.warning(": 'main' takes %d parameters but %d model root(s) "
 						+ "were loaded", parameters, roots.size());
 			}
 
 			for (List<EObject> arguments : bind(roots, parameters)) {
 				M2tResult result = engine.execute(main, new M2tContext(arguments, inputs.output().toPath()));
 				report(context, errors, result);
+				if (result.isSuccess() && result.generatedFiles().isEmpty()) {
+					// A main without a [file] block writes to nowhere in a build. Not an error —
+					// the template may well decide per model that there is nothing to write — but
+					// a generation that silently produces nothing is what #270 was about.
+					context.warning(": 'main' wrote no file for %s", describe(arguments));
+				}
 			}
 
 			String failures = errors.toString();
@@ -246,12 +269,60 @@ public class M2tGenerator implements Generator<M2tGeneratorOptions> {
 		return arguments;
 	}
 
+	/**
+	 * Parses a module, or reports why it could not be.
+	 *
+	 * <p>Every error the parser collected becomes one bnd error placed in the template file, at
+	 * its line, so that an IDE can show a marker where the text has to change; the column goes
+	 * into the message, bnd locations have none. The summary bnd prints on the instruction then
+	 * only counts them. Before, the first error's text was all that reached the build, with no
+	 * file and no line (#270).
+	 *
+	 * @return the module, or {@code null} after the errors were reported
+	 */
+	private static Module parse(BuildContext context, M2tEngine engine, File file, Formatter errors) {
+		try {
+			return engine.parse(URI.createFileURI(file.getAbsolutePath()));
+		} catch (M2tParseException e) {
+			if (e.getErrors().isEmpty()) {
+				errors.format("%s: %s%n", file, causes(e));
+				return null;
+			}
+			for (Resource.Diagnostic diagnostic : e.getErrors()) {
+				context.error(": %s:%d:%d %s", file.getName(), diagnostic.getLine(),
+						diagnostic.getColumn(), diagnostic.getMessage())
+						.file(file.getAbsolutePath())
+						.line(diagnostic.getLine());
+			}
+			errors.format("%d parse error(s) in %s%n", e.getErrors().size(), file);
+			return null;
+		}
+	}
+
+	/**
+	 * Names the model roots of one execution the way a warning can: by type and, when they
+	 * came from a file, by that file.
+	 */
+	private static String describe(List<EObject> roots) {
+		StringBuilder sb = new StringBuilder();
+		for (EObject root : roots) {
+			if (sb.length() > 0) {
+				sb.append(", ");
+			}
+			sb.append(root.eClass().getName());
+			if (root.eResource() != null && root.eResource().getURI() != null) {
+				sb.append(" from ").append(root.eResource().getURI().lastSegment());
+			}
+		}
+		return sb.toString();
+	}
+
 	private static void report(BuildContext context, Formatter errors, M2tResult result) {
 		for (Diagnostic diagnostic : result.diagnostics()) {
 			if (diagnostic.getSeverity() >= Diagnostic.ERROR) {
 				errors.format("%s%n", diagnostic.getMessage());
 			} else if (diagnostic.getSeverity() == Diagnostic.WARNING) {
-				context.warning("fennecM2T: %s", diagnostic.getMessage());
+				context.warning(": %s", diagnostic.getMessage());
 			} else {
 				context.trace("fennecM2T: %s", diagnostic.getMessage());
 			}

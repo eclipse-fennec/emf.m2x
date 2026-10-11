@@ -22,6 +22,16 @@ Bundle-Description: bnd external plugin that runs MOFM2T v1.0 templates during a
 	org.eclipse.fennec.emf.osgi.api;version=latest,\
 	org.eclipse.fennec.emf.osgi.component.minimal;version=latest
 
+# The tests drive the generator through a real bnd Project; bndlib reaches for the OSGi
+# resource and framework API on the way, which the plugin itself never touches.
+-testpath: \
+	biz.aQute.bnd.util;version=latest,\
+	osgi.core;version=latest,\
+	org.osgi.service.repository;version=latest,\
+	org.osgi.util.function;version=latest,\
+	org.osgi.util.promise;version=latest,\
+	slf4j.api;version=latest
+
 -privatepackage: \
 	org.eclipse.fennec.m2x.m2t.generator
 

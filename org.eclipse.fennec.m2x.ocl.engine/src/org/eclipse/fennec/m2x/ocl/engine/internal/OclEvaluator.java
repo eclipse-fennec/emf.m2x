@@ -571,11 +571,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 			}
 		}
 
-		// Check for null arguments in non-collection operations — null in arithmetic/string context is invalid
+		// A null argument of a non-collection operation has no reading: 'a' + null and 1 + null
+		// are invalid (OCL v2.4 §11.2.3). Reported, not only answered — this was the one path on
+		// which an expression became invalid without a word, and a generator wrote the word
+		// OclInvalid into its document while the run counted as successful (#270).
 		if (!(source instanceof Collection<?>) && !(source instanceof Map<?, ?>)) {
 			for (Object arg : args) {
 				if (arg == null) {
-					return OclInvalid.INSTANCE;
+					return addError("Null argument for operation '" + opName + "'");
 				}
 			}
 		}

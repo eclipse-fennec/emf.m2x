@@ -64,6 +64,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
+import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
@@ -275,8 +276,7 @@ public class M2tEvaluator {
 			// Apply post-processing if present
 			if (template.getPost() != null) {
 				env.define("self", result);
-				Object postResult = evaluateOcl(template.getPost());
-				result = asString(postResult);
+				result = render(template.getPost());
 			}
 
 			return result;
@@ -333,7 +333,7 @@ public class M2tEvaluator {
 
 			// Evaluate before expression (outside loop scope, before first iteration)
 			if (block.getBefore() != null) {
-				writers.append(asString(evaluateOcl(block.getBefore())));
+				writers.append(render(block.getBefore()));
 			}
 
 			int iterLimit = Math.min(items.size(), limits.maxForIterations());
@@ -356,7 +356,7 @@ public class M2tEvaluator {
 
 					// Separator evaluated between iterations, with 'i' in scope
 					if (i > 0 && block.getEach() != null) {
-						writers.append(asString(evaluateOcl(block.getEach())));
+						writers.append(render(block.getEach()));
 					}
 
 					executeBody(block);
@@ -367,7 +367,7 @@ public class M2tEvaluator {
 
 			// Evaluate after expression (outside loop scope, after last iteration)
 			if (block.getAfter() != null) {
-				writers.append(asString(evaluateOcl(block.getAfter())));
+				writers.append(render(block.getAfter()));
 			}
 
 			return WRAPPED_NULL;
@@ -403,9 +403,7 @@ public class M2tEvaluator {
 			// Inline expression wrapper — special case, no elseLet/else semantics
 			Variable letVar = block.getLetVariable();
 			if (block.getBody().isEmpty() && letVar.getName().startsWith("__inline__")) {
-				Object value = letVar.getOwnedInit() != null
-						? evaluateOcl(letVar.getOwnedInit()) : null;
-				writers.append(asString(value));
+				writers.append(render(letVar.getOwnedInit()));
 				return WRAPPED_NULL;
 			}
 
@@ -433,11 +431,19 @@ public class M2tEvaluator {
 
 		@Override
 		public Object caseFileBlock(FileBlock block) {
-			String filePath = asString(evaluateOcl(block.getFileUrl()));
+			String filePath = render(block.getFileUrl());
+			if (filePath.isEmpty()) {
+				// Acceleo stops the generation here ("undefined file URL"); this one skips the
+				// block, so the rest of the document still gets its say, and names the block.
+				// Writing on would have produced a file called OclInvalid (#270).
+				addDiagnostic(Diagnostic.ERROR, "[file] URL evaluated to nothing — block skipped",
+						positionOf(block.getFileUrl()));
+				return WRAPPED_NULL;
+			}
 			OpenModeKind mode = block.getOpenMode();
 			Charset charset = StandardCharsets.UTF_8;
 			if (block.getCharset() != null) {
-				String charsetName = asString(evaluateOcl(block.getCharset()));
+				String charsetName = render(block.getCharset());
 				try {
 					charset = Charset.forName(charsetName);
 				} catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
@@ -447,7 +453,7 @@ public class M2tEvaluator {
 
 			// §8.1.17: Evaluate optional uniqId for file-rename tracking
 			if (block.getUniqId() != null) {
-				String uniqId = asString(evaluateOcl(block.getUniqId()));
+				String uniqId = render(block.getUniqId());
 				writers.setFileUniqueId(filePath, uniqId);
 			}
 
@@ -466,7 +472,7 @@ public class M2tEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			String markerId = asString(evaluateOcl(block.getMarker()));
+			String markerId = render(block.getMarker());
 
 			// Execute body first to capture default content and compute hash (D31)
 			writers.pushStringWriter();
@@ -570,12 +576,9 @@ public class M2tEvaluator {
 				}
 				List<List<Object>> crossProduct = crossProduct(setArgs);
 
-				String before = invocation.getBefore() != null
-						? asString(evaluateOcl(invocation.getBefore())) : null;
-				String each = invocation.getEach() != null
-						? asString(evaluateOcl(invocation.getEach())) : null;
-				String after = invocation.getAfter() != null
-						? asString(evaluateOcl(invocation.getAfter())) : null;
+				String before = invocation.getBefore() != null ? render(invocation.getBefore()) : null;
+				String each = invocation.getEach() != null ? render(invocation.getEach()) : null;
+				String after = invocation.getAfter() != null ? render(invocation.getAfter()) : null;
 
 				if (!crossProduct.isEmpty()) {
 					if (before != null) writers.append(before);
@@ -615,8 +618,7 @@ public class M2tEvaluator {
 					env.define("self", evalArgs.get(0));
 				}
 
-				Object result = evaluateOcl(query.getExpression());
-				writers.append(asString(result));
+				writers.append(render(query.getExpression()));
 			} finally {
 				env.popScope();
 			}
@@ -666,8 +668,7 @@ public class M2tEvaluator {
 		@Override
 		public Object caseOclExpression(OclExpression expr) {
 			// Generic OCL expression in template position — evaluate and output result
-			Object result = evaluateOcl(expr);
-			writers.append(asString(result));
+			writers.append(render(expr));
 			return WRAPPED_NULL;
 		}
 
@@ -713,6 +714,40 @@ public class M2tEvaluator {
 	 * Variables from the M2T environment are made available as the OCL context.
 	 */
 	Object evaluateOcl(OclExpression expression) {
+		OclResult result = evaluate(expression);
+		return result == null ? null : result.value();
+	}
+
+	/**
+	 * Evaluates an expression whose value goes into the document.
+	 *
+	 * <p>{@code invalid} is not text. It is what an expression answers when it could not be
+	 * evaluated — a null argument, an operation nobody provides, a failed cast — and writing
+	 * its name into the document turned that into a word a reader had to search for, in a
+	 * generation that counted as successful (#270). The spot stays empty instead, and the
+	 * expression is named at its line: by the OCL engine's own diagnostic where it reported
+	 * why, and by this one where the value turned invalid in silence — a literal
+	 * {@code invalid}, or a failure the engine answers without a word.
+	 */
+	private String render(OclExpression expression) {
+		OclResult result = evaluate(expression);
+		if (result == null) {
+			return "";
+		}
+		if (result.value() == OclInvalid.INSTANCE) {
+			if (result.isSuccess()) {
+				addDiagnostic(Diagnostic.ERROR, "Expression evaluated to invalid — nothing written",
+						positionOf(expression));
+			}
+			return "";
+		}
+		return asString(result.value());
+	}
+
+	/**
+	 * Evaluates an expression and forwards what it reported; {@code null} for no expression.
+	 */
+	private OclResult evaluate(OclExpression expression) {
 		if (expression == null) {
 			return null;
 		}
@@ -745,7 +780,7 @@ public class M2tEvaluator {
 			// reporting success while the document said otherwise (#114).
 			OclResult result = oclEngine.evaluateWithDiagnostics(expression, oclContext, oclOptions);
 			result.diagnostics().forEach(this::addOclDiagnostic);
-			return result.value();
+			return result;
 		} catch (RuntimeException e) {
 			addError("OCL evaluation error [" + e.getClass().getSimpleName() + "]: " + e.getMessage());
 			return null;
@@ -773,16 +808,28 @@ public class M2tEvaluator {
 			return null;
 		}
 		for (Object entry : data) {
-			if (!(entry instanceof EObject node)) {
-				continue;
-			}
-			// Up the containment chain: only the node a visit was entered for is recorded, while a
-			// diagnostic is usually about an inner one — the enclosing expression is its place.
-			for (EObject current = node; current != null; current = current.eContainer()) {
-				SourcePosition position = positions.get(current);
+			if (entry instanceof EObject node) {
+				SourcePosition position = positionOf(node);
 				if (position != null) {
 					return position;
 				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The place a node stood in the template, or {@code null} when nothing this module parsed
+	 * contains it.
+	 *
+	 * <p>Up the containment chain: only the node a visit was entered for is recorded, while a
+	 * diagnostic is usually about an inner one — the enclosing expression is its place.
+	 */
+	private SourcePosition positionOf(EObject node) {
+		for (EObject current = node; current != null; current = current.eContainer()) {
+			SourcePosition position = positions.get(current);
+			if (position != null) {
+				return position;
 			}
 		}
 		return null;
@@ -1051,8 +1098,7 @@ public class M2tEvaluator {
 				executeBody(target);
 				String result = writers.popWriter();
 				env.define("self", result);
-				Object postResult = evaluateOcl(target.getPost());
-				writers.append(asString(postResult));
+				writers.append(render(target.getPost()));
 			} else {
 				executeBody(target);
 			}
