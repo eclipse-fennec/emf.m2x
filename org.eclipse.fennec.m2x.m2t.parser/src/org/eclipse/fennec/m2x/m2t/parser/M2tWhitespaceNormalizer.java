@@ -270,10 +270,14 @@ public class M2tWhitespaceNormalizer {
 			stripTrailingNewline(body, index);
 		}
 
-		// Inject default "\n" separator for standalone for-blocks without explicit separator.
-		// Both SPEC and ACCELEO modes do this — the newline between iterations is a
-		// fundamental part of standalone for-block behavior (§8.4).
-		if (block instanceof ForBlock forBlock && forBlock.getEach() == null) {
+		// Inject the default "\n" separator for a standalone for-block without an explicit
+		// separator — but only for the multi-line shape: §8.4 says "in the case of a
+		// multi-line 'for block', when a separator character is not specified, use 'new
+		// line' as the default separator". A single-line [for …]…[/for] alone on its line
+		// concatenates its iterations, as Acceleo 3.7's testForI reference ("123") shows
+		// (#273). Both SPEC and ACCELEO modes do this.
+		if (block instanceof ForBlock forBlock && forBlock.getEach() == null
+				&& Boolean.TRUE.equals(multiLineBlocks.get(block))) {
 			StringLiteralExp newlineSep = OclFactory.eINSTANCE.createStringLiteralExp();
 			newlineSep.setStringSymbol("\n");
 			forBlock.setEach(newlineSep);

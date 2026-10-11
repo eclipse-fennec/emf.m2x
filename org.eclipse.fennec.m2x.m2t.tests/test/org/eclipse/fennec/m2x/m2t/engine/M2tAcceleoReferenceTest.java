@@ -195,8 +195,9 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testForI");
-			// 1-based counter with default separator \n between iterations
-			assertEquals("1\n2\n3", content);
+			// 1-based counter. No separator: the default "\n" is for the multi-line for
+			// block only (§8.4), and Acceleo's reference result testForI is "123" (#273).
+			assertEquals("123", content);
 		}
 
 		@Test
