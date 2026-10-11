@@ -257,6 +257,13 @@ bnd.bnd:0: error: fennecM2T : vcard.mtl:17:4 [template main → vcards/hopper.vc
 Nothing is written for such a value; the word `OclInvalid` never reaches a generated file. What
 the rest of the template produced is still written, so the output can be inspected (#270).
 
+**If a failing generation does not fail the build**, look at `-fixupmessages` in `cnf` before
+suspecting the generator. A fixup pattern is a regular expression matched anywhere in the message,
+and `"[Include Override]:";is:=ignore` — written to silence bnd's include warning — is a character
+class: it matches `n:` in `M2tParseException:` and `l:` in `vcard.mtl:2:9`, so every error the
+generator reports is dropped and `BUILD SUCCESSFUL` is printed over an empty output directory.
+`"Include Override";is:=ignore` silences the warning and nothing else (#270).
+
 Runtime warnings — an unresolved `extends`, a navigation that found nothing, a namespace URI
 declared by two files — become bnd warnings and do not fail the build. So does an execution of
 `main` that wrote no file: a template may well decide that there is nothing to write for a
