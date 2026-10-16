@@ -184,6 +184,7 @@ Extracted into `QvtrBlackboxBridge` for testability and security centralization 
 
 - `invokeImplementedBy()` — asks `RelationImplementationProvider`s for the operation the clause names (D39 hybrid), then the blackbox registry; arguments are the clause's, i.e. the domains' root objects; unserved is an error, never a silent fallback to QVT-R enforcement (#282)
 - `evaluateBlackboxQuery()` reports an unserved query once per run with the reason (#283)
+- A relation with `implementedby` that goes beyond the §7.8 restrictions (domains not primitive or simple templates, when/where defining variables) gets one positioned WARNING per run from `QvtrEvaluator` — "should" in the spec, and the check before and after the operation keeps the general form safe (#287)
 - `evaluateBlackboxQuery()` — delegates query calls without body to registered libraries
 - `isBlackboxAllowed()` — enforces `allowedBlackboxModules` allow-list
 - All blackbox access gated by `config.blackboxEnabled()` (disabled by default)

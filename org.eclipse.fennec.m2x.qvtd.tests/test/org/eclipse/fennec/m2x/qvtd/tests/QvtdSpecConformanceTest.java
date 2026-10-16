@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
@@ -1534,6 +1535,91 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().equals(
 					"Relation 'ClassToTable' does not hold after its implementedby operation returned (§7.11.3.6)")),
 					() -> "diagnostics: " + result.diagnostics());
+		}
+
+		/** Runs a source with ClassToTable's createTableOp served, over the given classes. */
+		private QvtdExecutionResult runWithOp(String source, EObject... classes) throws QvtdParseException {
+			BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+			registry.register(new QvtdBlackboxLibrary() {
+				@Override
+				public String getModuleName() { return "ops"; }
+				@Override
+				public String getUnitQualifiedName() { return "ops"; }
+				@Override
+				public List<String> getUsedPackageURIs() { return List.of(); }
+				@Override
+				public List<String> getOperationNames() { return List.of("createTableOp"); }
+				@Override
+				public Object invoke(String operationName, Object self, Object[] args) {
+					return createTable(getName((EObject) args[0]));
+				}
+			});
+			QvtdEngine implEngine = QvtdEngines.create(QvtdConfiguration.builder(
+					OclConfiguration.builder(new OclParserSupport()).build())
+					.blackboxRegistry(registry).blackboxEnabled(true).build());
+			return implEngine.execute(implEngine.parse(source, "test"), QvtdExecutionContext.enforce(
+					"rdbms", Map.of("uml", QvtdModelExtent.of(classes), "rdbms", emptyExtent())));
+		}
+
+		private static List<Diagnostic> section78Warnings(QvtdExecutionResult result) {
+			return result.diagnostics().stream()
+					.filter(d -> d.getSeverity() == Diagnostic.WARNING && d.getMessage().contains("(§7.8)"))
+					.toList();
+		}
+
+		@Test
+		@DisplayName("an implementedby relation with sub-elements is warned about once, at the clause (§7.8, #287)")
+		void beyondSection78IsWarnedAboutOnce() throws QvtdParseException {
+			// IMPLEMENTED's domains carry name = cn: §7.8 says they "should" be simple templates
+			QvtdExecutionResult result = runWithOp(IMPLEMENTED,
+					createClass("Employee", null), createClass("Manager", null));
+
+			assertTrue(result.isSuccess(), () -> "a warning, not an error: " + result.diagnostics());
+			List<Diagnostic> warnings = section78Warnings(result);
+			assertEquals(1, warnings.size(), () -> "once per relation, not per binding: " + result.diagnostics());
+			int line = 6;
+			int column = IMPLEMENTED.lines().toList().get(line - 1).indexOf("createTableOp");
+			assertEquals("test:" + line + ":" + column + " Relation 'ClassToTable': implemented by an operation,"
+					+ " but domain 'uml' is neither primitive nor a simple object template without sub-elements;"
+					+ " domain 'rdbms' is neither primitive nor a simple object template without sub-elements"
+					+ " (§7.8) — keep it simple and constrain it from a wrapper relation that calls it",
+					warnings.get(0).getMessage());
+		}
+
+		@Test
+		@DisplayName("a relation within the §7.8 restrictions is not warned about (#287)")
+		void withinSection78IsNotWarnedAbout() throws QvtdParseException {
+			QvtdExecutionResult result = runWithOp("""
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation ClassToTable {
+							checkonly domain uml c : Class {};
+							enforce domain rdbms t : Table {} implementedby createTableOp(c);
+						}
+					}
+					""", createClass("Employee", null));
+
+			assertTrue(result.isSuccess(), () -> "" + result.diagnostics());
+			assertEquals(List.of(), section78Warnings(result));
+		}
+
+		@Test
+		@DisplayName("a where-clause that defines a variable is named in the warning (§7.8, #287)")
+		void whereDefiningVariableIsNamed() throws QvtdParseException {
+			QvtdExecutionResult result = runWithOp("""
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation ClassToTable {
+							note : String;
+							checkonly domain uml c : Class {};
+							enforce domain rdbms t : Table {} implementedby createTableOp(c);
+							where { note = 'x'; }
+						}
+					}
+					""", createClass("Employee", null));
+
+			List<Diagnostic> warnings = section78Warnings(result);
+			assertEquals(1, warnings.size(), () -> "" + result.diagnostics());
+			assertTrue(warnings.get(0).getMessage().contains("but its where-clause defines variable 'note' (§7.8)"),
+					warnings.get(0).getMessage());
 		}
 
 		@Test
