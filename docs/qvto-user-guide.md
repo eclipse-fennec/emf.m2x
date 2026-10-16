@@ -265,7 +265,7 @@ All properties use the `qvto.` prefix. OCL limits are **not** repeated here; the
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `qvto.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries |
+| `qvto.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries — bound as `QvtoBlackboxLibrary` services, see §11.2 |
 | `qvto.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; **empty puts no restriction on the names** |
 | `qvto.unitResolverEnabled` | boolean | `false` | Whether transformations may import units resolved from outside |
 | `qvto.discoverUnitResolvers` | boolean | `false` | Whether resolvers registered as services are looked up by the name a transformation imports |
@@ -735,20 +735,24 @@ Call Java code from QVT-O transformations (§8.1.4).
 ### 11.1 Implement a Library
 
 ```java
-import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
+import java.util.List;
+
+import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
+import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxInvocationContext;
-import org.eclipse.fennec.m2x.qvto.api.BlackboxOperationDescriptor;
+import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 
 public class StringUtils implements QvtoBlackboxLibrary {
 
     @Override
     public String getModuleName() {
-        return "StringUtils";  // used in 'uses StringUtils;'
+        return "StringUtils";  // the name of the synthetic library module
     }
 
     @Override
     public String getUnitQualifiedName() {
-        return "my.lib.StringUtils";  // used in 'import my.lib.StringUtils;'
+        return "my.lib.StringUtils";  // what 'import my.lib.StringUtils;' resolves to
     }
 
     @Override
@@ -758,7 +762,21 @@ public class StringUtils implements QvtoBlackboxLibrary {
 
     @Override
     public List<BlackboxOperationDescriptor> getOperationDescriptors() {
-        return List.of(/* operation descriptors */);
+        // String::capitalize() : String — contextual, called as 'hello'.capitalize()
+        BlackboxOperationDescriptor capitalize =
+                QvtOperationalFactory.eINSTANCE.createBlackboxOperationDescriptor();
+        capitalize.setName("capitalize");
+        capitalize.setContextType(EcorePackage.Literals.ESTRING);
+        capitalize.setReturnType(EcorePackage.Literals.ESTRING);
+
+        // slugify(s : String) : String — module-level, called as slugify('Hello World')
+        BlackboxOperationDescriptor slugify =
+                QvtOperationalFactory.eINSTANCE.createBlackboxOperationDescriptor();
+        slugify.setName("slugify");
+        slugify.getParameterTypes().add(EcorePackage.Literals.ESTRING);
+        slugify.setReturnType(EcorePackage.Literals.ESTRING);
+
+        return List.of(capitalize, slugify);
     }
 
     @Override
@@ -766,7 +784,7 @@ public class StringUtils implements QvtoBlackboxLibrary {
                          Object[] args) {
         return switch (operationName) {
             case "capitalize" -> {
-                String s = (String) args[0];
+                String s = (String) context.self();
                 yield s.isEmpty() ? s : Character.toUpperCase(s.charAt(0)) + s.substring(1);
             }
             case "slugify" -> ((String) args[0]).toLowerCase().replaceAll("\\s+", "-");
@@ -776,48 +794,75 @@ public class StringUtils implements QvtoBlackboxLibrary {
 }
 ```
 
+A descriptor declares what the transformation may call: an operation with a `contextType` is contextual (`'hello'.capitalize()`, the receiver in `context.self()`), one without is module-level (`slugify('…')`, the arguments in `args`).
+
 ### 11.2 Register the Library
+
+Blackboxes are off by default, because they let a transformation run Java code. Enabling them is a separate decision from registering a library: a registered library is unreachable until `blackboxEnabled` is on, and then only for the names the allow-list permits. An empty allow-list puts no restriction on the names.
 
 **Standalone:**
 
 ```java
+import java.util.Set;
+
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoBlackboxRegistry;
+import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 
 BasicQvtoBlackboxRegistry registry = new BasicQvtoBlackboxRegistry();
 registry.register(new StringUtils());
 
 QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
     .blackboxRegistry(registry)
+    .blackboxEnabled(true)                                  // required: off by default
+    .allowedBlackboxModules(Set.of("my.lib.StringUtils"))   // recommended
     .build();
 ```
 
-**OSGi:**
+**OSGi:** publish the library as a `QvtoBlackboxLibrary` service. `DefaultQvtoEngine` binds every such service through a dynamic reference of cardinality `0..n` named `blackboxes`, and drops it when it goes away — without restarting the engine. Each link and each run uses the libraries bound at that moment.
 
 ```java
 @Component(service = QvtoBlackboxLibrary.class)
 public class StringUtils implements QvtoBlackboxLibrary {
-    // ... automatically discovered via whiteboard pattern
+    // ... as in 11.1
 }
 ```
+
+```json
+"DefaultQvtoEngine": {
+    "qvto.blackboxEnabled": true,
+    "qvto.allowedBlackboxModules": ["my.lib.StringUtils"]
+}
+```
+
+The reference is configured like any Declarative Services reference, through the engine's configuration:
+
+| Property | Effect |
+|----------|--------|
+| `blackboxes.target` | LDAP filter on the library services this engine binds, e.g. `(blackbox.group=reporting)` |
+| `blackboxes.cardinality.minimum` | The engine is not available until this many libraries are bound — the way to make a deployment wait for its libraries instead of failing an import that runs first |
+
+Without `blackboxes.cardinality.minimum` a run sees what is registered when it starts: a library that arrives later is not waited for, and the import fails with `Cannot resolve import`. Where two services have the same `getUnitQualifiedName()`, the one with the higher `service.ranking` answers; among equal rankings, the one registered first.
 
 ### 11.3 Using in QVT-O
 
+The library is imported by its `getUnitQualifiedName()`, and its operations are called like any other:
+
 ```
--- Simple import
+modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+
 import my.lib.StringUtils;
 
--- Selective import
-from my.lib.StringUtils import capitalize;
-
--- In a transformation
-transformation T(in m : PKG);
-
-uses StringUtils;
-
-main() {
-    var name := 'hello'.capitalize();  -- calls Java method
+transformation T(inout m : ECORE) {
+    main() {
+        m.objectsOfType(EPackage)->forEach(p) {
+            p.name := p.name.capitalize();   -- contextual operation
+            p.nsPrefix := slugify(p.name);   -- module-level operation
+        };
+    }
 }
 ```
+
+Selective import works as well: `from my.lib.StringUtils import capitalize;`.
 
 ### 11.4 BlackboxInvocationContext
 
