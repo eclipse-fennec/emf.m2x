@@ -145,6 +145,33 @@ class QvtdOperationProviderTest extends AbstractQvtdEngineTest {
 
 	// --- helpers ---
 
+	@Test
+	@DisplayName("a blackbox query no library serves is an error, not a null in the target (#283)")
+	void unservedBlackboxQueryIsAnError() throws QvtdParseException {
+		// Missing is declared without a body, and the only library serves TypeMap. Before #283
+		// the call evaluated to null in silence — here straight into the enforced column type.
+		QvtdExecutionResult result = execute("""
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					query Missing(umlType : String) : String;
+
+					top relation R {
+						an : String; atype : String;
+						checkonly domain uml c : Class {
+							ownedAttribute = a : Attribute { name = an, type = atype }
+						};
+						enforce domain rdbms t : Table {
+							ownedColumn = col : Column { name = an, type = Missing(atype) }
+						};
+					}
+				}
+				""");
+
+		assertFalse(result.isSuccess(), () -> "an unserved query must fail the run: " + result.diagnostics());
+		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage()
+				.equals("Blackbox query 'Missing' cannot be served: no registered library serves it")),
+				() -> "the error names the query and why: " + result.diagnostics());
+	}
+
 	private static String getType(EObject obj) {
 		return (String) obj.eGet(obj.eClass().getEStructuralFeature("type"));
 	}

@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
@@ -60,6 +61,8 @@ public class QvtrBlackboxBridge {
 	private static final String SOURCE = QvtrDiagnosticSink.SOURCE;
 	/** The blackbox modules this run has reached into, for the D29 ceiling. */
 	private final Set<String> usedLibraries = new HashSet<>();
+	/** Queries already reported as unserved this run, so each is reported once (#283). */
+	private final Set<String> unservedReported = new HashSet<>();
 
 	/**
 	 * Creates a bridge for one run.
@@ -173,6 +176,7 @@ public class QvtrBlackboxBridge {
 	public Object evaluateBlackboxQuery(Function query, OperationCallExp callExpr,
 			Map<String, Object> callerBindings) {
 		if (blackboxRegistry() == null || !config.blackboxEnabled()) {
+			reportUnserved(query.getName());
 			return null;
 		}
 
@@ -189,6 +193,7 @@ public class QvtrBlackboxBridge {
 		String queryName = query.getName();
 		QvtdBlackboxLibrary library = libraryFor(queryName);
 		if (library == null) {
+			reportUnserved(queryName);
 			return null;
 		}
 		try {
@@ -246,6 +251,43 @@ public class QvtrBlackboxBridge {
 	 * @param moduleName the library's module name
 	 * @return {@code true} if the module may be used
 	 */
+	/**
+	 * Reports a blackbox query that is called but cannot be served, once per query and run (#283).
+	 *
+	 * <p>The query still evaluates to {@code null}, but no longer in silence: before #283 the
+	 * caller saw only the consequence — an unbound variable, a failed predicate — or, in an
+	 * enforced template, nothing at all while {@code null} was written into the target. A library
+	 * that would serve the query but is past the library ceiling has been reported by
+	 * {@link #libraryFor(String)} already.
+	 *
+	 * @param queryName the query that was called
+	 */
+	private void reportUnserved(String queryName) {
+		String reason;
+		if (!config.blackboxEnabled()) {
+			reason = "blackboxes are not enabled";
+		} else if (blackboxRegistry() == null) {
+			reason = "no blackbox registry is configured";
+		} else {
+			List<QvtdBlackboxLibrary> serving = blackboxRegistry().getLibraries().stream()
+					.filter(library -> library.getOperationNames().contains(queryName))
+					.toList();
+			if (serving.isEmpty()) {
+				reason = "no registered library serves it";
+			} else if (serving.stream().anyMatch(library -> isBlackboxAllowed(library.getModuleName()))) {
+				return; // the library ceiling, reported where it was hit
+			} else {
+				reason = "the allow-list names none of the libraries that serve it ("
+						+ serving.stream().map(QvtdBlackboxLibrary::getModuleName).sorted()
+								.collect(Collectors.joining(", "))
+						+ ")";
+			}
+		}
+		if (unservedReported.add(queryName)) {
+			diagnostics.error("Blackbox query '" + queryName + "' cannot be served: " + reason);
+		}
+	}
+
 	public boolean isBlackboxAllowed(String moduleName) {
 		Set<String> allowed = config.allowedBlackboxModules();
 		return allowed.isEmpty() || allowed.contains(moduleName);
