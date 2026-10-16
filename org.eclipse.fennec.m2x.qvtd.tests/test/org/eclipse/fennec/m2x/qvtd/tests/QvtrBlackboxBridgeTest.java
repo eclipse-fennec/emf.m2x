@@ -46,6 +46,9 @@ import org.junit.jupiter.api.Test;
  */
 class QvtrBlackboxBridgeTest {
 
+	/** What the bridge under test reported; a fresh list per test. */
+	private final List<Diagnostic> diagnostics = new ArrayList<>();
+
 	// ── isBlackboxAllowed ────────────────────────────────────────────
 
 	@Test
@@ -85,6 +88,7 @@ class QvtrBlackboxBridgeTest {
 
 		Object result = bridge.evaluateBlackboxQuery(query, callExpr, Map.of());
 		assertNull(result, "Should return null when blackbox is disabled");
+		assertReported("Blackbox query 'TypeMap' cannot be served: blackboxes are not enabled");
 	}
 
 	@Test
@@ -115,6 +119,57 @@ class QvtrBlackboxBridgeTest {
 
 		Object result = bridge.evaluateBlackboxQuery(query, callExpr, Map.of());
 		assertNull(result, "Should return null when no registry");
+		assertReported("Blackbox query 'TypeMap' cannot be served: no blackbox registry is configured");
+	}
+
+	@Test
+	void evaluateBlackboxQuery_noLibraryServesIt_isReported() {
+		BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+		registry.register(createLibrary("helpers", "OtherQuery", args -> "X"));
+		QvtrBlackboxBridge bridge = createBridgeWithRegistry(registry, true, Set.of());
+
+		assertNull(bridge.evaluateBlackboxQuery(query("TypeMap"), call("TypeMap"), Map.of()));
+		assertReported("Blackbox query 'TypeMap' cannot be served: no registered library serves it");
+	}
+
+	@Test
+	void evaluateBlackboxQuery_allowListExcludesTheLibrary_isReported() {
+		BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+		registry.register(createLibrary("helpers", "TypeMap", args -> "NUMBER"));
+		QvtrBlackboxBridge bridge = createBridgeWithRegistry(registry, true, Set.of("trusted"));
+
+		assertNull(bridge.evaluateBlackboxQuery(query("TypeMap"), call("TypeMap"), Map.of()));
+		assertReported("Blackbox query 'TypeMap' cannot be served: the allow-list names none of the"
+				+ " libraries that serve it (helpers)");
+	}
+
+	@Test
+	void evaluateBlackboxQuery_unservedQuery_isReportedOncePerRun() {
+		// A query is called once per binding; one diagnostic says it, a thousand would bury it
+		QvtrBlackboxBridge bridge = createBridgeWithRegistry(null, false, Set.of());
+		for (int i = 0; i < 3; i++) {
+			bridge.evaluateBlackboxQuery(query("TypeMap"), call("TypeMap"), Map.of());
+		}
+		assertEquals(1, diagnostics.size(), () -> "diagnostics: " + diagnostics);
+	}
+
+	/** Exactly one diagnostic, an error with this message (#283). */
+	private void assertReported(String message) {
+		assertEquals(1, diagnostics.size(), () -> "diagnostics: " + diagnostics);
+		assertEquals(Diagnostic.ERROR, diagnostics.get(0).getSeverity());
+		assertEquals(message, diagnostics.get(0).getMessage());
+	}
+
+	private static Function query(String name) {
+		Function query = QvtbaseFactory.eINSTANCE.createFunction();
+		query.setName(name);
+		return query;
+	}
+
+	private static OperationCallExp call(String name) {
+		OperationCallExp callExpr = OclFactory.eINSTANCE.createOperationCallExp();
+		callExpr.setName(name);
+		return callExpr;
 	}
 
 	// ── Helpers ──────────────────────────────────────────────────────
@@ -138,7 +193,6 @@ class QvtrBlackboxBridgeTest {
 			builder.blackboxRegistry(registry);
 		}
 		QvtdConfiguration config = builder.build();
-		List<Diagnostic> diagnostics = new ArrayList<>();
 
 		return new QvtrBlackboxBridge(config, List.of(),
 				null, // extentManager not needed for these tests
