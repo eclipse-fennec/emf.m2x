@@ -29,6 +29,7 @@ import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdConfigurationHelper;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineConfiguration;
@@ -103,6 +104,18 @@ class QvtdConfigurationHelperTest {
 	 * A {@link QvtdEngineConfiguration} answering with the given overrides, and with the
 	 * attribute's declared default everywhere else — the same thing SCR hands the component.
 	 */
+	@Test
+	@DisplayName("the blackbox registry it was given is the one in the configuration")
+	void theSuppliedBlackboxRegistryIsCarriedOver() {
+		// The DS component fills a registry with the library services it binds (#269); before,
+		// no registry reached the configuration, and qvtd.blackboxEnabled had nothing to enable.
+		BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+		assertSame(registry, QvtdConfigurationHelper.from(config(Map.of()), OCL, null, null, registry)
+				.blackboxRegistry());
+		assertNull(QvtdConfigurationHelper.from(config(Map.of()), OCL, null, null).blackboxRegistry(),
+				"without one there is none");
+	}
+
 	@Test
 	@DisplayName("the resource set it was given is what resolves metamodels")
 	void theSuppliedResourceSetDecidesTheRegistry() {
