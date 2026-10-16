@@ -21,8 +21,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
+import java.util.stream.Collectors;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
@@ -86,6 +88,8 @@ public class QvtrEvaluator {
 	private final QvtrPatternMatcher patternMatcher;
 	private final QvtrTraceManager traceManager;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
+	/** Relations already warned about for §7.8, so each is warned about once per run (#287). */
+	private final Set<String> section78Warned = new HashSet<>();
 	/** Whether the trace limit was already reported, so it is reported once (#284). */
 	private boolean traceLimitReported;
 
@@ -219,6 +223,7 @@ public class QvtrEvaluator {
 	 */
 	private void executeRelation(Relation relation) {
 		checkDeadline();
+		warnBeyondSection78(relation);
 		env.pushScope();
 		try {
 			// 1. Evaluate the when-clause's relation calls to get pre-bindings. The remaining
@@ -290,6 +295,7 @@ public class QvtrEvaluator {
 	private void executeRelationWithBindings(Relation relation,
 			Map<String, Object> preBindings) {
 		checkDeadline();
+		warnBeyondSection78(relation);
 		int maxDepth = config.maxRelationDepth();
 		if (relationCallDepth >= maxDepth) {
 			throw new QvtdExecutionException(
@@ -672,6 +678,81 @@ public class QvtrEvaluator {
 	 */
 	private boolean isPrimitiveDomain(RelationDomain domain) {
 		return domain.getTypedModel() == null && domain.getPattern().isEmpty();
+	}
+
+	/**
+	 * Warns, once per run, about a relation with an {@code implementedby} clause that goes beyond
+	 * the restrictions of QVT v1.3 §7.8 (#287).
+	 *
+	 * <p>"The Relations that may be implemented by Mapping Operations and Black box Operations are
+	 * restricted": their domains <em>should</em> be primitive or a simple object template without
+	 * sub-elements, and their when and where clauses <em>should</em> not define variables — the
+	 * conditions belong in a wrapper relation that calls the simple one. "Should", not "shall", and
+	 * the engine checks the relation before and after the operation anyway (#282), so this is a
+	 * warning, worded and positioned like the other languages' runtime diagnostics.
+	 */
+	private void warnBeyondSection78(Relation relation) {
+		if (relation.getOperationalImpl().isEmpty() || !section78Warned.add(relation.getName())) {
+			return;
+		}
+		List<String> findings = new ArrayList<>();
+		Set<String> domainBound = new HashSet<>();
+		for (Domain d : relation.getDomain()) {
+			if (!(d instanceof RelationDomain domain)) {
+				continue;
+			}
+			domain.getRootVariable().forEach(v -> domainBound.add(v.getName()));
+			for (DomainPattern pattern : domain.getPattern()) {
+				TemplateExp template = pattern.getTemplateExpression();
+				if (template == null) {
+					continue;
+				}
+				template.eAllContents().forEachRemaining(node -> {
+					if (node instanceof VariableExp ve && ve.getReferredVariable() != null) {
+						domainBound.add(ve.getReferredVariable().getName());
+					} else if (node instanceof TemplateExp nested && nested.getBindsTo() != null) {
+						domainBound.add(nested.getBindsTo().getName());
+					}
+				});
+				if (!(template instanceof ObjectTemplateExp simple) || !simple.getPart().isEmpty()) {
+					findings.add("domain '" + domain.getName()
+							+ "' is neither primitive nor a simple object template without sub-elements");
+				}
+			}
+		}
+		addDefinedVariables(relation.getWhen(), "when", domainBound, findings);
+		addDefinedVariables(relation.getWhere(), "where", domainBound, findings);
+		if (findings.isEmpty()) {
+			return;
+		}
+		String message = "Relation '" + relation.getName() + "': implemented by an operation, but "
+				+ String.join("; ", findings)
+				+ " (§7.8) — keep it simple and constrain it from a wrapper relation that calls it";
+		SourcePosition position = positionLookup.apply(relation.getOperationalImpl().get(0));
+		diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
+				position == null ? message : position + " " + message,
+				position == null ? null : new Object[] { position }));
+	}
+
+	/** The variables a when- or where-clause binds that no domain binds — what §7.8 calls defining. */
+	private static void addDefinedVariables(Pattern clause, String name, Set<String> domainBound,
+			List<String> findings) {
+		if (clause == null) {
+			return;
+		}
+		Set<String> defined = new TreeSet<>();
+		clause.eAllContents().forEachRemaining(node -> {
+			if (node instanceof VariableExp ve && ve.getReferredVariable() != null
+					// a let or iterator variable is local to its expression, not defined by the clause
+					&& !(ve.getReferredVariable().eContainer() instanceof OclExpression)
+					&& !domainBound.contains(ve.getReferredVariable().getName())) {
+				defined.add(ve.getReferredVariable().getName());
+			}
+		});
+		if (!defined.isEmpty()) {
+			findings.add("its " + name + "-clause defines " + (defined.size() == 1 ? "variable " : "variables ")
+					+ defined.stream().map(v -> "'" + v + "'").collect(Collectors.joining(", ")));
+		}
 	}
 
 	/**

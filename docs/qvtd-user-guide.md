@@ -1003,6 +1003,21 @@ When `rdbms` is the target, the engine first checks whether the relation already
 
 The operation is responsible for making the relation hold. Afterwards the engine checks again, and a relation that still does not hold is an error — "a runtime exception" in the words of the specification. An `implementedby` operation that neither a provider (§10) nor a library serves is an error as well; the engine does not enforce the domain in its place.
 
+The specification restricts the relations an operation may implement (§7.8): their domains *should* be primitive or a simple object template without sub-elements, and their when and where clauses *should* not define variables. The conditions belong in a "wrapper" relation that calls the simple one — as in the specification's own example:
+
+```qvtr
+relation RExpToMExp {
+    domain relations re : OclExpression {};
+    enforce domain core me : OclExpression {} implementedby CopyOclExpession(re, me);
+}
+```
+
+A relation with an `implementedby` clause that goes beyond this runs, but the result carries one warning per run, positioned at the clause:
+
+```
+<unit>:<line>:<column> Relation 'ClassToTable': implemented by an operation, but domain 'rdbms' is neither primitive nor a simple object template without sub-elements (§7.8) — keep it simple and constrain it from a wrapper relation that calls it
+```
+
 ---
 
 ## 10. Hybrid QVT-R / QVT-O

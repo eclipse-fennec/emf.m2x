@@ -113,7 +113,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private final Map<String, Relation> relationMap = new HashMap<>();
 	/** Where each import was written, keyed by the annotation detail that carries it (#264). */
 	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
-	/** Where collection member and rest names stood — built here, not by the expression builder. */
+	/**
+	 * Where collection member and rest names and {@code implementedby} clauses stood — built here,
+	 * not by the expression builder.
+	 */
 	private final Map<EObject, SourcePosition> templatePositions = new IdentityHashMap<>();
 	/** Current relation being processed (for variable scope). */
 	private Relation currentRelation;
@@ -600,6 +603,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 			RelationImplementation relImpl = REL.createRelationImplementation();
 			relImpl.setInDirectionOf(tm);
+			recordPosition(relImpl, ctx.pathName());   // where a runtime warning points (#287)
 
 			// Create synthetic EOperation for the impl reference
 			EOperation implOp =
@@ -960,7 +964,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	/**
 	 * Where each expression node stood, for runtime diagnostics (#116), where each import
 	 * was written, for link diagnostics (#264), and where collection member and rest names
-	 * stood, for binding diagnostics (#278).
+	 * stood, for binding diagnostics (#278), and where each {@code implementedby} clause stood, for
+	 * the §7.8 warning (#287).
 	 *
 	 * @return the positions, by node identity
 	 */
