@@ -84,8 +84,8 @@ class QvtoTraceManager {
 
 	/**
 	 * Records a mapping invocation for both resolve lookups and EMF trace export.
-	 * If {@code maxTraceRecords} is set and reached, further records are silently
-	 * dropped (Q-6 / M-4c).
+	 * If {@code maxTraceRecords} is set and reached, further records are dropped (Q-6 / M-4c)
+	 * and {@link #isLimitReached()} turns true, which the evaluator reports as an error (#284).
 	 *
 	 * @param mappingOp the mapping operation AST node
 	 * @param source the source object

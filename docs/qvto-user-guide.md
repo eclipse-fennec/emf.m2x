@@ -1151,7 +1151,7 @@ QvtoEvaluationOptions opts = QvtoEvaluationOptions.defaults()
 | `maxLoopIterations` | 1,000,000 | Per-loop iteration cap — applies to `while`, `forEach`, `forExp` |
 | `maxStackDepth` | 1,000 | Call stack depth — limits recursive helpers/mappings |
 | `maxDiagnostics` | 10,000 | Maximum diagnostic messages before truncation |
-| `maxTraceRecords` | 1,000,000 | Maximum trace records — silently drops further records |
+| `maxTraceRecords` | 1,000,000 | Maximum trace records — further records are dropped, and the run fails with an error |
 
 ### 13.2 Sandboxed Execution Example
 
@@ -1198,7 +1198,7 @@ if (!result.isSuccess()) {
 
 - **Diagnostics**: The `log()` built-in and internal diagnostics are capped. When the limit is reached, one final warning `Maximum diagnostics limit reached (<limit>), further diagnostics truncated` is added and further diagnostics are silently dropped.
 
-- **Trace records**: When `maxTraceRecords` is reached, further mapping trace records are silently dropped. This does not terminate execution but may affect `resolve`/`invResolve` for later mappings.
+- **Trace records**: When `maxTraceRecords` is reached, further mapping trace records are dropped and one error `Maximum trace records exceeded: <limit>` is reported, so the run does not report success. Execution continues, but `resolve`/`invresolve` and the reuse of a mapping already applied may miss what was mapped after the limit (#284).
 
 ### 13.4 Embedder Responsibilities
 
