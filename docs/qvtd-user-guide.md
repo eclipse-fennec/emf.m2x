@@ -186,7 +186,7 @@ QvtdEngine engine = QvtdEngines.create(config);
 | `maxRelationDepth(int)` | 200 | Maximum depth of relation calls |
 | `maxBindings(int)` | 10,000 | Maximum bindings while matching a pattern |
 | `timeoutMs(long)` | 30,000 | Execution timeout in milliseconds; 0 means none (`qvtd.timeout` under OSGi) |
-| `maxTraceRecords(int)` | 100,000 | Maximum trace records per relation |
+| `maxTraceRecords(int)` | 1,000,000 | Maximum trace records one run may hold, across all relations; reaching it is an error |
 
 A registry or resolver alone does nothing: blackboxes and unit resolvers are off until `blackboxEnabled(true)` or `unitResolverEnabled(true)` switches them on. Exceeding one of the limits ends the run with a `QvtdExecutionException` (§11.3).
 
@@ -990,7 +990,7 @@ transformation T(uml : simpleuml, rdbms : simplerdbms) {
 }
 ```
 
-The engine calls `invoke("TypeMap", null, new Object[]{atype})`. A blackbox query that no library serves — blackboxes off, no library lists it, or the allow-list excludes it — evaluates to `null`.
+The engine calls `invoke("TypeMap", null, new Object[]{atype})`. A blackbox query that no library serves — blackboxes off, no library lists it, or the allow-list excludes it — is an error naming the query and the reason (`Blackbox query 'TypeMap' cannot be served: …`), reported once per run; the call evaluates to `null`.
 
 **`implementedby`** — delegates the enforcement of a domain to an operation:
 
@@ -999,7 +999,9 @@ enforce domain rdbms s : Schema { name = pn }
     implementedby CreateSchema(p);
 ```
 
-The engine calls `invoke("CreateSchema", null, new Object[]{p})` when `rdbms` is the target. Only the last segment of the name selects the operation (`MyBlackbox::CreateSchema` selects `CreateSchema` as well). A returned `EObject` that has no container is added to the target extent; any other return value is ignored.
+When `rdbms` is the target, the engine first checks whether the relation already holds; only if it does not does it call `invoke("CreateSchema", null, new Object[]{p})` (§7.11.3.6). The arguments are the root objects of the other domains (§10, rule 4.5). Only the last segment of the name selects the operation (`MyBlackbox::CreateSchema` selects `CreateSchema` as well). A returned `EObject` that has no container is added to the target extent; any other return value is ignored.
+
+The operation is responsible for making the relation hold. Afterwards the engine checks again, and a relation that still does not hold is an error — "a runtime exception" in the words of the specification. An `implementedby` operation that neither a provider (§10) nor a library serves is an error as well; the engine does not enforce the domain in its place.
 
 ---
 
@@ -1014,49 +1016,69 @@ QvtdEngine (Relations)
     │
     ├── evaluates top relations
     ├── matches source domains
-    └── for implementedby clauses:
+    └── for an implementedby clause, when the relation does not hold:
             │
-            ├── 1. Try RelationImplementationProviders (QVT-O)
-            └── 2. Fallback to BlackboxRegistry (Java)
+            ├── 1. a RelationImplementationProvider that serves the operation (QVT-O)
+            ├── 2. otherwise a blackbox library that serves it (Java)
+            ├── 3. otherwise an error
+            └── afterwards: the relation must hold, or it is an error
 ```
 
 ### 10.2 Registering a QVT-O Provider
 
-The engine `QvtoEngines.create` returns implements `RelationImplementationProvider`; the `QvtoEngine` interface does not extend it, so the provider role takes a cast. Register it with the QVT-R engine:
+Every `QvtoEngine` is a `RelationImplementationProvider`. Load the transformation whose mappings implement relations and register the engine with the QVT-R engine:
 
 ```java
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
-import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 
-// Create QVT-O engine
+// Create the QVT-O engine and load the transformation that implements relations
 QvtoEngine qvtoEngine = QvtoEngines.create(qvtoConfig);
-
-// Load the operational transformation that implements relations
-OperationalTransformation ot = qvtoEngine.parse(qvtoSource, "MyImpl");
+OperationalTransformation ot = qvtoEngine.parse("""
+    modeltype SRC uses 'http://test/simpleuml/1.0';
+    modeltype TGT uses 'http://test/simplerdbms/1.0';
+    transformation QvtoImpl(in uml : SRC, out rdbms : TGT);
+    mapping Class::classToTableOp() : Table {
+        name := self.name;
+        type := 'QVTO';
+    }
+    """, "QvtoImpl");
 qvtoEngine.loadTransformation(ot);
 
-// Register as provider with the QVT-R engine
+// Register it with the QVT-R engine
 QvtdEngine qvtdEngine = QvtdEngines.create(qvtdConfig);
-qvtdEngine.registerImplementationProvider((RelationImplementationProvider) qvtoEngine);
+qvtdEngine.registerImplementationProvider(qvtoEngine);
 
-// Now execute — implementedby clauses try the QVT-O engine first
+// The relation names the mapping and passes the root object of its other domain
+RelationalTransformation trafo = qvtdEngine.parse("""
+    transformation T(uml : simpleuml, rdbms : simplerdbms) {
+        top relation ClassToTable {
+            cn : String;
+            checkonly domain uml c : Class { name = cn };
+            enforce domain rdbms t : Table { name = cn }
+                implementedby classToTableOp(c);
+        }
+    }
+    """, "T");
 QvtdExecutionResult result = qvtdEngine.execute(trafo, ctx);
 ```
 
+Compiling against `qvto.api` therefore needs `qvtd.api` on the class path.
+
 ### 10.3 How It Works
 
-> **Known gap.** Hybrid execution does not work end to end yet. The provider is asked for the **relation's** name, not for the operation the `implementedby` clause names, and `refines` is not consulted — a QVT-O mapping named after the operation is never called, and QVT-R enforces the domain itself. A mapping named after the relation is called, but the objects it creates do not reach the QVT-R target extent, and the run still reports success.
+When a relation with an `implementedby` clause for the enforced direction does not hold (§7.11.3.6):
 
-When the QVT-R engine encounters an `implementedby` clause:
-
-1. It iterates all registered `RelationImplementationProvider` instances
-2. For each provider, it calls `canProvide(relationName)` — checks if the provider's loaded transformation has a `MappingOperation` with that name
-3. If a provider matches, it calls `executeRelation(name, context)` — the provider bridges the QVT-R execution context to QVT-O and executes the mapping
-4. If no provider matches, it falls back to the `QvtdBlackboxRegistry`
+1. The engine evaluates the clause's arguments — the root objects of the other domains (§10, rule 4.5).
+2. It asks the registered providers, in registration order, `canProvide(operationName)` with the name the clause gives; a QVT-O engine answers for a mapping of that name in a loaded transformation.
+3. The first provider that serves it gets `invoke(operationName, arguments, context)`. The QVT-O engine runs that one mapping — not the transformation's `main()` — with the first argument as its context object if the mapping has one, and with its model parameters bound by name to the QVT-R run's extents, so what it creates lands in the QVT-R target. The result's diagnostics join the run's; an error among them fails it.
+4. If no provider serves the operation, a blackbox library may (§9); if none does, that is an error.
+5. The relation is checked again; if it still does not hold, that is an error.
 
 ### 10.4 QVT-O `refines` Clause
 
@@ -1072,7 +1094,7 @@ mapping uml::Package::packageToSchema() : rdbms::Schema
 }
 ```
 
-The parser supports both `::` (spec §8.4.7) and `.` (Eclipse-compatible) separators in the `refines` module reference.
+The parser supports both `::` (spec §8.4.7) and `.` (Eclipse-compatible) separators in the `refines` module reference. `refines` records which relation a mapping implements; which mapping an `implementedby` clause calls is decided by the name the clause gives.
 
 ---
 
