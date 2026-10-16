@@ -11,7 +11,7 @@ Direct QVT-R interpretation engine (D33 — no QVT-C lowering). Implements QVT v
 
 | Module | Purpose |
 |--------|---------|
-| `org.eclipse.fennec.m2x.qvtd.model` | EMF metamodel (3 EPackages) |
+| `org.eclipse.fennec.m2x.qvtd.model` | EMF metamodel (2 EPackages: qvtrelation, qvttemplate; qvtbase lives in `qvt.model`, D40) |
 | `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces |
 | `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser, CST→AST |
 | `org.eclipse.fennec.m2x.qvtd.engine` | Direct interpretation engine |

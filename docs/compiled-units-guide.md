@@ -728,7 +728,7 @@ With one resolver nothing here matters. With several — a store, a file system,
 rules apply, in one place (`ResolutionPolicy`), for compile and for the execute-time link alike:
 
 1. **Every source is asked**, not only until the first answer. The first answer in source order is
-   what is used: configured resolvers in configuration order, OSGi whiteboard services by
+   what is used: configured resolvers in configuration order, services looked up in the OSGi service registry by
    `service.ranking` (highest first), class-path providers in declaration order.
 2. **A failing source is an error.** A resolver that throws ends the resolution naming the source
    and the cause — `Cannot resolve import 'HelperLib': source …StoreUnitResolver failed …: disk on

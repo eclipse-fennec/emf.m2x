@@ -40,54 +40,74 @@ The Fennec QVT-R Engine provides:
 |--------|-------------|
 | `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces |
 | `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser + §7.5 validator |
-| `org.eclipse.fennec.m2x.qvtd.engine` | Direct interpretation engine |
-| `org.eclipse.fennec.m2x.qvtd.model` | QVT-R EMF metamodel (3 EPackages) |
-| `org.eclipse.fennec.m2x.ocl.*` | Required OCL bundles (transitive) |
+| `org.eclipse.fennec.m2x.qvtd.engine` | Direct interpretation engine, DS components |
+| `org.eclipse.fennec.m2x.qvtd.model` | QVT-R EMF metamodel (2 EPackages: `qvtrelation`, `qvttemplate`) |
+| `org.eclipse.fennec.m2x.qvt.model` | QVTBase metamodel (`qvtbase`), shared with QVT-O |
+| `org.eclipse.fennec.m2x.unit` | Language-neutral unit contracts: compile, store, prepare |
+| `org.eclipse.fennec.m2x.ocl.{api,model,parser,engine}` | Fennec OCL |
+
+**Standalone class path.** Outside OSGi nothing resolves dependencies for you. These are needed for the Quick Start below — checked by running it with exactly them:
+
+- the bundles above, `ocl.*` being four jars
+- `org.antlr:antlr4-runtime` 4.13.x
+- `org.eclipse.emf.common` and `org.eclipse.emf.ecore`
+- `org.eclipse.fennec.emf.osgi.component.minimal` — the engine computes metamodel fingerprints with its `FingerprintHelper`; it carries `FingerprintService` itself, so `emf.osgi.api` is not needed in plain Java
+
+Compiled units (§5.5) additionally need `org.eclipse.emf.ecore.xmi`; hybrid execution with QVT-O (§10) needs the QVT-O bundles. Under OSGi the engine also needs `org.eclipse.fennec.m2x.unit.osgi` and the `emf.osgi` runtime that provides the `ResourceSet` and `FingerprintService` services (§3.4).
 
 ---
 
 ## 2. Quick Start
 
-Minimal example — parse a QVT-R transformation from a String and execute it:
+Minimal example — parse a QVT-R transformation from a String and execute it. It copies `EPackage`s, so it needs no metamodel of its own:
 
 ```java
+import java.util.List;
+import java.util.Map;
+
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngine;
-import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 
 // 1. Create engine
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 QvtdConfiguration config = QvtdConfiguration.builder(oclConfig).build();
 QvtdEngine engine = QvtdEngines.create(config);
 
-// 2. Parse transformation
+// 2. Parse transformation — typed models name their metamodel (§3.3)
 RelationalTransformation trafo = engine.parse("""
-    transformation Uml2Rdbms(uml : SimpleUML, rdbms : SimpleRDBMS) {
-        top relation PackageToSchema {
+    transformation CopyPackages(source : ecore, target : ecore) {
+        top relation PackageToPackage {
             pn : String;
-            checkonly domain uml p : Package { name = pn };
-            enforce domain rdbms s : Schema { name = pn };
+            checkonly domain source p : EPackage { name = pn };
+            enforce domain target q : EPackage { name = pn };
         }
     }
-    """, "Uml2Rdbms");
+    """, "CopyPackages");
 
 // 3. Set up named model extents
-QvtdModelExtent umlExtent = QvtdModelExtent.of(myPackage);
-QvtdModelExtent rdbmsExtent = QvtdModelExtent.of();  // empty output
+EPackage myPackage = EcoreFactory.eINSTANCE.createEPackage();
+myPackage.setName("library");
+QvtdModelExtent sourceExtent = QvtdModelExtent.of(myPackage);
+QvtdModelExtent targetExtent = QvtdModelExtent.of();  // empty output
 
-// 4. Execute in enforce mode (target = rdbms)
-QvtdExecutionContext ctx = QvtdExecutionContext.enforce("rdbms",
-    Map.of("uml", umlExtent, "rdbms", rdbmsExtent));
+// 4. Execute in enforce mode, "target" being the direction
+QvtdExecutionContext ctx = QvtdExecutionContext.enforce("target",
+    Map.of("source", sourceExtent, "target", targetExtent));
 QvtdExecutionResult result = engine.execute(trafo, ctx);
 
 // 5. Read output
 if (result.isSuccess()) {
-    List<EObject> schemas = rdbmsExtent.getContents();
+    List<EObject> packages = targetExtent.getContents();  // one EPackage "library"
 }
 ```
 
@@ -126,8 +146,9 @@ The full form, when the OCL side needs configuration too:
 ```java
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
-import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 
 // OCL configuration (shared with QVT-R)
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport())
@@ -135,7 +156,9 @@ OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport())
 
 // QVT-R configuration
 QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
-    .blackboxRegistry(new BasicQvtdBlackboxRegistry())
+    .blackboxRegistry(myBlackboxRegistry)
+    .blackboxEnabled(true)        // off by default
+    .maxRelationDepth(100)
     .build();
 
 QvtdEngine engine = QvtdEngines.create(config);
@@ -149,17 +172,27 @@ QvtdEngine engine = QvtdEngines.create(config);
 |--------|---------|-------------|
 | `resourceSet(resourceSet)` | — | Resource set whose package registry resolves the transformation's typed models |
 | `packageRegistry(registry)` | `EPackage.Registry.INSTANCE` | The registry itself; wins over `resourceSet` when both are set |
-| `blackboxRegistry(registry)` | empty | Registry for blackbox Java libraries |
-| `blackboxEnabled(boolean)` | `false` | Enable blackbox library imports |
-| `allowedBlackboxModules(Set)` | empty | Allow-list for blackbox module names |
-| `addUnitResolver(resolver)` | — | Add a unit resolver for multi-file imports |
-| `unitResolverEnabled(boolean)` | `false` | Enable unit resolver imports |
-| `maxBlackboxLibraries(int)` | 10 | Maximum registered blackbox libraries |
-| `maxUnitResolvers(int)` | 5 | Maximum registered unit resolvers |
+| `registerPackage(ePackage)` | — | Contributes a metamodel that answers for its nsURI ahead of the registry — local to this configuration, nothing reaches the global registry |
+| `blackboxRegistry(registry)` | none | Registry for blackbox Java libraries (§9) |
+| `blackboxEnabled(boolean)` | `false` | Whether blackbox libraries are consulted at all |
+| `allowedBlackboxModules(Set)` | empty | Module names (`getModuleName()`) that may serve a blackbox operation; empty puts no restriction |
+| `maxBlackboxLibraries(int)` | 10 | Distinct blackbox libraries one run may use |
+| `addUnitResolver(resolver)` | — | Add a unit resolver for imports (§3.4.2) |
+| `unitResolvers(list)` | — | Set all unit resolvers at once |
+| `unitResolverEnabled(boolean)` | `false` | Whether unit resolvers are consulted at all |
+| `discoverUnitResolvers(boolean)` | `false` | Also ask resolvers found through `ServiceLoader`; requires `unitResolverEnabled`, counts as one resolver |
+| `allowedUnitModules(Set)` | empty | Qualified names that may be imported as a unit; empty puts no restriction |
+| `maxUnitResolvers(int)` | 5 | Unit resolvers one engine will use |
+| `maxRelationDepth(int)` | 200 | Maximum depth of relation calls |
+| `maxBindings(int)` | 10,000 | Maximum bindings while matching a pattern |
+| `timeoutMs(long)` | 30,000 | Execution timeout in milliseconds; 0 means none (`qvtd.timeout` under OSGi) |
+| `maxTraceRecords(int)` | 100,000 | Maximum trace records per relation |
+
+A registry or resolver alone does nothing: blackboxes and unit resolvers are off until `blackboxEnabled(true)` or `unitResolverEnabled(true)` switches them on. Exceeding one of the limits ends the run with a `QvtdExecutionException` (§11.3).
 
 ### 3.3 Which Metamodels the Engine Sees
 
-The typed models of a transformation — `transformation t(uml : simpleuml, rdbms : simplerdbms)` — are resolved by package name when the transformation is parsed. By default the engine looks in `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Hand it your own registry when you hold the packages yourself:
+The typed models of a transformation — `transformation t(uml : simpleuml, rdbms : simplerdbms)` — are resolved when the transformation is parsed: first as a registry key (an nsURI), then by package name, and last by package name ignoring case. By default the engine looks in `EPackage.Registry.INSTANCE`, which is the right answer in plain Java. Hand it your own registry when you hold the packages yourself:
 
 ```java
 // the ResourceSet you already have — under OSGi this is what emf.osgi injects
@@ -212,7 +245,8 @@ public class MyTransformationRunner {
 |---|---|---|
 | `DefaultQvtdEngine` | PROTOTYPE | Nothing — each consumer gets its own engine and trace state |
 | `DefaultOclEngine` | PROTOTYPE | Nothing — bound `prototype_required`, so each QVT-R engine evaluates on its own OCL engine |
-| `DefaultOclExpressionCacheComponent` | SINGLETON | The parsed-expression cache, shared by all OCL engines |
+| `DefaultOclExpressionCache` | SINGLETON | The parsed-expression cache, shared by all OCL engines |
+| `QvtdServiceUnitResolver` | SINGLETON | Looks up units in the service registry by the name an import gives (§3.4.2); bound by every engine as `unitDiscovery`, consulted only with `qvtd.discoverUnitResolvers` |
 | `ResourceSet` (from `emf.osgi`) | PROTOTYPE | Nothing — bound `prototype_required`, so each engine resolves metamodels through its own resource set |
 
 The engine takes its OCL engine as a **mandatory** service reference. That is door 2 from [§3.1](#31-three-ways-to-give-qvt-r-its-ocl-engine): the OCL engine a consumer configured — with its cache and its operation providers — is the one that evaluates relation expressions, rather than a second one built beside it.
@@ -225,7 +259,7 @@ The **resource set** is a mandatory reference as well, and deliberately not an o
 }
 ```
 
-The fingerprint service `emf.osgi` provides is bound the same way, mandatory, for the same reason.
+The fingerprint service `emf.osgi` provides is mandatory for the same reason; it is a plain singleton reference, not `prototype_required`. Blackbox libraries are bound the other way — dynamically, `0..n`, see §9.2.
 
 ### 3.4.1 Configuration via ConfigAdmin
 
@@ -286,6 +320,9 @@ Where the unit comes from is the resolvers' business. Configure them with `QvtdC
            property = "qvtd.unit.name=shared.Library")
 public class SharedLibraryUnit implements QvtdUnitResolver {
 
+    private final URI uri = URI.createURI("platform:/plugin/com.acme/Library.qvtr");
+    private final String source = "...";  // the unit's QVT-R text
+
     @Override
     public Optional<QvtdUnit> resolveUnit(String qualifiedName) {
         return Optional.of(new QvtdUnit.SourceUnit(qualifiedName, uri, source));
@@ -307,7 +344,10 @@ The engine looks that up when it links the import — not before. Outside OSGi t
 }
 ```
 
-An import that nothing answers for is an error — `Cannot resolve import: shared.Library` — rather than a silently missing relation. `QvtdParseException.getErrors()` carries one diagnostic per failed import, at the line and column of its name, all of them in one exception (#264).
+An import that nothing answers for is an error — `Cannot resolve import: shared.Library` — rather than a silently missing relation. Imports are linked after parsing, so `parse()` does not report them:
+
+- `compile()` throws `QvtdParseException`; `getErrors()` carries one diagnostic per failed import, at the line and column of its name, all of them in one exception (#264).
+- `execute()` on a parsed transformation returns a result with `isSuccess() == false` and an `Execution error: Cannot resolve import: …` diagnostic.
 
 **Running on a specific OCL engine:** the reference is unfiltered by default, so the engine binds whichever `OclEngine` service is there. To pin it to one you configured yourself, set a target filter:
 
@@ -434,25 +474,35 @@ for (EObject input : inputs) {
 
 ### 5.4 Metamodel Registration
 
-Metamodel EPackages referenced in the transformation must be registered in the global `EPackage.Registry` before parsing:
+Metamodel EPackages referenced in the transformation must be resolvable through the registry the configuration uses (§3.3) — the global `EPackage.Registry` by default — before parsing:
 
 ```java
-// Register metamodels
-EPackage.Registry.INSTANCE.put(SimpleUMLPackage.eNS_URI, SimpleUMLPackage.eINSTANCE);
-EPackage.Registry.INSTANCE.put(SimpleRDBMSPackage.eNS_URI, SimpleRDBMSPackage.eINSTANCE);
+// contribute the metamodels to this configuration only
+QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
+    .registerPackage(SimpleUMLPackage.eINSTANCE)
+    .registerPackage(SimpleRDBMSPackage.eINSTANCE)
+    .build();
 
-// Now parse — the parser resolves types from registered packages
-RelationalTransformation trafo = engine.parse(source, "MyTrafo");
+// or, in plain Java, the global registry
+EPackage.Registry.INSTANCE.put(SimpleUMLPackage.eNS_URI, SimpleUMLPackage.eINSTANCE);
 ```
 
 ---
 
-### 5.3 Storable Units
+### 5.5 Storable Units
 
 `parse()` returns a graph that runs; `compile()` returns a document that can be stored, loaded
 elsewhere and executed there:
 
 ```java
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.UnitKey;
+import org.eclipse.fennec.m2x.unit.api.UnitStore;
+import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
+import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
+import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
+
 CompiledUnit unit = engine.compile(source, "T");   // dependencies pinned by default
 
 UnitStore store = new DefaultUnitStore(new InMemoryUnitStoreBackend());
@@ -486,10 +536,9 @@ QvtdExecutionResult result = engine.execute(trafo, ctx);
 ```
 
 The engine iterates all **top-level relations**:
-1. Matches source domain patterns against the source extent
-2. For each match, enforces the target domain (find-or-create)
-3. Evaluates when/where clauses
-4. Records trace entries
+1. Evaluates the relation calls of the when-clause, binding their arguments from existing traces — no trace, no execution
+2. Matches the source domain patterns against the source extents
+3. For each match: checks the remaining when-predicates, enforces the target domain (find-or-create), records a trace entry, then evaluates the where-clause
 
 ### 6.2 Check-Only Mode
 
@@ -551,7 +600,7 @@ engine.execute(trafo, ctx);
 
 ```qvtr
 transformation Uml2Rdbms(uml : SimpleUML, rdbms : SimpleRDBMS) {
-    -- relations, keys, queries go here
+    -- keys first, then relations and queries in any order
 }
 ```
 
@@ -582,28 +631,38 @@ relation AttributeToColumn {
 ```qvtr
 top relation ClassToTable {
     cn : String;
-    checkonly domain uml c : Class { name = cn };
-    enforce domain rdbms t : Table { name = cn };
+    p : Package;
+    s : Schema;
+    checkonly domain uml c : Class { owningPackage = p : Package {}, name = cn };
+    enforce domain rdbms t : Table { schema = s : Schema {}, name = cn };
 
-    -- when: precondition (checked before matching)
+    -- when: precondition, checked before enforcing
     when {
-        PackageToSchema(p, s);  -- requires trace from PackageToSchema
+        PackageToSchema(p, s);   -- requires a trace from PackageToSchema
+        cn <> 'Abstract';         -- OCL predicate
     }
 
-    -- where: postcondition (evaluated after enforcement)
+    -- where: evaluated after enforcement
     where {
-        AttributeToColumn(a, col);  -- invokes non-top relation
-        cn <> 'Abstract';           -- OCL predicate
+        AttributeToColumn(c, t);  -- invokes a non-top relation
     }
 }
+
+relation AttributeToColumn {
+    an : String;
+    checkonly domain uml c : Class { ownedAttribute = a : Attribute { name = an } };
+    enforce domain rdbms t : Table { ownedColumn = col : Column { name = an } };
+}
 ```
+
+Every variable a relation uses is declared — by a variable declaration, a domain, or a template binding (§8.2).
 
 - **When-clause** `RelationCallExp`: checks if a trace record exists for the called relation. The arguments are **bound from the trace**.
 - **Where-clause** `RelationCallExp`: invokes the called relation with the given arguments as pre-bindings.
 
 ### 7.4 Object Templates
 
-Object templates define patterns for matching and creating model elements:
+Object templates define patterns for matching and creating model elements (a fragment — `cn` and `an` are declared in the enclosing relation):
 
 ```qvtr
 enforce domain rdbms t : Table {
@@ -620,10 +679,13 @@ enforce domain rdbms t : Table {
 Collection templates match and create collection-valued properties:
 
 ```qvtr
+-- c : Class; rest : Set(Class); declared in the relation
 checkonly domain uml p : Package {
-    ownedClass = Set(Class) { c ++ rest }  -- c = first member, rest = remainder
+    ownedClass = cs : Set(Class) { c ++ rest }  -- c = one member, rest = the others
 };
 ```
+
+The variable before the `:` binds the whole collection and may be omitted (`ownedClass = : Set(Class) { … }`); members and the rest must be declared variables or `_`.
 
 ### 7.6 Keys
 
@@ -652,16 +714,24 @@ query sqlType(oclType : String) : String {
 ### 7.8 Abstract Relations and Overrides
 
 ```qvtr
-abstract relation BaseMapping {
-    -- abstract: not executed directly
+top abstract relation BaseMapping {          -- abstract: not executed directly
+    pn : String;
+    checkonly domain uml p : Package { name = pn };
+    enforce domain rdbms s : Schema { name = pn };
 }
 
-top relation ConcreteMapping overrides BaseMapping {
-    -- overrides: replaces BaseMapping in execution
+top relation ConcreteMapping overrides BaseMapping {   -- replaces BaseMapping in execution
+    pn : String;
+    checkonly domain uml p : Package { name = pn };
+    enforce domain rdbms s : Schema { name = pn.toUpper() };
 }
 ```
 
+The modifiers come in this order: `top`, `abstract`, `relation`. Every relation has at least one domain, abstract ones included.
+
 ### 7.9 Transformation Extends
+
+Schematically — `{ ... }` stands for a complete relation body:
 
 ```qvtr
 transformation Base(src : SRC, tgt : TGT) {
@@ -952,11 +1022,15 @@ QvtdEngine (Relations)
 
 ### 10.2 Registering a QVT-O Provider
 
-`QvtoEngine` implements `RelationImplementationProvider`. Register it with the QVT-R engine:
+The engine `QvtoEngines.create` returns implements `RelationImplementationProvider`; the `QvtoEngine` interface does not extend it, so the provider role takes a cast. Register it with the QVT-R engine:
 
 ```java
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngine;
-import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngine;
+import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 
 // Create QVT-O engine
 QvtoEngine qvtoEngine = QvtoEngines.create(qvtoConfig);
@@ -967,13 +1041,15 @@ qvtoEngine.loadTransformation(ot);
 
 // Register as provider with the QVT-R engine
 QvtdEngine qvtdEngine = QvtdEngines.create(qvtdConfig);
-qvtdEngine.registerImplementationProvider(qvtoEngine);
+qvtdEngine.registerImplementationProvider((RelationImplementationProvider) qvtoEngine);
 
 // Now execute — implementedby clauses try the QVT-O engine first
 QvtdExecutionResult result = qvtdEngine.execute(trafo, ctx);
 ```
 
 ### 10.3 How It Works
+
+> **Known gap.** Hybrid execution does not work end to end yet. The provider is asked for the **relation's** name, not for the operation the `implementedby` clause names, and `refines` is not consulted — a QVT-O mapping named after the operation is never called, and QVT-R enforces the domain itself. A mapping named after the relation is called, but the objects it creates do not reach the QVT-R target extent, and the run still reports success.
 
 When the QVT-R engine encounters an `implementedby` clause:
 
@@ -1022,7 +1098,10 @@ try {
 
 Parse errors include:
 - **Syntax errors** — malformed QVT-R source (line/column from ANTLR4)
-- **Binding violations** — §7.5 unresolved variable references (detected post-parse)
+- **Resolution errors** — unknown metamodels, types and properties
+- **Binding violations** — §7.5 / §7.13.5 variable problems (detected post-parse, §8)
+
+Unresolvable imports are not parse errors: they surface at `compile()` or `execute()` (§3.4.2).
 
 ### 11.2 Execution Diagnostics
 
@@ -1044,8 +1123,9 @@ if (!result.isSuccess()) {
 
 | Error | When | Cause |
 |-------|------|-------|
-| `QvtdParseException` | Parse time | Syntax error or §7.5 binding violation |
-| `QvtdExecutionException` | Runtime | Fatal error (stack overflow, missing extent) |
+| `QvtdParseException` | Parse / compile time | Syntax, resolution or binding error; at `compile()` also an unresolvable import |
+| `QvtdExecutionException` | Runtime (unchecked) | A limit was exceeded: relation or query call depth, bindings, timeout (§3.2) |
+| `IllegalArgumentException` | Creating the context | The target model name of `enforce(...)` is not among the extents |
 | `isSuccess() == false` | Runtime | Relation enforcement failed, OCL evaluation error |
 | `isConsistent() == false` | Check-only | Relations do not hold between the models |
 
@@ -1072,6 +1152,8 @@ top relation PackageToSchema {
 
 top relation ClassToTable {
     cn : String;
+    p : Package;
+    s : Schema;
     checkonly domain uml c : Class { name = cn };
     enforce domain rdbms t : Table { name = cn };
     when {

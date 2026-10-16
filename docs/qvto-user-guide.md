@@ -51,17 +51,35 @@ See [benchmark-results.md](benchmark-results.md) for detailed numbers.
 |--------|-------------|
 | `org.eclipse.fennec.m2x.qvto.api` | Public API interfaces |
 | `org.eclipse.fennec.m2x.qvto.parser` | ANTLR4 parser |
-| `org.eclipse.fennec.m2x.qvto.engine` | Evaluator implementation |
+| `org.eclipse.fennec.m2x.qvto.engine` | Evaluator implementation, DS components |
 | `org.eclipse.fennec.m2x.qvto.model` | QVT-O & Trace EMF metamodel |
-| `org.eclipse.fennec.m2x.ocl.*` | Required OCL bundles (transitive) |
+| `org.eclipse.fennec.m2x.qvt.model` | QVTBase metamodel, shared with QVT-R |
+| `org.eclipse.fennec.m2x.qvtd.api` | Needed by the engine: it implements `RelationImplementationProvider` for QVT-R hybrid execution |
+| `org.eclipse.fennec.m2x.unit` | Language-neutral unit contracts: compile, store, prepare |
+| `org.eclipse.fennec.m2x.ocl.{api,model,parser,engine}` | Fennec OCL |
+
+**Standalone class path.** Outside OSGi nothing resolves dependencies for you. These are needed for the Quick Start below — checked by running it with exactly them:
+
+- the bundles above, `ocl.*` being four jars
+- `org.antlr:antlr4-runtime` 4.13.x
+- `org.eclipse.emf.common` and `org.eclipse.emf.ecore`
+- `org.eclipse.fennec.emf.osgi.component.minimal` — the engine computes metamodel fingerprints with its `FingerprintHelper`; it carries `FingerprintService` itself, so `emf.osgi.api` is not needed in plain Java
+
+Compiled units (§12.2.1) additionally need `org.eclipse.emf.ecore.xmi`. Under OSGi the engine also needs `org.eclipse.fennec.m2x.unit.osgi` and the `emf.osgi` runtime that provides the `ResourceSet` and `FingerprintService` services (§3.4).
 
 ---
 
 ## 2. Quick Start
 
-Minimal example — parse a QVT-O transformation from a String and execute it:
+Minimal example — parse a QVT-O transformation from a String and execute it. It copies `EPackage`s, so it needs no metamodel of its own:
 
 ```java
+import java.util.List;
+
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
@@ -69,9 +87,7 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
-import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
-import org.eclipse.fennec.m2x.qvto.engine.QvtoEngine;
-import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 
 // 1. Create engine
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
@@ -80,19 +96,25 @@ QvtoEngine engine = QvtoEngines.create(qvtoConfig);
 
 // 2. Parse transformation
 OperationalTransformation trafo = engine.parse("""
-    transformation Uml2Rdbms(in uml : UML, out rdbms : RDBMS);
+    modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+
+    transformation CopyPackages(in source : ECORE, out target : ECORE);
 
     main() {
-        uml.rootObjects()[Package]->map packageToSchema();
+        source.rootObjects()[EPackage]->map toCopy();
     }
 
-    mapping Package::packageToSchema() : Schema {
-        name := self.name;
+    mapping EPackage::toCopy() : EPackage {
+        name := self.name + 'Copy';
+        nsURI := self.nsURI + '/copy';
     }
-    """, "Uml2Rdbms");
+    """, "CopyPackages");
 
 // 3. Set up model extents
-BasicQvtoModelExtent inExtent = new BasicQvtoModelExtent(myUmlPackage);
+EPackage myPackage = EcoreFactory.eINSTANCE.createEPackage();
+myPackage.setName("library");
+myPackage.setNsURI("http://example.org/library");
+BasicQvtoModelExtent inExtent = new BasicQvtoModelExtent(myPackage);
 inExtent.setReadOnly(true);  // in-parameter
 BasicQvtoModelExtent outExtent = new BasicQvtoModelExtent();
 
@@ -101,9 +123,11 @@ QvtoExecutionResult result = engine.execute(trafo, QvtoExecutionContext.of(inExt
 
 // 5. Read output
 if (result.isSuccess()) {
-    List<EObject> outputObjects = outExtent.getContents();
+    List<EObject> outputObjects = outExtent.getContents();  // one EPackage "libraryCopy"
 }
 ```
+
+Every metamodel a transformation uses is declared with `modeltype … uses '<nsURI>'` and resolved through the package registry (§3.3); a type name without one fails to parse with *Unknown type (…)*.
 
 For a worked example over real files — two metamodels, an instance model and two `.qvto` files,
 run ad hoc and as compiled units — see the `org.eclipse.fennec.m2x.qvto.example` project. Its
@@ -138,11 +162,14 @@ Under OSGi the engine is a service and door 2 is what the component uses — see
 The full form, when the OCL side needs configuration too:
 
 ```java
+import java.util.Set;
+
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
-import org.eclipse.fennec.m2x.qvto.api.BasicQvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
+import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
+import org.eclipse.fennec.m2x.qvto.engine.QvtoEngines;
 
 // OCL configuration (shared with QVT-O)
 OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport())
@@ -151,8 +178,12 @@ OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport())
 
 // QVT-O configuration — or builder(oclEngine) to use an engine you already have
 QvtoConfiguration qvtoConfig = QvtoConfiguration.builder(oclConfig)
-    .blackboxRegistry(new BasicQvtoBlackboxRegistry())
+    .blackboxRegistry(myBlackboxRegistry)
+    .blackboxEnabled(true)                                // off by default
+    .allowedBlackboxModules(Set.of("my.lib.StringUtils"))
     .addUnitResolver(myUnitResolver)
+    .unitResolverEnabled(true)                            // off by default
+    .allowedUnitModules(Set.of("my.company.Utilities"))
     .build();
 
 QvtoEngine engine = QvtoEngines.create(qvtoConfig);
@@ -166,10 +197,20 @@ QvtoEngine engine = QvtoEngines.create(qvtoConfig);
 |--------|-------------|
 | `resourceSet(resourceSet)` | Resource set whose package registry resolves `modeltype … uses '<nsURI>'` |
 | `packageRegistry(registry)` | The registry itself (default: `EPackage.Registry.INSTANCE`); wins over `resourceSet` when both are set |
-| `blackboxRegistry(registry)` | Registry for blackbox Java libraries |
+| `registerPackage(ePackage)` | Contributes a metamodel that answers for its nsURI ahead of the registry — local to this configuration, nothing reaches the global registry |
+| `blackboxRegistry(registry)` | Registry for blackbox Java libraries (default: none) |
+| `blackboxEnabled(boolean)` | Whether blackbox libraries are consulted at all (default: `false`) |
+| `allowedBlackboxModules(set)` | Qualified names that may be imported as a blackbox; empty puts no restriction (default: empty) |
+| `maxBlackboxLibraries(int)` | Blackbox libraries one link may pull in (default: 10) |
 | `addUnitResolver(resolver)` | Add a unit resolver for multi-file composition |
 | `unitResolvers(list)` | Set all unit resolvers at once |
+| `unitResolverEnabled(boolean)` | Whether unit resolvers are consulted at all (default: `false`) |
+| `discoverUnitResolvers(boolean)` | Also ask resolvers found through `ServiceLoader`; requires `unitResolverEnabled`, counts as one resolver (default: `false`) |
+| `allowedUnitModules(set)` | Qualified names that may be imported as a unit; empty puts no restriction (default: empty) |
+| `maxUnitResolvers(int)` | Unit resolvers one engine will use (default: 5) |
 | `parallelExecutor(executor)` | Executor for `parallelTransform()` (default: virtual threads) |
+
+A registry or resolver alone does nothing: blackboxes and unit resolvers are off until `blackboxEnabled(true)` or `unitResolverEnabled(true)` switches them on, because both let a transformation reach code and files outside itself.
 
 ### 3.3 Which Metamodels the Engine Sees
 
@@ -229,7 +270,8 @@ public class MyTransformationRunner {
 |---|---|---|
 | `DefaultQvtoEngine` | PROTOTYPE | Nothing — each consumer gets its own engine and trace state |
 | `DefaultOclEngine` | PROTOTYPE | Nothing — bound `prototype_required`, so each QVT-O engine evaluates on its own OCL engine |
-| `DefaultOclExpressionCacheComponent` | SINGLETON | The parsed-expression cache, shared by all OCL engines |
+| `DefaultOclExpressionCache` | SINGLETON | The parsed-expression cache, shared by all OCL engines |
+| `QvtoServiceUnitResolver` | SINGLETON | Looks up units in the service registry by the name an import gives (§3.4.2); bound by every engine as `unitDiscovery`, consulted only with `qvto.discoverUnitResolvers` |
 | `ResourceSet` (from `emf.osgi`) | PROTOTYPE | Nothing — bound `prototype_required`, so each engine resolves metamodels through its own resource set |
 
 The engine takes its OCL engine as a **mandatory** service reference. That is door 2 from [§3.1](#31-three-ways-to-give-qvt-o-its-ocl-engine): the OCL engine a consumer configured — with its cache and its operation providers — is the one that evaluates transformation expressions, rather than a second one built beside it.
@@ -242,7 +284,7 @@ The **resource set** is a mandatory reference as well, and deliberately not an o
 }
 ```
 
-The fingerprint service `emf.osgi` provides is bound the same way, mandatory, for the same reason.
+The fingerprint service `emf.osgi` provides is mandatory for the same reason; it is a plain singleton reference, not `prototype_required`. Blackbox libraries are bound the other way — dynamically, `0..n`, see §11.2.
 
 ### 3.4.1 Configuration via ConfigAdmin
 
@@ -287,6 +329,9 @@ A transformation names what it imports, so the engine knows at link time which n
 @Component(service = QvtoUnitResolver.class,
            property = "qvto.unit.name=my.company.Utilities")
 public class UtilitiesUnit implements QvtoUnitResolver {
+
+    private final URI uri = URI.createURI("platform:/plugin/com.acme/Utilities.qvto");
+    private final String source = "...";  // the unit's QVT-O text
 
     @Override
     public Optional<QvtoUnit> resolveUnit(String qualifiedName) {
@@ -383,8 +428,11 @@ BasicQvtoModelExtent inoutExtent = new BasicQvtoModelExtent(existingModel);
 ### 5.1 From String
 
 ```java
-OperationalTransformation trafo = engine.parse(
-    "transformation T(in m : PKG); main() { /* ... */ }",
+OperationalTransformation trafo = engine.parse("""
+    modeltype PKG uses 'http://example.org/library/1.0';
+    transformation T(in m : PKG);
+    main() { /* ... */ }
+    """,
     "T"  // unit name
 );
 ```
@@ -458,7 +506,7 @@ QvtoExecutionResult result = engine.execute(
 
 ### 6.2 With Configuration Properties
 
-Configuration properties are accessible in QVT-O via `configProperty`:
+A transformation declares its configuration properties and reads them by name; the execution context supplies the values:
 
 ```java
 QvtoExecutionContext ctx = QvtoExecutionContext.of(
@@ -474,6 +522,10 @@ In QVT-O:
 ```
 configuration property outputDir : String;
 configuration property verbose : Boolean;
+
+main() {
+    if verbose then log('writing to ' + outputDir) endif;
+}
 ```
 
 ### 6.3 With Named Parameter Bindings
@@ -526,7 +578,7 @@ QvtoExecutionResult result = engine.execute(trafo, ctx, options);
 | `maxLoopIterations` | 1,000,000 | Maximum iterations per while/for loop |
 | `maxDiagnostics` | 10,000 | Maximum diagnostic entries before truncation |
 | `maxTraceRecords` | 1,000,000 | Maximum trace records (0 = unlimited) |
-| `tracingEnabled` | false | Collect trace records for resolve operations |
+| `tracingEnabled` | false | Return the trace in `QvtoExecutionResult.trace()`; records are kept either way, because resolve needs them |
 | `oclOptions` | the OCL engine's defaults | OCL evaluation options (limits, providers) for the transformation's expressions; unset, the defaults of the OCL engine apply — what `OclConfiguration` or `ocl.*` configured |
 
 ### 7.3 OCL Options Within QVT-O
@@ -618,7 +670,7 @@ QvtoExecutionResult result = engine.execute(trafo, ctx);
 
 if (!result.isSuccess()) {
     for (Diagnostic d : result.diagnostics()) {
-        System.err.printf("[%s] %s%n", severityName(d.getSeverity()), d.getMessage());
+        System.err.printf("[%d] %s%n", d.getSeverity(), d.getMessage());
     }
 }
 
@@ -627,14 +679,19 @@ if (result.hasFatalError()) {
 }
 ```
 
+`isSuccess()` is true when no diagnostic is `ERROR` or worse; `hasFatalError()` when one is `CANCEL`.
+
 ### 9.3 Severity Levels
 
 | Level | Value | Meaning |
 |-------|:-----:|---------|
 | `Diagnostic.OK` | 0 | Success |
-| `Diagnostic.WARNING` | 1 | Warning (transformation completed) |
-| `Diagnostic.ERROR` | 2 | Error (transformation may have partial output) |
-| `Diagnostic.CANCEL` | 4 | Fatal error (transformation aborted) |
+| `Diagnostic.INFO` | 1 | Information, e.g. `log()` output |
+| `Diagnostic.WARNING` | 2 | Warning (transformation completed) |
+| `Diagnostic.ERROR` | 4 | Error (transformation may have partial output) |
+| `Diagnostic.CANCEL` | 8 | Fatal error (transformation aborted) |
+
+The values are those of `org.eclipse.emf.common.util.Diagnostic`.
 
 ### 9.4 QVT-O log() and assert
 
@@ -655,6 +712,8 @@ These appear in `result.diagnostics()` with appropriate severity levels.
 Traces record the mapping execution history, enabling resolve operations and post-execution analysis.
 
 ### 10.1 Enabling Tracing
+
+The engine records traces in every run — resolve operations depend on them. The option decides only whether the result hands the trace out:
 
 ```java
 QvtoEvaluationOptions options = QvtoEvaluationOptions.defaults()
@@ -710,7 +769,7 @@ mapping Attribute::attributeToColumn() : Column {
 }
 ```
 
-Tracing is required for resolve operations — they are enabled automatically when the transformation uses resolve.
+Resolve works whether or not `tracingEnabled` is set: the records are kept either way, up to `maxTraceRecords` (§13.3).
 
 ### 10.4 TraceRecord Structure
 
@@ -932,7 +991,7 @@ public class FileSystemUnitResolver implements QvtoUnitResolver {
 
 ### 12.2 SourceUnit vs. CompiledUnit
 
-`QvtoUnit` is a sealed interface with two variants:
+`QvtoUnit` is a sealed interface with three variants:
 
 ```java
 // Source code — will be parsed by the engine
@@ -940,7 +999,12 @@ QvtoUnit source = new QvtoUnit.SourceUnit("my.pkg.Helper", uri, sourceCode);
 
 // Pre-compiled — already parsed OperationalTransformation
 QvtoUnit compiled = new QvtoUnit.CompiledUnit("my.pkg.Helper", parsedTrafo);
+
+// By reference — where the unit lives; loaded when it is consumed, in the consumer's context
+QvtoUnit referenced = new QvtoUnit.ResourceUnit("my.pkg.Helper", compiledUnitUri);
 ```
+
+A `ResourceUnit` URI holds a compiled-unit document (or a bare AST); loading it runs the same validation as a store load.
 
 Use `CompiledUnit` to hand the engine a transformation it has already parsed, within one JVM.
 
@@ -952,6 +1016,16 @@ loaded elsewhere and executed there — with its dependencies embedded, pinned o
 ### 12.2.1 Storable units, dependency modes, store, prepare
 
 ```java
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
+import org.eclipse.fennec.m2x.unit.api.UnitKey;
+import org.eclipse.fennec.m2x.unit.api.UnitStore;
+import org.eclipse.fennec.m2x.unit.prepare.UnitPreparer;
+import org.eclipse.fennec.m2x.unit.store.DefaultUnitStore;
+import org.eclipse.fennec.m2x.unit.store.InMemoryUnitStoreBackend;
+
 // a document instead of a graph — storable, with the library carried inside it
 CompiledUnit unit = engine.compile(source, "Main", UnitCompileOptions.of(DependencyMode.EMBED));
 
@@ -963,7 +1037,7 @@ PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder())
 QvtoExecutionResult result = engine.execute(prepared, "Main", QvtoExecutionContext.of(extent));
 ```
 
-`QvtoStoreUnitResolver` resolves imports from a store. The whole mechanism — modes, store,
+`put` throws `UnitStoreException`, `prepare` throws `UnitPrepareException` (both in `org.eclipse.fennec.m2x.unit.api`). In plain Java this path needs `org.eclipse.emf.ecore.xmi` on the class path (§1). `QvtoStoreUnitResolver` resolves imports from a store. The whole mechanism — modes, store,
 prepare, validation, fingerprints — is described in the
 [Compiled Units Guide](compiled-units-guide.md).
 
@@ -974,34 +1048,38 @@ prepare, validation, fingerprints — is described in the
 ```java
 QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
     .addUnitResolver(new FileSystemUnitResolver(basePath))
+    .unitResolverEnabled(true)                           // required: off by default
+    .allowedUnitModules(Set.of("my.pkg.Helper"))         // recommended
     .build();
-
-// D29: unitResolverEnabled(true) required to activate resolver lookups
-// Runtime registration removed — all resolvers declared at configuration time
 ```
 
-**OSGi:**
+All resolvers are declared at configuration time; there is no registration at runtime.
+
+**OSGi:** not a whiteboard. Publish the resolver with the name it serves as `qvto.unit.name`, and switch discovery on with `qvto.unitResolverEnabled` and `qvto.discoverUnitResolvers` — see §3.4.2:
 
 ```java
-@Component(service = QvtoUnitResolver.class)
-public class BundleUnitResolver implements QvtoUnitResolver {
-    // ... automatically discovered via whiteboard pattern
+@Component(service = QvtoUnitResolver.class, property = "qvto.unit.name=my.pkg.Helper")
+public class HelperUnit implements QvtoUnitResolver {
+    // ...
 }
 ```
+
+A resolver service without `qvto.unit.name` is never asked.
 
 ### 12.4 QVT-O Syntax for Composition
 
 **Access — call another transformation:**
 
 ```
--- Main transformation accesses a helper transformation
-transformation Main(in src : SRC, out tgt : TGT);
+modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
 
-access Helper;
-
-main() {
-    var helper := new Helper(src, tgt);
-    helper.transform();
+transformation Main(inout m : ECORE)
+    access Helper {
+    main() {
+        var helper := new Helper(m);
+        var status := helper.transform();
+        assert fatal (status.succeeded());
+    }
 }
 ```
 
@@ -1015,23 +1093,19 @@ import my.lib.StringUtils;
 from my.lib.StringUtils import capitalize, slugify;
 ```
 
-**Transformation instantiation:**
+**Transformation instantiation:** `transform()` and `parallelTransform()` are called on one transformation instance and return a `Status`; `wait` is a module-level operation that takes the statuses to wait for:
 
 ```
 main() {
     -- Create and run another transformation
-    var t := new OtherTrafo(inExtent, outExtent);
-    t.transform();
-
-    -- Check status
-    if t.succeeded() then
-        log("OtherTrafo completed successfully")
-    endif;
+    var t := new OtherTrafo(m);
+    var s := t.transform();
+    if s.succeeded() then log('OtherTrafo completed successfully') endif;
 
     -- Parallel execution
-    var tasks := Sequence{t1, t2, t3};
-    tasks->parallelTransform();
-    tasks->wait();
+    var s1 := new OtherTrafo(m1).parallelTransform();
+    var s2 := new OtherTrafo(m2).parallelTransform();
+    wait(Set{s1, s2});
 }
 ```
 
@@ -1116,13 +1190,13 @@ if (!result.isSuccess()) {
 
 ### 13.3 How Limits Are Enforced
 
-- **Timeout**: A deadline (`System.nanoTime()`) is set at execution start. The evaluator checks the deadline at every function call entry and loop iteration (~15ns overhead per check). When exceeded, execution stops with a `"timeout"` diagnostic.
+- **Timeout**: A deadline (`System.nanoTime()`) is set at execution start. The evaluator checks the deadline at every function call entry and loop iteration (~15ns overhead per check). When exceeded, execution stops with an `Execution timeout exceeded` error.
 
-- **Loop iterations**: Each `while`, `forEach`, and `forExp` loop maintains a per-loop counter. When `maxLoopIterations` is exceeded, the loop breaks with a `"Maximum loop iterations exceeded"` diagnostic.
+- **Loop iterations**: Each `while`, `forEach`, and `forExp` loop maintains a per-loop counter. When `maxLoopIterations` is exceeded, the loop breaks with a `Maximum loop iterations exceeded: <limit>` error.
 
-- **Stack depth**: Checked at every `callOperation`, `callMapping`, and `callConstructor`. When exceeded, the call returns with a `"Maximum stack depth exceeded"` diagnostic.
+- **Stack depth**: Checked at every `callOperation`, `callMapping`, and `callConstructor`. When exceeded, the call returns with a `Maximum stack depth exceeded: <limit>` error.
 
-- **Diagnostics**: The `log()` built-in and internal diagnostics are capped. When the limit is reached, one final `"truncated"` warning is added and further diagnostics are silently dropped.
+- **Diagnostics**: The `log()` built-in and internal diagnostics are capped. When the limit is reached, one final warning `Maximum diagnostics limit reached (<limit>), further diagnostics truncated` is added and further diagnostics are silently dropped.
 
 - **Trace records**: When `maxTraceRecords` is reached, further mapping trace records are silently dropped. This does not terminate execution but may affect `resolve`/`invResolve` for later mappings.
 

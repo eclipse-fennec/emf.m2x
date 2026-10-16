@@ -657,7 +657,7 @@ newly require is one policy, `ResolutionPolicy` (`unit.resolve`), used by the co
 execute-time linker and both discovery resolvers:
 
 1. **Every source is asked**, not only until the first answer. Order is the caller's: configured
-   resolvers in configuration order, whiteboard services by `service.ranking` (highest first; among
+   resolvers in configuration order, services looked up in the service registry by `service.ranking` (highest first; among
    equals the one registered first), class-path providers in declaration order. The first answer in
    that order is returned.
 2. **A failing source is an error.** A resolver that throws ends the resolution with a
