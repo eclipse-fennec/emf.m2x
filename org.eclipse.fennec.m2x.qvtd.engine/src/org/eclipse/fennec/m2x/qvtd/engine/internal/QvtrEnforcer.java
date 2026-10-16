@@ -105,10 +105,28 @@ public class QvtrEnforcer {
 			}
 		}
 
-		// implementedby clause (§7.11.3.6): delegate to operational implementation
+		// implementedby clause (§7.11.3.6): the relation does not hold in this direction — the
+		// match above found nothing — so the operation the clause names is invoked, and the
+		// relation has to hold when it returns. "It is a runtime exception if the relation
+		// evaluates to false after the operation returns"; before #282 nothing checked that.
 		TypedModel targetModel = targetDomain.getTypedModel();
-		if (blackboxBridge.invokeImplementedBy(relation, targetModel, sourceBindings)) {
-			return;
+		switch (blackboxBridge.invokeImplementedBy(relation, targetModel, sourceBindings)) {
+			case INVOKED -> {
+				List<Map<String, Object>> afterwards = patternMatcher.matchDomain(targetDomain, sourceBindings);
+				if (afterwards.isEmpty()) {
+					diagnostics.error("Relation '" + relation.getName() + "' does not hold after its"
+							+ " implementedby operation returned (§7.11.3.6)");
+				} else {
+					sourceBindings.putAll(afterwards.get(0));
+				}
+				return;
+			}
+			case FAILED -> {
+				return;
+			}
+			case NONE -> {
+				// no implementedby for this direction: QVT-R enforces the domain below
+			}
 		}
 
 		// No match found → enforce: create target objects from template

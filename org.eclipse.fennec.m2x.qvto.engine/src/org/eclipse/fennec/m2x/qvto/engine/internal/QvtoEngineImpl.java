@@ -44,9 +44,10 @@ import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationResult;
+import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
@@ -76,7 +77,7 @@ import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
  * @author Data In Motion Consulting
  * @since 1.0
  */
-public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationImplementationProvider {
+public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices {
 
 	private final QvtoParserSupport parserSupport;
 	private final EPackage.Registry packageRegistry;
@@ -260,28 +261,32 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationI
 		Objects.requireNonNull(context, "context must not be null");
 		Objects.requireNonNull(options, "options must not be null");
 
-		// §8.1.13: Link phase — resolve stub imports via unit resolvers and blackbox registry
-		List<QvtoUnitResolver> effectiveResolvers = effectiveResolvers();
-		QvtoBlackboxRegistry effectiveRegistry = effectiveBlackboxRegistry();
-		Set<String> effectiveBbAllow = effectiveBlackboxAllowList();
-		Set<String> effectiveUrAllow = effectiveUnitAllowList();
-		// Always run the linker — it validates that all imports can be resolved.
-		// When enable flags are false, no resolvers/registry are available,
-		// so unresolved imports will correctly fail with "Cannot resolve import".
-		try {
-			QvtoLinker linker = new QvtoLinker(new QvtoLinkPolicy(parserSupport, effectiveResolvers,
-					packageRegistry, effectiveRegistry, effectiveBbAllow, effectiveUrAllow,
-					maxBlackboxLibraries));
-			linker.link(transformation);
-		} catch (QvtoParseException e) {
-			return new QvtoExecutionResult(
-					List.of(new BasicDiagnostic(
-							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine",
-							0, "Link error: " + e.getMessage(), null)),
-					null);
+		Diagnostic linkError = link(transformation);
+		if (linkError != null) {
+			return new QvtoExecutionResult(List.of(linkError), null);
 		}
+		return run(transformation, context, options, effectiveBlackboxRegistry(), packageRegistry);
+	}
 
-		return run(transformation, context, options, effectiveRegistry, packageRegistry);
+	/**
+	 * §8.1.13: the link phase — resolves stub imports via unit resolvers and the blackbox
+	 * registry. It always runs, because it validates that every import can be resolved: with the
+	 * enable flags off no resolver or registry is available, and an unresolved import fails with
+	 * "Cannot resolve import".
+	 *
+	 * @return the link error, or {@code null} if the transformation linked
+	 */
+	private Diagnostic link(OperationalTransformation transformation) {
+		try {
+			QvtoLinker linker = new QvtoLinker(new QvtoLinkPolicy(parserSupport, effectiveResolvers(),
+					packageRegistry, effectiveBlackboxRegistry(), effectiveBlackboxAllowList(),
+					effectiveUnitAllowList(), maxBlackboxLibraries));
+			linker.link(transformation);
+			return null;
+		} catch (QvtoParseException e) {
+			return new BasicDiagnostic(Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine",
+					0, "Link error: " + e.getMessage(), null);
+		}
 	}
 
 	@Override
@@ -382,58 +387,77 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationI
 	}
 
 	@Override
-	public boolean canProvide(String relationQualifiedName) {
-		return providerFor(relationQualifiedName) != null;
+	public boolean canProvide(String operationName) {
+		return providerFor(operationName) != null;
 	}
 
 	/**
 	 * The loaded transformation that has a mapping of this name, in load order.
 	 *
-	 * @param relationQualifiedName the relation a QVT-R run is asking for
+	 * @param operationName the operation a QVT-R {@code implementedby} clause names
 	 * @return the transformation, or {@code null} if none of them has it
 	 */
-	private OperationalTransformation providerFor(String relationQualifiedName) {
+	private OperationalTransformation providerFor(String operationName) {
 		for (OperationalTransformation candidate : loadedTransformations) {
-			if (findMappingByName(candidate, relationQualifiedName) != null) {
+			if (findMappingByName(candidate, operationName) != null) {
 				return candidate;
 			}
 		}
 		return null;
 	}
 
+	/**
+	 * Invokes the mapping a QVT-R {@code implementedby} clause names (QVT v1.3 §7.11.3.6, #282).
+	 *
+	 * <p>One mapping, not the transformation's {@code main()}: a mapping "refines conceptually a
+	 * relation where each relation domain corresponds to a parameter" (§8.2.1.15), and the clause
+	 * passes the root objects of the relation's domains (§10, rule 4.5). A contextual mapping
+	 * takes its context from the first argument. The model parameters of the transformation are
+	 * bound, by name, to the QVT-R run's own extents — not to copies, so what the mapping creates
+	 * lands where the QVT-R run looks for it.
+	 */
 	@Override
-	public QvtdExecutionResult executeRelation(String relationQualifiedName,
+	public RelationImplementationResult invoke(String operationName, List<Object> arguments,
 			QvtdExecutionContext qvtdContext) {
-		OperationalTransformation ot = providerFor(relationQualifiedName);
+		Objects.requireNonNull(operationName, "operationName must not be null");
+		Objects.requireNonNull(arguments, "arguments must not be null");
+		Objects.requireNonNull(qvtdContext, "qvtdContext must not be null");
+		OperationalTransformation ot = providerFor(operationName);
 		if (ot == null) {
-			return new QvtdExecutionResult(
-					List.of(new BasicDiagnostic(
-							Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine", 0,
-							"No QVT-O transformation loaded for relation: " + relationQualifiedName,
-							null)),
-					false);
+			return failed("No loaded QVT-O transformation has a mapping '" + operationName + "'");
+		}
+		MappingOperation mapping = findMappingByName(ot, operationName);
+		Object self = null;
+		List<Object> parameters = arguments;
+		if (mapping.getContext() != null) {
+			if (arguments.isEmpty()) {
+				return failed("Mapping '" + operationName + "' has a context, and implementedby passed no argument for it");
+			}
+			self = arguments.get(0);
+			parameters = arguments.subList(1, arguments.size());
+		}
+		Diagnostic linkError = link(ot);
+		if (linkError != null) {
+			return new RelationImplementationResult(null, List.of(linkError));
 		}
 
-		// Bridge QvtdExecutionContext → QvtoExecutionContext
-		// Map named extents to positional extents matching OT model parameters
+		// Bind the transformation's model parameters to the QVT-R run's extents, by name
 		List<QvtoModelExtent> extents = new ArrayList<>();
 		for (var modelParam : ot.getModelParameter()) {
-			String paramName = modelParam.getName();
-			QvtdModelExtent qvtdExtent = qvtdContext.modelExtents().get(paramName);
-			if (qvtdExtent != null) {
-				extents.add(bridgeExtent(qvtdExtent));
-			} else {
-				// Use empty extent for unmatched parameters
-				extents.add(new BridgedModelExtent(new ArrayList<>()));
-			}
+			QvtdModelExtent qvtdExtent = qvtdContext.modelExtents().get(modelParam.getName());
+			extents.add(qvtdExtent != null ? new BridgedModelExtent(qvtdExtent) : new BasicQvtoModelExtent());
 		}
+		QvtoEvalEnvironment env = QvtoEvalEnvironment.forTransformation(Map.of());
+		QvtoEvaluator evaluator = new QvtoEvaluator(oclEngine, env,
+				new QvtoRun(ot, QvtoExecutionContext.of(extents, Map.of()), QvtoEvaluationOptions.defaults(),
+						packageRegistry, effectiveBlackboxRegistry()), this);
+		Object value = evaluator.invoke(mapping, self, parameters.toArray());
+		return new RelationImplementationResult(value, evaluator.getDiagnostics());
+	}
 
-		QvtoExecutionContext qvtoCtx = QvtoExecutionContext.of(extents, Map.of());
-		QvtoExecutionResult qvtoResult = execute(ot, qvtoCtx);
-
-		// Bridge result back
-		List<Diagnostic> diagnostics = qvtoResult.diagnostics();
-		return new QvtdExecutionResult(diagnostics, !qvtdContext.checkOnly());
+	private static RelationImplementationResult failed(String message) {
+		return new RelationImplementationResult(null, List.of(new BasicDiagnostic(
+				Diagnostic.ERROR, "org.eclipse.fennec.m2x.qvto.engine", 0, message, null)));
 	}
 
 	private static MappingOperation findMappingByName(OperationalTransformation ot, String name) {
@@ -449,34 +473,35 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices, RelationI
 		return null;
 	}
 
-	private static QvtoModelExtent bridgeExtent(QvtdModelExtent qvtdExtent) {
-		return new BridgedModelExtent(qvtdExtent.getContents());
-	}
 
 	/**
 	 * Bridges a QVT-R model extent to a QVT-O model extent. Both share the
 	 * same underlying object list so mutations are visible across engines.
 	 */
+	/**
+	 * A QVT-R extent seen as a QVT-O one. It delegates rather than copies (#282): before, it took
+	 * a copy of the contents, and what QVT-O added never reached the QVT-R run.
+	 */
 	private static final class BridgedModelExtent implements QvtoModelExtent {
-		private List<EObject> contents;
+		private final QvtdModelExtent extent;
 
-		BridgedModelExtent(List<EObject> contents) {
-			this.contents = new ArrayList<>(contents);
+		BridgedModelExtent(QvtdModelExtent extent) {
+			this.extent = extent;
 		}
 
 		@Override
 		public List<EObject> getContents() {
-			return contents;
+			return extent.getContents();
 		}
 
 		@Override
 		public void setContents(List<? extends EObject> newContents) {
-			contents = new ArrayList<>(newContents);
+			extent.setContents(newContents);
 		}
 
 		@Override
 		public void add(EObject object) {
-			contents.add(object);
+			extent.add(object);
 		}
 	}
 

@@ -34,6 +34,7 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationResult;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
@@ -78,7 +79,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 							cn : String;
 							checkonly domain uml c : Class { name = cn };
 							enforce domain rdbms t : Table { name = cn }
-								implementedby classToTableOp(cn);
+								implementedby classToTableOp(c);
 						}
 					}
 					""";
@@ -89,7 +90,8 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 					modeltype TGT uses 'http://test/simplerdbms/1.0';
 					transformation QvtoImpl(in uml : SRC, out rdbms : TGT);
 					mapping Class::classToTableOp() : Table {
-						name := 'QVTO_' + self.name;
+						name := self.name;
+						type := 'QVTO';
 					}
 					""";
 
@@ -103,10 +105,8 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			// 4. Set up QVT-R engine with provider registered
 			QvtdConfiguration qvtdConfig = QvtdConfiguration.builder(oclConfig).build();
 			QvtdEngine qvtdEngine = QvtdEngines.create(qvtdConfig);
-			// The QVT-O engine also serves as a relation implementation provider (§7.8,
-			// D39). In OSGi that is a second service registration; here the created
-			// engine carries both roles.
-			qvtdEngine.registerImplementationProvider(asProvider(qvtoEngine));
+			// Every QVT-O engine is a relation implementation provider (§7.8, D39, #282)
+			qvtdEngine.registerImplementationProvider(qvtoEngine);
 
 			// 5. Execute
 			EObject cls = createClass("Employee", null);
@@ -119,6 +119,15 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			QvtdExecutionResult result = qvtdEngine.execute(rt, ctx);
 
 			assertTrue(result.isSuccess(), "Hybrid execution should succeed: " + result.diagnostics());
+			// The mapping is the one implementedby names, called with the root object c (§10 rule
+			// 4.5), and what it created is in the QVT-R target. Before #282 the provider was asked
+			// for the relation's name, never called, and QVT-R created the table itself — this test
+			// passed regardless, because it asserted success only.
+			assertEquals(1, rdbms.getContents().size(), () -> "one table: " + rdbms.getContents());
+			EObject table = rdbms.getContents().get(0);
+			assertEquals("Employee", table.eGet(table.eClass().getEStructuralFeature("name")));
+			assertEquals("QVTO", table.eGet(table.eClass().getEStructuralFeature("type")),
+					"the QVT-O mapping created the table, not QVT-R");
 		}
 
 		@Test
@@ -139,8 +148,8 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			OperationalTransformation ot = qvtoEngine.parse(qvtoSource, "test");
 			qvtoEngine.loadTransformation(ot);
 
-			assertTrue(asProvider(qvtoEngine).canProvide("classToTableOp"));
-			assertFalse(asProvider(qvtoEngine).canProvide("nonExistentMapping"));
+			assertTrue(qvtoEngine.canProvide("classToTableOp"));
+			assertFalse(qvtoEngine.canProvide("nonExistentMapping"));
 		}
 
 		@Test
@@ -150,7 +159,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			QvtoConfiguration config = QvtoConfiguration.builder(oclConfig).build();
 			QvtoEngine qvtoEngine = QvtoEngines.create(config);
 
-			assertFalse(asProvider(qvtoEngine).canProvide("anyMapping"),
+			assertFalse(qvtoEngine.canProvide("anyMapping"),
 					"Without loaded transformation, canProvide should return false");
 		}
 
@@ -165,7 +174,7 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 							cn : String;
 							checkonly domain uml c : Class { name = cn };
 							enforce domain rdbms t : Table { name = cn }
-								implementedby createTableOp(cn);
+								implementedby createTableOp(c);
 						}
 					}
 					""";
@@ -193,10 +202,11 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 
 				@Override
 				public Object invoke(String operationName, Object self, Object[] args) {
-					if ("createTableOp".equals(operationName) && args.length == 1) {
-						EObject table = createTable((String) args[0]);
-						table.eSet(table.eClass().getEStructuralFeature("name"),
-								"BB_" + args[0]);
+					if ("createTableOp".equals(operationName) && args.length == 1
+							&& args[0] instanceof EObject cls) {
+						// the relation has to hold afterwards (§7.11.3.6): name = cn
+						EObject table = createTable(getName(cls));
+						table.eSet(table.eClass().getEStructuralFeature("type"), "BB");
 						return table;
 					}
 					return null;
@@ -208,10 +218,8 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 					.blackboxEnabled(true)
 					.build();
 			QvtdEngine qvtdEngine = QvtdEngines.create(config);
-			// The QVT-O engine also serves as a relation implementation provider (§7.8,
-			// D39). In OSGi that is a second service registration; here the created
-			// engine carries both roles.
-			qvtdEngine.registerImplementationProvider(asProvider(qvtoEngine));
+			// Every QVT-O engine is a relation implementation provider (§7.8, D39, #282)
+			qvtdEngine.registerImplementationProvider(qvtoEngine);
 
 			EObject cls = createClass("Employee", null);
 			QvtdModelExtent uml = QvtdModelExtent.of(cls);
@@ -225,8 +233,8 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 			assertTrue(result.isSuccess(), "" + result.diagnostics());
 			assertEquals(1, rdbms.getContents().size());
 			EObject table = rdbms.getContents().get(0);
-			assertEquals("BB_Employee",
-					table.eGet(table.eClass().getEStructuralFeature("name")),
+			assertEquals("Employee", table.eGet(table.eClass().getEStructuralFeature("name")));
+			assertEquals("BB", table.eGet(table.eClass().getEStructuralFeature("type")),
 					"Should fallback to blackbox when provider doesn't match");
 		}
 	}
@@ -410,16 +418,18 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 				@Override
 				public boolean canProvide(String name) { return false; }
 				@Override
-				public QvtdExecutionResult executeRelation(String name, QvtdExecutionContext ctx) {
-					return new QvtdExecutionResult(List.of(), false);
+				public RelationImplementationResult invoke(String name, List<Object> arguments,
+						QvtdExecutionContext ctx) {
+					return new RelationImplementationResult(null, List.of());
 				}
 			});
 			qvtdEngine.registerImplementationProvider(new RelationImplementationProvider() {
 				@Override
 				public boolean canProvide(String name) { return false; }
 				@Override
-				public QvtdExecutionResult executeRelation(String name, QvtdExecutionContext ctx) {
-					return new QvtdExecutionResult(List.of(), false);
+				public RelationImplementationResult invoke(String name, List<Object> arguments,
+						QvtdExecutionContext ctx) {
+					return new RelationImplementationResult(null, List.of());
 				}
 			});
 
@@ -502,14 +512,11 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 					}
 					""", "Second"));
 
-			RelationImplementationProvider provider = asProvider(engine);
+			RelationImplementationProvider provider = engine;
 			assertTrue(provider.canProvide("secondMapping"), "the transformation just loaded");
 			assertTrue(provider.canProvide("firstMapping"),
 					"the one loaded before it is still there");
 		}
 	}
 
-	private static RelationImplementationProvider asProvider(QvtoEngine engine) {
-		return (RelationImplementationProvider) engine;
-	}
 }

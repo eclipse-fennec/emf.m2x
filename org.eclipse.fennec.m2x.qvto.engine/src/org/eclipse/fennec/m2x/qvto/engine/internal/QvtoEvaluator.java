@@ -217,6 +217,63 @@ public class QvtoEvaluator {
 	 * @return the collected diagnostics
 	 */
 	public List<Diagnostic> execute() {
+		prepare();
+
+		ImperativeOperation mainOp = operationResolver.findMainOperation();
+		if (mainOp == null) {
+			addError("No main() entry operation found in transformation '"
+					+ transformation.getName() + "'");
+			return diagnostics;
+		}
+		invokeGuarded(mainOp, null, new Object[0]);
+		processDeferredTasks();
+		return diagnostics;
+	}
+
+	/**
+	 * Invokes one operation of the transformation, outside {@code main()} — what a QVT-R
+	 * {@code implementedby} clause calls (QVT v1.3 §7.11.3.6, #282).
+	 *
+	 * <p>The transformation is set up as for {@link #execute()} — model parameters, configuration
+	 * properties, module properties — and then only the operation runs.
+	 *
+	 * @param operation the operation to invoke
+	 * @param self its context object, or {@code null} for an operation without one
+	 * @param args its arguments
+	 * @return the operation's result, or {@code null}
+	 */
+	public Object invoke(ImperativeOperation operation, Object self, Object[] args) {
+		prepare();
+		Object result = invokeGuarded(operation, self, args);
+		processDeferredTasks();
+		return result;
+	}
+
+	/**
+	 * Calls an operation the way an entry point is called: a return, a fatal assertion and an
+	 * uncaught exception end it and are reported here.
+	 */
+	private Object invokeGuarded(ImperativeOperation operation, Object self, Object[] args) {
+		try {
+			return callOperation(operation, self, args);
+		} catch (ReturnException e) {
+			return e.value;
+		} catch (FatalAssertionException e) {
+			// §8.2.2.20: fatal assert terminates execution
+			addError("Assertion failed: " + e.message);
+		} catch (RaiseException e) {
+			// §8.2.2.15: uncaught raise terminates execution
+			addError("Uncaught exception: " + e.exceptionType
+					+ (e.argument != null ? " - " + e.argument : ""));
+		}
+		return null;
+	}
+
+	/**
+	 * Sets the transformation up for a run: deadline, model parameters, configuration and module
+	 * properties, {@code this}, and the alias and tag registries.
+	 */
+	private void prepare() {
 		// Set timeout deadline (Q-5 / M-3)
 		if (options.timeout() != null) {
 			deadlineNanos = System.nanoTime() + options.timeout().toNanos();
@@ -274,27 +331,6 @@ public class QvtoEvaluator {
 				env.define(varName, value);
 			}
 		}
-
-		ImperativeOperation mainOp = operationResolver.findMainOperation();
-		if (mainOp == null) {
-			addError("No main() entry operation found in transformation '"
-					+ transformation.getName() + "'");
-			return diagnostics;
-		}
-		try {
-			callOperation(mainOp, null, new Object[0]);
-		} catch (ReturnException e) {
-			// main() returned — normal
-		} catch (FatalAssertionException e) {
-			// §8.2.2.20: fatal assert terminates execution
-			addError("Assertion failed: " + e.message);
-		} catch (RaiseException e) {
-			// §8.2.2.15: uncaught raise terminates execution
-			addError("Uncaught exception: " + e.exceptionType
-					+ (e.argument != null ? " - " + e.argument : ""));
-		}
-		processDeferredTasks();
-		return diagnostics;
 	}
 
 	/**

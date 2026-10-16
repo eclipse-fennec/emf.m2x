@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -1407,7 +1408,7 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 							cn : String;
 							checkonly domain uml c : Class { name = cn };
 							enforce domain rdbms t : Table { name = cn }
-								implementedby createTableOp(cn);
+								implementedby createTableOp(c);
 						}
 					}
 					""";
@@ -1429,13 +1430,13 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 
 				@Override
 				public Object invoke(String operationName, Object self, Object[] args) {
-					if ("createTableOp".equals(operationName) && args.length == 1) {
-						// Create a Table with name = arg and custom marker
-						createdTable = createTable((String) args[0]);
-						// Set a distinguishing marker to prove implementedby was called
-						createdTable.eSet(
-								createdTable.eClass().getEStructuralFeature("name"),
-								"IMPL_" + args[0]);
+					if ("createTableOp".equals(operationName) && args.length == 1
+							&& args[0] instanceof EObject cls) {
+						// §10 rule 4.5: the argument is the root object of the other domain. The
+						// relation has to hold afterwards, so name = cn; the type is the marker
+						// that proves implementedby was called
+						createdTable = createTable(getName(cls));
+						createdTable.eSet(createdTable.eClass().getEStructuralFeature("type"), "IMPL");
 						return createdTable;
 					}
 					return null;
@@ -1462,9 +1463,96 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 			assertTrue(result.isSuccess(), "" + result.diagnostics());
 			assertEquals(1, rdbms.getContents().size());
 			EObject table = rdbms.getContents().get(0);
-			assertEquals("IMPL_Employee",
-					table.eGet(table.eClass().getEStructuralFeature("name")),
+			assertEquals("Employee", table.eGet(table.eClass().getEStructuralFeature("name")));
+			assertEquals("IMPL", table.eGet(table.eClass().getEStructuralFeature("type")),
 					"implementedby should delegate to blackbox operation");
+		}
+
+		private static final String IMPLEMENTED = """
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					top relation ClassToTable {
+						cn : String;
+						checkonly domain uml c : Class { name = cn };
+						enforce domain rdbms t : Table { name = cn }
+							implementedby createTableOp(c);
+					}
+				}
+				""";
+
+		/** Runs IMPLEMENTED with a library whose createTableOp is the given function. */
+		private QvtdExecutionResult runImplemented(java.util.function.Function<EObject, Object> op,
+				AtomicInteger calls, QvtdModelExtent rdbms) throws QvtdParseException {
+			BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+			registry.register(new QvtdBlackboxLibrary() {
+				@Override
+				public String getModuleName() { return "ops"; }
+				@Override
+				public String getUnitQualifiedName() { return "ops"; }
+				@Override
+				public List<String> getUsedPackageURIs() { return List.of(); }
+				@Override
+				public List<String> getOperationNames() { return List.of("createTableOp"); }
+				@Override
+				public Object invoke(String operationName, Object self, Object[] args) {
+					calls.incrementAndGet();
+					return op.apply((EObject) args[0]);
+				}
+			});
+			QvtdEngine implEngine = QvtdEngines.create(QvtdConfiguration.builder(
+					OclConfiguration.builder(new OclParserSupport()).build())
+					.blackboxRegistry(registry).blackboxEnabled(true).build());
+			return implEngine.execute(implEngine.parse(IMPLEMENTED, "test"), QvtdExecutionContext.enforce(
+					"rdbms", Map.of("uml", QvtdModelExtent.of(createClass("Employee", null)), "rdbms", rdbms)));
+		}
+
+		@Test
+		@DisplayName("the operation is not invoked when the relation already holds (§7.11.3.6)")
+		void implementedbyNotInvokedWhenRelationHolds() throws QvtdParseException {
+			// "invoked when [...] the relation evaluates to false as per the checking semantics"
+			AtomicInteger calls = new AtomicInteger();
+			QvtdModelExtent rdbms = QvtdModelExtent.of(createTable("Employee"));
+
+			QvtdExecutionResult result = runImplemented(cls -> createTable(getName(cls)), calls, rdbms);
+
+			assertTrue(result.isSuccess(), "" + result.diagnostics());
+			assertEquals(0, calls.get(), "the table exists, so the relation holds already");
+			assertEquals(1, rdbms.getContents().size());
+		}
+
+		@Test
+		@DisplayName("a relation that does not hold after the operation returned is an error (§7.11.3.6)")
+		void relationMustHoldAfterTheOperation() throws QvtdParseException {
+			// "It is a runtime exception if the relation evaluates to false after the operation
+			// returns." Before #282 nothing checked, and a wrongly named table was a success.
+			AtomicInteger calls = new AtomicInteger();
+			QvtdModelExtent rdbms = emptyExtent();
+
+			QvtdExecutionResult result = runImplemented(cls -> createTable("Wrong"), calls, rdbms);
+
+			assertEquals(1, calls.get());
+			assertFalse(result.isSuccess(), "the relation does not hold, so the run must fail");
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().equals(
+					"Relation 'ClassToTable' does not hold after its implementedby operation returned (§7.11.3.6)")),
+					() -> "diagnostics: " + result.diagnostics());
+		}
+
+		@Test
+		@DisplayName("an implementedby operation nobody serves is an error, not QVT-R enforcing it (#282)")
+		void unservedImplementedbyIsAnError() throws QvtdParseException {
+			// RelationImplementation.impl is [1]: a clause without an operation behind it has no
+			// reading. Before #282 QVT-R quietly enforced the domain itself.
+			QvtdEngine plain = QvtdEngines.create(QvtdConfiguration.builder(
+					OclConfiguration.builder(new OclParserSupport()).build()).build());
+			QvtdModelExtent rdbms = emptyExtent();
+			QvtdExecutionResult result = plain.execute(plain.parse(IMPLEMENTED, "test"), QvtdExecutionContext.enforce(
+					"rdbms", Map.of("uml", QvtdModelExtent.of(createClass("Employee", null)), "rdbms", rdbms)));
+
+			assertFalse(result.isSuccess());
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().equals(
+					"Operation 'createTableOp' of the implementedby clause of relation 'ClassToTable'"
+							+ " cannot be served: blackboxes are not enabled")),
+					() -> "diagnostics: " + result.diagnostics());
+			assertTrue(rdbms.getContents().isEmpty(), "QVT-R must not enforce the domain in its place");
 		}
 	}
 
