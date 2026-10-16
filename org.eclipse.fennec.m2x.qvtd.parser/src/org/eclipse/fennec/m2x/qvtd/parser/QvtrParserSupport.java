@@ -149,7 +149,7 @@ public class QvtrParserSupport {
 		}
 
 		// §7.5: Validate binding restrictions on all relations
-		validateBindings(result, unitName);
+		validateBindings(result, unitName, builder.getNodePositions());
 
 		return result;
 	}
@@ -175,11 +175,12 @@ public class QvtrParserSupport {
 
 	/**
 	 * Validates §7.5 binding restrictions on all relations in the transformation.
-	 * Reports unresolved variable references and binding order violations.
+	 * Reports unresolved variable references, binding order violations and undeclared names
+	 * at binding sites (#278), the latter at the position the name was written.
 	 */
-	private void validateBindings(RelationalTransformation transformation, String unitName)
-			throws QvtdParseException {
-		QvtrBindingValidator validator = new QvtrBindingValidator();
+	private void validateBindings(RelationalTransformation transformation, String unitName,
+			Map<EObject, SourcePosition> positions) throws QvtdParseException {
+		QvtrBindingValidator validator = new QvtrBindingValidator(positions);
 		List<Resource.Diagnostic> allDiagnostics = new ArrayList<>();
 
 		for (Rule rule : transformation.getRule()) {

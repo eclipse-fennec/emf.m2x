@@ -736,16 +736,16 @@ For each relation, the validator checks:
 
 ### 8.2 Binding Sites
 
-Variables can be bound by:
+A binding site binds a variable the relation **declares** — by a variable declaration, a domain root, or a template's `bindsTo` (§7.13.5). Mentioning a name declares nothing. Declared variables can be bound by:
 
 | Binding site | Example | Mechanism |
 |-------------|---------|-----------|
 | Template `bindsTo` | `p : Package { ... }` | Pattern matching binds `p` |
 | Property template (simple variable) | `name = pn` | §7.5 Rule 1.1: binds `pn` |
-| Collection template members | `{ c ++ rest }` | Binds `c` and `rest` |
+| Collection template members | `{ c ++ rest }` | Binds `c` and `rest` (both must be declared) |
 | Primitive domain root | `primitive domain x : String` | Framework binds `x` |
 | Variable declaration | `pn : String;` | Explicit declaration |
-| When-clause `RelationCallExp` | `when { R(a, b); }` | `a`, `b` bound from trace |
+| When-clause `RelationCallExp` | `when { R(a, b); }` | `a`, `b` bound from trace (both must be declared) |
 
 ### 8.3 What Triggers an Error
 
@@ -763,13 +763,28 @@ A `QvtdParseException` is thrown when:
   where { ghostVar = 'test'; }  -- ERROR: ghostVar is never bound
   ```
 
+- A name at a **binding site** — property template value, collection member or rest, when-clause relation call argument — is declared nowhere (§7.13.5). Before this check such a name ran as `null`: the enforced property was written as `null` and the run reported success.
+  ```qvtr
+  enforce domain rdbms s : Schema { name = tlsPort };  -- ERROR: tlsPort is not declared
+  when { PackageToSchema(p, s); }                      -- ERROR unless p and s are declared
+  ```
+  A declaration inside a comment declares nothing — comments are never parsed or executed.
+
 ### 8.4 What Is NOT an Error
 
-A **simple `VariableExp`** as a `PropertyTemplateItem` value is a potential binding site (§7.5 Rule 1.1), not a usage:
+A **simple `VariableExp`** as a `PropertyTemplateItem` value is a potential binding site (§7.5 Rule 1.1), not a usage — a declared variable that no other part of the relation binds yet is bound here:
 
 ```qvtr
+newVar : String;
 checkonly domain uml p : Package { name = newVar };
--- NOT an error: newVar is bound by pattern matching (Rule 1.1)
+-- NOT an error: the declared newVar is bound by pattern matching (Rule 1.1)
+```
+
+A variable bound by a nested template is declared by that template, as in the specification's `ClassToTable`:
+
+```qvtr
+checkonly domain uml c : Class { namespace = p : Package {} };
+when { PackageToSchema(p, s); }  -- p is declared by the nested template, s needs `s : Schema;`
 ```
 
 ### 8.5 Error Message Format
@@ -779,7 +794,15 @@ QVT-R binding validation error in 'MyTrafo':
   §7.5: Variable 'unknownVar' in domain 'rdbms' of relation 'R' is not bound
 ```
 
-Each diagnostic includes the §7.5 reference, the variable name, the domain/clause context, and the relation name.
+An undeclared name at a binding site is reported at the position where it is written:
+
+```
+QVT-R binding validation error in 'MyTrafo':
+  §7.13.5: Variable 'tlsPort' in domain 'rdbms' of relation 'R' is not declared — neither in
+  the relation's variable declarations nor bound by a domain or template
+```
+
+Each diagnostic includes the spec reference, the variable name, the domain/clause context, and the relation name.
 
 ---
 

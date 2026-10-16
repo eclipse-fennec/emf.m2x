@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
@@ -41,6 +42,7 @@ import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
+import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 /**
  * Static validator for QVT-R §7.5 "Restrictions on Expressions".
@@ -71,6 +73,17 @@ class QvtrBindingValidator {
 
 	/** Variables that are implicitly available and never flagged as unresolved. */
 	private static final Set<String> IMPLICIT_VARS = Set.of("self", "_");
+
+	/** Where the parser saw each node, for diagnostics that can point at a name. */
+	private final Map<EObject, SourcePosition> positions;
+
+	/**
+	 * @param positions where each node stood, by identity; a node without an entry is reported
+	 *                  without a position
+	 */
+	QvtrBindingValidator(Map<EObject, SourcePosition> positions) {
+		this.positions = Objects.requireNonNull(positions, "positions must not be null");
+	}
 
 	/**
 	 * Validates §7.5 binding restrictions for a single relation.
@@ -142,7 +155,135 @@ class QvtrBindingValidator {
 					diagnostics);
 		}
 
+		// Phase 5: names at binding sites must be declared (§7.13.5). Last, so that the
+		// diagnostics of the phases above keep their order.
+		checkDeclarations(relation, diagnostics);
+
 		return diagnostics;
+	}
+
+	// ==================== Declaration Check ====================
+
+	/**
+	 * Reports each name at a binding site that the relation declares nowhere (#278).
+	 *
+	 * <p>The phases above count a simple variable at a binding site — {@code name = x} in a
+	 * property template, a collection member, a rest variable, an argument of a relation call
+	 * in the when-clause — as binding {@code x}. That is right for a declared variable and wrong
+	 * for any other name: §7.13.5 resolves these names with
+	 * {@code variable->any(v | v.name = …)} over the relation's variables, which are its variable
+	 * declarations, its domains' root variables and the variables its templates bind. A name in
+	 * none of them resolves to nothing, and before #278 it executed as {@code null} instead —
+	 * an enforced property written as {@code null} and a run reported successful. Names in other
+	 * positions are usages and already reported by the phases above.
+	 */
+	private void checkDeclarations(Relation relation, List<Resource.Diagnostic> diagnostics) {
+		Set<String> declared = collectDeclaredNames(relation);
+		for (Domain d : relation.getDomain()) {
+			if (d instanceof RelationDomain rd) {
+				for (DomainPattern dp : rd.getPattern()) {
+					if (dp.getTemplateExpression() != null) {
+						checkTemplateDeclarations(dp.getTemplateExpression(), declared,
+								"domain '" + rd.getName() + "'", relation.getName(), diagnostics);
+					}
+				}
+			}
+		}
+		if (relation.getWhen() != null) {
+			for (Predicate pred : relation.getWhen().getPredicate()) {
+				if (pred.getConditionExpression() instanceof RelationCallExp relCall) {
+					for (OclExpression arg : relCall.getArgument()) {
+						if (arg instanceof VariableExp ve) {
+							checkDeclared(ve.getReferredVariable(), ve, declared,
+									"when-clause", relation.getName(), diagnostics);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	private void checkTemplateDeclarations(TemplateExp template, Set<String> declared,
+			String site, String relName, List<Resource.Diagnostic> diagnostics) {
+		if (template instanceof ObjectTemplateExp ote) {
+			for (PropertyTemplateItem item : ote.getPart()) {
+				if (item.getValue() instanceof VariableExp ve) {
+					checkDeclared(ve.getReferredVariable(), ve, declared, site, relName,
+							diagnostics);
+				} else if (item.getValue() instanceof TemplateExp nested) {
+					checkTemplateDeclarations(nested, declared, site, relName, diagnostics);
+				}
+			}
+		} else if (template instanceof CollectionTemplateExp cte) {
+			for (OclExpression member : cte.getMember()) {
+				if (member instanceof VariableExp ve) {
+					checkDeclared(ve.getReferredVariable(), ve, declared, site, relName,
+							diagnostics);
+				} else if (member instanceof TemplateExp nested) {
+					checkTemplateDeclarations(nested, declared, site, relName, diagnostics);
+				}
+			}
+			if (cte.getRest() != null) {
+				checkDeclared(cte.getRest(), cte.getRest(), declared, site, relName, diagnostics);
+			}
+		}
+	}
+
+	private void checkDeclared(Variable variable, EObject node, Set<String> declared,
+			String site, String relName, List<Resource.Diagnostic> diagnostics) {
+		if (variable == null || variable.getName() == null
+				|| IMPLICIT_VARS.contains(variable.getName())
+				|| declared.contains(variable.getName())) {
+			return;
+		}
+		diagnostics.add(ParseDiagnostic.of("§7.13.5: Variable '" + variable.getName() + "' in "
+				+ site + " of relation '" + relName + "' is not declared — neither in the "
+				+ "relation's variable declarations nor bound by a domain or template",
+				positions.get(node)));
+	}
+
+	/**
+	 * The names the relation declares: its variable declarations and domain root variables
+	 * (both in {@link Relation#getVariable()}) and every variable a template binds, nested ones
+	 * included (§7.13.5 objectTemplateCS: the bound variable is one of the relation's).
+	 */
+	private Set<String> collectDeclaredNames(Relation relation) {
+		Set<String> declared = new HashSet<>();
+		for (Variable v : relation.getVariable()) {
+			declared.add(v.getName());
+		}
+		for (Domain d : relation.getDomain()) {
+			if (d instanceof RelationDomain rd) {
+				for (Variable v : rd.getRootVariable()) {
+					declared.add(v.getName());
+				}
+				for (DomainPattern dp : rd.getPattern()) {
+					if (dp.getTemplateExpression() != null) {
+						collectBoundNames(dp.getTemplateExpression(), declared);
+					}
+				}
+			}
+		}
+		return declared;
+	}
+
+	private void collectBoundNames(TemplateExp template, Set<String> declared) {
+		if (template.getBindsTo() != null) {
+			declared.add(template.getBindsTo().getName());
+		}
+		if (template instanceof ObjectTemplateExp ote) {
+			for (PropertyTemplateItem item : ote.getPart()) {
+				if (item.getValue() instanceof TemplateExp nested) {
+					collectBoundNames(nested, declared);
+				}
+			}
+		} else if (template instanceof CollectionTemplateExp cte) {
+			for (OclExpression member : cte.getMember()) {
+				if (member instanceof TemplateExp nested) {
+					collectBoundNames(nested, declared);
+				}
+			}
+		}
 	}
 
 	// ==================== Binding Collection ====================

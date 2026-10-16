@@ -213,6 +213,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -268,6 +270,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -544,6 +548,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -556,6 +562,10 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							}
 						}
 						top relation AttributeToColumn {
+							p : Package;
+							s : Schema;
+							c : Class;
+							t : Table;
 							an : String;
 							checkonly domain uml a : Attribute {
 								name = an
@@ -624,6 +634,10 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation AttributeToColumn {
+							p : Package;
+							s : Schema;
+							c : Class;
+							t : Table;
 							an : String;
 							checkonly domain uml a : Attribute {
 								name = an
@@ -678,6 +692,7 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -743,6 +758,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -807,6 +824,7 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -869,6 +887,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -922,6 +942,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn

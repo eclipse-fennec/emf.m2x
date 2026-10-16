@@ -15,9 +15,20 @@
 package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
+import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.qvtbase.Domain;
+import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
+import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -86,6 +97,8 @@ class QvtdBindingValidatorTest extends AbstractQvtdEngineTest {
 							enforce domain rdbms s : Schema { name = pn };
 						}
 						relation AttributeToColumn {
+							p : Package;
+							s : Schema;
 							an : String;
 							checkonly domain uml a : Attribute { name = an };
 							enforce domain rdbms col : Column { name = an };
@@ -289,8 +302,8 @@ class QvtdBindingValidatorTest extends AbstractQvtdEngineTest {
 		}
 
 		@Test
-		@DisplayName("Variable only in target domain — not bound when domain is target")
-		void varOnlyInTargetNotBoundExternally() {
+		@DisplayName("Undeclared variable at template binding sites (§7.13.5, #278)")
+		void undeclaredVarAtTemplateBindingSites() {
 			String source = """
 					transformation T(uml : simpleuml, rdbms : simplerdbms) {
 						top relation R {
@@ -303,11 +316,14 @@ class QvtdBindingValidatorTest extends AbstractQvtdEngineTest {
 						}
 					}
 					""";
-			// localOnlyVar is bound by each domain independently but
-			// when one domain is the target, the OTHER must provide the binding.
-			// Since both domains bind it via PropertyTemplateItem, it IS available
-			// from external source for both directions. This should PASS.
-			assertDoesNotThrow(() -> parse(source));
+			// Both property templates would bind localOnlyVar, but only a declared variable can be
+			// bound: §7.13.5 resolves the name among the relation's variables, and localOnlyVar is
+			// neither declared nor bound by a template. Before #278 this passed, and an enforced
+			// name was written as null.
+			QvtdParseException ex = assertThrows(QvtdParseException.class,
+					() -> parse(source));
+			assertTrue(ex.getMessage().contains("localOnlyVar"),
+					"Error should mention the undeclared variable: " + ex.getMessage());
 		}
 	}
 
@@ -388,6 +404,206 @@ class QvtdBindingValidatorTest extends AbstractQvtdEngineTest {
 			// At least 2 diagnostics (ghost1 and ghost2)
 			assertTrue(ex.getErrors().size() >= 2,
 					"Expected at least 2 diagnostics, got " + ex.getErrors().size());
+		}
+	}
+
+	// ==================== Undeclared Names (#278) ====================
+
+	/**
+	 * A name at a binding site — a property template value, a collection member or rest, a
+	 * relation call argument in the when-clause — is looked up among the relation's variables
+	 * (§7.13.5); nothing declares a variable by mentioning it. Before #278 such a name executed
+	 * as {@code null}: the enforced property was written as {@code null}, the run successful.
+	 */
+	@Nested
+	@DisplayName("Undeclared names at binding sites (§7.13.5, #278)")
+	class UndeclaredNames {
+
+		@Test
+		@DisplayName("Property template value declared nowhere is rejected at its position")
+		void undeclaredPropertyTemplateValue() {
+			String source = """
+					transformation PackageToSchema(uml : simpleuml, rdbms : simplerdbms) {
+						top relation PackageToSchema {
+							pn : String;
+							checkonly domain uml p : Package { name = pn };
+							enforce domain rdbms s : Schema { name = tlsPort };
+						}
+					}
+					""";
+			QvtdParseException ex = assertThrows(QvtdParseException.class,
+					() -> parse(source));
+			Resource.Diagnostic diagnostic = only(ex, "tlsPort");
+			assertTrue(diagnostic.getMessage().contains("§7.13.5"), diagnostic.getMessage());
+			assertEquals(5, diagnostic.getLine(), "line of the name");
+			assertEquals(source.lines().toList().get(4).indexOf("tlsPort"),
+					diagnostic.getColumn(), "column of the name");
+		}
+
+		@Test
+		@DisplayName("A declaration inside a comment declares nothing")
+		void declarationInCommentDeclaresNothing() {
+			String source = """
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation R {
+							pn : String;
+							-- tlsPort : String;
+							checkonly domain uml p : Package { name = pn };
+							enforce domain rdbms s : Schema { name = tlsPort };
+						}
+					}
+					""";
+			QvtdParseException ex = assertThrows(QvtdParseException.class,
+					() -> parse(source));
+			only(ex, "tlsPort");
+		}
+
+		@Test
+		@DisplayName("Collection member declared nowhere is rejected")
+		void undeclaredCollectionMember() {
+			String source = """
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation R {
+							pn : String;
+							checkonly domain uml p : Package {
+								name = pn,
+								ownedClass = cs : Set(Class) { first ++ _ }
+							};
+							enforce domain rdbms s : Schema { name = pn };
+						}
+					}
+					""";
+			QvtdParseException ex = assertThrows(QvtdParseException.class,
+					() -> parse(source));
+			Resource.Diagnostic diagnostic = only(ex, "first");
+			assertEquals(6, diagnostic.getLine(), "line of the member");
+		}
+
+		@Test
+		@DisplayName("Collection rest declared nowhere is rejected")
+		void undeclaredCollectionRest() {
+			String source = """
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation R {
+							pn : String;
+							checkonly domain uml p : Package {
+								name = pn,
+								ownedClass = cs : Set(Class) { _ ++ others }
+							};
+							enforce domain rdbms s : Schema { name = pn };
+						}
+					}
+					""";
+			QvtdParseException ex = assertThrows(QvtdParseException.class,
+					() -> parse(source));
+			Resource.Diagnostic diagnostic = only(ex, "others");
+			assertEquals(6, diagnostic.getLine(), "line of the rest");
+		}
+
+		@Test
+		@DisplayName("Declared collection member and rest are accepted")
+		void declaredCollectionMemberAndRest() {
+			String source = """
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation R {
+							pn : String;
+							first : Class;
+							others : Set(Class);
+							checkonly domain uml p : Package {
+								name = pn,
+								ownedClass = cs : Set(Class) { first ++ others }
+							};
+							enforce domain rdbms s : Schema { name = pn };
+						}
+					}
+					""";
+			assertDoesNotThrow(() -> parse(source));
+		}
+
+		@Test
+		@DisplayName("Relation call argument in when declared nowhere is rejected")
+		void undeclaredWhenArgument() {
+			String source = """
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation PackageToSchema {
+							pn : String;
+							checkonly domain uml p : Package { name = pn };
+							enforce domain rdbms s : Schema { name = pn };
+						}
+						relation ClassToTable {
+							s : Schema;
+							cn : String;
+							checkonly domain uml c : Class { name = cn };
+							enforce domain rdbms t : Table { name = cn };
+							when { PackageToSchema(p, s); }
+						}
+					}
+					""";
+			QvtdParseException ex = assertThrows(QvtdParseException.class,
+					() -> parse(source));
+			Resource.Diagnostic diagnostic = only(ex, "'p'");
+			assertTrue(diagnostic.getMessage().contains("when-clause"), diagnostic.getMessage());
+			assertEquals(12, diagnostic.getLine(), "line of the argument");
+		}
+
+		@Test
+		@DisplayName("A nested template binding declares its variable (spec ClassToTable)")
+		void nestedTemplateBindingDeclares() {
+			String source = """
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation PackageToSchema {
+							pn : String;
+							checkonly domain uml p : Package { name = pn };
+							enforce domain rdbms s : Schema { name = pn };
+						}
+						relation ClassToTable {
+							s : Schema;
+							cn : String;
+							checkonly domain uml c : Class {
+								owningPackage = p : Package {},
+								name = cn
+							};
+							enforce domain rdbms t : Table { name = cn };
+							when { PackageToSchema(p, s); }
+						}
+					}
+					""";
+			assertDoesNotThrow(() -> parse(source));
+		}
+
+		@Test
+		@DisplayName("A primitive domain's variable is the one later domains refer to")
+		void primitiveDomainVariableInScope() throws QvtdParseException {
+			String source = """
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation WithPrimitive {
+							primitive domain prefix : String;
+							checkonly domain uml p : Package { name = prefix };
+							enforce domain rdbms s : Schema { name = prefix };
+						}
+					}
+					""";
+			Relation relation = (Relation) parse(source).getRule().get(0);
+			List<String> domainOrder = relation.getDomain().stream().map(Domain::getName).toList();
+			assertEquals(List.of("prefix", "uml", "rdbms"), domainOrder,
+					"domains in source order (§7.13.5 domainListCS)");
+			Variable prefix = ((RelationDomain) relation.getDomain().get(0)).getRootVariable().get(0);
+			for (Domain domain : relation.getDomain().subList(1, 3)) {
+				ObjectTemplateExp template = (ObjectTemplateExp) ((RelationDomain) domain)
+						.getPattern().get(0).getTemplateExpression();
+				VariableExp value = (VariableExp) template.getPart().get(0).getValue();
+				assertSame(prefix, value.getReferredVariable(),
+						"'name = prefix' in domain " + domain.getName());
+			}
+		}
+
+		/** The one diagnostic of the exception, which must name the given text. */
+		private Resource.Diagnostic only(QvtdParseException ex, String name) {
+			assertEquals(1, ex.getErrors().size(), () -> "diagnostics: " + ex.getErrors().stream()
+					.map(Resource.Diagnostic::getMessage).toList());
+			Resource.Diagnostic diagnostic = ex.getErrors().get(0);
+			assertTrue(diagnostic.getMessage().contains(name), diagnostic.getMessage());
+			return diagnostic;
 		}
 	}
 }
