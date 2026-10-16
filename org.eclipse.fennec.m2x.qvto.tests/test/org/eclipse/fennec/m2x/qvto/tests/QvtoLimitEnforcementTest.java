@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -82,7 +83,7 @@ class QvtoLimitEnforcementTest extends AbstractQvtoEngineTest {
 				""";
 
 		@Test
-		@DisplayName("records past the limit are dropped, and the run still succeeds")
+		@DisplayName("records past the limit are dropped, and the run reports it as an error (#284)")
 		void recordsPastTheLimitAreDropped() throws QvtoParseException {
 			// The trace grows with the model, so it is the one structure a transformation can
 			// make arbitrarily large without writing anything arbitrarily large itself
@@ -94,7 +95,13 @@ class QvtoLimitEnforcementTest extends AbstractQvtoEngineTest {
 					QvtoEvaluationOptions.defaults().withTracing(true).withMaxTraceRecords(3),
 					source, emptyExtent());
 
-			assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+			// Resolve and mapping reuse answer from the trace, so a cut trace can make them answer
+			// wrongly; before #284 the run reported success regardless
+			assertFalse(result.isSuccess(), "a run whose trace was cut must not report success");
+			assertEquals(1, result.diagnostics().stream()
+					.filter(d -> d.getSeverity() == Diagnostic.ERROR
+							&& d.getMessage().startsWith("Maximum trace records exceeded: 3"))
+					.count(), () -> "one error naming the limit: " + result.diagnostics());
 			Trace trace = result.trace();
 			assertEquals(3, trace.getTraceRecords().size(),
 					"the limit is what the trace holds, not what the transformation produced");

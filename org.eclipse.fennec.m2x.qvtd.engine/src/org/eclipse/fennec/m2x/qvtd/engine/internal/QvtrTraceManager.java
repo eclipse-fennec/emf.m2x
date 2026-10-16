@@ -66,10 +66,17 @@ public class QvtrTraceManager {
 
 	private final Map<String, List<TraceRecord>> tracesByRelation = new HashMap<>();
 
+	/** Records held across all relations — what {@code maxTraceRecords} bounds. */
+	private int recorded;
+
 	/**
-	 * Creates a trace manager with the given per-relation record limit.
+	 * Creates a trace manager with the given record limit.
 	 *
-	 * @param maxTraceRecords maximum records per relation (M-R8)
+	 * <p>The limit bounds the whole trace, as QVT-O's does (#284). It guards memory against a
+	 * transformation that grows its trace with the model, and a bound per relation does not do
+	 * that: a transformation with many relations could hold that many times the limit.
+	 *
+	 * @param maxTraceRecords maximum records across all relations (M-R8)
 	 */
 	public QvtrTraceManager(int maxTraceRecords) {
 		this.maxTraceRecords = maxTraceRecords;
@@ -78,27 +85,29 @@ public class QvtrTraceManager {
 	/**
 	 * Records a trace entry for a successful relation execution.
 	 *
+	 * <p>Past {@code maxTraceRecords} the entry is dropped and {@code false} returned; the caller
+	 * reports that (#284). The trace stops growing there, so a when-clause may miss what was
+	 * executed afterwards.
+	 *
 	 * @param relation the relation that was executed
 	 * @param bindings the complete variable bindings (source + target)
+	 * @return {@code true} if the entry was recorded, {@code false} if the limit dropped it
 	 */
-	public void record(Relation relation, Map<String, Object> bindings) {
+	public boolean record(Relation relation, Map<String, Object> bindings) {
 		String key = relation.getName();
 		List<TraceRecord> traces = tracesByRelation.computeIfAbsent(key, k -> new ArrayList<>());
-		int size = traces.size();
-		if (size >= maxTraceRecords) {
-			if (size == maxTraceRecords) {
-				LOG.log(Level.WARNING,
-						"Relation ''{0}'' reached trace record limit ({1}) — further records dropped, results may be unreliable",
-						new Object[]{key, maxTraceRecords});
-			}
-			return;
+		if (recorded >= maxTraceRecords) {
+			return false;
 		}
+		int size = traces.size();
 		if (size == TRACE_WARN_THRESHOLD) {
 			LOG.log(Level.WARNING,
 					"Relation ''{0}'' has accumulated {1} trace records — possible memory issue",
 					new Object[]{key, size});
 		}
 		traces.add(new TraceRecord(relation, bindings));
+		recorded++;
+		return true;
 	}
 
 	/**

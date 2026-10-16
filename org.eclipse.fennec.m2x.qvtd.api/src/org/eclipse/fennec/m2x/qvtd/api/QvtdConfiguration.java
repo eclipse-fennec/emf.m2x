@@ -66,6 +66,12 @@ public final class QvtdConfiguration {
 	 */
 	public static final long DEFAULT_TIMEOUT_MS = 30_000;
 
+	/**
+	 * Default ceiling on the trace records of one run, across all relations — the same as
+	 * QVT-O's (#284).
+	 */
+	public static final int DEFAULT_MAX_TRACE_RECORDS = 1_000_000;
+
 	private final long timeoutMs;
 	private final int maxTraceRecords;
 
@@ -237,8 +243,8 @@ public final class QvtdConfiguration {
 	}
 
 	/**
-	 * Returns the maximum number of trace records per relation (M-R8).
-	 * Defaults to 100,000.
+	 * Returns the maximum number of trace records one run may hold, across all relations (M-R8).
+	 * Defaults to {@value #DEFAULT_MAX_TRACE_RECORDS}.
 	 */
 	public int maxTraceRecords() {
 		return maxTraceRecords;
@@ -311,7 +317,7 @@ public final class QvtdConfiguration {
 		private int maxRelationDepth = 200;
 		private int maxBindings = 10_000;
 		private long timeoutMs = DEFAULT_TIMEOUT_MS;
-		private int maxTraceRecords = 100_000;
+		private int maxTraceRecords = DEFAULT_MAX_TRACE_RECORDS;
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
@@ -518,8 +524,9 @@ public final class QvtdConfiguration {
 		}
 
 		/**
-		 * Sets the maximum number of trace records per relation (M-R8).
-		 * Defaults to 100,000.
+		 * Sets the maximum number of trace records one run may hold, across all relations (M-R8).
+		 * Reaching it is reported as an error (#284). Defaults to
+		 * {@value QvtdConfiguration#DEFAULT_MAX_TRACE_RECORDS}.
 		 */
 		public Builder maxTraceRecords(int max) {
 			if (max <= 0) {

@@ -86,6 +86,8 @@ public class QvtrEvaluator {
 	private final QvtrPatternMatcher patternMatcher;
 	private final QvtrTraceManager traceManager;
 	private final List<Diagnostic> diagnostics = new ArrayList<>();
+	/** Whether the trace limit was already reported, so it is reported once (#284). */
+	private boolean traceLimitReported;
 
 	/**
 	 * Where an expression node stood, so a runtime diagnostic can name the place and the unit —
@@ -273,7 +275,7 @@ public class QvtrEvaluator {
 				if (targetDomain != null) {
 					enforcer.enforceTargetDomain(relation, targetDomain, sourceBinding);
 				}
-				traceManager.record(relation, sourceBinding);
+				recordTrace(relation, sourceBinding);
 				evaluateWhereClause(relation, sourceBinding);
 			}
 		} finally {
@@ -332,7 +334,7 @@ public class QvtrEvaluator {
 
 			for (Map<String, Object> binding : sourceBindings) {
 				if (hasOptionalNullBinding(sourceDomains, binding)) {
-					traceManager.record(relation, binding);
+					recordTrace(relation, binding);
 					continue;
 				}
 				if (!whenConditionHolds(relation, binding)) {
@@ -342,7 +344,7 @@ public class QvtrEvaluator {
 				if (targetDomain != null) {
 					enforcer.enforceTargetDomain(relation, targetDomain, binding);
 				}
-				traceManager.record(relation, binding);
+				recordTrace(relation, binding);
 				evaluateWhereClause(relation, binding);
 			}
 		} finally {
@@ -670,6 +672,24 @@ public class QvtrEvaluator {
 	 */
 	private boolean isPrimitiveDomain(RelationDomain domain) {
 		return domain.getTypedModel() == null && domain.getPattern().isEmpty();
+	}
+
+	/**
+	 * Records a relation execution in the trace, and reports the first entry the trace limit
+	 * drops (#284).
+	 *
+	 * <p>Past {@code maxTraceRecords} the trace stops growing, so a when-clause may miss what was
+	 * executed afterwards and skip a relation that should run. Before #284 the trace manager only
+	 * logged that and the run reported success; now it is an error, reported once, worded as
+	 * QVT-O words it.
+	 */
+	private void recordTrace(Relation relation, Map<String, Object> binding) {
+		if (!traceManager.record(relation, binding) && !traceLimitReported) {
+			traceLimitReported = true;
+			diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0,
+					"Maximum trace records exceeded: " + config.maxTraceRecords()
+							+ " — when-clauses may miss what was executed after it", null));
+		}
 	}
 
 	/**
