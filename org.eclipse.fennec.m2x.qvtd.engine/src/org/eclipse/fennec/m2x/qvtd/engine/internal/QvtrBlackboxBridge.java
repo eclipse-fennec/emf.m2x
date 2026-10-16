@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -25,7 +26,6 @@ import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.qvtbase.Function;
@@ -36,8 +36,8 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationResult;
 
 /**
  * Handles blackbox library invocation and {@code implementedby} delegation
@@ -94,78 +94,101 @@ public class QvtrBlackboxBridge {
 		return config.blackboxRegistry();
 	}
 
+	/** What became of a relation's {@code implementedby} clause for the enforced direction. */
+	enum Implementation {
+		/** The relation has no {@code implementedby} for this direction; QVT-R enforces it. */
+		NONE,
+		/** The operation was invoked; whether the relation now holds is the caller's check. */
+		INVOKED,
+		/** The operation could not be invoked or failed; that has been reported. */
+		FAILED
+	}
+
 	/**
-	 * Invokes an implementedby operational implementation (§7.11.3.6).
-	 * Searches the relation's {@code operationalImpl} list for an implementation
-	 * matching the target direction and delegates first to registered
-	 * {@link RelationImplementationProvider}s (D39, Phase 4b), then falls back
-	 * to the blackbox registry.
+	 * Invokes the operation a relation's {@code implementedby} clause names for the enforced
+	 * direction (QVT v1.3 §7.11.3.6).
 	 *
-	 * @return {@code true} if an implementation was found and invoked
+	 * <p>The operation is the one the clause names — {@code RelationImplementation.impl} — asked
+	 * for by that name: first from the registered {@link RelationImplementationProvider}s (D39),
+	 * then from the blackbox libraries. Before #282 the providers were asked for the relation's
+	 * name, so a QVT-O mapping named after the operation was never called. The arguments are the
+	 * clause's, evaluated in the current bindings — the root objects of the relation's domains
+	 * (§10, rule 4.5). What the operation returns, if it is an object nobody contains yet, is
+	 * added to the target extent.
+	 *
+	 * <p>An operation nobody serves is an error, not a reason for QVT-R to enforce the domain
+	 * itself: {@code impl} has multiplicity {@code [1]}, so a clause without an operation behind it
+	 * has no reading (#282).
+	 *
+	 * @return what happened; the caller checks the relation after {@link Implementation#INVOKED}
 	 */
-	public boolean invokeImplementedBy(Relation relation, TypedModel targetModel,
+	public Implementation invokeImplementedBy(Relation relation, TypedModel targetModel,
 			Map<String, Object> bindings) {
 		for (RelationImplementation impl : relation.getOperationalImpl()) {
 			TypedModel direction = impl.getInDirectionOf();
-			if (direction != null && targetModel.getName().equals(direction.getName())) {
-				EOperation op = impl.getImpl();
-				if (op == null) {
-					continue;
-				}
-				String opName = op.getName();
+			if (direction == null || !targetModel.getName().equals(direction.getName())
+					|| impl.getImpl() == null) {
+				continue;
+			}
+			String opName = impl.getImpl().getName();
+			List<Object> arguments = evaluateArguments(impl, bindings);
 
-				// §7.8 / D39: Try RelationImplementationProviders first (QVT-O hybrid)
-				String qualifiedName = relation.getName();
-				for (RelationImplementationProvider provider : implementationProviders) {
-					if (provider.canProvide(qualifiedName)) {
-						QvtdExecutionResult result = provider.executeRelation(qualifiedName, context);
-						if (result.isSuccess()) {
-							return true;
-						}
-						diagnostics.addAll(result.diagnostics());
-						return true; // invoked, even if errors
+			// §7.8 / D39: a RelationImplementationProvider (QVT-O) first
+			for (RelationImplementationProvider provider : implementationProviders) {
+				if (provider.canProvide(opName)) {
+					RelationImplementationResult result = provider.invoke(opName, arguments, context);
+					diagnostics.addAll(result.diagnostics());
+					if (result.diagnostics().stream().anyMatch(d -> d.getSeverity() >= Diagnostic.ERROR)) {
+						return Implementation.FAILED;
 					}
-				}
-
-				// Fallback: blackbox registry (M-R5: enforce config gate)
-				if (blackboxRegistry() == null || !config.blackboxEnabled()) {
-					continue;
-				}
-				QvtdBlackboxLibrary library = libraryFor(opName);
-				if (library == null) {
-					continue;
-				}
-
-				// Evaluate argument expressions from annotation
-				Object[] argValues = new Object[0];
-				EAnnotation ann = impl.getEAnnotation("qvtr.implementedby.args");
-				if (ann != null) {
-					List<EObject> argExprs = ann.getReferences();
-					argValues = new Object[argExprs.size()];
-					for (int i = 0; i < argExprs.size(); i++) {
-						if (argExprs.get(i) instanceof OclExpression argExpr) {
-							argValues[i] = oclCallback.evaluate(argExpr, bindings);
-						}
-					}
-				}
-
-				// One library, chosen by what it declares — a failure of that library is a
-				// failure of the transformation, not a reason to ask the next one (#180)
-				try {
-					Object result = library.invoke(opName, null, argValues);
-					if (result instanceof EObject created && created.eContainer() == null) {
-						extentManager.getExtent(targetModel).add(created);
-					}
-					return true;
-				} catch (RuntimeException failure) {
-					diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE, 0,
-							"Blackbox operation '" + opName + "' of library '" + library.getModuleName()
-									+ "' failed: " + failure, new Object[] { failure }));
-					return true; // invoked, and it failed — reported, not retried elsewhere
+					place(result.value(), targetModel);
+					return Implementation.INVOKED;
 				}
 			}
+
+			// Then a blackbox library (M-R5: the configuration gate applies)
+			QvtdBlackboxLibrary library = libraryFor(opName);
+			if (library == null) {
+				String reason = unservedReason(opName);
+				if (reason != null) { // null: the library ceiling, reported where it was hit
+					diagnostics.error("Operation '" + opName + "' of the implementedby clause of relation '"
+							+ relation.getName() + "' cannot be served: " + reason);
+				}
+				return Implementation.FAILED;
+			}
+			// One library, chosen by what it declares — a failure of that library is a failure of
+			// the transformation, not a reason to ask the next one (#180)
+			try {
+				place(library.invoke(opName, null, arguments.toArray()), targetModel);
+				return Implementation.INVOKED;
+			} catch (RuntimeException failure) {
+				diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE, 0,
+						"Blackbox operation '" + opName + "' of library '" + library.getModuleName()
+								+ "' failed: " + failure, new Object[] { failure }));
+				return Implementation.FAILED;
+			}
 		}
-		return false;
+		return Implementation.NONE;
+	}
+
+	/** The clause's argument expressions, evaluated in the current bindings. */
+	private List<Object> evaluateArguments(RelationImplementation impl, Map<String, Object> bindings) {
+		List<Object> values = new ArrayList<>();
+		EAnnotation ann = impl.getEAnnotation("qvtr.implementedby.args");
+		if (ann != null) {
+			for (EObject argExpr : ann.getReferences()) {
+				values.add(argExpr instanceof OclExpression expr ? oclCallback.evaluate(expr, bindings) : null);
+			}
+		}
+		return values;
+	}
+
+	/** Adds what an operation returned to the target extent, if it is a new root. */
+	private void place(Object value, TypedModel targetModel) {
+		if (value instanceof EObject created && created.eContainer() == null
+				&& !extentManager.getExtent(targetModel).getContents().contains(created)) {
+			extentManager.getExtent(targetModel).add(created);
+		}
 	}
 
 	/**
@@ -263,29 +286,37 @@ public class QvtrBlackboxBridge {
 	 * @param queryName the query that was called
 	 */
 	private void reportUnserved(String queryName) {
-		String reason;
-		if (!config.blackboxEnabled()) {
-			reason = "blackboxes are not enabled";
-		} else if (blackboxRegistry() == null) {
-			reason = "no blackbox registry is configured";
-		} else {
-			List<QvtdBlackboxLibrary> serving = blackboxRegistry().getLibraries().stream()
-					.filter(library -> library.getOperationNames().contains(queryName))
-					.toList();
-			if (serving.isEmpty()) {
-				reason = "no registered library serves it";
-			} else if (serving.stream().anyMatch(library -> isBlackboxAllowed(library.getModuleName()))) {
-				return; // the library ceiling, reported where it was hit
-			} else {
-				reason = "the allow-list names none of the libraries that serve it ("
-						+ serving.stream().map(QvtdBlackboxLibrary::getModuleName).sorted()
-								.collect(Collectors.joining(", "))
-						+ ")";
-			}
-		}
-		if (unservedReported.add(queryName)) {
+		String reason = unservedReason(queryName);
+		if (reason != null && unservedReported.add(queryName)) {
 			diagnostics.error("Blackbox query '" + queryName + "' cannot be served: " + reason);
 		}
+	}
+
+	/**
+	 * Why no blackbox library serves an operation, or {@code null} if one would but is past the
+	 * library ceiling — reported where the ceiling was hit.
+	 */
+	private String unservedReason(String operationName) {
+		if (!config.blackboxEnabled()) {
+			return implementationProviders.isEmpty() ? "blackboxes are not enabled"
+					: "no provider serves it, and blackboxes are not enabled";
+		}
+		if (blackboxRegistry() == null) {
+			return "no blackbox registry is configured";
+		}
+		List<QvtdBlackboxLibrary> serving = blackboxRegistry().getLibraries().stream()
+				.filter(library -> library.getOperationNames().contains(operationName))
+				.toList();
+		if (serving.isEmpty()) {
+			return "no registered library serves it";
+		}
+		if (serving.stream().anyMatch(library -> isBlackboxAllowed(library.getModuleName()))) {
+			return null;
+		}
+		return "the allow-list names none of the libraries that serve it ("
+				+ serving.stream().map(QvtdBlackboxLibrary::getModuleName).sorted()
+						.collect(Collectors.joining(", "))
+				+ ")";
 	}
 
 	public boolean isBlackboxAllowed(String moduleName) {

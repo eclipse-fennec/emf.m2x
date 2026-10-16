@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.qvtd.api;
 
+import java.util.List;
+
 import org.osgi.annotation.versioning.ConsumerType;
 
 /**
@@ -25,8 +27,13 @@ import org.osgi.annotation.versioning.ConsumerType;
  *   <li>{@code qvtd.engine} → {@code qvtd.api} (consumes this provider)
  * </ul>
  *
- * <p>A QVT-O engine can provide an implementation that executes QVT-R
- * {@code RelationImplementation} bodies using QVT-O mappings.
+ * <p>A provider serves the operation a QVT-R {@code implementedby} clause names
+ * (QVT v1.3 §7.11.3.6 {@code RelationImplementation.impl : Operation}) — one operation, called
+ * with the arguments the clause gives, which are the root objects of the relation's other
+ * domains (§10, rule 4.5). A QVT-O engine serves it with the mapping of that name, which
+ * "refines conceptually a relation where each relation domain corresponds to a parameter"
+ * (§8.2.1.15). The QVT-R engine calls it only when the relation does not hold in the enforced
+ * direction, and checks the relation again afterwards (#282).
  *
  * @author Data In Motion Consulting
  * @since 1.0
@@ -35,19 +42,25 @@ import org.osgi.annotation.versioning.ConsumerType;
 public interface RelationImplementationProvider {
 
 	/**
-	 * Returns whether this provider can execute the given relation.
+	 * Returns whether this provider serves the given operation.
 	 *
-	 * @param relationQualifiedName the fully qualified relation name
-	 * @return {@code true} if this provider can handle the relation
+	 * @param operationName the name of the operation an {@code implementedby} clause names
+	 * @return {@code true} if this provider can invoke it
 	 */
-	boolean canProvide(String relationQualifiedName);
+	boolean canProvide(String operationName);
 
 	/**
-	 * Executes a relation implementation.
+	 * Invokes the operation an {@code implementedby} clause names.
 	 *
-	 * @param relationQualifiedName the fully qualified relation name
-	 * @param context the execution context with model extents
-	 * @return the execution result
+	 * <p>The operation is responsible for the changes that make the relation hold in the
+	 * enforced direction; what it returns is the object of the enforced domain. Objects it
+	 * creates go into the extents of the given context — the same extents the QVT-R run uses.
+	 *
+	 * @param operationName the operation, one this provider {@linkplain #canProvide(String) serves}
+	 * @param arguments the evaluated arguments of the {@code implementedby} call, in order
+	 * @param context the QVT-R execution context, whose extents the operation works on
+	 * @return the operation's result and what it reported, never {@code null}
 	 */
-	QvtdExecutionResult executeRelation(String relationQualifiedName, QvtdExecutionContext context);
+	RelationImplementationResult invoke(String operationName, List<Object> arguments,
+			QvtdExecutionContext context);
 }
