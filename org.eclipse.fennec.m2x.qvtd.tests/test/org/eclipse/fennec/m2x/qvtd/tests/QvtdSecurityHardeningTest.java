@@ -212,7 +212,7 @@ class QvtdSecurityHardeningTest {
 		assertEquals(200, config.maxRelationDepth());
 		assertEquals(10_000, config.maxBindings());
 		assertEquals(30_000, config.timeoutMs(), "an execution has a deadline by default (#261)");
-		assertEquals(100_000, config.maxTraceRecords());
+		assertEquals(1_000_000, config.maxTraceRecords(), "the whole trace, as in QVT-O (#284)");
 		assertFalse(config.blackboxEnabled());
 		assertEquals(Set.of(), config.allowedBlackboxModules());
 	}
@@ -340,10 +340,28 @@ class QvtdSecurityHardeningTest {
 		assertEquals(5, traceManager.lookup(relation, List.of()).size(),
 				"Should store exactly maxTraceRecords entries");
 
-		// Record a 6th — should be silently dropped
-		traceManager.record(relation, Map.of("var", "val_overflow"));
+		// A 6th is dropped, and the trace manager says so — the evaluator reports it (#284)
+		assertFalse(traceManager.record(relation, Map.of("var", "val_overflow")));
 		assertEquals(5, traceManager.lookup(relation, List.of()).size(),
 				"Should not exceed maxTraceRecords limit");
+	}
+
+	@Test
+	void r8_traceLimit_boundsTheWholeTrace() {
+		// The limit guards memory, so it counts every relation's records together (#284): a
+		// bound per relation would let a transformation with many relations hold that many
+		// times the limit
+		QvtrTraceManager traceManager = new QvtrTraceManager(3);
+		Relation first = QvtrelationFactory.eINSTANCE.createRelation();
+		first.setName("First");
+		Relation second = QvtrelationFactory.eINSTANCE.createRelation();
+		second.setName("Second");
+
+		assertTrue(traceManager.record(first, Map.of("var", "a")));
+		assertTrue(traceManager.record(first, Map.of("var", "b")));
+		assertTrue(traceManager.record(second, Map.of("var", "c")));
+		assertFalse(traceManager.record(second, Map.of("var", "d")),
+				"the third record filled the trace, whichever relation it belonged to");
 	}
 
 	// ── Helpers ───────────────────────────────────────────────────────

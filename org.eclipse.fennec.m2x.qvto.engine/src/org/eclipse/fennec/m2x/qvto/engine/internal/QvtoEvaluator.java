@@ -870,7 +870,7 @@ public class QvtoEvaluator {
 			}
 
 			// Record trace (§8.1.11.1: context, in-params, result)
-			traceManager.addRecord(mappingOp, self, args, result);
+			recordTrace(mappingOp, self, args, result);
 
 			return result;
 		} catch (ReturnException e) {
@@ -878,7 +878,7 @@ public class QvtoEvaluator {
 			if (result == null && !mappingOp.getResult().isEmpty()) {
 				result = env.lookup(mappingOp.getResult().get(0).getName());
 			}
-			traceManager.addRecord(mappingOp, self, args, result);
+			recordTrace(mappingOp, self, args, result);
 			return result;
 		} finally {
 			env.popScope();
@@ -1177,6 +1177,24 @@ public class QvtoEvaluator {
 				? diagnostic.getMessage()
 				: position + " " + diagnostic.getMessage();
 		addDiagnostic(diagnostic.getSeverity(), message);
+	}
+
+	/**
+	 * Records a mapping invocation in the trace, and reports the first record the trace limit
+	 * drops (#284).
+	 *
+	 * <p>Past {@code maxTraceRecords} the trace stops growing, so a resolve operation, or the
+	 * reuse of a mapping already applied (§8.1.11.1), may miss what was mapped afterwards and
+	 * answer from an incomplete trace. Before #284 that happened in silence and the run reported
+	 * success; now it is an error, like every other limit, reported once.
+	 */
+	private void recordTrace(MappingOperation mappingOp, Object self, Object[] args, Object result) {
+		boolean reachedBefore = traceManager.isLimitReached();
+		traceManager.addRecord(mappingOp, self, args, result);
+		if (!reachedBefore && traceManager.isLimitReached()) {
+			addError("Maximum trace records exceeded: " + options.maxTraceRecords()
+					+ " — resolve operations and mapping reuse may miss what was mapped after it");
+		}
 	}
 
 	private void addError(String message) {

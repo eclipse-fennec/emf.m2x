@@ -68,6 +68,6 @@ public @interface QvtdEngineConfiguration {
 	@AttributeDefinition(name = "Timeout (ms)", description = "Transformation timeout in milliseconds (0 = no timeout)")
 	long timeout() default QvtdConfiguration.DEFAULT_TIMEOUT_MS;
 
-	@AttributeDefinition(name = "Max Trace Records", description = "Maximum number of trace records one transformation may create")
-	int maxTraceRecords() default 100_000;
+	@AttributeDefinition(name = "Max Trace Records", description = "Maximum number of trace records one run may hold, across all relations; reaching it is an error")
+	int maxTraceRecords() default QvtdConfiguration.DEFAULT_MAX_TRACE_RECORDS;
 }

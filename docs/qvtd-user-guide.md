@@ -258,7 +258,7 @@ All properties use the `qvtd.` prefix. OCL limits are **not** repeated here; the
 | `qvtd.maxRelationDepth` | int | 200 | Recursion depth of relation invocation (§7.10) |
 | `qvtd.maxBindings` | int | 10,000 | Variable bindings one relation may produce |
 | `qvtd.timeout` | long | 30,000 | Transformation timeout in ms (0 = no timeout) |
-| `qvtd.maxTraceRecords` | int | 100,000 | Trace records one transformation may create |
+| `qvtd.maxTraceRecords` | int | 1,000,000 | Trace records one run may hold, across all relations; reaching it is an error (`Maximum trace records exceeded: <limit>`) |
 
 Blackboxes and unit resolvers are **off by default**: both let a transformation reach code and files outside itself, so switching them on is a decision.
 
