@@ -177,6 +177,33 @@ class OclSyntaxGapsTest extends AbstractOclTest {
 		assertEquals(7, eval("/* a /* b /* c */ b */ a */ 7", self));
 	}
 
+	// ==================== Code Inside Comments Is Never Evaluated (§9.3) ====================
+
+	@Test
+	void comment_lineCommentCodeNotEvaluated() throws OclParseException {
+		// Without the comment each of these would change the result or fail (1/0 is invalid)
+		assertEquals(1, eval("1 -- + 1000", self));
+		assertEquals(3, eval("1\n-- + 1000\n+ 2", self));
+		assertEquals(5, eval("5 -- / 0", self));
+		assertEquals("a", eval("'a' -- .concat('b')", self));
+	}
+
+	@Test
+	void comment_blockCommentCodeNotEvaluated() throws OclParseException {
+		assertEquals(2, eval("/* 1 / 0 + */ 2", self));
+		assertEquals(3, eval("1 /* + 1000 */ + 2", self));
+		assertEquals(4, eval("4 /*\n + self.noSuchFeature\n */", self));
+		assertEquals(5, eval("5 /* outer /* + 1 */ + 1000 */", self));
+	}
+
+	@Test
+	void comment_markersInsideStringsAreText() throws OclParseException {
+		// A comment marker inside a string literal is text, not the start of a comment
+		assertEquals("a -- b", eval("'a -- b'", self));
+		assertEquals("/* x */", eval("'/* x */'", self));
+		assertEquals(9, eval("'-- + 1000'.size()", self));
+	}
+
 	// ==================== G-10: Self-Variable Alias (§12.12.5 form [B]) ====================
 
 	@Test
