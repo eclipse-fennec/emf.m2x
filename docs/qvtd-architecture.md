@@ -186,6 +186,7 @@ Extracted into `QvtrBlackboxBridge` for testability and security centralization 
 - `evaluateBlackboxQuery()` — delegates query calls without body to registered libraries
 - `isBlackboxAllowed()` — enforces `allowedBlackboxModules` allow-list
 - All blackbox access gated by `config.blackboxEnabled()` (disabled by default)
+- Under OSGi the libraries come from `DefaultQvtdEngine`'s dynamic `0..n` reference `blackboxes` (bind and unbind methods, #269): no restart when a library comes or goes, each run reads what is bound, the higher `service.ranking` wins a name; `blackboxes.target` and `blackboxes.cardinality.minimum` narrow the set and make the engine wait for it. A whiteboard on purpose — the engine selects libraries by operation name, so it has to know them all
 
 ### 5.4.2 Query Evaluation (§7.11.4)
 

@@ -248,8 +248,8 @@ All properties use the `qvtd.` prefix. OCL limits are **not** repeated here; the
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `qvtd.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries |
-| `qvtd.allowedBlackboxModules` | String[] | *(empty)* | Qualified names that may be imported as a blackbox; **empty puts no restriction on the names** |
+| `qvtd.blackboxEnabled` | boolean | `false` | Whether transformations may call Java blackbox libraries — bound as `QvtdBlackboxLibrary` services, see §9.2 |
+| `qvtd.allowedBlackboxModules` | String[] | *(empty)* | Module names (`getModuleName()`) of the libraries that may serve a query or an `implementedby`; **empty puts no restriction on the names** |
 | `qvtd.unitResolverEnabled` | boolean | `false` | Whether transformations may import units resolved from outside |
 | `qvtd.discoverUnitResolvers` | boolean | `false` | Whether resolvers registered as services are looked up by the name a transformation imports |
 | `qvtd.allowedUnitModules` | String[] | *(empty)* | Qualified names that may be imported as a unit; **empty puts no restriction on the names** |
@@ -808,18 +808,20 @@ Each diagnostic includes the spec reference, the variable name, the domain/claus
 
 ## 9. Blackbox Libraries
 
-Call Java code from QVT-R transformations via the `implementedby` clause (§7.8).
+Call Java code from QVT-R transformations: as a blackbox query — a `query` without a body — or through the `implementedby` clause of a domain (§7.8).
 
 ### 9.1 Implement a Library
 
 ```java
+import java.util.List;
+
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
 
 public class MyBlackbox implements QvtdBlackboxLibrary {
 
     @Override
     public String getModuleName() {
-        return "MyBlackbox";
+        return "MyBlackbox";  // what qvtd.allowedBlackboxModules names
     }
 
     @Override
@@ -833,12 +835,14 @@ public class MyBlackbox implements QvtdBlackboxLibrary {
     }
 
     @Override
+    public List<String> getOperationNames() {
+        return List.of("TypeMap");  // the operations this library serves
+    }
+
+    @Override
     public Object invoke(String operationName, Object self, Object[] args) {
         return switch (operationName) {
-            case "computeName" -> {
-                EObject pkg = (EObject) args[0];
-                yield pkg.eGet(pkg.eClass().getEStructuralFeature("name"));
-            }
+            case "TypeMap" -> "INTEGER".equals(args[0]) ? "NUMBER" : "VARCHAR";
             default -> throw new IllegalArgumentException(
                 "Unknown operation: " + operationName);
         };
@@ -846,32 +850,86 @@ public class MyBlackbox implements QvtdBlackboxLibrary {
 }
 ```
 
+QVT-R does not import a library by name. The engine picks the library that lists the operation in `getOperationNames()`, if the allow-list permits its `getModuleName()` and the run is still under `maxBlackboxLibraries` — a ceiling on the distinct libraries one run uses.
+
 ### 9.2 Register the Library
 
+Blackboxes are off by default. A registered library is unreachable until `blackboxEnabled` is on, and then only for the module names the allow-list permits; an empty allow-list puts no restriction on the names.
+
+**Standalone:**
+
 ```java
+import java.util.Set;
+
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdBlackboxRegistry;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 
 BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
 registry.register(new MyBlackbox());
 
 QvtdConfiguration config = QvtdConfiguration.builder(oclConfig)
     .blackboxRegistry(registry)
-    .blackboxEnabled(true)
+    .blackboxEnabled(true)                           // required: off by default
+    .allowedBlackboxModules(Set.of("MyBlackbox"))    // recommended
     .build();
 ```
 
-### 9.3 Using in QVT-R
+Both calls are needed: without a registry there is nothing to call (the default is none), without `blackboxEnabled(true)` the registry is not consulted.
 
-```qvtr
-top relation PackageToSchema {
-    pn : String;
-    checkonly domain uml p : Package { name = pn };
-    enforce domain rdbms s : Schema { name = pn }
-        implementedby MyBlackbox::computeName(p);
+**OSGi:** publish the library as a `QvtdBlackboxLibrary` service. `DefaultQvtdEngine` binds every such service through a dynamic reference of cardinality `0..n` named `blackboxes`, and drops it when it goes away — without restarting the engine. Each run uses the libraries bound when it starts.
+
+```java
+@Component(service = QvtdBlackboxLibrary.class)
+public class MyBlackbox implements QvtdBlackboxLibrary {
+    // ... as in 9.1
 }
 ```
 
-The `implementedby` clause delegates enforcement of the target domain to the blackbox library. The engine calls `invoke("computeName", null, new Object[]{p})`.
+```json
+"DefaultQvtdEngine": {
+    "qvtd.blackboxEnabled": true,
+    "qvtd.allowedBlackboxModules": ["MyBlackbox"]
+}
+```
+
+| Property | Effect |
+|----------|--------|
+| `blackboxes.target` | LDAP filter on the library services this engine binds, e.g. `(blackbox.group=reporting)` |
+| `blackboxes.cardinality.minimum` | The engine is not available until this many libraries are bound — the way to make a deployment wait for its libraries instead of running without them |
+
+Where two services have the same `getUnitQualifiedName()`, the one with the higher `service.ranking` is used; among equal rankings, the one registered first.
+
+### 9.3 Using in QVT-R
+
+**Blackbox query** — declared without a body, served by the library that lists its name:
+
+```qvtr
+transformation T(uml : simpleuml, rdbms : simplerdbms) {
+    query TypeMap(umlType : String) : String;
+
+    top relation AttributeToColumn {
+        an : String; atype : String; sqltype : String;
+        checkonly domain uml c : Class {
+            ownedAttribute = a : Attribute { name = an, type = atype }
+        };
+        enforce domain rdbms t : Table {
+            ownedColumn = col : Column { name = an, type = sqltype }
+        };
+        where { sqltype = TypeMap(atype); }
+    }
+}
+```
+
+The engine calls `invoke("TypeMap", null, new Object[]{atype})`. A blackbox query that no library serves — blackboxes off, no library lists it, or the allow-list excludes it — evaluates to `null`.
+
+**`implementedby`** — delegates the enforcement of a domain to an operation:
+
+```qvtr
+enforce domain rdbms s : Schema { name = pn }
+    implementedby CreateSchema(p);
+```
+
+The engine calls `invoke("CreateSchema", null, new Object[]{p})` when `rdbms` is the target. Only the last segment of the name selects the operation (`MyBlackbox::CreateSchema` selects `CreateSchema` as well). A returned `EObject` that has no container is added to the target extent; any other return value is ignored.
 
 ---
 

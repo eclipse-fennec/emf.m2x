@@ -223,7 +223,7 @@ public sealed interface QvtoUnit {              // Sealed union
 }
 ```
 
-**OSGi registration:** `@Reference(cardinality = MULTIPLE, policy = DYNAMIC)` whiteboard.
+**OSGi registration:** not a whiteboard. A resolver service publishes the unit it serves as `qvto.unit.name`; `QvtoServiceUnitResolver` looks the name an `import` gives up in the service registry at link time (#90, see the user guide §3.4.2).
 **Standalone:** Pass resolvers via `QvtoConfiguration.Builder.unitResolvers(List<QvtoUnitResolver>)`.
 
 > **D29 Security:** Unit resolvers are **disabled by default**. Set `unitResolverEnabled(true)` in
@@ -340,8 +340,14 @@ QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 > `allowedBlackboxModules(Set<String>)` — an empty set (default) allows all registered libraries
 > when enabled. See also §4.7.6 for linker enforcement.
 
-**OSGi:** The registry is a DS Component with `@Reference(MULTIPLE, DYNAMIC)` whiteboard
-for `QvtoBlackboxLibrary` services.
+**OSGi:** `DefaultQvtoEngine` binds `QvtoBlackboxLibrary` services through a dynamic `0..n`
+reference (`blackboxes`, bind and unbind methods) into an internal registry it hands to its
+configuration (#269). The engine is not restarted when a library comes or goes; each link and run
+reads the libraries bound at that moment, the higher `service.ranking` winning a name both claim
+(`RankedServices` in `unit.osgi`). Unlike unit resolvers this is a whiteboard on purpose: a
+transformation calls into a library by module name, so the engine has to know the libraries it
+has, and `blackboxes.target` / `blackboxes.cardinality.minimum` give deployments the standard DS
+means to narrow the set and to wait for it.
 
 #### 4.7.6 Synthetic Module Creation (QvtoLinker)
 
