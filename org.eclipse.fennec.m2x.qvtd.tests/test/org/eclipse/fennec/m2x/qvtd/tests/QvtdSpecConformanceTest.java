@@ -582,6 +582,8 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 							enforce domain rdbms s : Schema { name = pn };
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class { name = cn };
 							enforce domain rdbms t : Table { name = cn };

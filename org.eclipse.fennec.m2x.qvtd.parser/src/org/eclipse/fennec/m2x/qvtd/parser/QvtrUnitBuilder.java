@@ -113,6 +113,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private final Map<String, Relation> relationMap = new HashMap<>();
 	/** Where each import was written, keyed by the annotation detail that carries it (#264). */
 	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
+	/** Where collection member and rest names stood — built here, not by the expression builder. */
+	private final Map<EObject, SourcePosition> templatePositions = new IdentityHashMap<>();
 	/** Current relation being processed (for variable scope). */
 	private Relation currentRelation;
 	/** ObjectTemplateExps marked with [?] optional multiplicity (transient). */
@@ -486,14 +488,16 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			relation.getVariable().addAll(vars);
 		}
 
-		// Process domains
-		for (QvtRParser.DomainContext domCtx : ctx.domain()) {
-			RelationDomain domain = visitDomain(domCtx);
-			relation.getDomain().add(domain);
-		}
-		for (QvtRParser.PrimitiveTypeDomainContext primCtx : ctx.primitiveTypeDomain()) {
-			RelationDomain domain = visitPrimitiveTypeDomain(primCtx);
-			relation.getDomain().add(domain);
+		// Process domains in source order (§7.13.5 domainListCS): a primitive domain's variable is
+		// in scope for the domains after it, and the order is the one a relation call's arguments
+		// follow. Before #278 all primitive domains came last, so `name = prefix` after
+		// `primitive domain prefix : String` resolved to a stray variable of the same name.
+		for (ParseTree child : ctx.children) {
+			if (child instanceof QvtRParser.DomainContext domCtx) {
+				relation.getDomain().add(visitDomain(domCtx));
+			} else if (child instanceof QvtRParser.PrimitiveTypeDomainContext primCtx) {
+				relation.getDomain().add(visitPrimitiveTypeDomain(primCtx));
+			}
 		}
 
 		// Process when clause
@@ -807,6 +811,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 					// behind them (#154)
 					VariableExp varExp = OCL.createVariableExp();
 					varExp.setReferredVariable(relationVariable(identifierText(itemCtx.identifier())));
+					recordPosition(varExp, itemCtx);
 					cte.getMember().add(varExp);
 				} else {
 					// '_' wildcard → anonymous variable
@@ -822,6 +827,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			if (selCtx.identifier() != null) {
 				Variable restVar = OCL.createVariable();
 				restVar.setName(identifierText(selCtx.identifier()));
+				recordPosition(restVar, selCtx.identifier());
 				cte.setRest(restVar);
 			} else if (selCtx.UNDERSCORE() != null) {
 				Variable restVar = OCL.createVariable();
@@ -952,13 +958,15 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * Resolves an EPackage by name from the package registry.
 	 */
 	/**
-	 * Where each expression node stood, for runtime diagnostics (#116), and where each import
-	 * was written, for link diagnostics (#264).
+	 * Where each expression node stood, for runtime diagnostics (#116), where each import
+	 * was written, for link diagnostics (#264), and where collection member and rest names
+	 * stood, for binding diagnostics (#278).
 	 *
 	 * @return the positions, by node identity
 	 */
 	Map<EObject, SourcePosition> getNodePositions() {
 		Map<EObject, SourcePosition> positions = new IdentityHashMap<>(importPositions);
+		positions.putAll(templatePositions);
 		if (expressionBuilder != null) {
 			positions.putAll(expressionBuilder.getNodePositions());
 		}
@@ -1078,9 +1086,13 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	}
 
 	/**
-	 * The relation's variable of that name — declared in the relation, bound by a domain, or
-	 * introduced by an earlier mention — and a fresh one registered with the relation otherwise,
-	 * so that the next mention finds it. One Variable per name within a relation (#154).
+	 * The relation's variable of that name — declared in the relation or bound by a domain — so
+	 * that one name means one Variable within a relation (#154).
+	 *
+	 * <p>A name declared nowhere gets a fresh variable that is <em>not</em> registered with the
+	 * relation: §7.13.5 looks a member name up among the relation's variables and has no rule that
+	 * declares one by mention. Registering it made an undeclared name look declared to the binding
+	 * validator, which then let it through as bound (#278); unregistered, the validator reports it.
 	 */
 	private Variable relationVariable(String name) {
 		if (currentRelation != null) {
@@ -1092,10 +1104,18 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		}
 		Variable variable = OCL.createVariable();
 		variable.setName(name);
-		if (currentRelation != null) {
-			currentRelation.getVariable().add(variable);
-		}
 		return variable;
+	}
+
+	/**
+	 * Records where a template node the expression builder never sees was written, so that a
+	 * diagnostic about it can point there (#278).
+	 */
+	private void recordPosition(EObject node, ParserRuleContext ctx) {
+		if (ctx.getStart() != null) {
+			templatePositions.put(node, new SourcePosition(ctx.getStart().getLine(),
+					ctx.getStart().getCharPositionInLine()));
+		}
 	}
 
 	/**
