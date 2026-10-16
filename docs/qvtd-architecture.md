@@ -170,7 +170,7 @@ Extracted into `QvtrEnforcer` for testability and separation of concerns.
 
 1. Try **match** target domain against existing elements
 2. Apply **default value assignments** (§7.11.3.7) for unbound variables
-3. Try **`implementedby`** (§7.11.3.6) via `QvtrBlackboxBridge` — delegate to `RelationImplementationProvider` or blackbox registry
+3. Try **`implementedby`** (§7.11.3.6) via `QvtrBlackboxBridge` — only when the target does not match yet: invoke the named operation through a `RelationImplementationProvider` or the blackbox registry, then re-match; still no match is an error (#282)
 4. If no match → **create** via `ObjectTemplateExp`:
    a. Check already-bound variable (e.g. from when-clause or shared variable)
    b. Look up by **Key** (`key T { prop1, prop2 }`) — identity-based find-or-create (§7.4)
@@ -182,7 +182,8 @@ Extracted into `QvtrEnforcer` for testability and separation of concerns.
 
 Extracted into `QvtrBlackboxBridge` for testability and security centralization (M-R5).
 
-- `invokeImplementedBy()` — searches `RelationImplementationProvider`s first (D39 hybrid), then falls back to blackbox registry
+- `invokeImplementedBy()` — asks `RelationImplementationProvider`s for the operation the clause names (D39 hybrid), then the blackbox registry; arguments are the clause's, i.e. the domains' root objects; unserved is an error, never a silent fallback to QVT-R enforcement (#282)
+- `evaluateBlackboxQuery()` reports an unserved query once per run with the reason (#283)
 - `evaluateBlackboxQuery()` — delegates query calls without body to registered libraries
 - `isBlackboxAllowed()` — enforces `allowedBlackboxModules` allow-list
 - All blackbox access gated by `config.blackboxEnabled()` (disabled by default)

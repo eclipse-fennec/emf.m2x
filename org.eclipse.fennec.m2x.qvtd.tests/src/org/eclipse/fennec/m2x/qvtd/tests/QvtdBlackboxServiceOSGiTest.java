@@ -179,20 +179,14 @@ class QvtdBlackboxServiceOSGiTest {
 		return ((EPackage) target.getContents().get(0)).getName();
 	}
 
-	/**
-	 * Runs the transformation and asserts that no library served the query Answer: the run
-	 * fails and nothing a library answers reached the target. The diagnostic names the unbound
-	 * {@code m} rather than the unserved query — an unserved blackbox query evaluates to
-	 * {@code null} without a diagnostic of its own, which is outside #269.
-	 */
+	/** Runs the transformation and asserts that no library served the query Answer (#283). */
 	private static void assertNotServed(QvtdEngine engine, String why) throws Exception {
 		QvtdModelExtent target = QvtdModelExtent.of(List.of());
 		QvtdExecutionResult result = execute(engine, target);
-		assertFalse(result.isSuccess(), () -> why + ", diagnostics: " + result.diagnostics());
-		assertTrue(target.getContents().stream()
-				.noneMatch(o -> o instanceof EPackage p && !"untouched".equals(p.getName())
-						&& p.getName() != null),
-				() -> why + ", but a library answered: " + target.getContents());
+		String diagnostics = result.diagnostics().toString();
+		assertFalse(result.isSuccess(), () -> why + ", diagnostics: " + diagnostics);
+		assertTrue(diagnostics.contains("Blackbox query 'Answer' cannot be served"),
+				() -> why + ", but failed otherwise: " + diagnostics);
 	}
 
 	private static QvtdExecutionResult execute(QvtdEngine engine, QvtdModelExtent target)
