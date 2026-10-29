@@ -467,11 +467,21 @@ public class QvtoEvaluator {
 	 * @return invalid, the value of the construct
 	 */
 	private Object undefinedCondition(String construct, Object condition) {
+		return undefinedCondition(construct, condition, "no branch is taken");
+	}
+
+	/**
+	 * Reports a condition that is neither true nor false, and what does not happen because of
+	 * it (#308, #310). A statement that cannot run is an error of the transformation.
+	 *
+	 * @return invalid, the value of the construct
+	 */
+	private Object undefinedCondition(String construct, Object condition, String consequence) {
 		addError(construct + "-condition must be Boolean, got: "
 				+ (condition == null ? "null"
 						: condition == OclInvalid.INSTANCE ? "invalid"
 						: condition.getClass().getSimpleName())
-				+ " — no branch is taken");
+				+ " — " + consequence);
 		return OclInvalid.INSTANCE;
 	}
 
@@ -503,31 +513,23 @@ public class QvtoEvaluator {
 		OclExpression body = iterExp.getOwnedBody();
 		String opName = iterExp.getName();
 
+		// The boolean iterators answer as the OCL engine does for the same expression (OCL v2.4
+		// §11.9): a body that is neither true nor false makes select and reject invalid, and
+		// counts in forAll, exists and any by their own precedence (#310). Read as false, the
+		// same expression had one result here and another one in the OCL engine.
 		return switch (opName) {
-			case "select" -> {
+			case "select", "reject" -> {
+				boolean keep = "select".equals(opName);
 				List<Object> result = new ArrayList<>();
 				for (Object elem : coll) {
 					env.pushScope();
 					try {
 						env.define(iterName, elem);
 						Object bodyVal = eval(body);
-						if (Boolean.TRUE.equals(bodyVal)) {
-							result.add(elem);
+						if (!(bodyVal instanceof Boolean matched)) {
+							yield OclInvalid.INSTANCE;
 						}
-					} finally {
-						env.popScope();
-					}
-				}
-				yield result;
-			}
-			case "reject" -> {
-				List<Object> result = new ArrayList<>();
-				for (Object elem : coll) {
-					env.pushScope();
-					try {
-						env.define(iterName, elem);
-						Object bodyVal = eval(body);
-						if (!Boolean.TRUE.equals(bodyVal)) {
+						if (matched == keep) {
 							result.add(elem);
 						}
 					} finally {
@@ -564,47 +566,48 @@ public class QvtoEvaluator {
 				}
 				yield result;
 			}
-			case "forAll" -> {
+			case "forAll", "exists" -> {
+				// §11.9.1: the deciding value wins — false for forAll, true for exists — then
+				// invalid, then null, then the other one
+				Boolean deciding = "exists".equals(opName);
+				boolean hasInvalid = false;
+				boolean hasNull = false;
 				for (Object elem : coll) {
 					env.pushScope();
 					try {
 						env.define(iterName, elem);
-						if (!Boolean.TRUE.equals(eval(body))) {
-							yield Boolean.FALSE;
+						Object bodyVal = eval(body);
+						if (deciding.equals(bodyVal)) {
+							yield deciding;
+						}
+						if (bodyVal == OclInvalid.INSTANCE) {
+							hasInvalid = true;
+						} else if (!(bodyVal instanceof Boolean)) {
+							hasNull = true;
 						}
 					} finally {
 						env.popScope();
 					}
 				}
-				yield Boolean.TRUE;
-			}
-			case "exists" -> {
-				for (Object elem : coll) {
-					env.pushScope();
-					try {
-						env.define(iterName, elem);
-						if (Boolean.TRUE.equals(eval(body))) {
-							yield Boolean.TRUE;
-						}
-					} finally {
-						env.popScope();
-					}
-				}
-				yield Boolean.FALSE;
+				yield hasInvalid ? OclInvalid.INSTANCE : hasNull ? WRAPPED_NULL : !deciding;
 			}
 			case "any" -> {
+				boolean hasInvalid = false;
 				for (Object elem : coll) {
 					env.pushScope();
 					try {
 						env.define(iterName, elem);
-						if (Boolean.TRUE.equals(eval(body))) {
+						Object bodyVal = eval(body);
+						if (Boolean.TRUE.equals(bodyVal)) {
 							yield elem;
 						}
+						hasInvalid |= bodyVal == OclInvalid.INSTANCE;
 					} finally {
 						env.popScope();
 					}
 				}
-				yield wrapNull(null);
+				// as the OCL engine: no match, and a body that was invalid — invalid
+				yield hasInvalid ? OclInvalid.INSTANCE : wrapNull(null);
 			}
 			default -> evalOcl(iterExp);
 		};
@@ -809,10 +812,15 @@ public class QvtoEvaluator {
 			env.pushScope();
 			bindOperationParams(mappingOp, self, args);
 
-			// when-guard: all must be true, otherwise skip
+			// when-guard: all must be true, otherwise skip. A guard that cannot be decided is an
+			// error, and the mapping does not run (§8.2.1.15, #310)
 			for (OclExpression whenExpr : mappingOp.getWhen()) {
 				Object whenVal = eval(whenExpr);
 				if (!Boolean.TRUE.equals(whenVal)) {
+					if (!Boolean.FALSE.equals(whenVal)) {
+						undefinedCondition("when", whenVal,
+								"mapping '" + mappingOp.getName() + "' is not executed");
+					}
 					return GUARD_FAILED;
 				}
 			}
@@ -887,9 +895,14 @@ public class QvtoEvaluator {
 			OclExpression whereExpr = mappingOp.getWhere();
 			if (whereExpr != null) {
 				Object whereVal = eval(whereExpr);
-				if (!Boolean.TRUE.equals(whereVal)) {
+				if (Boolean.FALSE.equals(whereVal)) {
 					addWarning("Mapping '" + mappingOp.getName()
 							+ "': where-postcondition failed");
+				} else if (!Boolean.TRUE.equals(whereVal)) {
+					// A postcondition is an assertion (§8.2.1.15): one that cannot be decided
+					// is an error (#310)
+					undefinedCondition("where", whereVal, "the postcondition of mapping '"
+							+ mappingOp.getName() + "' cannot be checked");
 				}
 			}
 
@@ -928,6 +941,10 @@ public class QvtoEvaluator {
 		for (OclExpression whenExpr : mapping.getWhen()) {
 			Object whenVal = eval(whenExpr);
 			if (!Boolean.TRUE.equals(whenVal)) {
+				if (!Boolean.FALSE.equals(whenVal)) {
+					undefinedCondition("when", whenVal,
+							"mapping '" + mapping.getName() + "' is not executed");
+				}
 				return;
 			}
 		}
@@ -1761,6 +1778,11 @@ public class QvtoEvaluator {
 				}
 				Object condition = eval(exp.getCondition());
 				if (!Boolean.TRUE.equals(condition)) {
+					// §8.2.2.4: iterates "until a condition becomes false" — an undefined one
+					// ends the loop too, but not without a word (#310)
+					if (!Boolean.FALSE.equals(condition)) {
+						undefinedCondition("while", condition, "the loop ends");
+					}
 					break;
 				}
 				try {
@@ -1813,6 +1835,11 @@ public class QvtoEvaluator {
 					if (condition != null) {
 						Object condVal = eval(condition);
 						if (!Boolean.TRUE.equals(condVal)) {
+							// §8.2.2.6 defines the condition as "if (condition) body" per element:
+							// the if of #308, so this element is skipped with an error (#310)
+							if (!Boolean.FALSE.equals(condVal)) {
+								undefinedCondition(exp.getName(), condVal, "the element is skipped");
+							}
 							continue;
 						}
 					}
@@ -1936,7 +1963,13 @@ public class QvtoEvaluator {
 			env.pushScope();
 			try {
 				env.define(target != null ? target.getName() : iterName, candidate);
-				return Boolean.TRUE.equals(eval(condition));
+				// §8.2.2.7 defines the variants with "if (SELECTOR <> null and CONDITION)": the
+				// if of #308, so an undefined condition skips the element with an error (#310)
+				Object condVal = eval(condition);
+				if (!(condVal instanceof Boolean)) {
+					undefinedCondition("xselect", condVal, "the element is skipped");
+				}
+				return Boolean.TRUE.equals(condVal);
 			} finally {
 				env.popScope();
 			}
@@ -2088,6 +2121,9 @@ public class QvtoEvaluator {
 			if (exp.getCondition() != null) {
 				Object cond = eval(exp.getCondition());
 				if (!Boolean.TRUE.equals(cond)) {
+					if (!Boolean.FALSE.equals(cond)) {
+						undefinedCondition("log", cond, "nothing is logged");
+					}
 					return WRAPPED_NULL; // Condition false — skip logging
 				}
 			}
@@ -2354,7 +2390,11 @@ public class QvtoEvaluator {
 			if (sourceObj instanceof Collection<?> coll) {
 				List<EObject> allResults = new ArrayList<>();
 				for (Object elem : coll) {
-					allResults.addAll(resolveForSource(exp, elem));
+					List<EObject> resolved = resolveForSource(exp, elem);
+					if (resolved == null) {
+						return OclInvalid.INSTANCE;
+					}
+					allResults.addAll(resolved);
 				}
 				if (exp.isOne()) {
 					return wrapNull(allResults.isEmpty() ? null : allResults.get(0));
@@ -2363,6 +2403,9 @@ public class QvtoEvaluator {
 			}
 
 			List<EObject> candidates = resolveForSource(exp, sourceObj);
+			if (candidates == null) {
+				return OclInvalid.INSTANCE;
+			}
 
 			if (exp.isOne()) {
 				return wrapNull(candidates.isEmpty() ? null : candidates.get(0));
@@ -2370,7 +2413,12 @@ public class QvtoEvaluator {
 			return wrapNull(candidates);
 		}
 
-		/** Resolves candidates for a single source object (or null for all records). */
+		/**
+		 * Resolves candidates for a single source object (or null for all records).
+		 *
+		 * @return the candidates, or {@code null} when the condition is neither true nor false
+		 *         for one of them — the resolve is then invalid
+		 */
 		private List<EObject> resolveForSource(ResolveExp exp, Object sourceObj) {
 			// Target type — the EClass itself (#156)
 			EClass targetType = null;
@@ -2405,6 +2453,11 @@ public class QvtoEvaluator {
 					try {
 						env.define(targetVarName, candidate);
 						Object condVal = eval(exp.getCondition());
+						if (!(condVal instanceof Boolean)) {
+							// §8.2.1.22: the condition filters as a select does, and a select
+							// whose body is neither true nor false is invalid (#310)
+							return null;
+						}
 						if (Boolean.TRUE.equals(condVal)) {
 							filtered.add(candidate);
 						}
