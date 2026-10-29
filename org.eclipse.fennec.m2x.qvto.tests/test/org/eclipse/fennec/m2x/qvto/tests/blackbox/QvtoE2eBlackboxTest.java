@@ -231,6 +231,33 @@ class QvtoE2eBlackboxTest {
 				"trimAll should not be callable without import");
 	}
 
+	// ==================== null arguments (#306) ====================
+
+	/**
+	 * OCL v2.4 §8.2: null conforms to every type, so a blackbox operation takes it and decides.
+	 * The null-argument error of #270 is the standard library's, not the transformation's.
+	 */
+	@Test
+	void blackbox_nullArgument_isPassedOn() throws Exception {
+		String source = """
+				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				import mylib;
+				transformation Main(inout m : ECORE) {
+				    main() {
+				        var s : String := null;
+				        log('trimmed null: ' + (trimAll(s) = null).repr());
+				    }
+				}
+				""";
+
+		OperationalTransformation t = engine.parse(source, "Main");
+		QvtoExecutionResult result = engine.execute(t,
+				QvtoExecutionContext.of(new BasicQvtoModelExtent()));
+
+		assertSuccess(result);
+		assertLogged(result, "trimmed null: true");
+	}
+
 	// ==================== Helper methods ====================
 
 	private static void assertSuccess(QvtoExecutionResult result) {

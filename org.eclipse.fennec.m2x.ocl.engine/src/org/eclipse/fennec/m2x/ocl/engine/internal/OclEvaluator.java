@@ -572,15 +572,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 			}
 		}
 
-		// A null argument of a non-collection operation has no reading: 'a' + null and 1 + null
-		// are invalid (OCL v2.4 §11.2.3). Reported, not only answered — this was the one path on
-		// which an expression became invalid without a word, and a generator wrote the word
-		// OclInvalid into its document while the run counted as successful (#270).
+		// A null argument of a non-collection standard-library operation has no reading: 'a' + null
+		// and 1 + null are invalid (OCL v2.4 §11.2.3), reported below (#270). An operation the
+		// model, a document or the host language defines takes it: null conforms to every type
+		// (§8.2, §11.2.1), and its body decides (QVT v1.3 §8.2.1.10, #306).
+		boolean nullArgument = false;
 		if (!(source instanceof Collection<?>) && !(source instanceof Map<?, ?>)) {
 			for (Object arg : args) {
-				if (arg == null) {
-					return addError("Null argument for operation '" + opName + "'");
-				}
+				nullArgument |= arg == null;
 			}
 		}
 
@@ -615,12 +614,16 @@ public class OclEvaluator extends OclSwitch<Object> {
 		if (operation != null && source instanceof EObject eo) {
 			try {
 				EList<Object> eArgs = args.length > 0
-						? new BasicEList<>(List.of(args))
+						? new BasicEList<>(Arrays.asList(args))
 						: ECollections.emptyEList();
 				return wrapNull(eo.eInvoke(operation, eArgs));
 			} catch (InvocationTargetException e) {
 				Throwable cause = e.getCause();
 				return addError("Operation invocation failed: " + opName + " - " + (cause != null ? cause.getMessage() : e.getMessage()));
+			} catch (NullPointerException | ClassCastException e) {
+				// Generated eInvoke code casts and unboxes its arguments without a check: a null
+				// for an int parameter, say. An error of the call, not of the evaluation (#306)
+				return addError("Operation invocation failed: " + opName + " - " + e);
 			} catch (UnsupportedOperationException e) {
 				// No generated eInvoke switch and no delegate that answers for this
 				// operation. Letting EMF's exception escape would tear down an evaluation
@@ -633,6 +636,17 @@ public class OclEvaluator extends OclSwitch<Object> {
 				}
 				// Matched by name only: the standard library or a provider may still answer
 			}
+		}
+
+		if (nullArgument) {
+			// Not the standard library's to answer: a user-defined operation, or the error of #270.
+			// Reported, not only answered — a generator otherwise wrote the word OclInvalid into
+			// its document while the run counted as successful.
+			Object custom = dispatchCustomOperation(opName, source, args);
+			if (custom != OclStdlib.NOT_FOUND) {
+				return wrapNull(custom);
+			}
+			return addError("Null argument for operation '" + opName + "'");
 		}
 
 		// 2. Try standard library

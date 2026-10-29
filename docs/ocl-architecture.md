@@ -231,10 +231,17 @@ reading, and `null.size()` none either.
 
 Neither of them is quiet. A `null` source is reported where it is refused (`Null source for
 operation …` under STRICT) or where no provider took it (`Unknown operation: size on null`
-under LENIENT); a `null` *argument* is reported in either mode, `Null argument for operation
-'+'`, and the value stays `invalid` (OCL v2.4 §11.2.3). The argument case was, until #270, the
-one path on which an expression turned invalid without a diagnostic — a generator then wrote
-the word `OclInvalid` into its document while the run counted as successful.
+under LENIENT); a `null` *argument* to a standard-library operation is reported in either mode,
+`Null argument for operation '+'`, and the value stays `invalid` (OCL v2.4 §11.2.3). The argument
+case was, until #270, the one path on which an expression turned invalid without a diagnostic — a
+generator then wrote the word `OclInvalid` into its document while the run counted as successful.
+
+That refusal is the standard library's alone (#306). `null` conforms to every type (§8.2,
+§11.2.1), so an operation the model, an OCL document or the host language defines — a model
+`EOperation`, a QVT-O helper, query or blackbox — receives it and its body decides. With a `null`
+argument the evaluator therefore tries the model operation and the custom providers, and reports
+`Null argument for operation …` only when none of them answers. A generated `eInvoke` that cannot
+take the `null` (an `int` parameter) is an `Operation invocation failed` error, not an exception.
 
 That second half is not a leftover: QVT-O evaluates every expression leniently and resolves its
 module-level helpers — which have no `self` — through exactly that path (`QvtoEvaluator:587`).

@@ -442,15 +442,37 @@ public class QvtoEvaluator {
 	 * Evaluates an OCL IfExp using the QVT-O dispatch chain so that imperative
 	 * body expressions (BlockExp, etc.) are handled correctly.
 	 * §8.2.2.8: imperative if — else is optional (returns null when absent).
+	 *
+	 * <p>A condition that is neither true nor false takes no branch, the else branch included:
+	 * "otherwise the result is invalid" (OCL v2.4 §10.3, IfExpEval [1]). Imperatively that is a
+	 * statement that does not run, so it is an error of the transformation (#308).
 	 */
 	private Object evalIfExp(IfExp ifExp) {
 		Object condVal = eval(ifExp.getOwnedCondition());
 		if (Boolean.TRUE.equals(condVal)) {
 			return eval(ifExp.getOwnedThen());
-		} else if (ifExp.getOwnedElse() != null) {
+		}
+		if (!Boolean.FALSE.equals(condVal)) {
+			return undefinedCondition("if", condVal);
+		}
+		if (ifExp.getOwnedElse() != null) {
 			return eval(ifExp.getOwnedElse());
 		}
 		return null;
+	}
+
+	/**
+	 * Reports a condition that is neither true nor false (#308).
+	 *
+	 * @return invalid, the value of the construct
+	 */
+	private Object undefinedCondition(String construct, Object condition) {
+		addError(construct + "-condition must be Boolean, got: "
+				+ (condition == null ? "null"
+						: condition == OclInvalid.INSTANCE ? "invalid"
+						: condition.getClass().getSimpleName())
+				+ " — no branch is taken");
+		return OclInvalid.INSTANCE;
 	}
 
 	/**
@@ -1678,6 +1700,11 @@ public class QvtoEvaluator {
 					}
 				} else if (source instanceof EObject eo && sf != null) {
 					assignToProperty(eo, sf, value, exp);
+				} else if (source == null || source == OclInvalid.INSTANCE) {
+					// §8.2.2.11: there is no object to assign to — the assignment cannot be
+					// performed, and it is not dropped without a word (#308)
+					addError("Cannot assign to property '" + (sf != null ? sf.getName() : "?")
+							+ "': the target is " + (source == null ? "null" : "invalid"));
 				}
 			}
 			return wrapNull(value);
@@ -1932,6 +1959,10 @@ public class QvtoEvaluator {
 				Object condition = eval(alt.getCondition());
 				if (Boolean.TRUE.equals(condition)) {
 					return wrapNull(eval(alt.getBody()));
+				}
+				// §8.2.2.8: "almost as nested OCL if expressions" — nor does it go on (#308)
+				if (!Boolean.FALSE.equals(condition)) {
+					return undefinedCondition("switch", condition);
 				}
 			}
 			if (exp.getElsePart() != null) {
