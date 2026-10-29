@@ -19,6 +19,7 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -331,6 +332,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			String name = segments.get(0);
 			return environment.lookup(name)
 					.<OclExpression>map(this::createVariableExp)
+					.or(() -> resolveOnImplicitIterator(name))
 					.orElseGet(() -> resolveImplicitProperty(name));
 		}
 
@@ -696,13 +698,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = this.environment.nested(iterVar);
 
 		if (typeCondition != null) {
-			OperationCallExp oclIsKindOf = OCL.createOperationCallExp();
-			oclIsKindOf.setName("oclIsKindOf");
-			VariableExp iterRef = OCL.createVariableExp();
-			iterRef.setReferredVariable(iterVar);
-			oclIsKindOf.setOwnedSource(iterRef);
-			oclIsKindOf.getOwnedArguments().add(typeCondition);
-			selectExp.setCondition(oclIsKindOf);
+			selectExp.setCondition(isKindOf(iterVar, typeCondition));
 		} else {
 			OclExpression condition = (OclExpression) visit(conditionCtx);
 			selectExp.setCondition(condition);
@@ -716,6 +712,10 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	public OclExpression visitXselectOneExp(QvtOParser.XselectOneExpContext ctx) {
 		// §8.2.2.7: list![condition] = xselectOne — returns first matching element
 		OclExpression source = (OclExpression) visit(ctx.expression(0));
+
+		// §8.2.2.7: "these shorthand conventions apply also to ... xselectOne", the type form
+		// included — list![T] is the first T, as list[T] is all of them (#298)
+		TypeExp typeCondition = tryBuildTypeCondition(ctx.xselectOneCondition);
 
 		String iterName = ctx.xselectOneIter != null
 				? qvtoIdentifierText(ctx.xselectOneIter)
@@ -738,12 +738,30 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		QvtoEnvironment savedEnv = this.environment;
 		this.environment = this.environment.nested(iterVar);
 
-		OclExpression condition = (OclExpression) visit(ctx.xselectOneCondition);
+		OclExpression condition;
+		if (typeCondition != null) {
+			condition = isKindOf(iterVar, typeCondition);
+		} else {
+			condition = (OclExpression) visit(ctx.xselectOneCondition);
+		}
 
 		this.environment = savedEnv;
 
 		anyExp.setCondition(condition);
 		return anyExp;
+	}
+
+	/**
+	 * The condition of the type form {@code list[T]} / {@code list![T]}: the iterator is a T.
+	 */
+	private static OperationCallExp isKindOf(Variable iterVar, TypeExp type) {
+		OperationCallExp oclIsKindOf = OCL.createOperationCallExp();
+		oclIsKindOf.setName("oclIsKindOf");
+		VariableExp iterRef = OCL.createVariableExp();
+		iterRef.setReferredVariable(iterVar);
+		oclIsKindOf.setOwnedSource(iterRef);
+		oclIsKindOf.getOwnedArguments().add(type);
+		return oclIsKindOf;
 	}
 
 	/**
@@ -2221,18 +2239,40 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			QvtOParser.CollectionOperationCallContext ctx, boolean isSafe) {
 		String opName = qvtoIdentifierText(ctx.qvtoIdentifier());
 
-		// §8.4.4: ->select(#Type) / ->select(##Type) — shorthand type check as iterator predicate
-		// When a known iterator receives a single #/## shorthand argument (sourceless oclIsKindOf/oclIsTypeOf),
-		// desugar to IteratorExp with the type check as body and iterator variable as source.
+		// OCL v2.4 §7.6.3: an iterator whose variable is omitted — ->any(true),
+		// ->select(name = 'x') — has an implicit one, and a name in the body may be its
+		// property (#299)
 		if (ITERATOR_NAMES.contains(opName) && ctx.argumentList() != null
 				&& ctx.argumentList().expression().size() == 1) {
-			OclExpression arg = (OclExpression) visit(ctx.argumentList().expression(0));
+			Variable iterVar = OCL.createVariable();
+			iterVar.setName("_implicit");
+			EClassifier elementType = inferElementType(source);
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
+			QvtoEnvironment savedEnv = this.environment;
+			this.environment = this.environment.nestedImplicit(iterVar);
+			OclExpression arg;
+			try {
+				arg = (OclExpression) visit(ctx.argumentList().expression(0));
+			} finally {
+				this.environment = savedEnv;
+			}
+			// §8.4.4: ->select(#Type) / ->select(##Type) — a sourceless oclIsKindOf/oclIsTypeOf
+			// is a type check on the iterator
 			if (arg instanceof OperationCallExp shorthand
 					&& shorthand.getOwnedSource() == null
 					&& ("oclIsKindOf".equals(shorthand.getName())
 						|| "oclIsTypeOf".equals(shorthand.getName()))) {
 				return desugarShorthandIterator(source, opName, shorthand, isSafe);
 			}
+			IteratorExp iterExp = OCL.createIteratorExp();
+			iterExp.setOwnedSource(source);
+			iterExp.setName(opName);
+			iterExp.setIsSafe(isSafe);
+			iterExp.getOwnedIterators().add(iterVar);
+			iterExp.setOwnedBody(arg);
+			return iterExp;
 		}
 
 		OperationCallExp exp = OCL.createOperationCallExp();
@@ -2281,6 +2321,32 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		exp.setReferredVariable(variable);
 		exp.setType(variable.getType());
 		return exp;
+	}
+
+	/**
+	 * A bare name inside an iterator without a variable: the iterator's property, when its
+	 * element type has one of that name — or, the element type being unknown here, by name at
+	 * run time, as for any property this parser cannot resolve.
+	 */
+	private Optional<OclExpression> resolveOnImplicitIterator(String name) {
+		Optional<Variable> iterator = environment.lookupImplicitIterator();
+		if (iterator.isEmpty()) {
+			return Optional.empty();
+		}
+		Variable iterVar = iterator.get();
+		if (iterVar.getType() instanceof EClass eClass) {
+			if (eClass.getEStructuralFeature(name) == null) {
+				return Optional.empty();
+			}
+		} else if (iterVar.getType() != null || findInDeclaredPackages(name) != null) {
+			// A data-typed element has no properties; a type name stays a type
+			return Optional.empty();
+		}
+		PropertyCallExp exp = OCL.createPropertyCallExp();
+		exp.setIsImplicit(true);
+		exp.setOwnedSource(createVariableExp(iterVar));
+		resolveProperty(exp, name);
+		return Optional.of(exp);
 	}
 
 	private OclExpression resolveImplicitProperty(String name) {

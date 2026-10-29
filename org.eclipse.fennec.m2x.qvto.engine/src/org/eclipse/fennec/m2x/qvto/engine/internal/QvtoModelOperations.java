@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -88,39 +89,19 @@ class QvtoModelOperations {
 		String opName = opCall.getName();
 		// §8.3.5.3: objectsOfType — exact type match only (not subtypes)
 		if ("objectsOfType".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			EClass filterType = resolveEClassArg(evalFn.apply(opCall.getOwnedArguments().get(0)));
-			if (filterType != null) {
-				List<EObject> result = new ArrayList<>();
-				for (EObject eo : extent.getContents()) {
-					if (isExactType(eo, filterType)) {
-						result.add(eo);
-					}
-				}
-				return wrapNull(result);
-			}
-			return wrapNull(new ArrayList<>(extent.getContents()));
+			return wrapNull(objectsOfType(extent, evalFn.apply(opCall.getOwnedArguments().get(0))));
 		}
 		// §8.3.5.2: objectsOfKind — includes subtypes
 		if ("objectsOfKind".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
-			EClass filterType = resolveEClassArg(evalFn.apply(opCall.getOwnedArguments().get(0)));
-			if (filterType != null) {
-				List<EObject> result = new ArrayList<>();
-				for (EObject eo : extent.getContents()) {
-					if (filterType.isInstance(eo)) {
-						result.add(eo);
-					}
-				}
-				return wrapNull(result);
-			}
-			return wrapNull(new ArrayList<>(extent.getContents()));
+			return wrapNull(objectsOfKind(extent, evalFn.apply(opCall.getOwnedArguments().get(0))));
 		}
-		// §8.3.5.1: objects — all objects
+		// §8.3.5.1: objects — "the set of all objects in the model", not only the roots (#301)
 		if ("objects".equals(opName)) {
-			return wrapNull(new ArrayList<>(extent.getContents()));
+			return wrapNull(new ArrayList<>(allObjects(extent)));
 		}
-		// §8.3.5.4: rootObjects — top-level objects not contained by others
+		// §8.3.5.4: rootObjects — the objects "not contained by other objects in the model"
 		if ("rootObjects".equals(opName)) {
-			return wrapNull(new ArrayList<>(extent.getContents()));
+			return wrapNull(rootObjects(extent));
 		}
 		// §8.3.5.5: addElement — add element to extent
 		if ("addElement".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
@@ -280,6 +261,64 @@ class QvtoModelOperations {
 					"InvalidModelMutation",
 					"Cannot modify read-only model extent (in-parameter)");
 		}
+	}
+
+	/**
+	 * §8.3.5.1: every object of the extent — its roots and what they contain, each once and
+	 * in document order. A root may also sit inside another root of the same extent (an
+	 * object created into the extent and then put into a containment), hence the set.
+	 *
+	 * <p>This and the three below are shared with {@link QvtoOperationProvider}, which answers
+	 * the same operations when the OCL engine evaluates the call.
+	 */
+	static Set<EObject> allObjects(QvtoModelExtent extent) {
+		Set<EObject> result = new LinkedHashSet<>();
+		for (EObject root : extent.getContents()) {
+			if (result.add(root)) {
+				for (var iter = root.eAllContents(); iter.hasNext(); ) {
+					result.add(iter.next());
+				}
+			}
+		}
+		return result;
+	}
+
+	/** §8.3.5.3: the objects of the extent whose type is exactly the given one. */
+	static List<EObject> objectsOfType(QvtoModelExtent extent, Object typeArg) {
+		EClass filterType = resolveEClassArg(typeArg);
+		List<EObject> result = new ArrayList<>();
+		for (EObject eo : allObjects(extent)) {
+			if (filterType == null || isExactType(eo, filterType)) {
+				result.add(eo);
+			}
+		}
+		return result;
+	}
+
+	/** §8.3.5.2: the objects of the extent that are of the given type or a subtype. */
+	static List<EObject> objectsOfKind(QvtoModelExtent extent, Object typeArg) {
+		EClass filterType = resolveEClassArg(typeArg);
+		List<EObject> result = new ArrayList<>();
+		for (EObject eo : allObjects(extent)) {
+			if (filterType == null || filterType.isInstance(eo)) {
+				result.add(eo);
+			}
+		}
+		return result;
+	}
+
+	/** §8.3.5.4: the objects "not contained by other objects in the model". */
+	static List<EObject> rootObjects(QvtoModelExtent extent) {
+		Set<EObject> all = allObjects(extent);
+		List<EObject> roots = new ArrayList<>();
+		for (EObject eo : extent.getContents()) {
+			// An object added to the extent and later put into a containment of another
+			// object of the same model is no longer a root
+			if (eo.eContainer() == null || !all.contains(eo.eContainer())) {
+				roots.add(eo);
+			}
+		}
+		return roots;
 	}
 
 	/**

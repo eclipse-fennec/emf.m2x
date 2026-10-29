@@ -92,54 +92,24 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// Built-in model extent operations
 		// §8.3.5.3: objectsOfType — exact type match only (not subtypes)
 		ops.add(new OclOperation("objectsOfType", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof QvtoModelExtent extent && args.length > 0) {
-						EClass filterType = resolveEClassArg(args[0]);
-						if (filterType != null) {
-							List<EObject> result = new ArrayList<>();
-							for (EObject eo : extent.getContents()) {
-								if (eo.eClass() == filterType) {
-									result.add(eo);
-								}
-							}
-							return result;
-						}
-					}
-					return List.of();
-				}));
+				(self, args) -> self instanceof QvtoModelExtent extent && args.length > 0
+						? QvtoModelOperations.objectsOfType(extent, args[0])
+						: List.of()));
 		// §8.3.5.2: objectsOfKind — includes subtypes
 		ops.add(new OclOperation("objectsOfKind", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof QvtoModelExtent extent && args.length > 0) {
-						EClass filterType = resolveEClassArg(args[0]);
-						if (filterType != null) {
-							List<EObject> result = new ArrayList<>();
-							for (EObject eo : extent.getContents()) {
-								if (filterType.isInstance(eo)) {
-									result.add(eo);
-								}
-							}
-							return result;
-						}
-					}
-					return List.of();
-				}));
-		// §8.3.5.1: objects — all objects
+				(self, args) -> self instanceof QvtoModelExtent extent && args.length > 0
+						? QvtoModelOperations.objectsOfKind(extent, args[0])
+						: List.of()));
+		// §8.3.5.1: objects — all objects, not only the roots (#301)
 		ops.add(new OclOperation("objects", ANY_TYPE, List.of(), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof QvtoModelExtent extent) {
-						return new ArrayList<>(extent.getContents());
-					}
-					return List.of();
-				}));
+				(self, args) -> self instanceof QvtoModelExtent extent
+						? new ArrayList<>(QvtoModelOperations.allObjects(extent))
+						: List.of()));
 		// §8.3.5.4: rootObjects — top-level objects not contained by others
 		ops.add(new OclOperation("rootObjects", ANY_TYPE, List.of(), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof QvtoModelExtent extent) {
-						return new ArrayList<>(extent.getContents());
-					}
-					return List.of();
-				}));
+				(self, args) -> self instanceof QvtoModelExtent extent
+						? QvtoModelOperations.rootObjects(extent)
+						: List.of()));
 		// §8.3.5.5: addElement — add element to extent
 		ops.add(new OclOperation("addElement", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
@@ -277,7 +247,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 						if (filterType != null) {
 							List<EObject> result = new ArrayList<>();
 							for (EObject child : eo.eContents()) {
-								if (child.eClass() == filterType) {
+								if (QvtoModelOperations.isExactType(child, filterType)) {
 									result.add(child);
 								}
 							}
@@ -312,7 +282,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 							List<EObject> result = new ArrayList<>();
 							for (var iter = eo.eAllContents(); iter.hasNext(); ) {
 								EObject desc = iter.next();
-								if (desc.eClass() == filterType) {
+								if (QvtoModelOperations.isExactType(desc, filterType)) {
 									result.add(desc);
 								}
 							}
