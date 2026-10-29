@@ -73,6 +73,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingCallExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
+import org.eclipse.fennec.m2x.model.qvtoperational.MappingParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.ObjectExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationBody;
@@ -814,7 +815,10 @@ public class QvtoEvaluator {
 						if (resultParams.size() == 1) {
 							env.assign("result", created);
 						}
-						addToDefaultExtent(created);
+						// §8.2.1.16: the extent the result names (T@extent), else the inferred one
+						addToExtent(created, rp instanceof MappingParameter mp && mp.getExtent() != null
+								? mp.getExtent().getName()
+								: null);
 					}
 				}
 			}
@@ -958,23 +962,23 @@ public class QvtoEvaluator {
 		}
 	}
 
-	/**
-	 * Adds an EObject to the appropriate output extent. First tries to match
-	 * by metamodel (EPackage), then falls back to the default output extent.
-	 */
-	private void addToDefaultExtent(EObject eObject) {
-		addToExtent(eObject, null);
+	private void addToExtent(EObject eObject, Variable extentRef) {
+		addToExtent(eObject, extentRef != null ? extentRef.getName() : null);
 	}
 
-	private void addToExtent(EObject eObject, Variable extentRef) {
-		if (extentRef != null && extentRef.getName() != null) {
-			QvtoModelExtent extent = extentManager.getExtent(extentRef.getName());
+	/**
+	 * Adds an EObject to the named extent, or — without a name — to the one inferred from its
+	 * metamodel.
+	 */
+	private void addToExtent(EObject eObject, String extentName) {
+		if (extentName != null) {
+			QvtoModelExtent extent = extentManager.getExtent(extentName);
 			if (extent != null) {
 				// §8.3.19: topclasses constraint — check if root type is allowed
 				if (tagRegistry.hasTopclassConstraints()
-						&& !tagRegistry.isTopclassAllowed(extentRef.getName(), eObject.eClass())) {
+						&& !tagRegistry.isTopclassAllowed(extentName, eObject.eClass())) {
 					addInfo("topclasses: " + eObject.eClass().getName()
-							+ " is not allowed as root in extent '" + extentRef.getName() + "'");
+							+ " is not allowed as root in extent '" + extentName + "'");
 					return;
 				}
 				extent.add(eObject);

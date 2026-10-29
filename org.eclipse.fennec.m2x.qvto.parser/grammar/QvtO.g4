@@ -188,17 +188,19 @@ resultList
 
 // §8.4: <declarator> ::= <typespec> | <scoped_identifier> ':' <typespec>
 // Allows both named (r : Type) and unnamed (Type → implicit 'result') result parameters.
+// <typespec> ::= <type_reference> <extent_location>? — the extent the result is created in (#302)
 resultParam
-    : qvtoIdentifier ':' typeExpression                                                     # NamedResult
-    | typeExpression                                                                        # UnnamedResult
+    : qvtoIdentifier ':' typeSpec                                                           # NamedResult
+    | typeSpec                                                                              # UnnamedResult
     ;
 
 paramList
     : param (',' param)*
     ;
 
+// §8.4: <param> ::= <param_direction>? <declarator>, whose <typespec> may name an extent (#302)
 param
-    : directionKind? qvtoIdentifier ':' typeExpression
+    : directionKind? qvtoIdentifier ':' typeSpec
     ;
 
 // §8.4.7: <mapping_extra> ::= <mapping_extension> | <mapping_refinement>

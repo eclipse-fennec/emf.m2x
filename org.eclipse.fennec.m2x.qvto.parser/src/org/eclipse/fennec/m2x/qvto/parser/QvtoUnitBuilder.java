@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
@@ -111,6 +112,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private record PendingExtension(MappingOperation mapping, String kind, String name) {}
 
+	/** An {@code @extent} of a mapping parameter, resolved once the model parameters are known. */
+	private record PendingExtentLocation(MappingParameter parameter, Token extent) {}
+
 	private final EPackage.Registry packageRegistry;
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 	/** Module-local type names from {@code typedef}, shared with the expression builder. */
@@ -120,6 +124,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoEnvironment environment;
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
+	private final List<PendingExtentLocation> pendingExtentLocations = new ArrayList<>();
 	private final Map<String, Module> importedModuleStubs = new HashMap<>();
 
 	/**
@@ -268,6 +273,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Resolve deferred mapping extensions for top-level module elements
 		if (hasTopLevelModuleElements && transformation != null) {
 			resolvePendingExtensions(transformation);
+			resolvePendingExtentLocations(transformation);
 			// §8.4: Resolve opposite properties
 			resolveOppositeProperties(transformation);
 		}
@@ -339,6 +345,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Resolve deferred mapping extensions (disjuncts, inherits, merges)
 		resolvePendingExtensions(transformation);
+		resolvePendingExtentLocations(transformation);
 
 		// §8.4: Resolve opposite properties across all intermediate classes
 		resolveOppositeProperties(transformation);
@@ -368,6 +375,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Resolve deferred mapping extensions (disjuncts, inherits, merges)
 		resolvePendingExtensions(library);
+		resolvePendingExtentLocations(library);
 
 		return library;
 	}
@@ -696,13 +704,13 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			if (rCtx instanceof QvtOParser.NamedResultContext named) {
 				resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
 						named.qvtoIdentifier()));
-				EClassifier type = expressionBuilder.resolveTypeExpression(named.typeExpression());
+				EClassifier type = expressionBuilder.resolveTypeExpression(named.typeSpec().typeExpression());
 				if (type != null) {
 					setParameterType(resultParam, type);
 				}
 			} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
 				resultParam.setName("result");
-				EClassifier type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
+				EClassifier type = expressionBuilder.resolveTypeExpression(unnamed.typeSpec().typeExpression());
 				if (type != null) {
 					setParameterType(resultParam, type);
 				}
@@ -1526,7 +1534,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 						paramCtx.qvtoIdentifier()));
 
 				EClassifier paramType = expressionBuilder.resolveTypeExpression(
-						paramCtx.typeExpression());
+						paramCtx.typeSpec().typeExpression());
 				if (paramType != null && !(paramType instanceof OclType)) {
 					eParam.setEType(paramType);
 				} else if (paramType instanceof PrimitiveType pt) {
@@ -1758,35 +1766,73 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			for (QvtOParser.ParamContext paramCtx : sigCtx.inputParams.param()) {
 				MappingParameter param = QVTO.createMappingParameter();
 				param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
-				EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
+				EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeSpec().typeExpression());
 				if (type != null) {
 					setParameterType(param, type);
 				}
+				recordExtentLocation(param, paramCtx.typeSpec());
 				operation.getEParameters().add(param);
 			}
 		}
 
-		// Result parameters (§8.4: named 'r : Type' or unnamed 'Type' → implicit 'result')
+		// Result parameters (§8.4: named 'r : Type' or unnamed 'Type' → implicit 'result').
+		// A mapping's results are mapping parameters (§8.2.1.16), out, and may name the extent
+		// their object is created in.
 		if (sigCtx.resultList() != null) {
 			for (QvtOParser.ResultParamContext rCtx : sigCtx.resultList().resultParam()) {
-				VarParameter resultParam = QVTO.createVarParameter();
+				MappingParameter resultParam = QVTO.createMappingParameter();
+				resultParam.setKind(DirectionKind.OUT);
+				QvtOParser.TypeSpecContext typeSpec;
 				if (rCtx instanceof QvtOParser.NamedResultContext named) {
 					resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
 							named.qvtoIdentifier()));
-					EClassifier type = expressionBuilder.resolveTypeExpression(named.typeExpression());
-					if (type != null) {
-						setParameterType(resultParam, type);
-					}
-				} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
+					typeSpec = named.typeSpec();
+				} else {
 					resultParam.setName("result");
-					EClassifier type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
-					if (type != null) {
-						setParameterType(resultParam, type);
-					}
+					typeSpec = ((QvtOParser.UnnamedResultContext) rCtx).typeSpec();
 				}
+				EClassifier type = expressionBuilder.resolveTypeExpression(typeSpec.typeExpression());
+				if (type != null) {
+					setParameterType(resultParam, type);
+				}
+				recordExtentLocation(resultParam, typeSpec);
 				operation.getResult().add(resultParam);
 			}
 		}
+	}
+
+	/** §8.2.1.16: remembers {@code T@extent} to be resolved against the model parameters. */
+	private void recordExtentLocation(MappingParameter param, QvtOParser.TypeSpecContext typeSpec) {
+		if (typeSpec.qvtoIdentifier() != null) {
+			pendingExtentLocations.add(new PendingExtentLocation(param, typeSpec.qvtoIdentifier().getStart()));
+		}
+	}
+
+	/**
+	 * §8.2.1.16: resolves each {@code @extent} of a mapping parameter to the model parameter of
+	 * that name. A name that is none of them is an error, as an unknown type is.
+	 */
+	private void resolvePendingExtentLocations(Module module) {
+		for (PendingExtentLocation pending : pendingExtentLocations) {
+			String name = pending.extent().getText();
+			ModelParameter extent = null;
+			if (module instanceof OperationalTransformation transformation) {
+				for (ModelParameter mp : transformation.getModelParameter()) {
+					if (name.equals(mp.getName())) {
+						extent = mp;
+						break;
+					}
+				}
+			}
+			if (extent != null) {
+				pending.parameter().setExtent(extent);
+			} else {
+				diagnostics.add(new ParseDiagnostic("Unknown extent '" + name
+						+ "': not a model parameter of the transformation",
+						pending.extent().getLine(), pending.extent().getCharPositionInLine()));
+			}
+		}
+		pendingExtentLocations.clear();
 	}
 
 	private void buildSimpleSignature(
@@ -1798,7 +1844,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ParamContext paramCtx : sigCtx.paramList().param()) {
 			VarParameter param = QVTO.createVarParameter();
 			param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
-			EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
+			EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeSpec().typeExpression());
 			if (type != null) {
 				setParameterType(param, type);
 			}

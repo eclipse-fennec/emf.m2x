@@ -847,6 +847,7 @@ Binds `ModelParameter` declarations to `QvtoModelExtent` instances:
 - Enforces read-only constraint on `in` parameters (§8.1.3.2)
 - Accessed via `getExtent(ModelParameter)`, `getExtent(int index)`, or `getExtent(String name)`
 - **Explicit extent routing (§8.1.3/§8.1.6):** `object T@extentName { ... }` and `new T@extentName()` route created objects to the named extent via `addToExtent(EObject, Variable)`
+- **Mapping parameters (§8.2.1.16, #302):** `mapping X::m(in p : S@src) : T@dest` — the parser resolves `@dest` to the `ModelParameter` (`MappingParameter.extent`; an unknown name is a parse error), and the result object is created in that extent. Without it the extent is inferred from the model types: the first `out`/`inout` parameter whose metamodel contains the type. With two out parameters of the same model type only the explicit form reaches the second. A mapping's result parameters are `MappingParameter`s of kind `OUT`.
 
 ### 6.6 QvtoControlFlowException — Imperative Control Flow
 
