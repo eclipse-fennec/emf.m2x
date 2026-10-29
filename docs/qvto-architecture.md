@@ -799,6 +799,20 @@ taken`. Assigning a property of `null` or `invalid` cannot be performed and repo
 property 'p': the target is null`. Both used to pass silently, the `if` even running its `else`; the
 measurement before the change found no test in any suite that reached either case.
 
+The other conditions follow the same line (#310); every one of them used to read `null` and `invalid`
+as `false`, and again no test in any suite reached them:
+
+| Condition | Undefined (neither true nor false) |
+|---|---|
+| `while` (§8.2.2.4) | ERROR, the loop ends |
+| `forEach`/`forOne` condition (§8.2.2.6: `if (condition) body` per element) | ERROR, that element is skipped, the loop goes on |
+| `xselect`/`xcollectselect…` condition (§8.2.2.7, same `if`) | ERROR, that element is skipped |
+| `log … when` (§8.2.2.19) | ERROR, nothing is logged |
+| `when` guard (§8.2.1.15), `map` and inherited/merged | ERROR, the mapping does not run (`xmap` was already an error) |
+| `where` postcondition | ERROR; a violated one (`false`) stays a WARNING |
+| `select`/`reject`/`forAll`/`exists`/`any` evaluated by QVT-O | as the OCL engine (§11.9.1): `select`/`reject` invalid, the quantifiers by their precedence, no diagnostic |
+| `resolve` condition (§8.2.1.22) | the resolve is `invalid`, as a `select` |
+
 **Imperative expressions inside OCL ones (§8.1.13, #296):** a call whose source is an
 imperative expression (`list[T]->first()`, `new T(m).transform()`) goes to the OCL engine like
 any other. The OCL evaluator meets the imperative node, which it does not know, and hands it
