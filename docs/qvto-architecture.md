@@ -791,6 +791,14 @@ prevents duplicate side effects when chaining operations
 (e.g. `String.incrStrCounter('X').repr()` must evaluate `incrStrCounter` exactly once).
 Name guards (`QvtoModelOperations.isExtentOperation`/`isElementOperation`) enforce this.
 
+**Undefined values in statements (#308).** An `if` (either notation) or a `switch` alternative whose
+condition is neither `true` nor `false` takes no branch, the `else` included — "otherwise the result is
+invalid" (OCL v2.4 §10.3, IfExpEval [1]; QVT §8.2.2.8 defines the switch "almost as nested OCL if
+expressions") — and reports the ERROR `if-condition must be Boolean, got: invalid — no branch is
+taken`. Assigning a property of `null` or `invalid` cannot be performed and reports `Cannot assign to
+property 'p': the target is null`. Both used to pass silently, the `if` even running its `else`; the
+measurement before the change found no test in any suite that reached either case.
+
 **Imperative expressions inside OCL ones (§8.1.13, #296):** a call whose source is an
 imperative expression (`list[T]->first()`, `new T(m).transform()`) goes to the OCL engine like
 any other. The OCL evaluator meets the imperative node, which it does not know, and hands it

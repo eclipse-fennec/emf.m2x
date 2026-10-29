@@ -19,8 +19,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
+
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
@@ -116,5 +119,17 @@ class OclNullArgumentDiagnosticTest extends AbstractOclTest {
 		OclResult including = evalResult("Sequence{1, 2}->including(null)->size()", STRICT);
 		assertEquals(3, ((Number) including.value()).intValue());
 		assertTrue(including.diagnostics().isEmpty(), () -> "diagnostics: " + including.diagnostics());
+	}
+
+	@Test
+	@DisplayName("a model operation takes null, and its implementation decides (#306)")
+	void modelOperationTakesNull() throws OclParseException {
+		// null conforms to every type (OCL v2.4 §8.2); the refusal of #270 is the standard
+		// library's, which has no reading for 'a' + null — not the model's
+		OclExpression parsed = engine.parse("p.getEClassifier(null)", self.eClass());
+		OclResult result = engine.evaluateWithDiagnostics(parsed,
+				OclContext.of(self, Map.of("p", EcorePackage.eINSTANCE)), STRICT);
+		assertEquals(null, result.value());
+		assertTrue(result.diagnostics().isEmpty(), () -> "diagnostics: " + result.diagnostics());
 	}
 }
