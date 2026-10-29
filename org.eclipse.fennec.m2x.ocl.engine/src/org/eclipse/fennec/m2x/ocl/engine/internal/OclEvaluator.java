@@ -638,6 +638,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// 2. Try standard library
 		Object result = OclStdlib.dispatch(opName, source, args, options, resolveOclLocale());
 		if (result != OclStdlib.NOT_FOUND) {
+			reportInvalidOrigin(exp, result, source, args);
 			return wrapNull(result);
 		}
 
@@ -1481,6 +1482,73 @@ public class OclEvaluator extends OclSwitch<Object> {
 	private Object addError(String message) {
 		diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0, message, nodeData()));
 		return OclInvalid.INSTANCE;
+	}
+
+	/**
+	 * Says where an {@code invalid} comes from (#304).
+	 *
+	 * <p>A standard-library operation answers {@code invalid} for values it is not defined
+	 * for — {@code first()} of an empty collection, {@code at()} out of range, a division by
+	 * zero (OCL v2.4 §11). That is the correct value, but without a word it travels on silently
+	 * and ends as the text {@code OclInvalid} in a log or a generated file, with nothing to tell
+	 * which expression produced it. So it is reported where it originates — from valid source
+	 * and arguments — and not again while it propagates.
+	 *
+	 * <p>A warning, as for a null navigated leniently: {@code invalid} is a value of the
+	 * language, and testing for it is ordinary. Where the call is tested on the spot —
+	 * {@code coll->first().oclIsUndefined()} — the author expects it, and nothing is said.
+	 */
+	private void reportInvalidOrigin(OperationCallExp exp, Object result, Object source,
+			Object[] args) {
+		if (result != OclInvalid.INSTANCE || source == OclInvalid.INSTANCE) {
+			return;
+		}
+		for (Object arg : args) {
+			if (arg == OclInvalid.INSTANCE) {
+				return;
+			}
+		}
+		if (exp.eContainer() instanceof OperationCallExp test && test.getOwnedSource() == exp
+				&& ("oclIsInvalid".equals(test.getName()) || "oclIsUndefined".equals(test.getName()))) {
+			return;
+		}
+		StringBuilder message = new StringBuilder("'").append(exp.getName()).append("' on ")
+				.append(describeValue(source));
+		if (args.length > 0) {
+			message.append(" with ");
+			for (int i = 0; i < args.length; i++) {
+				message.append(i > 0 ? ", " : "").append(describeValue(args[i]));
+			}
+		}
+		addWarning(message.append(" is invalid").toString());
+	}
+
+	/** A value as a diagnostic names it: short, and by its OCL kind for a collection. */
+	private static String describeValue(Object value) {
+		if (value == null) {
+			return "null";
+		}
+		if (value instanceof Collection<?> collection) {
+			String kind = value instanceof OclOrderedSet<?> ? "OrderedSet"
+					: value instanceof OclBag<?> ? "Bag"
+					: value instanceof Set<?> ? "Set"
+					: "Sequence";
+			return collection.isEmpty() ? "an empty " + kind
+					: (kind.startsWith("O") ? "an " : "a ") + kind + " of " + collection.size();
+		}
+		if (value instanceof String text) {
+			return "'" + (text.length() > 40 ? text.substring(0, 40) + "…" : text) + "'";
+		}
+		if (value instanceof Number || value instanceof Boolean) {
+			return value.toString();
+		}
+		if (value == OclUnlimitedNatural.INSTANCE) {
+			return "*";
+		}
+		if (value instanceof EObject eo) {
+			return "a " + eo.eClass().getName();
+		}
+		return "a " + value.getClass().getSimpleName();
 	}
 
 	/**

@@ -249,6 +249,18 @@ evaluation stays successful. M2T selects `LENIENT` (D14, #114) and forwards thes
 its own result, which is what lets a template author see which expression came up empty instead of
 finding a gap in the generated document.
 
+**Nor is an `invalid` silent where it arises** (#304). A standard-library operation answers
+`invalid` for values it is not defined for: `first()` of an empty collection, `at()` out of
+range, a division by zero (OCL v2.4 §11). The value is right, but it used to travel on unnoticed
+and end as the text `OclInvalid`. Where it originates, from valid source and arguments, the
+evaluator records a `WARNING` naming the operation and the values, e.g. `'first' on an empty
+Sequence is invalid`. It does this in either mode, and only there: propagating `invalid`
+further says nothing more, and a call tested on the spot (`coll->first().oclIsUndefined()`,
+`(a / b).oclIsInvalid()`) expects it and stays quiet. A warning, not an error, because
+`invalid` is a value of the language. Measured before it was introduced: across all suites
+the origins came from tests that produce `invalid` on purpose, plus two QVT-O transformations
+that really did call `first()` on an empty collection or an operation on `null`.
+
 ### 4.6 Extension Interfaces
 
 ```java
