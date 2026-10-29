@@ -22,6 +22,7 @@ import java.util.function.BiFunction;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 
 /**
  * Evaluation context for OCL expressions, bundling the context object ({@code self}),
@@ -58,6 +59,12 @@ import org.eclipse.emf.ecore.resource.ResourceSet;
  *     When set, the OCL evaluator calls this function before doing {@code eGet()}.
  *     The function receives the target EObject and property name, and returns the value
  *     or {@link #PROPERTY_NOT_HANDLED} if the interceptor does not handle the property.
+ * @param foreignExpressionEvaluator optional evaluator for expressions that are not OCL's,
+ *     or {@code null}. A language built on OCL — QVT-O's imperative expressions — can nest
+ *     its own expressions inside OCL ones ({@code list[T]->first()}). When the OCL evaluator
+ *     meets such a node it hands it here, with the variables the OCL evaluation has bound
+ *     since this context (iterator and let variables), and takes what comes back as the
+ *     node's value. Without it such a node is an error.
  * @author Data In Motion Consulting
  * @since 1.0
  */
@@ -66,7 +73,8 @@ public record OclContext(
 		OclModelExtent extent,
 		Map<String, Object> variables,
 		ResourceSet resourceSet,
-		BiFunction<EObject, String, Object> propertyInterceptor) {
+		BiFunction<EObject, String, Object> propertyInterceptor,
+		BiFunction<OclExpression, Map<String, Object>, Object> foreignExpressionEvaluator) {
 
 	/**
 	 * Sentinel returned by {@link #propertyInterceptor()} when it does not handle
@@ -84,6 +92,21 @@ public record OclContext(
 		// extent is nullable — not every evaluation needs allInstances()
 		// resourceSet is nullable — not every evaluation needs it
 		// propertyInterceptor is nullable — only needed for QVT-O intermediate properties
+		// foreignExpressionEvaluator is nullable — only needed by a language built on OCL
+	}
+
+	/**
+	 * Constructor without foreignExpressionEvaluator.
+	 *
+	 * @param self the context object
+	 * @param extent the model extent, or {@code null}
+	 * @param variables external variables
+	 * @param resourceSet the resource set, or {@code null}
+	 * @param propertyInterceptor the property interceptor, or {@code null}
+	 */
+	public OclContext(EObject self, OclModelExtent extent, Map<String, Object> variables,
+			ResourceSet resourceSet, BiFunction<EObject, String, Object> propertyInterceptor) {
+		this(self, extent, variables, resourceSet, propertyInterceptor, null);
 	}
 
 	/**
@@ -96,7 +119,7 @@ public record OclContext(
 	 */
 	public OclContext(EObject self, OclModelExtent extent, Map<String, Object> variables,
 			ResourceSet resourceSet) {
-		this(self, extent, variables, resourceSet, null);
+		this(self, extent, variables, resourceSet, null, null);
 	}
 
 	/**
@@ -107,7 +130,7 @@ public record OclContext(
 	 * @param variables external variables
 	 */
 	public OclContext(EObject self, OclModelExtent extent, Map<String, Object> variables) {
-		this(self, extent, variables, null, null);
+		this(self, extent, variables, null, null, null);
 	}
 
 	/**

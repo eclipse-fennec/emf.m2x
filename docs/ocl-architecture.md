@@ -166,13 +166,27 @@ Bundles evaluation context (replaces bare `EObject` parameter):
 public record OclContext(
     EObject self,                      // The context object ('self')
     OclModelExtent extent,             // For allInstances() — nullable
-    Map<String, Object> variables      // Global variables
+    Map<String, Object> variables,     // Global variables
+    ResourceSet resourceSet,           // Package resolution — nullable
+    BiFunction<EObject, String, Object> propertyInterceptor,              // nullable
+    BiFunction<OclExpression, Map<String, Object>, Object> foreignExpressionEvaluator // nullable
 ) {
     public static OclContext of(EObject self) { ... }
     public static OclContext of(EObject self, OclModelExtent extent) { ... }
     public static OclContext of(EObject self, Map<String, Object> variables) { ... }
 }
 ```
+
+The last two are hooks for a language built on OCL. `propertyInterceptor` answers property
+reads before `eGet()` (QVT-O intermediate properties). `foreignExpressionEvaluator` evaluates
+a node that is not OCL's but sits inside an OCL expression — QVT-O's `list[T]->first()` or
+`x.late resolveone(T)->asOrderedSet()`: the OCL evaluator hands the node over together with
+the iterator and let variables it has bound since the context, and uses the returned value.
+Without it such a node is an `Unsupported expression type` error (#296).
+
+An operation call whose `referredOperation` the parser could not resolve — the source's type
+was unknown — is still dispatched to the object's own `EOperation` of that name and arity at
+run time, before the standard library and custom providers (§7.5.4, #300).
 
 ### 4.4 OclResult (D20)
 

@@ -39,11 +39,13 @@ class QvtoRuntimeDiagnosticPositionTest extends AbstractQvtoEngineTest {
 	@Test
 	@DisplayName("a problem while running is reported at all")
 	void runtimeDiagnosticIsForwarded() throws QvtoParseException {
+		// The extent holds no EPackage, so ![EPackage] is null (§8.2.2.7) and navigating it is
+		// the problem. It used to be ![EClass], which found nothing only because of #298.
 		var transformation = engine.parse("""
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
 				transformation T(inout m : ECORE);
 				main() {
-				    var c := m.rootObjects()![EClass];
+				    var c := m.rootObjects()![EPackage];
 				    log(c.eSuperTypes->first().name);
 				}
 				""", "positions");
@@ -64,13 +66,13 @@ class QvtoRuntimeDiagnosticPositionTest extends AbstractQvtoEngineTest {
 			+ "node of the expression is in the position map")
 	@DisplayName("a problem while running names the unit, the line and the column")
 	void runtimeDiagnosticCarriesItsPosition() throws QvtoParseException {
-		// eSuperTypes of a fresh EClass is empty, so first() has nothing — the expression on
-		// line 5 is the one that goes wrong, and the message has to say so.
+		// The extent holds no EPackage, so c is null and navigating it goes wrong — the
+		// expression on line 5 is the one that goes wrong, and the message has to say so.
 		var transformation = engine.parse("""
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
 				transformation T(inout m : ECORE);
 				main() {
-				    var c := m.rootObjects()![EClass];
+				    var c := m.rootObjects()![EPackage];
 				    log(c.eSuperTypes->first().name);
 				}
 				""", "positions");

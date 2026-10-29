@@ -785,11 +785,23 @@ QvtoEvaluator
 then delegates to OclEngine for standard OCL expressions.
 
 **Source evaluation invariant:** For `OperationCallExp`, intermediate dispatch steps
-(model extent/element operation checks, imperative source handling) must not eagerly
-evaluate the source expression unless the operation name actually matches a known
-operation in that category. This prevents duplicate side effects when chaining operations
+(model extent/element operation checks) must not eagerly evaluate the source expression
+unless the operation name actually matches a known operation in that category. This
+prevents duplicate side effects when chaining operations
 (e.g. `String.incrStrCounter('X').repr()` must evaluate `incrStrCounter` exactly once).
 Name guards (`QvtoModelOperations.isExtentOperation`/`isElementOperation`) enforce this.
+
+**Imperative expressions inside OCL ones (§8.1.13, #296):** a call whose source is an
+imperative expression (`list[T]->first()`, `new T(m).transform()`) goes to the OCL engine like
+any other. The OCL evaluator meets the imperative node, which it does not know, and hands it
+back through `OclContext.foreignExpressionEvaluator` (`QvtoEvaluator.evalNestedInOcl`)
+together with the iterator/let variables it has bound. The source is evaluated once, and the
+call is dispatched on its value: model `EOperation`, standard library, providers.
+
+The model extent operations exist twice — in `QvtoModelOperations` (QVT-O dispatch) and in
+`QvtoOperationProvider` (when the OCL engine evaluates the call); both share
+`QvtoModelOperations.allObjects/objectsOfType/objectsOfKind/rootObjects`, so `objects()`
+and its typed variants cover every contained object, not only the roots (§8.3.5, #301).
 
 ### 6.3 QvtoEvalEnvironment — Mutable Scope Stack
 
@@ -916,8 +928,19 @@ late resolveone(Type)
 late resolveIn(ClassName::mappingName, Type)
 ```
 
-Late resolve creates deferred tasks that are executed after the main transformation run,
-allowing forward references to mappings that haven't executed yet.
+An assignment whose right-hand side involves a late resolve is a *deferred assignment*
+(§8.2.2.11) and is deferred as a whole, wherever it stands (top of a mapping body, block,
+`if`). When it is reached, `QvtoEvaluator` records a `DeferredAssignment`: the target object
+and property, the visible variables, and the source of each late resolve (§8.2.1.22) — except
+a source that uses a variable of the right-hand side itself (an iterator), which is evaluated
+with it. The assignment returns null. After the entry operation, the right-hand sides are
+evaluated in order against the full trace and assigned, so
+`x.late resolveone(T)->asOrderedSet()` works as well as a bare late resolve.
+
+Assignments to a many-valued property flatten the value and omit nulls (§8.2.2.11); what EMF
+still refuses is reported as an ERROR diagnostic, not thrown out of `execute` (#297). A late
+resolve outside a property assignment (a variable, say) is not deferred and yields null with
+a warning.
 
 ---
 

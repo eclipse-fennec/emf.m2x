@@ -35,6 +35,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
@@ -602,13 +603,21 @@ public class OclEvaluator extends OclSwitch<Object> {
 			}
 		}
 
-		// 1. Try Ecore model operation (referredOperation set by parser)
-		if (exp.getReferredOperation() != null && source instanceof EObject eo) {
+		// 1. Try Ecore model operation: the one the parser resolved, or — where the parser did
+		// not know the source's type, as for a QVT-O property of type EPackage — the object's
+		// own operation of that name and arity (OCL v2.4 §7.5.4, #300)
+		EOperation operation = exp.getReferredOperation();
+		boolean foundByName = false;
+		if (operation == null && source instanceof EObject eo) {
+			operation = findOperation(eo.eClass(), opName, args.length);
+			foundByName = operation != null;
+		}
+		if (operation != null && source instanceof EObject eo) {
 			try {
 				EList<Object> eArgs = args.length > 0
 						? new BasicEList<>(List.of(args))
 						: ECollections.emptyEList();
-				return wrapNull(eo.eInvoke(exp.getReferredOperation(), eArgs));
+				return wrapNull(eo.eInvoke(operation, eArgs));
 			} catch (InvocationTargetException e) {
 				Throwable cause = e.getCause();
 				return addError("Operation invocation failed: " + opName + " - " + (cause != null ? cause.getMessage() : e.getMessage()));
@@ -616,10 +625,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 				// No generated eInvoke switch and no delegate that answers for this
 				// operation. Letting EMF's exception escape would tear down an evaluation
 				// that has a diagnostics channel for exactly this.
-				return addError("Operation '" + opName + "' has no implementation."
-						+ " Either the model is generated and implements it, or the"
-						+ " operation carries an OCL body annotation and the package"
-						+ " declares the delegate (see installDelegates())");
+				if (!foundByName) {
+					return addError("Operation '" + opName + "' has no implementation."
+							+ " Either the model is generated and implements it, or the"
+							+ " operation carries an OCL body annotation and the package"
+							+ " declares the delegate (see installDelegates())");
+				}
+				// Matched by name only: the standard library or a provider may still answer
 			}
 		}
 
@@ -1174,6 +1186,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	@Override
 	public Object defaultCase(EObject object) {
+		// A node of a language built on OCL, nested in an OCL expression — QVT-O's
+		// list[T]->first() — is the host's to evaluate, with what this evaluation has bound
+		OclContext ctx = env.getContext();
+		if (object instanceof OclExpression foreign && ctx != null
+				&& ctx.foreignExpressionEvaluator() != null) {
+			return wrapNull(ctx.foreignExpressionEvaluator().apply(foreign, env.bindingsSinceRoot()));
+		}
 		return addError("Unsupported expression type: " + object.eClass().getName());
 	}
 
@@ -1549,6 +1568,18 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 *
 	 * @return the intercepted value, or {@link OclContext#PROPERTY_NOT_HANDLED} if not intercepted
 	 */
+	/**
+	 * The operation of the class, own or inherited, with this name and number of parameters.
+	 */
+	private static EOperation findOperation(EClass eClass, String name, int arity) {
+		for (EOperation candidate : eClass.getEAllOperations()) {
+			if (candidate.getName().equals(name) && candidate.getEParameters().size() == arity) {
+				return candidate;
+			}
+		}
+		return null;
+	}
+
 	private Object tryPropertyInterceptor(EObject target, String propName) {
 		OclContext ctx = env.getContext();
 		if (ctx != null && ctx.propertyInterceptor() != null) {

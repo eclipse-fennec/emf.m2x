@@ -37,10 +37,13 @@ class QvtoEnvironment {
 
 	private final QvtoEnvironment parent;
 	private final Map<String, Variable> variables;
+	private final Variable implicitIterator;
 
-	private QvtoEnvironment(QvtoEnvironment parent, Map<String, Variable> variables) {
+	private QvtoEnvironment(QvtoEnvironment parent, Map<String, Variable> variables,
+			Variable implicitIterator) {
 		this.parent = parent;
 		this.variables = Map.copyOf(variables);
+		this.implicitIterator = implicitIterator;
 	}
 
 	/**
@@ -49,7 +52,7 @@ class QvtoEnvironment {
 	 * @return a new root environment
 	 */
 	static QvtoEnvironment root() {
-		return new QvtoEnvironment(null, Map.of());
+		return new QvtoEnvironment(null, Map.of(), null);
 	}
 
 	/**
@@ -62,7 +65,7 @@ class QvtoEnvironment {
 		Objects.requireNonNull(variable, "variable must not be null");
 		Map<String, Variable> vars = new LinkedHashMap<>();
 		vars.put(variable.getName(), variable);
-		return new QvtoEnvironment(this, vars);
+		return new QvtoEnvironment(this, vars, null);
 	}
 
 	/**
@@ -77,7 +80,31 @@ class QvtoEnvironment {
 		for (Variable v : additionalVariables) {
 			vars.put(v.getName(), v);
 		}
-		return new QvtoEnvironment(this, vars);
+		return new QvtoEnvironment(this, vars, null);
+	}
+
+	/**
+	 * Creates a child environment whose implicit source is an iterator without a name — the
+	 * {@code ->select(name = 'x')} form of OCL v2.4 §7.6.3.
+	 *
+	 * @param iterator the implicit iterator variable
+	 * @return a new child environment
+	 */
+	QvtoEnvironment nestedImplicit(Variable iterator) {
+		Objects.requireNonNull(iterator, "iterator must not be null");
+		return new QvtoEnvironment(this, Map.of(), iterator);
+	}
+
+	/**
+	 * Returns the innermost implicit iterator, if any.
+	 *
+	 * @return the implicit iterator variable, or empty outside an iterator without a variable
+	 */
+	Optional<Variable> lookupImplicitIterator() {
+		if (implicitIterator != null) {
+			return Optional.of(implicitIterator);
+		}
+		return parent != null ? parent.lookupImplicitIterator() : Optional.empty();
 	}
 
 	/**

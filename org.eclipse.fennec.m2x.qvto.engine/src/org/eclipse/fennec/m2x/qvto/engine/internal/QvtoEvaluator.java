@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,7 +45,6 @@ import org.eclipse.fennec.m2x.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ComputeExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ForExp;
-import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeExpression;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.InstantiationExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.LogExp;
@@ -57,10 +57,10 @@ import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.util.ImperativeOclSwitch;
-import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
@@ -86,7 +86,6 @@ import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
-import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
@@ -164,14 +163,11 @@ public class QvtoEvaluator {
 	 */
 	private List<OclOperationProvider> additionalProviders;
 
-	// Late resolve support
-	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
+	// Late resolve support (§8.2.1.22, §8.2.2.11)
+	private final List<DeferredAssignment> deferredAssignments = new ArrayList<>();
 	private boolean isDeferredExecution;
-	// L-value capture: set by caseAssignExp before RHS evaluation
-	private EObject pendingLvalueOwner;
-	private EStructuralFeature pendingLvalueFeature;
-	private boolean pendingLvalueIsReset;
-	private boolean pendingLvalueIsSubtract;
+	// While a deferred assignment runs: the late resolves' sources captured when it was reached
+	private Map<ResolveExp, Object> deferredResolveSources = Map.of();
 
 	/**
 	 * Creates an evaluator for a single transformation execution.
@@ -408,16 +404,9 @@ public class QvtoEvaluator {
 							+ (arg != null ? arg.toString() : "");
 				}
 			}
-			// §8.1.13: an operation on an imperative source — "new T(m).transform()". The OCL
-			// engine cannot evaluate the source, so it is evaluated here and the call is offered
-			// to the registered custom operations. Answering here matters: falling through would
-			// evaluate the source a second time.
-			if (opCall.getOwnedSource() instanceof ImperativeExpression) {
-				Object handled = callOnImperativeSource(opCall);
-				if (handled != UNHANDLED) {
-					return handled;
-				}
-			}
+			// §8.1.13: an operation on an imperative source — "new T(m).transform()",
+			// "list[T]->first()" — is the OCL engine's like any other call: it hands the source
+			// back to evalNestedInOcl, evaluating it once, and dispatches on its value (#296)
 			return UNHANDLED;
 		}
 
@@ -446,45 +435,6 @@ public class QvtoEvaluator {
 		public Object defaultCase(EObject object) {
 			return UNHANDLED;
 		}
-	}
-
-	/**
-	 * §8.1.13: an operation call whose source is an imperative expression.
-	 *
-	 * @param opCall the call
-	 * @return what the operation answered, or {@link #UNHANDLED} to let OCL evaluate it — which
-	 *         re-evaluates the source, acceptable only because the standard-library operations
-	 *         that end up there have no side effects
-	 */
-	private Object callOnImperativeSource(OperationCallExp opCall) {
-		Object source = eval(opCall.getOwnedSource());
-		Object[] args = new Object[opCall.getOwnedArguments().size()];
-		for (int i = 0; i < args.length; i++) {
-			args[i] = eval(opCall.getOwnedArguments().get(i));
-		}
-		String opName = opCall.getName();
-		// The catch-all is remembered rather than invoked, so that an exact match wins and no
-		// operation with a side effect is invoked twice
-		OclOperation fallback = null;
-		for (var provider : oclEngine.getOperationProviders(oclOptions())) {
-			for (var op : provider.getOperations()) {
-				if (!op.name().equals(opName)) {
-					continue;
-				}
-				if (op.ownerType() instanceof AnyType) {
-					fallback = op;
-				} else {
-					return wrapNull(op.implementation().apply(source, args));
-				}
-			}
-		}
-		if (fallback != null) {
-			Object opResult = fallback.implementation().apply(source, args);
-			if (opResult != null) {
-				return opResult;
-			}
-		}
-		return UNHANDLED;
 	}
 
 	/**
@@ -670,15 +620,13 @@ public class QvtoEvaluator {
 		if (selfObj instanceof EObject eo) {
 			self = eo;
 		}
-		// §8.1.10: Intermediate property interceptor for OCL sub-expressions
-		OclContext oclCtx;
-		if (intermediateStore.hasIntermediateProperties()) {
-			oclCtx = new OclContext(self, null, vars, null, intermediateStore::interceptIntermediateProperty);
-		} else {
-			oclCtx = self != null
-					? OclContext.of(self, vars)
-					: OclContext.of(vars);
-		}
+		// §8.1.10: Intermediate property interceptor for OCL sub-expressions; and the imperative
+		// expressions nested in the OCL one come back here (#296)
+		OclContext oclCtx = new OclContext(self, null, vars, null,
+				intermediateStore.hasIntermediateProperties()
+						? intermediateStore::interceptIntermediateProperty
+						: null,
+				this::evalNestedInOcl);
 		OclResult oclResult = oclEngine.evaluateWithDiagnostics(expr, oclCtx, oclOptions());
 		// Placed, not just copied: the OCL engine names the node it stumbled over, and the parser
 		// recorded where that node stood — including in an imported unit (#116).
@@ -687,6 +635,30 @@ public class QvtoEvaluator {
 	}
 
 
+
+	/**
+	 * A QVT-O expression nested in one the OCL engine evaluates — {@code list[T]->first()},
+	 * {@code x.late resolveone(T)->asOrderedSet()} (§8.1.13, #296). It is evaluated once, here,
+	 * with the iterator and let variables the OCL engine has bound around it.
+	 *
+	 * @param expr the nested expression
+	 * @param oclBindings the variables the OCL evaluation has bound
+	 * @return its value
+	 */
+	private Object evalNestedInOcl(OclExpression expr, Map<String, Object> oclBindings) {
+		if (expr.eClass().getEPackage() == OclPackage.eINSTANCE) {
+			// An OCL node the OCL engine itself does not know — not ours either
+			addError("Unsupported expression type: " + expr.eClass().getName());
+			return OclInvalid.INSTANCE;
+		}
+		env.pushScope();
+		try {
+			oclBindings.forEach(env::define);
+			return eval(expr);
+		} finally {
+			env.popScope();
+		}
+	}
 
 	/**
 	 * Calls an imperative operation (helper/query/mapping entry).
@@ -1271,64 +1243,105 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * Processes all deferred (late) resolve tasks after all mappings have completed.
-	 * Each task re-evaluates its resolve expression (which now has access to the full
-	 * trace) and assigns the result to the captured l-value property.
+	 * Performs the deferred assignments once the entry operation has finished (§8.2.1.22), in
+	 * the order they were reached. Each right-hand side is evaluated now, against the full
+	 * trace, with the variables and late-resolve sources captured when it was reached.
 	 */
-	@SuppressWarnings("unchecked")
 	private void processDeferredTasks() {
-		if (deferredTasks.isEmpty()) {
+		if (deferredAssignments.isEmpty()) {
 			return;
 		}
 		isDeferredExecution = true;
 		try {
-			for (DeferredResolveTask task : deferredTasks) {
-				// Re-evaluate the resolve expression — isDeferredExecution causes
-				// caseResolveExp to fall through to normal resolve logic
-				pendingLvalueOwner = null; // Clear to avoid re-capture
-				Object sourceObj = task.capturedSource();
+			for (DeferredAssignment deferred : deferredAssignments) {
 				env.pushScope();
+				deferredResolveSources = deferred.resolveSources();
 				try {
-					if (sourceObj != null) {
-						env.define("self", sourceObj);
-					}
-					Object resolved = qvtOpSwitch.doSwitch(task.resolveExp());
-					resolved = unwrapNull(resolved);
-
-					if (resolved != null && task.targetObject() != null
-							&& task.targetFeature() != null) {
-						EStructuralFeature sf = task.targetObject().eClass()
-								.getEStructuralFeature(task.targetFeature().getName());
-						if (sf == null) {
-							sf = task.targetFeature();
-						}
-						if (task.isSubtract()) {
-							// -= : remove from collection
-							Object current = task.targetObject().eGet(sf);
-							if (current instanceof Collection<?>) {
-								Collection<Object> col = (Collection<Object>) current;
-								col.remove(coerceForFeature(sf, resolved));
-							}
-						} else if (task.isReset()) {
-							task.targetObject().eSet(sf, coerceForFeature(sf, resolved));
-						} else {
-							Object current = task.targetObject().eGet(sf);
-							if (current instanceof Collection<?>) {
-								((Collection<Object>) current).add(
-										coerceForFeature(sf, resolved));
-							} else {
-								task.targetObject().eSet(sf, coerceForFeature(sf, resolved));
-							}
-						}
-					}
+					deferred.variables().forEach(env::define);
+					Object value = evalAssignedValue(deferred.assignment());
+					assignToProperty(deferred.target(), deferred.feature(), value,
+							deferred.assignment());
 				} finally {
+					deferredResolveSources = Map.of();
 					env.popScope();
 				}
 			}
 		} finally {
 			isDeferredExecution = false;
-			deferredTasks.clear();
+			deferredAssignments.clear();
 		}
+	}
+
+	/**
+	 * §8.2.2.11: whether the assignment is a deferred one — its right-hand side involves a
+	 * late resolve.
+	 */
+	private static boolean involvesLateResolve(AssignExp exp) {
+		List<OclExpression> parts = new ArrayList<>(exp.getValue());
+		if (exp.getDefaultValue() != null) {
+			parts.add(exp.getDefaultValue());
+		}
+		for (OclExpression part : parts) {
+			if (part instanceof ResolveExp r && r.isIsDeferred()) {
+				return true;
+			}
+			for (var iter = part.eAllContents(); iter.hasNext(); ) {
+				if (iter.next() instanceof ResolveExp r && r.isIsDeferred()) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * §8.2.1.22: the source object of each late resolve in the assignment, evaluated where the
+	 * assignment is reached — except a source that uses a variable the right-hand side itself
+	 * declares (an iterator, say), which can only be evaluated with the right-hand side.
+	 */
+	private Map<ResolveExp, Object> captureLateResolveSources(AssignExp exp) {
+		Map<ResolveExp, Object> sources = new IdentityHashMap<>();
+		List<OclExpression> parts = new ArrayList<>(exp.getValue());
+		if (exp.getDefaultValue() != null) {
+			parts.add(exp.getDefaultValue());
+		}
+		for (OclExpression part : parts) {
+			List<EObject> nodes = new ArrayList<>();
+			nodes.add(part);
+			part.eAllContents().forEachRemaining(nodes::add);
+			for (EObject node : nodes) {
+				if (node instanceof ResolveExp r && r.isIsDeferred() && r.getOwnedSource() != null
+						&& !usesVariableDeclaredIn(r.getOwnedSource(), exp)) {
+					sources.put(r, eval(r.getOwnedSource()));
+				}
+			}
+		}
+		return sources;
+	}
+
+	private static boolean usesVariableDeclaredIn(OclExpression expr, AssignExp assignment) {
+		List<EObject> nodes = new ArrayList<>();
+		nodes.add(expr);
+		expr.eAllContents().forEachRemaining(nodes::add);
+		for (EObject node : nodes) {
+			if (node instanceof VariableExp ref && ref.getReferredVariable() != null
+					&& EcoreUtil.isAncestor(assignment, ref.getReferredVariable())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * §8.2.2.11: the right-hand side of an assignment, with the default value standing in for null.
+	 */
+	private Object evalAssignedValue(AssignExp exp) {
+		List<OclExpression> values = exp.getValue();
+		Object value = values.isEmpty() ? null : eval(values.get(0));
+		if (value == null && exp.getDefaultValue() != null) {
+			value = eval(exp.getDefaultValue());
+		}
+		return value;
 	}
 
 	private static Object wrapNull(Object value) {
@@ -1377,6 +1390,132 @@ public class QvtoEvaluator {
 		if (extentManager.isReadOnly(target)) {
 			throw new RaiseException("InvalidModelMutation",
 					"Cannot modify object in read-only model extent (in-parameter)");
+		}
+	}
+
+	/**
+	 * Assigns to a property of a model object: an intermediate property (§8.1.10), a static
+	 * one of an intermediate class (§8.4), or the object's own.
+	 */
+	private void assignToProperty(EObject eo, EStructuralFeature sf, Object value, AssignExp exp) {
+		// §8.1.10: Check intermediate property first — intermediate properties
+		// are stored externally, so they ARE allowed on in-model objects.
+		ContextualProperty icp = intermediateStore.findIntermediateProperty(eo, sf.getName());
+		if (icp != null) {
+			// Eclipse bug449445: invalid → null for property assignment,
+			// or clear if current value is a collection
+			if (exp.isIsSubtract()) {
+				// -= on intermediate property: remove from collection
+				Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
+				if (current instanceof Collection<?>) {
+					@SuppressWarnings("unchecked")
+					Collection<Object> col = (Collection<Object>) current;
+					col.remove(value);
+				}
+			} else if ((value == OclInvalid.INSTANCE || value == null) && exp.isIsReset()) {
+				Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
+				if (current instanceof Collection<?>) {
+					@SuppressWarnings("unchecked")
+					Collection<Object> col = (Collection<Object>) current;
+					col.clear();
+				} else {
+					intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), null);
+				}
+			} else if (value == OclInvalid.INSTANCE) {
+				// += invalid: silently ignored
+			} else if (exp.isIsReset()) {
+				// §8.2.1: Collection assignment uses value-copy semantics
+				if (value instanceof Collection<?> srcCol) {
+					intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), new ArrayList<>(srcCol));
+				} else {
+					intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
+				}
+			} else {
+				// += on intermediate property: add to collection or set value
+				Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
+				if (current instanceof Collection<?>) {
+					@SuppressWarnings("unchecked")
+					Collection<Object> col = (Collection<Object>) current;
+					col.add(value);
+				} else {
+					intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
+				}
+			}
+			return;
+		}
+		// §8.1.3.2: Guard non-intermediate property assignment on in-model objects
+		checkNotReadOnly(eo);
+		// Resolve the feature from the actual EClass to handle
+		// cross-package identity (dynamic Ecore models)
+		EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
+		if (actualSf == null) {
+			actualSf = sf;
+		}
+		// §8.4: Static intermediate class feature → shared store
+		if (QvtoIntermediatePropertyStore.isStatic(actualSf)) {
+			intermediateStore.setStaticValue(actualSf, value);
+			return;
+		}
+		assignToModelFeature(eo, actualSf, value, exp);
+	}
+
+	/**
+	 * §8.2.2.11: assigns to, appends to or removes from a feature of a model object.
+	 *
+	 * <p>A many-valued feature takes the flattened values, and "any residual null values are
+	 * omitted". What EMF still refuses — a value of the wrong type, say — is an error of the
+	 * transformation, reported as such rather than thrown out of {@code execute} (#297).
+	 */
+	@SuppressWarnings("unchecked")
+	private void assignToModelFeature(EObject eo, EStructuralFeature sf, Object value,
+			AssignExp exp) {
+		if (sf == null) {
+			addError("Unknown property in assignment on " + eo.eClass().getName());
+			return;
+		}
+		// Eclipse bug449445: invalid → null for property assignment, ignored on +=
+		Object assigned = value == OclInvalid.INSTANCE ? null : value;
+		try {
+			if (exp.isIsSubtract()) {
+				if (eo.eGet(sf) instanceof Collection<?> current) {
+					((Collection<Object>) current).remove(coerceForFeature(sf, assigned));
+				}
+			} else if (sf.isMany()) {
+				List<Object> items = new ArrayList<>();
+				collectFeatureValues(sf, assigned, items);
+				if (exp.isIsReset()) {
+					// §8.2.1: collection assignment uses value-copy semantics
+					eo.eSet(sf, items);
+				} else {
+					((Collection<Object>) eo.eGet(sf)).addAll(items);
+				}
+			} else if (exp.isIsReset()) {
+				// A single-valued feature may hold a collection itself — an intermediate class's
+				// Sequence(String) — and gets a copy (§8.2.1: value-copy semantics)
+				eo.eSet(sf, assigned instanceof Collection<?> values
+						? new ArrayList<>(values)
+						: coerceForFeature(sf, assigned));
+			} else if (eo.eGet(sf) instanceof Collection<?> current) {
+				// += onto the collection such a feature holds
+				List<Object> items = new ArrayList<>();
+				collectFeatureValues(sf, assigned, items);
+				((Collection<Object>) current).addAll(items);
+			} else {
+				eo.eSet(sf, coerceForFeature(sf, assigned));
+			}
+		} catch (IllegalArgumentException | ClassCastException | ArrayStoreException e) {
+			addError("Cannot assign to " + eo.eClass().getName() + "::" + sf.getName() + ": "
+					+ e.getMessage());
+		}
+	}
+
+	private static void collectFeatureValues(EStructuralFeature sf, Object value, List<Object> into) {
+		if (value instanceof Collection<?> values) {
+			for (Object item : values) {
+				collectFeatureValues(sf, item, into);
+			}
+		} else if (value != null && value != OclInvalid.INSTANCE) {
+			into.add(coerceForFeature(sf, value));
 		}
 	}
 
@@ -1436,34 +1575,16 @@ public class QvtoEvaluator {
 		public Object caseAssignExp(AssignExp exp) {
 			OclExpression left = exp.getLeft();
 
-			// Capture l-value before evaluating RHS (needed for late resolve)
-			if (left instanceof PropertyCallExp propLeft) {
-				Object lvalSource = eval(propLeft.getOwnedSource());
-				if (lvalSource instanceof EObject eo) {
-					EStructuralFeature sf = propLeft.getReferredProperty();
-					EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
-					pendingLvalueOwner = eo;
-					pendingLvalueFeature = actualSf != null ? actualSf : sf;
-					pendingLvalueIsReset = exp.isIsReset();
-					pendingLvalueIsSubtract = exp.isIsSubtract();
-				}
+			// §8.2.2.11: an assignment involving a late resolve is deferred as a whole — wherever
+			// it stands, in a block or an if as much as at the top of a mapping body (#297)
+			if (!isDeferredExecution && involvesLateResolve(exp) && deferAssignment(exp)) {
+				// "This assignment is not executed at the time the assignment is reached ...
+				// A null value is returned instead." (§8.2.1.22)
+				return WRAPPED_NULL;
 			}
 
-			// Evaluate value(s)
-			List<OclExpression> values = exp.getValue();
-			Object value = null;
-			if (!values.isEmpty()) {
-				value = eval(values.get(0));
-			}
+			Object value = evalAssignedValue(exp);
 
-			// §8.2.2.11: defaultValue — replace null with the default expression
-			if (value == null && exp.getDefaultValue() != null) {
-				value = eval(exp.getDefaultValue());
-			}
-
-			// Clear pending l-value after RHS evaluation
-			pendingLvalueOwner = null;
-			pendingLvalueFeature = null;
 			if (left instanceof VariableExp varExp) {
 				String varName = varExp.getReferredVariable().getName();
 				// §8.2.1.17: Implicit property assignment — inside object expressions
@@ -1474,53 +1595,7 @@ public class QvtoEvaluator {
 					EObject target = resolveImplicitPropertyTarget(varName);
 					if (target != null) {
 						checkNotReadOnly(target);
-						// §8.3.19: Resolve alias to real feature name
-						String realName = resolveAlias(varName, target);
-						EStructuralFeature sf = target.eClass().getEStructuralFeature(
-								realName != null ? realName : varName);
-						// Eclipse bug449445: invalid → null for property assignment
-						Object coerced = coerceForFeature(sf,
-								value == OclInvalid.INSTANCE ? null : value);
-						if (exp.isIsSubtract()) {
-							// -= : remove element from collection
-							Object current = target.eGet(sf);
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.remove(coerced);
-							}
-						} else if (exp.isIsReset()) {
-							if (value == OclInvalid.INSTANCE || value == null) {
-								// Clear collection or set null
-								Object current = target.eGet(sf);
-								if (current instanceof Collection<?>) {
-									@SuppressWarnings("unchecked")
-									Collection<Object> col = (Collection<Object>) current;
-									col.clear();
-								} else {
-									target.eSet(sf, null);
-								}
-							} else {
-								// §8.2.1: Collection assignment uses value-copy semantics
-								if (coerced instanceof Collection<?> srcCol) {
-									target.eSet(sf, new ArrayList<>(srcCol));
-								} else {
-									target.eSet(sf, coerced);
-								}
-							}
-						} else {
-							Object current = target.eGet(sf);
-							if (current instanceof Collection<?>) {
-								// Eclipse bug449445: invalid is silently ignored on +=
-								if (coerced != OclInvalid.INSTANCE) {
-									@SuppressWarnings("unchecked")
-									Collection<Object> col = (Collection<Object>) current;
-									col.add(coerced);
-								}
-							} else {
-								target.eSet(sf, coerced);
-							}
-						}
+						assignToModelFeature(target, implicitFeature(target, varName), value, exp);
 						return wrapNull(value);
 					}
 				}
@@ -1598,116 +1673,46 @@ public class QvtoEvaluator {
 						}
 					}
 				} else if (source instanceof EObject eo && sf != null) {
-					// §8.1.10: Check intermediate property first — intermediate properties
-					// are stored externally, so they ARE allowed on in-model objects.
-					ContextualProperty icp = intermediateStore.findIntermediateProperty(eo, sf.getName());
-					if (icp != null) {
-						// Eclipse bug449445: invalid → null for property assignment,
-						// or clear if current value is a collection
-						if (exp.isIsSubtract()) {
-							// -= on intermediate property: remove from collection
-							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.remove(value);
-							}
-						} else if ((value == OclInvalid.INSTANCE || value == null) && exp.isIsReset()) {
-							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.clear();
-							} else {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), null);
-							}
-						} else if (value == OclInvalid.INSTANCE) {
-							// += invalid: silently ignored
-						} else if (exp.isIsReset()) {
-							// §8.2.1: Collection assignment uses value-copy semantics
-							if (value instanceof Collection<?> srcCol) {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), new ArrayList<>(srcCol));
-							} else {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
-							}
-						} else {
-							// += on intermediate property: add to collection or set value
-							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.add(value);
-							} else {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
-							}
-						}
-						return wrapNull(value);
-					}
-					// §8.1.3.2: Guard non-intermediate property assignment on in-model objects
-					checkNotReadOnly(eo);
-					// Resolve the feature from the actual EClass to handle
-					// cross-package identity (dynamic Ecore models)
-					EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
-					if (actualSf == null) {
-						actualSf = sf;
-					}
-					// §8.4: Static intermediate class feature → shared store
-					if (QvtoIntermediatePropertyStore.isStatic(actualSf)) {
-						intermediateStore.setStaticValue(actualSf, value);
-						return wrapNull(value);
-					}
-					// Eclipse bug449445: invalid → null for EObject property assignment
-					Object coerced = coerceForFeature(actualSf,
-							value == OclInvalid.INSTANCE ? null : value);
-					if (exp.isIsSubtract()) {
-						// -= on EObject property: remove from collection
-						Object current = eo.eGet(actualSf);
-						if (current instanceof Collection<?>) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							col.remove(coerced);
-						}
-					} else if (exp.isIsReset()) {
-						if (value == OclInvalid.INSTANCE || value == null) {
-							// Clear collection or set null
-							Object current = eo.eGet(actualSf);
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.clear();
-							} else {
-								eo.eSet(actualSf, null);
-							}
-						} else {
-							// §8.2.1: Collection assignment uses value-copy semantics
-							if (coerced instanceof Collection<?> srcCol) {
-								eo.eSet(actualSf, new ArrayList<>(srcCol));
-							} else {
-								eo.eSet(actualSf, coerced);
-							}
-						}
-					} else {
-						// += on EReference/EAttribute list
-						if (coerced != OclInvalid.INSTANCE) {
-							Object current = eo.eGet(actualSf);
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								if (coerced instanceof Collection<?> rhs) {
-									for (Object item : rhs) {
-										col.add(coerceForFeature(actualSf, item));
-									}
-								} else {
-									col.add(coerced);
-								}
-							} else {
-								eo.eSet(actualSf, coerced);
-							}
-						}
-					}
+					assignToProperty(eo, sf, value, exp);
 				}
 			}
 			return wrapNull(value);
+		}
+
+		/**
+		 * §8.2.2.11: records a deferred assignment — the property it assigns and the sources
+		 * of its late resolves, as §8.2.1.22 lists them — to be performed at the end.
+		 *
+		 * @return whether it was deferred; an assignment to a variable is not, as the
+		 *         variable is gone by the time the late resolve can run
+		 */
+		private boolean deferAssignment(AssignExp exp) {
+			OclExpression left = exp.getLeft();
+			EObject target = null;
+			EStructuralFeature feature = null;
+			if (left instanceof PropertyCallExp propLeft
+					&& eval(propLeft.getOwnedSource()) instanceof EObject eo
+					&& propLeft.getReferredProperty() != null) {
+				target = eo;
+				feature = propLeft.getReferredProperty();
+			} else if (left instanceof VariableExp varExp
+					&& !env.contains(varExp.getReferredVariable().getName())) {
+				String name = varExp.getReferredVariable().getName();
+				target = resolveImplicitPropertyTarget(name);
+				feature = target != null ? implicitFeature(target, name) : null;
+			}
+			if (target == null || feature == null) {
+				return false;
+			}
+			deferredAssignments.add(new DeferredAssignment(exp, target, feature,
+					env.allVisibleVariables(), captureLateResolveSources(exp)));
+			return true;
+		}
+
+		/** §8.3.19: the feature an unqualified name stands for, an alias resolved. */
+		private EStructuralFeature implicitFeature(EObject target, String name) {
+			String realName = resolveAlias(name, target);
+			return target.eClass().getEStructuralFeature(realName != null ? realName : name);
 		}
 
 		@Override
@@ -2294,26 +2299,20 @@ public class QvtoEvaluator {
 		@Override
 		public Object caseResolveExp(ResolveExp exp) {
 			if (exp.isIsDeferred() && !isDeferredExecution) {
-				// Deferred (late) resolve: capture source eagerly, defer actual resolve
-				// §8.1.11.3: null source = search all records
-				Object sourceObj = exp.getOwnedSource() != null
-						? eval(exp.getOwnedSource()) : null;
-				if (pendingLvalueOwner != null) {
-					deferredTasks.add(new DeferredResolveTask(
-							exp, pendingLvalueOwner, pendingLvalueFeature,
-							pendingLvalueIsReset, pendingLvalueIsSubtract, sourceObj));
-				} else {
-					addWarning("Late resolve only supported in property assignments");
-				}
+				// A late resolve is deferred with the property assignment it is part of
+				// (caseAssignExp); anywhere else there is nothing to defer it with
+				addWarning("Late resolve only supported in property assignments");
 				return WRAPPED_NULL;
 			}
 
-			// Source object: §8.1.11.3 — when no explicit source, search ALL trace records (null)
+			// Source object: §8.1.11.3 — when no explicit source, search ALL trace records (null).
+			// A late resolve's source was captured when its assignment was reached (§8.2.1.22).
 			Object sourceObj = null;
-			if (exp.getOwnedSource() != null) {
+			if (deferredResolveSources.containsKey(exp)) {
+				sourceObj = deferredResolveSources.get(exp);
+			} else if (exp.getOwnedSource() != null) {
 				sourceObj = eval(exp.getOwnedSource());
 			}
-			// else: sourceObj stays null → resolve searches all records
 
 			// §8.1.11.7: coll->resolve(Type) = coll->xcollect(resolve(Type))
 			// When source is a Collection, iterate per-element and collect results
