@@ -813,6 +813,10 @@ as `false`, and again no test in any suite reached them:
 | `select`/`reject`/`forAll`/`exists`/`any` evaluated by QVT-O | as the OCL engine (§11.9.1): `select`/`reject` invalid, the quantifiers by their precedence, no diagnostic |
 | `resolve` condition (§8.2.1.22) | the resolve is `invalid`, as a `select` |
 
+The shorthands `list[T]` and `list![T]` share their notation with `list[condition]`; a simple name is
+the type form only when it names a type and is neither a variable in scope nor the shorthand's own
+iterator — `coll[i | b]` with a variable `b` used to fail with `Unknown type (b)` (#312).
+
 **Imperative expressions inside OCL ones (§8.1.13, #296):** a call whose source is an
 imperative expression (`list[T]->first()`, `new T(m).transform()`) goes to the OCL engine like
 any other. The OCL evaluator meets the imperative node, which it does not know, and hands it

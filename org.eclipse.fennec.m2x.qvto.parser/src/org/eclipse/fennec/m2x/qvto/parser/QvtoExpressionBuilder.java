@@ -671,14 +671,14 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	public OclExpression visitXselectExp(QvtOParser.XselectExpContext ctx) {
 		OclExpression source = (OclExpression) visit(ctx.expression(0));
 
-		// §8.2.2.7: If condition is a TypeExp, reinterpret as oclIsKindOf(Type)
-		QvtOParser.ExpressionContext conditionCtx = ctx.xselectCondition;
-		TypeExp typeCondition = tryBuildTypeCondition(conditionCtx);
-
 		// Determine iterator variable name
 		String iterName = ctx.xselectIter != null
 				? qvtoIdentifierText(ctx.xselectIter)
 				: "_xsel_it";
+
+		// §8.2.2.7: If condition is a TypeExp, reinterpret as oclIsKindOf(Type)
+		QvtOParser.ExpressionContext conditionCtx = ctx.xselectCondition;
+		TypeExp typeCondition = tryBuildShorthandTypeCondition(conditionCtx, iterName);
 
 		// §8.2.2.7: this is xselect, not an OCL select — an imperative loop, so the AST says so
 		ImperativeIterateExp selectExp = IMP.createImperativeIterateExp();
@@ -715,11 +715,10 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		// §8.2.2.7: "these shorthand conventions apply also to ... xselectOne", the type form
 		// included — list![T] is the first T, as list[T] is all of them (#298)
-		TypeExp typeCondition = tryBuildTypeCondition(ctx.xselectOneCondition);
-
 		String iterName = ctx.xselectOneIter != null
 				? qvtoIdentifierText(ctx.xselectOneIter)
 				: "_xsel1_it";
+		TypeExp typeCondition = tryBuildShorthandTypeCondition(ctx.xselectOneCondition, iterName);
 
 		// §8.2.2.7: this is xselectOne — the first match, and never a null (which is where it
 		// differs from OCL's any)
@@ -769,6 +768,34 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * Returns a TypeExp if the expression is a simple path name that resolves to a type,
 	 * null otherwise.
 	 */
+	/**
+	 * The type form of the shorthands {@code list[T]} and {@code list![T]} (§8.2.2.7). They share
+	 * their notation with {@code list[condition]}, so a simple name is the type form only if it
+	 * names a type — not when it is a variable in scope or the shorthand's own iterator, and not
+	 * when it names nothing, which the condition reports like any unknown name (#312).
+	 */
+	private TypeExp tryBuildShorthandTypeCondition(QvtOParser.ExpressionContext exprCtx,
+			String iteratorName) {
+		if (exprCtx instanceof QvtOParser.PrimaryExpContext primaryCtx
+				&& primaryCtx.primaryExpression() instanceof QvtOParser.PathNameExpContext pathCtx) {
+			List<String> segments = pathNameSegments(pathCtx.pathName());
+			if (segments.size() == 1) {
+				String name = segments.get(0);
+				if (name.equals(iteratorName) || environment.lookup(name).isPresent()) {
+					return null;
+				}
+				EClassifier classifier = findClassifier(name);
+				if (classifier == null) {
+					return null;
+				}
+				TypeExp typeExp = OCL.createTypeExp();
+				typeExp.setReferredType(classifier);
+				return typeExp;
+			}
+		}
+		return tryBuildTypeCondition(exprCtx);
+	}
+
 	private TypeExp tryBuildTypeCondition(QvtOParser.ExpressionContext exprCtx) {
 		// Unwrap: expression → primaryExpression → pathNameExp
 		if (exprCtx instanceof QvtOParser.PrimaryExpContext primaryCtx) {
@@ -1702,22 +1729,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	EClassifier resolveClassifier(List<String> segments) {
 		if (segments.size() == 1) {
 			String name = segments.get(0);
-			EClassifier local = localTypes.get(name);
-			if (local != null) {
-				return local;
-			}
-			EClassifier fromRegistry = findInDeclaredPackages(name);
-			if (fromRegistry != null) {
-				return fromRegistry;
-			}
-			// QVT v1.3 §8.3.1: names of the QVT-O standard library — Exception and its
-			// subclasses, and the Void synonym — belong to the language, not to a
-			// metamodel, so they resolve here rather than through the registry.
-			EClassifier fromStandardLibrary = QvtoStandardLibraryTypes.lookup(name);
-			if (fromStandardLibrary != null) {
-				return fromStandardLibrary;
-			}
-			return unresolvedName(name);
+			EClassifier found = findClassifier(name);
+			return found != null ? found : unresolvedName(name);
 		}
 
 		String classifierName = segments.get(segments.size() - 1);
@@ -1744,6 +1757,27 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * of the visit does not run into a {@code null}. The unit is rejected once it has
 	 * been visited — see {@link #getDiagnostics()} (#66).
 	 */
+	/**
+	 * A simple type name — a typedef, a class of a declared package, or a name of the QVT-O
+	 * standard library — without reporting a miss.
+	 *
+	 * @return the classifier, or {@code null} if the name is no type in scope
+	 */
+	private EClassifier findClassifier(String name) {
+		EClassifier local = localTypes.get(name);
+		if (local != null) {
+			return local;
+		}
+		EClassifier fromRegistry = findInDeclaredPackages(name);
+		if (fromRegistry != null) {
+			return fromRegistry;
+		}
+		// QVT v1.3 §8.3.1: names of the QVT-O standard library — Exception and its
+		// subclasses, and the Void synonym — belong to the language, not to a
+		// metamodel, so they resolve here rather than through the registry.
+		return QvtoStandardLibraryTypes.lookup(name);
+	}
+
 	private EClassifier unresolvedName(String name) {
 		diagnostics.add(positions.at("Unknown type (" + name + ")"));
 		EClass placeholder = EcoreFactory.eINSTANCE.createEClass();
