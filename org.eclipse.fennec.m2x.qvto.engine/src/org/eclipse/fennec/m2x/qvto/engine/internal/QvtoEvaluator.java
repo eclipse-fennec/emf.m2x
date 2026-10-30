@@ -922,6 +922,8 @@ public class QvtoEvaluator {
 			for (MappingOperation disjunct : disjuncts) {
 				Object result = callMapping(disjunct, self, args);
 				if (result != GUARD_FAILED) {
+					// §8.1.11.4: the record counts for the invoked mapping too (resolveIn)
+					traceManager.markInvoked(mappingOp, traceManager.lookupRecord(disjunct, self, args));
 					return result; // First candidate whose guard passes wins (even if result is null)
 				}
 			}
@@ -962,11 +964,12 @@ public class QvtoEvaluator {
 				}
 			}
 
-			// Implicit inhibition (§8.2.1.15 p106): check trace for cached result
+			// Implicit inhibition (§8.2.1.15 p106, §8.1.11.2): an earlier execution with the same
+			// context and in parameters answers — with its result, or none for a void mapping (#334)
 			if (traceManager != null) {
-				Object cached = traceManager.lookupCachedResult(mappingOp, self, args);
-				if (cached != null) {
-					return cached;
+				QvtoTraceRecord previous = traceManager.lookupRecord(mappingOp, self, args);
+				if (previous != null) {
+					return previous.result();
 				}
 			}
 
@@ -2562,7 +2565,16 @@ public class QvtoEvaluator {
 					allResults.addAll(resolved);
 				}
 				if (exp.isOne()) {
-					return wrapNull(allResults.isEmpty() ? null : allResults.get(0));
+					// §8.2.2.22: on a collection the operator is "a shorthand for invoking it in the
+					// body of an xcollect" — one result per element, nulls dropped (#334)
+					List<EObject> perElement = new ArrayList<>();
+					for (Object elem : coll) {
+						List<EObject> resolved = resolveForSource(exp, elem);
+						if (resolved != null && !resolved.isEmpty()) {
+							perElement.add(resolved.get(0));
+						}
+					}
+					return wrapNull(perElement);
 				}
 				return wrapNull(allResults);
 			}
@@ -2597,11 +2609,11 @@ public class QvtoEvaluator {
 			// Resolve — dispatch based on inverse/in-mapping flags
 			List<EObject> candidates;
 			if (exp instanceof ResolveInExp resolveIn && resolveIn.getInMapping() != null) {
-				String mappingName = resolveIn.getInMapping().getName();
+				MappingOperation inMapping = resolveIn.getInMapping();
 				if (exp.isIsInverse()) {
-					candidates = traceManager.invResolveIn(mappingName, sourceObj, targetType);
+					candidates = traceManager.invResolveIn(inMapping, sourceObj, targetType);
 				} else {
-					candidates = traceManager.resolveIn(mappingName, sourceObj, targetType);
+					candidates = traceManager.resolveIn(inMapping, sourceObj, targetType);
 				}
 			} else if (exp.isIsInverse()) {
 				candidates = traceManager.invResolve(sourceObj, targetType);
