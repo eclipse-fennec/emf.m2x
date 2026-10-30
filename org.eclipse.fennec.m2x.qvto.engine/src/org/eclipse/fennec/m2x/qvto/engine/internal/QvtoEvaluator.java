@@ -1991,6 +1991,11 @@ public class QvtoEvaluator {
 	 * Adds a diagnostic entry, respecting {@code maxDiagnostics} limit (M-4b / Q-7).
 	 */
 	private void addDiagnostic(int severity, String message) {
+		addDiagnostic(severity, 0, message);
+	}
+
+	/** @param code the diagnostic's code — the level of a log record (§8.2.2.19) */
+	private void addDiagnostic(int severity, int code, String message) {
 		if (diagnostics.size() >= options.maxDiagnostics()) {
 			if (diagnostics.size() == options.maxDiagnostics()) {
 				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
@@ -1999,7 +2004,7 @@ public class QvtoEvaluator {
 			}
 			return;
 		}
-		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, 0, message, null));
+		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, code, message, null));
 	}
 
 	/**
@@ -2773,17 +2778,8 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseLogExp(LogExp exp) {
-			// Evaluate arguments (inherited from OperationCallExp)
-			StringBuilder sb = new StringBuilder();
-			for (OclExpression arg : exp.getOwnedArguments()) {
-				Object val = eval(arg);
-				if (sb.length() > 0) {
-					sb.append(' ');
-				}
-				sb.append(val);
-			}
-
-			// Check optional condition
+			// §8.2.2.19: "No log record is produced if it evaluates to false" — the condition
+			// first, so the arguments of a record that is not produced are not evaluated (#345)
 			if (exp.getCondition() != null) {
 				Object cond = eval(exp.getCondition());
 				if (!Boolean.TRUE.equals(cond)) {
@@ -2793,8 +2789,23 @@ public class QvtoEvaluator {
 					return WRAPPED_NULL; // Condition false — skip logging
 				}
 			}
-
-			addInfo("log: " + sb);
+			// log(message, element, level): "the second argument gives the model element to be
+			// print (using an implicit call to the 'repr' operation) … the third argument gives a
+			// level number" — carried as the diagnostic's code, not written into the text (#345)
+			List<OclExpression> args = exp.getOwnedArguments();
+			StringBuilder sb = new StringBuilder();
+			if (!args.isEmpty()) {
+				Object message = eval(args.get(0));
+				sb.append(message instanceof String text ? text : OclValues.repr(message));
+			}
+			if (args.size() > 1) {
+				sb.append(' ').append(OclValues.repr(eval(args.get(1))));
+			}
+			int level = 0;
+			if (args.size() > 2 && eval(args.get(2)) instanceof Number number) {
+				level = number.intValue();
+			}
+			addDiagnostic(Diagnostic.INFO, level, "log: " + sb);
 			return WRAPPED_NULL;
 		}
 

@@ -20,7 +20,11 @@ import java.util.Map;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.EcorePackage;
+import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
  * The M1 classes of the QVT-O standard library (QVT v1.3 §8.3.1).
@@ -87,8 +91,18 @@ public final class QvtoStandardLibraryTypes {
 		// side-effect-only helpers. Held here as one stable classifier so that every
 		// occurrence refers to the same type rather than to a fresh fabrication.
 		createClass(ePackage, "Void");
+		// §8.3.1.1/§8.3.1.2: Transformation and Model — their values are a transformation
+		// instance and a model extent, no model objects, so they are data types (#345)
+		createDataType(ePackage, "Transformation");
+		createDataType(ePackage, "Model");
 
 		return ePackage;
+	}
+
+	private static void createDataType(EPackage owner, String name) {
+		EDataType dataType = EcoreFactory.eINSTANCE.createEDataType();
+		dataType.setName(name);
+		owner.getEClassifiers().add(dataType);
 	}
 
 	private static EClass createClass(EPackage owner, String name, EClass... superTypes) {
@@ -106,6 +120,14 @@ public final class QvtoStandardLibraryTypes {
 		for (EClassifier classifier : PACKAGE.getEClassifiers()) {
 			types.put(classifier.getName(), classifier);
 		}
+		// §8.3.1: "Object is an M1 type" that every value conforms to; §8.3.2: Any is its
+		// deprecated synonym (#345)
+		types.put("Object", OclStandardLibrary.INSTANCE.oclAny());
+		types.put("Any", OclStandardLibrary.INSTANCE.oclAny());
+		// §8.3.4: Element, the type of every model object
+		types.put("Element", EcorePackage.Literals.EOBJECT);
+		// §8.3.1.3: Status, what transform() answers
+		types.put("Status", QvtOperationalPackage.Literals.STATUS);
 		return Map.copyOf(types);
 	}
 }
