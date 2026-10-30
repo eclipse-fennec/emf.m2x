@@ -32,7 +32,6 @@ import java.util.regex.PatternSyntaxException;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
@@ -293,8 +292,10 @@ class OclStdlib {
 		if (left instanceof OclType lt && right instanceof OclType rt) {
 			return Objects.equals(lt.getName(), rt.getName());
 		}
+		// OCL v2.4 §11.3.1: "True if self is the same object as object2" — object values are
+		// identities (Annex A.2.4), not structures; OclSet already hashes them by identity (#318)
 		if (left instanceof EObject le && right instanceof EObject re) {
-			return EcoreUtil.equals(le, re);
+			return le == re;
 		}
 		// Numeric cross-type equality: 5.0 = 5 → true (OCL v2.4 §11.5.1)
 		if (left instanceof Number ln && right instanceof Number rn) {
