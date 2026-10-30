@@ -775,7 +775,26 @@ public class QvtoEvaluator {
 	 * If the when-guard fails, this is an assertion failure (§8.2.1.15).
 	 */
 	private Object callMappingStrict(MappingOperation mappingOp, Object self, Object[] args) {
-		// Strict mode: check when-guards as pre-conditions
+		// §8.1.14.3: "For strict evaluation … the first candidate for which the source type
+		// conforms is selected without evaluating the predicate as a guard. The predicate is
+		// instead evaluated as a pre-condition" (#333)
+		MappingOperation target = mappingOp;
+		if (!mappingOp.getDisjunct().isEmpty()) {
+			target = null;
+			for (MappingOperation candidate : mappingOp.getDisjunct()) {
+				if (typesConform(candidate, self, args)) {
+					target = candidate;
+					break;
+				}
+			}
+		} else if (!typesConform(mappingOp, self, args)) {
+			target = null;
+		}
+		if (target == null) {
+			addError("xmap pre-condition failed for mapping: " + mappingOp.getName()
+					+ " — no candidate conforms to the source and argument types");
+			return null;
+		}
 		if (++stackDepth > options.maxStackDepth()) {
 			--stackDepth;
 			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
@@ -788,11 +807,11 @@ public class QvtoEvaluator {
 		}
 		try {
 			env.pushScope();
-			bindOperationParams(mappingOp, self, args);
-			for (OclExpression whenExpr : mappingOp.getWhen()) {
+			bindOperationParams(target, self, args);
+			for (OclExpression whenExpr : target.getWhen()) {
 				Object whenVal = eval(whenExpr);
 				if (!Boolean.TRUE.equals(whenVal)) {
-					addError("xmap pre-condition failed for mapping: " + mappingOp.getName());
+					addError("xmap pre-condition failed for mapping: " + target.getName());
 					return null;
 				}
 			}
@@ -801,7 +820,95 @@ public class QvtoEvaluator {
 			--stackDepth;
 		}
 		// Pre-condition passed — delegate to standard callMapping for body execution
-		return callMapping(mappingOp, self, args);
+		Object result = callMapping(target, self, args);
+		return result == GUARD_FAILED ? null : result;
+	}
+
+	/**
+	 * Calls a mapping by name the way {@code source.map name(args)} does (§8.1.14.2, §8.2.1.15):
+	 * the overloads of that name and argument count are the candidates, those whose types the
+	 * source and arguments conform to are tried most-derived first, and the first whose guard
+	 * holds answers; none → null. Shared by the QVT-O evaluator and the OCL engine, which calls
+	 * mappings that stand inside an OCL expression through the operation provider (#333).
+	 *
+	 * @param strict {@code xmap}: the first conforming candidate is selected and its guard is a
+	 *        pre-condition
+	 * @return the mapping's result, or {@code null}
+	 */
+	Object callMappingByName(String opName, Object sourceObj, Object[] args, boolean strict) {
+		List<ImperativeOperation> named = operationResolver.findAllOperations(opName);
+		if (named.isEmpty()) {
+			addError("Mapping not found: " + opName);
+			return null;
+		}
+		List<ImperativeOperation> candidates = named.stream()
+				.filter(op -> parameterCount(op) == args.length).toList();
+		if (candidates.isEmpty()) {
+			addError("Mapping " + opName + " takes no " + args.length + " argument(s)");
+			return null;
+		}
+		// Single candidate: direct call
+		if (candidates.size() == 1) {
+			ImperativeOperation targetOp = candidates.get(0);
+			if (strict && targetOp instanceof MappingOperation mappingOp) {
+				return callMappingStrict(mappingOp, sourceObj, args);
+			}
+			return callOperation(targetOp, sourceObj, args);
+		}
+		// Multiple candidates: implicit disjunction, most-derived context type first
+		for (ImperativeOperation candidate : QvtoOperationResolver.filterAndSortByType(candidates, sourceObj)) {
+			if (candidate instanceof MappingOperation mappingOp) {
+				if (strict) {
+					// §8.1.14.3: the first conforming candidate is selected; its predicate is a
+					// pre-condition, not a guard that passes on to the next candidate
+					return callMappingStrict(mappingOp, sourceObj, args);
+				}
+				Object result = callMapping(mappingOp, sourceObj, args);
+				if (result != GUARD_FAILED) {
+					return result;
+				}
+			}
+		}
+		return null; // No candidate matched (§8.1.14: returns null)
+	}
+
+	/**
+	 * The implicit type predicate of a mapping (§8.1.14.1, §8.2.1.15): a contextual mapping needs
+	 * a non-null source of its context type, and every argument of a class-typed parameter must
+	 * be an instance of that class (null conforms to every type).
+	 */
+	private static boolean typesConform(MappingOperation mapping, Object self, Object[] args) {
+		VarParameter context = mapping.getContext();
+		if (context != null) {
+			if (self == null) {
+				return false;
+			}
+			if (context.getEType() instanceof EClass contextClass && !contextClass.isInstance(self)) {
+				return false;
+			}
+		}
+		int argIdx = 0;
+		for (Object param : mapping.getEParameters()) {
+			if (param instanceof VarParameter vp && !mapping.getResult().contains(vp)) {
+				Object arg = argIdx < args.length ? args[argIdx] : null;
+				argIdx++;
+				if (arg != null && vp.getEType() instanceof EClass parameterClass && !parameterClass.isInstance(arg)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/** The number of in, inout and out parameters of an operation, results excluded. */
+	static int parameterCount(ImperativeOperation operation) {
+		int count = 0;
+		for (Object param : operation.getEParameters()) {
+			if (param instanceof VarParameter vp && !operation.getResult().contains(vp)) {
+				count++;
+			}
+		}
+		return count;
 	}
 
 	/**
@@ -819,6 +926,12 @@ public class QvtoEvaluator {
 				}
 			}
 			return null; // No candidate matched
+		}
+
+		// §8.2.1.15: "After passing the parameters, the type compliance of the actual object
+		// parameters as well as the when clause are checked. If this fails, null is returned" (#333)
+		if (!typesConform(mappingOp, self, args)) {
+			return GUARD_FAILED;
 		}
 
 		if (++stackDepth > options.maxStackDepth()) {
@@ -885,7 +998,7 @@ public class QvtoEvaluator {
 			if (body instanceof MappingBody mappingBody) {
 				// 2. Inherited mappings: after init+instantiation, before population (§8.1.15)
 				for (MappingOperation inherited : mappingOp.getInherited()) {
-					executePopulationOnly(inherited, self, args);
+					invokeReused(inherited, self, args, resultParams);
 				}
 				// 3. Population section (main body)
 				for (OclExpression contentExpr : mappingBody.getContent()) {
@@ -897,7 +1010,7 @@ public class QvtoEvaluator {
 				}
 				// 5. Merged mappings: after end section (§8.1.15)
 				for (MappingOperation merged : mappingOp.getMerged()) {
-					executePopulationOnly(merged, self, args);
+					invokeReused(merged, self, args, resultParams);
 				}
 			} else if (body != null) {
 				for (OclExpression expr : body.getContent()) {
@@ -906,10 +1019,10 @@ public class QvtoEvaluator {
 			} else {
 				// §8.4 S.168: bodyless mapping declaration — still execute inherited/merged
 				for (MappingOperation inherited : mappingOp.getInherited()) {
-					executePopulationOnly(inherited, self, args);
+					invokeReused(inherited, self, args, resultParams);
 				}
 				for (MappingOperation merged : mappingOp.getMerged()) {
-					executePopulationOnly(merged, self, args);
+					invokeReused(merged, self, args, resultParams);
 				}
 			}
 
@@ -992,29 +1105,64 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * Executes only the population section of a mapping body (for inherited/merged).
+	 * Invokes an inherited or merged mapping (§8.2.1.15): "Invocation of the inherited mappings
+	 * follows the 'standard' invocation semantics, except that the out parameters may now start
+	 * with a non-null value"; for merges "the parameters of the merging mapping are passed to the
+	 * parameters of the merged mappings, including the actual value of the out parameters". The
+	 * reused mapping runs in a scope of its own — its parameter and result names, its init,
+	 * population and end — and hands its results back; it creates no trace record of its own.
+	 * Before #333 only its population ran, in the caller's scope.
 	 */
-	private void executePopulationOnly(MappingOperation mapping, Object self, Object[] args) {
-		// §8.1.15: A merged/inherited mapping is not invoked if its when-guard is not satisfied
-		for (OclExpression whenExpr : mapping.getWhen()) {
-			Object whenVal = eval(whenExpr);
-			if (!Boolean.TRUE.equals(whenVal)) {
-				if (!Boolean.FALSE.equals(whenVal)) {
-					undefinedCondition("when", whenVal,
-							"mapping '" + mapping.getName() + "' is not executed");
-				}
-				return;
-			}
+	private void invokeReused(MappingOperation reused, Object self, Object[] args,
+			EList<VarParameter> callerResults) {
+		if (!typesConform(reused, self, args)) {
+			return;
 		}
-		OperationBody body = mapping.getBody();
-		if (body instanceof MappingBody mappingBody) {
-			for (OclExpression expr : mappingBody.getContent()) {
-				eval(expr);
+		EList<VarParameter> results = reused.getResult();
+		// The caller's current results, read before the reused mapping's own names shadow them
+		List<Object> current = new ArrayList<>();
+		for (VarParameter callerResult : callerResults) {
+			current.add(env.lookup(callerResult.getName()));
+		}
+		List<Object> passedBack = new ArrayList<>();
+		env.pushScope();
+		try {
+			bindOperationParams(reused, self, args);
+			for (int i = 0; i < results.size(); i++) {
+				Object value = i < current.size() ? current.get(i) : null;
+				env.define(results.get(i).getName(), value);
+				if (results.size() == 1) {
+					env.define("result", value);
+				}
 			}
-		} else if (body != null) {
-			for (OclExpression expr : body.getContent()) {
-				eval(expr);
+			// §8.1.15: a reused mapping is not invoked if its when-guard is not satisfied
+			for (OclExpression whenExpr : reused.getWhen()) {
+				Object whenVal = eval(whenExpr);
+				if (!Boolean.TRUE.equals(whenVal)) {
+					if (!Boolean.FALSE.equals(whenVal)) {
+						undefinedCondition("when", whenVal,
+								"mapping '" + reused.getName() + "' is not executed");
+					}
+					return;
+				}
 			}
+			OperationBody body = reused.getBody();
+			if (body instanceof MappingBody mappingBody) {
+				mappingBody.getInitSection().forEach(this::eval);
+				instantiateResults(results);
+				mappingBody.getContent().forEach(this::eval);
+				mappingBody.getEndSection().forEach(this::eval);
+			} else if (body != null) {
+				body.getContent().forEach(this::eval);
+			}
+			for (VarParameter result : results) {
+				passedBack.add(env.lookup(result.getName()));
+			}
+		} finally {
+			env.popScope();
+		}
+		for (int i = 0; i < passedBack.size() && i < callerResults.size(); i++) {
+			env.assign(callerResults.get(i).getName(), passedBack.get(i));
 		}
 	}
 
@@ -2381,40 +2529,7 @@ public class QvtoEvaluator {
 				args[i] = eval(argExprs.get(i));
 			}
 
-			// Find all candidate operations (§8.1.14.2: implicit disjunction)
-			String opName = exp.getName();
-			List<ImperativeOperation> candidates = operationResolver.findAllOperations(opName);
-			if (candidates.isEmpty()) {
-				addError("Mapping not found: " + opName);
-				return WRAPPED_NULL;
-			}
-
-			boolean isStrict = exp.isIsStrict();
-
-			// Single candidate: direct call
-			if (candidates.size() == 1) {
-				ImperativeOperation targetOp = candidates.get(0);
-				if (isStrict && targetOp instanceof MappingOperation mappingOp) {
-					return wrapNull(callMappingStrict(mappingOp, sourceObj, args));
-				}
-				return wrapNull(callOperation(targetOp, sourceObj, args));
-			}
-
-			// Multiple candidates: implicit disjunction (§8.1.14.2)
-			// Filter by context type compatibility, then sort most-derived first
-			List<ImperativeOperation> sorted = QvtoOperationResolver.filterAndSortByType(candidates, sourceObj);
-			for (ImperativeOperation candidate : sorted) {
-				if (candidate instanceof MappingOperation mappingOp) {
-					Object result = isStrict
-							? callMappingStrict(mappingOp, sourceObj, args)
-							: callMapping(mappingOp, sourceObj, args);
-					if (result != GUARD_FAILED) {
-						return wrapNull(result);
-					}
-				}
-			}
-			// No candidate matched (§8.1.14: returns null)
-			return WRAPPED_NULL;
+			return wrapNull(callMappingByName(exp.getName(), sourceObj, args, exp.isIsStrict()));
 		}
 
 		@Override
