@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -31,7 +32,6 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
-import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
@@ -334,34 +334,27 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					}
 					return List.of();
 				}));
-		// §8.3.4.10: clone() — shallow copy (skip containments)
+		// §8.3.4.10: Element::clone() — shallow copy (skip containments); §8.3.9.11: List::clone()
+		// "Returns a new list that is a shallow clone of self"; §8.3.11.2ff: "Collections are
+		// immutable so a clone returns self" (#343)
 		ops.add(new OclOperation("clone", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof EObject eo) {
 						return QvtoModelOperations.cloneElement(eo, false, evaluator.extentOf(eo));
 					}
-					return null;
+					if (self instanceof Map<?, ?> dict) {
+						return new LinkedHashMap<>(dict);
+					}
+					if (self instanceof Collection<?> collection) {
+						return evaluator.isList(collection) ? new ArrayList<>(collection) : collection;
+					}
+					return self;
 				}));
 		// §8.3.4.11: Element::deepclone() — deep copy (recursive)
-		// §8.3.9.13: List(T)::deepclone() — new list with each element deep-cloned
+		// §8.3.9.13: List(T)::deepclone() — "a new list in which each element is in turn a
+		// deepclone"; §8.3.12.3ff: a Bag, Set, … "that is a deep clone" — of its own kind (#343)
 		ops.add(new OclOperation("deepclone", ANY_TYPE, List.of(), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof EObject eo) {
-						return QvtoModelOperations.cloneElement(eo, true, evaluator.extentOf(eo));
-					}
-					if (self instanceof Collection<?> coll) {
-						List<Object> result = new ArrayList<>();
-						for (Object elem : coll) {
-							if (elem instanceof EObject eo) {
-								result.add(EcoreUtil.copy(eo));
-							} else {
-								result.add(elem); // primitives are immutable
-							}
-						}
-						return result;
-					}
-					return null;
-				}));
+				(self, args) -> deepClone(self)));
 		// §8.3.4 (MOF reflective): container() — containing object
 		ops.add(new OclOperation("container", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
@@ -618,6 +611,30 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	private boolean hasCollectionContext(String name) {
 		return operationResolver.findAllOperations(name).stream()
 				.anyMatch(op -> op.getContext() != null && op.getContext().getEType() instanceof CollectionType);
+	}
+
+	/**
+	 * A deep clone: a model object as {@code Element::deepclone} makes one (added to the model of
+	 * the original), a collection of its own kind and a Dict with their elements deep-cloned, a
+	 * value as itself.
+	 */
+	private Object deepClone(Object value) {
+		if (value instanceof EObject eo) {
+			return QvtoModelOperations.cloneElement(eo, true, evaluator.extentOf(eo));
+		}
+		if (value instanceof Map<?, ?> dict) {
+			Map<Object, Object> clone = new LinkedHashMap<>();
+			dict.forEach((key, element) -> clone.put(key, deepClone(element)));
+			return clone;
+		}
+		if (value instanceof Collection<?> collection) {
+			List<Object> elements = new ArrayList<>(collection.size());
+			for (Object element : collection) {
+				elements.add(deepClone(element));
+			}
+			return evaluator.newCollection(evaluator.kindOf(collection), elements);
+		}
+		return value;
 	}
 
 	/**

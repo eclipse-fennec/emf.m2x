@@ -1835,8 +1835,13 @@ public class QvtoEvaluator {
 		return current != null ? kindOf(current) : CollectionKind.SEQUENCE;
 	}
 
+	/** Whether a collection is a mutable List — a Sequence, List being its alias (D26). */
+	boolean isList(Collection<?> collection) {
+		return kindOf(collection) == CollectionKind.SEQUENCE && !(collection instanceof Set<?>);
+	}
+
 	/** The kind of a collection value, by the class the OCL engine builds that kind with. */
-	private CollectionKind kindOf(Collection<?> collection) {
+	CollectionKind kindOf(Collection<?> collection) {
 		collectionClasses();
 		for (Map.Entry<CollectionKind, Class<?>> entry : collectionClasses.entrySet()) {
 			if (entry.getValue() == collection.getClass()) {
@@ -1853,7 +1858,7 @@ public class QvtoEvaluator {
 	 * would cost a full OCL evaluation every time.
 	 */
 	@SuppressWarnings("unchecked")
-	private Collection<Object> newCollection(CollectionKind kind, Collection<?> elements) {
+	Collection<Object> newCollection(CollectionKind kind, Collection<?> elements) {
 		Class<?> type = collectionClasses().get(kind == CollectionKind.COLLECTION ? CollectionKind.SEQUENCE : kind);
 		try {
 			return (Collection<Object>) type.getConstructor(Collection.class).newInstance(elements);

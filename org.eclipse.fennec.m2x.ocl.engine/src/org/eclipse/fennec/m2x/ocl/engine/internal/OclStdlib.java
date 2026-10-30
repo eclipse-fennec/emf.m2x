@@ -1570,6 +1570,9 @@ class OclStdlib {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
+				if (!isList(source)) {
+					yield notAList(name, source);
+				}
 				@SuppressWarnings("unchecked")
 				var list = (Collection<Object>) source;
 				list.add(args[0]);
@@ -1579,6 +1582,9 @@ class OclStdlib {
 			case "remove" -> {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
+				if (!isList(source)) {
+					yield notAList(name, source);
 				}
 				if (source instanceof List<?> list) {
 					// §8.3.9.35 post reject(e = element): OCL equality, 1 = 1.0 (#317)
@@ -1590,6 +1596,9 @@ class OclStdlib {
 			case "removeAt" -> {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
+				if (!isList(source)) {
+					yield notAList(name, source);
 				}
 				if (source instanceof List<?> list && args[0] instanceof Long idx) {
 					int i = idx.intValue() - 1; // 1-based to 0-based
@@ -1604,6 +1613,9 @@ class OclStdlib {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
+				if (!isList(source)) {
+					yield notAList(name, source);
+				}
 				if (source instanceof List<?> list && !list.isEmpty()) {
 					yield list.remove(0);
 				}
@@ -1614,6 +1626,9 @@ class OclStdlib {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
+				if (!isList(source)) {
+					yield notAList(name, source);
+				}
 				if (source instanceof List<?> list && !list.isEmpty()) {
 					yield list.remove(list.size() - 1);
 				}
@@ -1623,6 +1638,9 @@ class OclStdlib {
 			case "removeAll" -> {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
+				if (!isList(source)) {
+					yield notAList(name, source);
 				}
 				if (args[0] instanceof Collection<?> toRemove && source instanceof List<?> list) {
 					list.removeIf(e -> toRemove.stream().anyMatch(r -> OclEqualityUtil.oclEquals(e, r)));
@@ -1640,7 +1658,9 @@ class OclStdlib {
 					int pos = 0;
 					for (Object e : source) {
 						if (pos++ > 0) out.append(sep);
-						out.append(String.valueOf(e));
+						// A Real as OCL writes it (1.0e10 → 10000000000.0), null as nothing, as
+						// QVT-O's string concatenation reads it (#343)
+						out.append(e == null ? "" : OclValues.toText(e));
 					}
 					out.append(end);
 				} catch (OutputLimitExceeded tooLarge) {
@@ -1650,6 +1670,21 @@ class OclStdlib {
 			}
 			default -> NOT_FOUND;
 		};
+	}
+
+	/**
+	 * Whether a collection is a QVT-O List — a Sequence, as List is its alias (D26) — the only
+	 * collection the mutating operations change: "Collections are immutable" (QVT v1.3 §8.3.11.2).
+	 */
+	private static boolean isList(Collection<?> source) {
+		return source instanceof List<?> && !(source instanceof OclBag<?>) && !(source instanceof OclOrderedSet<?>);
+	}
+
+	private static ArgumentError notAList(String operation, Collection<?> source) {
+		String kind = source instanceof OclOrderedSet<?> ? "an OrderedSet"
+				: source instanceof OclBag<?> ? "a Bag" : "a Set";
+		return new ArgumentError("'" + operation + "' changes a List, and " + kind
+				+ " is immutable (QVT v1.3 §8.3.11.2)");
 	}
 
 	// --- Ordered Collection: Sequence, OrderedSet (OCL v2.4 Section 11.7.3/11.7.4) ---
@@ -1706,6 +1741,20 @@ class OclStdlib {
 				yield result;
 			}
 			case "insertAt" -> {
+				// QVT v1.3 §8.3.9.26: List::insertAt(object, index) : Void modifies the list. Told
+				// from OCL's insertAt(index, object) : Sequence by the index — an Integer in the
+				// second place and none in the first; with two Integers OCL's form is meant (#343)
+				if (!OclNumbers.isInteger(args[0]) && OclNumbers.isInteger(args[1])) {
+					if (!isList(source)) {
+						yield notAList(name, source);
+					}
+					int at = asIndex(args[1]);
+					if (at < 1 || at > source.size() + 1) yield OclInvalid.INSTANCE;
+					@SuppressWarnings("unchecked")
+					var list = (List<Object>) source;
+					list.add(at - 1, args[0]);
+					yield null; // returns Void
+				}
 				int idx = asIndex(args[0]);
 				if (idx < 1 || idx > source.size() + 1) yield OclInvalid.INSTANCE;
 				if (source instanceof OclOrderedSet<?>) {
@@ -1748,6 +1797,8 @@ class OclStdlib {
 				Object key = dictKey(source, args[0]);
 				yield key == NOT_FOUND ? null : source.get(key);
 			}
+			// OCL v2.5 Map::keys() : Set(K). QVT v1.3 §8.3.8.8 has Dict::keys() : List(KeyT), but a
+			// Dict is OCL's Map (D26) and this library is OCL's: QVT-O writes ->asSequence() (#343)
 			case "keys" -> new OclSet<>(source.keySet());
 			case "values" -> new ArrayList<>(source.values());
 			case "including" -> {
@@ -1771,9 +1822,9 @@ class OclStdlib {
 			case "hasKey" -> dictKey(source, args[0]) != NOT_FOUND;
 			// QVT-O §8.3.8.3: Dict::defaultget(k, default) — get with fallback
 			case "defaultget" -> {
+				// The default "if the key does not exist" — not for a key whose value is null (#343)
 				Object key = dictKey(source, args[0]);
-				Object val = key == NOT_FOUND ? null : source.get(key);
-				yield val != null ? val : args[1];
+				yield key == NOT_FOUND ? args[1] : source.get(key);
 			}
 			// QVT-O §8.3.8.4: Dict::put(k, v) — mutable insert/update
 			case "put" -> {
