@@ -62,11 +62,12 @@ import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
 /**
@@ -1134,7 +1135,8 @@ public class M2tEvaluator {
 		if (value == null || value == WRAPPED_NULL) {
 			return "";
 		}
-		return value.toString();
+		// A Real is written as OCL writes it: 3.0, never 3 or 3E+1 (#322)
+		return OclValues.toText(value);
 	}
 
 	private static boolean isTrue(Object value) {

@@ -165,7 +165,7 @@ class OclSecurityHardeningTest extends AbstractOclTest {
 		EObject person = createPerson("test", 30, 50000, false);
 
 		assertSame(OclInvalid.INSTANCE, eval("'abc'.abs()", person), "a String where a number goes");
-		assertSame(OclInvalid.INSTANCE, eval("Sequence{'a','b'}->sum()", person),
+		assertSame(OclInvalid.INSTANCE, eval("Sequence{true, false}->sum()", person),
 				"summing what cannot be added");
 		assertSame(OclInvalid.INSTANCE, eval("1.concat('x')", person), "a number where a String goes");
 		assertSame(OclInvalid.INSTANCE, eval("Set{1}->at(1)", person), "an index into an unordered set");

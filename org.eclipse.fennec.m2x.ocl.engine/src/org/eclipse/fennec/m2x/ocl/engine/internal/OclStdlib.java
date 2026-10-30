@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -44,6 +46,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 
 /**
  * OCL Standard Library operation dispatch.
@@ -93,7 +96,7 @@ class OclStdlib {
 
 		boolean accepts(Object value) {
 			return switch (this) {
-				case INTEGER -> value instanceof Long || value instanceof Integer;
+				case INTEGER -> OclNumbers.isInteger(value);
 				case NUMBER -> value instanceof Number || value instanceof OclUnlimitedNatural;
 				case STRING -> value instanceof String;
 				case BOOLEAN -> value instanceof Boolean;
@@ -143,8 +146,8 @@ class OclStdlib {
 
 	private static String primitiveTypeName(Object source) {
 		if (source instanceof OclUnlimitedNatural) return "UnlimitedNatural";
-		if (source instanceof Long || source instanceof Integer) return "Integer";
-		if (source instanceof Double || source instanceof Float) return "Real";
+		if (OclNumbers.isInteger(source)) return "Integer";
+		if (OclNumbers.isReal(source)) return "Real";
 		if (source instanceof String) return "String";
 		if (source instanceof Boolean) return "Boolean";
 		return null;
@@ -244,17 +247,15 @@ class OclStdlib {
 		if (source instanceof Boolean b) {
 			return dispatchBoolean(name, b, args);
 		}
-		if (source instanceof Long l) {
-			return dispatchInteger(name, l, args, options);
+		if (OclNumbers.isInteger(source)) {
+			return dispatchInteger(name, (Number) source, args, options);
 		}
-		if (source instanceof Integer i) {
-			return dispatchInteger(name, (long) i, args, options);
-		}
-		if (source instanceof Double d) {
-			return dispatchReal(name, d, args);
-		}
-		if (source instanceof Float f) {
-			return dispatchReal(name, (double) f, args);
+		if (OclNumbers.isReal(source)) {
+			// NaN and the infinities a model's EDouble may hold are no Real values (§11.4.1, #322)
+			if (!OclNumbers.isFinite((Number) source)) {
+				return OclInvalid.INSTANCE;
+			}
+			return dispatchReal(name, OclNumbers.bigDecimal((Number) source), args);
 		}
 		if (source instanceof String s) {
 			return dispatchString(name, s, args, options, locale);
@@ -310,9 +311,9 @@ class OclStdlib {
 			case "oclContents" -> oclContents(source);
 			// §11.2.4: toString is not among the operations defined on invalid (#321)
 			case "toString" -> source == null || source == OclInvalid.INSTANCE
-					? OclInvalid.INSTANCE : String.valueOf(source);
+					? OclInvalid.INSTANCE : OclValues.toText(source);
 			// QVT-O §8.3.3.1: Object::repr() — textual representation of any object
-			case "repr" -> String.valueOf(source);
+			case "repr" -> source == null ? "null" : OclValues.toText(source);
 			// §8.4.4: stereotypedBy — UML-specific, not supported (P10-07)
 			case "stereotypedBy" -> OclInvalid.INSTANCE;
 			default -> NOT_FOUND;
@@ -329,8 +330,8 @@ class OclStdlib {
 		if (source == OclInvalid.INSTANCE) return LIBRARY.oclInvalid();
 		if (source instanceof OclUnlimitedNatural) return LIBRARY.unlimitedNatural();
 		if (source instanceof EObject eo) return eo.eClass();
-		if (source instanceof Long || source instanceof Integer) return LIBRARY.integer();
-		if (source instanceof Double || source instanceof Float) return LIBRARY.real();
+		if (OclNumbers.isInteger(source)) return LIBRARY.integer();
+		if (OclNumbers.isReal(source)) return LIBRARY.real();
 		if (source instanceof String) return LIBRARY.string();
 		if (source instanceof Boolean) return LIBRARY.booleanType();
 		if (source instanceof OclOrderedSet<?>) return createCollectionType(CollectionKind.ORDERED_SET);
@@ -415,9 +416,9 @@ class OclStdlib {
 		if (left instanceof EObject le && right instanceof EObject re) {
 			return le == re;
 		}
-		// Numeric cross-type equality: 5.0 = 5 → true (OCL v2.4 §11.5.1)
+		// Numeric cross-type equality: 5.0 = 5 → true (OCL v2.4 §11.5.1), exact beyond 2^53 (#317)
 		if (left instanceof Number ln && right instanceof Number rn) {
-			return Double.compare(ln.doubleValue(), rn.doubleValue()) == 0;
+			return OclNumbers.equal(ln, rn);
 		}
 		return Objects.equals(left, right);
 	}
@@ -556,8 +557,8 @@ class OclStdlib {
 	 */
 	static boolean matchesPrimitiveType(Object source, String typeName) {
 		return switch (typeName) {
-			case "Integer" -> source instanceof Long || source instanceof Integer;
-			case "Real" -> source instanceof Double || source instanceof Float;
+			case "Integer" -> OclNumbers.isInteger(source);
+			case "Real" -> OclNumbers.isReal(source);
 			case "String" -> source instanceof String;
 			case "Boolean" -> source instanceof Boolean;
 			case "UnlimitedNatural" -> source instanceof OclUnlimitedNatural;
@@ -576,8 +577,7 @@ class OclStdlib {
 			return true;
 		}
 		return switch (typeName) {
-			case "Real" -> source instanceof Long || source instanceof Integer
-					|| source instanceof OclUnlimitedNatural;
+			case "Real" -> OclNumbers.isInteger(source) || source instanceof OclUnlimitedNatural;
 			case "Integer" -> source instanceof OclUnlimitedNatural;
 			default -> false;
 		};
@@ -652,11 +652,11 @@ class OclStdlib {
 		if (matchesPrimitiveType(source, typeName) || "OclAny".equals(typeName)) {
 			return source;
 		}
-		if ("Real".equals(typeName) && (source instanceof Long || source instanceof Integer)) {
-			return ((Number) source).doubleValue();
+		if ("Real".equals(typeName) && OclNumbers.isInteger(source)) {
+			return OclNumbers.bigDecimal((Number) source);
 		}
-		if ("UnlimitedNatural".equals(typeName) && (source instanceof Long || source instanceof Integer)
-				&& ((Number) source).longValue() >= 0) {
+		if ("UnlimitedNatural".equals(typeName) && OclNumbers.isInteger(source)
+				&& OclNumbers.signum((Number) source) >= 0) {
 			return source;
 		}
 		return OclInvalid.INSTANCE;
@@ -785,7 +785,7 @@ class OclStdlib {
 
 	// --- Integer (OCL v2.4 Section 11.5) ---
 
-	private static Object dispatchInteger(String name, Long source, Object[] args,
+	private static Object dispatchInteger(String name, Number source, Object[] args,
 			OclEvaluationOptions options) {
 		// Guard: if arg is OclUnlimitedNatural, special-case comparison/max/min
 		if (args.length > 0 && args[0] instanceof OclUnlimitedNatural) {
@@ -798,56 +798,45 @@ class OclStdlib {
 				default -> NOT_FOUND;
 			};
 		}
+		if (args.length > 0 && args[0] instanceof Number n && !OclNumbers.isFinite(n)) {
+			return OclInvalid.INSTANCE; // NaN or an infinity from the model (#322)
+		}
+		// Integer arithmetic is exact: it continues in BigInteger where a long would overflow
+		// (§11.4.2, #322); with a Real argument the operation is Real's (Integer conforms to Real)
 		return switch (name) {
-			case "+" -> {
-				if (args.length == 0) yield source; // unary +
-				Object arg = args[0];
-				if (arg instanceof Double d) yield source + d;
-				yield source + asLong(arg);
-			}
-			case "-" -> {
-				if (args.length == 0) yield -source; // unary -
-				Object arg = args[0];
-				if (arg instanceof Double d) yield source - d;
-				yield source - asLong(arg);
-			}
-			case "*" -> {
-				Object arg = args[0];
-				if (arg instanceof Double d) yield source * d;
-				yield source * asLong(arg);
-			}
+			case "+" -> args.length == 0 ? source : OclNumbers.add(source, (Number) args[0]);
+			case "-" -> args.length == 0 ? OclNumbers.negate(source) : OclNumbers.subtract(source, (Number) args[0]);
+			case "*" -> OclNumbers.multiply(source, (Number) args[0]);
 			case "/" -> {
-				Object arg = args[0];
-				double divisor = arg instanceof Double d ? d : asLong(arg);
-				if (divisor == 0.0) yield OclInvalid.INSTANCE;
-				yield source / divisor; // always returns Real (Double)
+				Object quotient = OclNumbers.divide(source, (Number) args[0]);
+				yield quotient == null ? OclInvalid.INSTANCE : quotient;
 			}
 			case "div" -> {
-				long divisor = asLong(args[0]);
-				if (divisor == 0) yield OclInvalid.INSTANCE;
-				yield source / divisor;
+				BigInteger divisor = OclNumbers.bigInteger((Number) args[0]);
+				if (divisor.signum() == 0) yield OclInvalid.INSTANCE;
+				yield OclNumbers.integer(OclNumbers.bigInteger(source).divide(divisor));
 			}
 			case "mod" -> {
-				long divisor = asLong(args[0]);
-				if (divisor == 0) yield OclInvalid.INSTANCE;
-				yield source % divisor;
+				BigInteger divisor = OclNumbers.bigInteger((Number) args[0]);
+				if (divisor.signum() == 0) yield OclInvalid.INSTANCE;
+				yield OclNumbers.integer(OclNumbers.bigInteger(source).remainder(divisor));
 			}
-			case "abs" -> Math.abs(source);
+			case "abs" -> OclNumbers.abs(source);
 			case "max" -> {
-				Object arg = args[0];
-				if (arg instanceof Double d) yield Math.max(source, d);
-				yield Math.max(source, asLong(arg));
+				Number arg = (Number) args[0];
+				Number larger = OclNumbers.compare(source, arg) >= 0 ? source : arg;
+				yield OclNumbers.isReal(arg) ? OclNumbers.bigDecimal(larger) : larger;
 			}
 			case "min" -> {
-				Object arg = args[0];
-				if (arg instanceof Double d) yield Math.min(source, d);
-				yield Math.min(source, asLong(arg));
+				Number arg = (Number) args[0];
+				Number smaller = OclNumbers.compare(source, arg) <= 0 ? source : arg;
+				yield OclNumbers.isReal(arg) ? OclNumbers.bigDecimal(smaller) : smaller;
 			}
-			case "<" -> source < asNumber(args[0]).doubleValue();
-			case "<=" -> source <= asNumber(args[0]).doubleValue();
-			case ">" -> source > asNumber(args[0]).doubleValue();
-			case ">=" -> source >= asNumber(args[0]).doubleValue();
-			case "toReal" -> (double) source;
+			case "<" -> OclNumbers.compare(source, (Number) args[0]) < 0;
+			case "<=" -> OclNumbers.compare(source, (Number) args[0]) <= 0;
+			case ">" -> OclNumbers.compare(source, (Number) args[0]) > 0;
+			case ">=" -> OclNumbers.compare(source, (Number) args[0]) >= 0;
+			case "toReal" -> OclNumbers.bigDecimal(source);
 			case "toInteger" -> source;
 			case "floor" -> source;
 			case "ceiling" -> source;
@@ -857,7 +846,7 @@ class OclStdlib {
 				long start, end;
 				if (args.length == 1 && args[0] instanceof Long e) {
 					// source.range(end) — source is start
-					start = source;
+					start = source.longValue();
 					end = e;
 				} else if (args.length >= 2 && args[0] instanceof Long s && args[1] instanceof Long e) {
 					// source.range(start, end) — source ignored (§8.3.17 static-style)
@@ -1033,7 +1022,7 @@ class OclStdlib {
 
 	// --- Real (OCL v2.4 Section 11.5) ---
 
-	private static Object dispatchReal(String name, Double source, Object[] args) {
+	private static Object dispatchReal(String name, BigDecimal source, Object[] args) {
 		// Guard: if arg is OclUnlimitedNatural, arithmetic is invalid
 		if (args.length > 0 && args[0] instanceof OclUnlimitedNatural) {
 			return switch (name) {
@@ -1045,34 +1034,33 @@ class OclStdlib {
 				default -> NOT_FOUND;
 			};
 		}
+		if (args.length > 0 && args[0] instanceof Number n && !OclNumbers.isFinite(n)) {
+			return OclInvalid.INSTANCE; // NaN or an infinity from the model (#322)
+		}
+		// Real is a BigDecimal: 0.1 + 0.2 = 0.3 (§11.4.1, #322)
 		return switch (name) {
-			case "+" -> {
-				if (args.length == 0) yield source;
-				yield source + asNumber(args[0]).doubleValue();
-			}
-			case "-" -> {
-				if (args.length == 0) yield -source;
-				yield source - asNumber(args[0]).doubleValue();
-			}
-			case "*" -> source * asNumber(args[0]).doubleValue();
+			case "+" -> args.length == 0 ? source : OclNumbers.add(source, (Number) args[0]);
+			case "-" -> args.length == 0 ? OclNumbers.negate(source) : OclNumbers.subtract(source, (Number) args[0]);
+			case "*" -> OclNumbers.multiply(source, (Number) args[0]);
 			case "/" -> {
-				double divisor = asNumber(args[0]).doubleValue();
-				if (divisor == 0.0) yield OclInvalid.INSTANCE;
-				yield source / divisor;
+				Object quotient = OclNumbers.divide(source, (Number) args[0]);
+				yield quotient == null ? OclInvalid.INSTANCE : quotient;
 			}
-			case "abs" -> Math.abs(source);
-			case "max" -> Math.max(source, asNumber(args[0]).doubleValue());
-			case "min" -> Math.min(source, asNumber(args[0]).doubleValue());
-			case "floor" -> (long) Math.floor(source);
-			case "ceiling" -> (long) Math.ceil(source);
-			case "round" -> (long) Math.round(source);
-			case "<" -> source < asNumber(args[0]).doubleValue();
-			case "<=" -> source <= asNumber(args[0]).doubleValue();
-			case ">" -> source > asNumber(args[0]).doubleValue();
-			case ">=" -> source >= asNumber(args[0]).doubleValue();
-			case "toInteger" -> (long) source.doubleValue();
+			case "abs" -> OclNumbers.abs(source);
+			case "max" -> OclNumbers.compare(source, (Number) args[0]) >= 0 ? source
+					: OclNumbers.bigDecimal((Number) args[0]);
+			case "min" -> OclNumbers.compare(source, (Number) args[0]) <= 0 ? source
+					: OclNumbers.bigDecimal((Number) args[0]);
+			case "floor" -> OclNumbers.floor(source);
+			case "ceiling" -> OclNumbers.ceiling(source);
+			case "round" -> OclNumbers.round(source);
+			case "<" -> OclNumbers.compare(source, (Number) args[0]) < 0;
+			case "<=" -> OclNumbers.compare(source, (Number) args[0]) <= 0;
+			case ">" -> OclNumbers.compare(source, (Number) args[0]) > 0;
+			case ">=" -> OclNumbers.compare(source, (Number) args[0]) >= 0;
+			case "toInteger" -> OclNumbers.integer(source.toBigInteger());
 			case "toReal" -> source;
-			case "toString" -> source.toString();
+			case "toString" -> OclNumbers.realToString(source);
 			default -> NOT_FOUND;
 		};
 	}
@@ -1092,8 +1080,8 @@ class OclStdlib {
 				yield source + other;
 			}
 			case "substring" -> {
-				int lower = (int) asLong(args[0]);
-				int upper = (int) asLong(args[1]);
+				int lower = asIndex(args[0]);
+				int upper = asIndex(args[1]);
 				// OCL v2.5 §11.5.1: 1 <= lower AND lower <= upper AND upper <= size
 				if (lower < 1 || upper > source.length() || lower > upper) {
 					yield OclInvalid.INSTANCE;
@@ -1143,7 +1131,7 @@ class OclStdlib {
 				yield tokens;
 			}
 			case "at" -> {
-				int idx = (int) asLong(args[0]);
+				int idx = asIndex(args[0]);
 				if (idx < 1 || idx > source.length()) {
 					yield OclInvalid.INSTANCE;
 				}
@@ -1157,18 +1145,13 @@ class OclStdlib {
 				yield chars;
 			}
 			case "toInteger" -> {
-				try {
-					yield Long.parseLong(source.trim());
-				} catch (NumberFormatException e) {
-					yield OclInvalid.INSTANCE;
-				}
+				Number parsed = parseInteger(source);
+				yield parsed == null ? OclInvalid.INSTANCE : parsed;
 			}
 			case "toReal" -> {
-				try {
-					yield Double.parseDouble(source.trim());
-				} catch (NumberFormatException e) {
-					yield OclInvalid.INSTANCE;
-				}
+				// Decimal notation only: NaN, Infinity, 1f or 0x1p3 are no Real (§11.4.1, #322)
+				BigDecimal parsed = parseReal(source);
+				yield parsed == null ? OclInvalid.INSTANCE : parsed;
 			}
 			case "toBoolean" -> {
 				// Eclipse: exact match only, no trim/lowercase, non-"true" → false
@@ -1279,23 +1262,9 @@ class OclStdlib {
 						|| "0".equals(lower) || "1".equals(lower);
 			}
 			// QVT-O §8.3.16.23: matchInteger
-			case "matchInteger" -> {
-				try {
-					Long.parseLong(source.trim());
-					yield true;
-				} catch (NumberFormatException e) {
-					yield false;
-				}
-			}
+			case "matchInteger" -> parseInteger(source) != null;
 			// QVT-O §8.3.16.24/25: matchFloat/matchReal
-			case "matchFloat", "matchReal" -> {
-				try {
-					Double.parseDouble(source.trim());
-					yield true;
-				} catch (NumberFormatException e) {
-					yield false;
-				}
-			}
+			case "matchFloat", "matchReal" -> parseReal(source) != null;
 			// QVT-O §8.3.16.26: matchIdentifier — letter first, then alphanumeric
 			case "matchIdentifier" -> {
 				if (source.isEmpty() || !Character.isLetter(source.charAt(0))) {
@@ -1318,21 +1287,9 @@ class OclStdlib {
 				yield null; // unparseable
 			}
 			// QVT-O §8.3.16.28: asInteger — returns null on failure (unlike OCL toInteger → invalid)
-			case "asInteger" -> {
-				try {
-					yield Long.parseLong(source.trim());
-				} catch (NumberFormatException e) {
-					yield null;
-				}
-			}
+			case "asInteger" -> parseInteger(source);
 			// QVT-O §8.3.16.29/30: asFloat/asReal — returns null on failure
-			case "asFloat", "asReal" -> {
-				try {
-					yield Double.parseDouble(source.trim());
-				} catch (NumberFormatException e) {
-					yield null;
-				}
-			}
+			case "asFloat", "asReal" -> parseReal(source);
 			// QVT-O §8.3.16.1 + §8.4.4: format / % — placeholder substitution
 			case "format", "%" -> {
 				// The width field of a format string is an allocation request, see formatBounded
@@ -1533,30 +1490,34 @@ class OclStdlib {
 				yield preserveCollectionKind(source, filtered);
 			}
 			case "sum" -> {
-				long longSum = 0;
-				double doubleSum = 0;
-				boolean allLong = true;
+				// §11.7.1: elements of a type with '+'. Numbers add exactly (#322); Strings
+				// concatenate, as String is summable in Eclipse OCL with '' as its zero (#322)
+				boolean strings = !source.isEmpty() && source.stream().allMatch(String.class::isInstance);
+				if (strings) {
+					StringBuilder text = new StringBuilder();
+					for (Object e : source) {
+						text.append((String) e);
+					}
+					yield text.toString();
+				}
+				Number total = 0L;
 				for (Object e : source) {
-					if (e instanceof Long l) {
-						longSum += l;
-						doubleSum += l;
-					} else if (e instanceof Number n) {
-						doubleSum += n.doubleValue();
-						allLong = false;
-					} else {
+					if (!(e instanceof Number n) || !OclNumbers.isFinite(n)) {
 						yield OclInvalid.INSTANCE;
 					}
+					total = OclNumbers.add(total, n);
 				}
-				if (allLong) {
-					yield longSum;
-				}
-				yield doubleSum;
+				yield total;
 			}
 			case "max" -> {
+				// §11.7.1: elements of a type with max — numbers (UnlimitedNatural included) and,
+				// as in Eclipse OCL, Strings; Boolean has no max (#322)
 				Object max = null;
 				for (Object e : source) {
-					if (!(e instanceof Comparable)) yield OclInvalid.INSTANCE;
-					if (max == null || compareOcl(e, max) > 0) {
+					if (!hasMaxMin(e)) yield OclInvalid.INSTANCE;
+					if (e instanceof OclUnlimitedNatural) {
+						max = e;
+					} else if (max == null || (!(max instanceof OclUnlimitedNatural) && compareOcl(e, max) > 0)) {
 						max = e;
 					}
 				}
@@ -1565,8 +1526,10 @@ class OclStdlib {
 			case "min" -> {
 				Object min = null;
 				for (Object e : source) {
-					if (!(e instanceof Comparable)) yield OclInvalid.INSTANCE;
-					if (min == null || compareOcl(e, min) < 0) {
+					if (!hasMaxMin(e)) yield OclInvalid.INSTANCE;
+					if (e instanceof OclUnlimitedNatural) {
+						if (min == null) min = e;
+					} else if (min == null || min instanceof OclUnlimitedNatural || compareOcl(e, min) < 0) {
 						min = e;
 					}
 				}
@@ -1690,7 +1653,7 @@ class OclStdlib {
 			case "first" -> source.isEmpty() ? OclInvalid.INSTANCE : source.get(0);
 			case "last" -> source.isEmpty() ? OclInvalid.INSTANCE : source.get(source.size() - 1);
 			case "at" -> {
-				int idx = (int) asLong(args[0]);
+				int idx = asIndex(args[0]);
 				if (idx < 1 || idx > source.size()) yield OclInvalid.INSTANCE;
 				yield source.get(idx - 1); // 1-based
 			}
@@ -1737,7 +1700,7 @@ class OclStdlib {
 				yield result;
 			}
 			case "insertAt" -> {
-				int idx = (int) asLong(args[0]);
+				int idx = asIndex(args[0]);
 				if (idx < 1 || idx > source.size() + 1) yield OclInvalid.INSTANCE;
 				if (source instanceof OclOrderedSet<?>) {
 					OclOrderedSet<Object> result = new OclOrderedSet<>(source);
@@ -1751,8 +1714,8 @@ class OclStdlib {
 				yield result;
 			}
 			case "subSequence", "subOrderedSet" -> {
-				int lower = (int) asLong(args[0]);
-				int upper = (int) asLong(args[1]);
+				int lower = asIndex(args[0]);
+				int upper = asIndex(args[1]);
 				if (lower < 1 || upper > source.size() || lower > upper) {
 					yield OclInvalid.INSTANCE;
 				}
@@ -1827,6 +1790,36 @@ class OclStdlib {
 		return OclCollectionUtil.compareOcl(a, b);
 	}
 
+	// --- Number helpers ---
+
+	/** Whether a collection element supports {@code max}/{@code min} (§11.7.1). */
+	private static boolean hasMaxMin(Object element) {
+		return element instanceof OclUnlimitedNatural || element instanceof String
+				|| (element instanceof Number n && OclNumbers.isFinite(n));
+	}
+
+	/** An OCL Integer from its decimal text, or {@code null} — exact beyond 64 bits (#322). */
+	private static Number parseInteger(String text) {
+		try {
+			return OclNumbers.integer(new BigInteger(text.trim()));
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	/**
+	 * An OCL Real from its decimal text, or {@code null}. {@code BigDecimal} reads exactly the
+	 * decimal notations, so the Java-only spellings {@code NaN}, {@code Infinity}, {@code 1f} and
+	 * {@code 0x1p3} that {@code Double.parseDouble} took are refused (#322).
+	 */
+	private static BigDecimal parseReal(String text) {
+		try {
+			return OclNumbers.real(new BigDecimal(text.trim()));
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
 	// --- Collection helpers ---
 
 	private static boolean isUniqueCollection(Collection<?> collection) {
@@ -1882,15 +1875,16 @@ class OclStdlib {
 		return value instanceof Boolean b ? b : false;
 	}
 
-	private static long asLong(Object value) {
-		if (value instanceof Long l) return l;
-		if (value instanceof Integer i) return i;
-		if (value instanceof Number n) return n.longValue();
-		return 0L;
-	}
-
-	private static Number asNumber(Object value) {
-		return value instanceof Number n ? n : 0L;
+	/**
+	 * A position argument as a Java index. A value outside the {@code int} range becomes
+	 * {@code -1}, which every caller treats as out of range — a cast would wrap 2^32 + 1 to 1.
+	 */
+	private static int asIndex(Object value) {
+		if (value instanceof Number n && OclNumbers.isInteger(n)) {
+			BigInteger position = OclNumbers.bigInteger(n);
+			return position.bitLength() < 32 ? position.intValue() : -1;
+		}
+		return -1;
 	}
 
 	private static String asString(Object value) {

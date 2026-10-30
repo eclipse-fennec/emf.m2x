@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -44,20 +45,16 @@ import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.compiled.UnitNature;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
+import org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
-import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
-import org.eclipse.fennec.m2x.unit.api.PreparedContext;
-import org.eclipse.fennec.m2x.unit.api.Unit;
-import org.eclipse.fennec.m2x.unit.api.UnitBinder;
-import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
-import org.eclipse.fennec.m2x.model.compiled.UnitNature;
-import org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument;
+import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
-import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
@@ -70,6 +67,10 @@ import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefEntry;
 import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefKey;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
 /**
  * Plain Java implementation of the {@link OclEngine} facade.
@@ -732,6 +733,11 @@ public class OclEngineImpl implements OclDelegateSupport {
 				return l.intValue();
 			}
 			return value;
+		}
+		// A Real is exact inside the evaluation (#322) and leaves the engine as the Double EMF
+		// users expect; an Integer beyond 64 bits stays a BigInteger
+		if (value instanceof BigDecimal decimal) {
+			return decimal.doubleValue();
 		}
 		if (value instanceof OclBag<?> bag) {
 			OclBag<Object> narrowed = new OclBag<>();

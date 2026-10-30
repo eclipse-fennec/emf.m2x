@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +34,7 @@ import org.eclipse.fennec.m2x.model.ocl.FeatureCallExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -144,12 +146,14 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 				// OclSet — none of which implement EList. Wrap so callers of the
 				// generated EMF accessor receive a valid (unmodifiable) EList.
 				if (operation.isMany() && result != null && !(result instanceof EList<?>)) {
-					if (result instanceof Collection<?> col) {
-						result = ECollections.unmodifiableEList(new BasicEList<>(col));
-					} else {
-						result = ECollections.unmodifiableEList(
-								new BasicEList<>(List.of(result)));
+					List<Object> elements = new ArrayList<>();
+					for (Object element : result instanceof Collection<?> col ? col : List.of(result)) {
+						elements.add(OclValues.toEcore(element, operation.getEType()));
 					}
+					result = ECollections.unmodifiableEList(new BasicEList<>(elements));
+				} else if (!operation.isMany()) {
+					// A number has the operation type's instance class (#322)
+					result = OclValues.toEcore(result, operation.getEType());
 				}
 
 				// 4. Evaluate postcondition if present

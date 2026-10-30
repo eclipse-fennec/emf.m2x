@@ -62,10 +62,10 @@ import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
-import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
@@ -89,6 +89,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
@@ -1564,20 +1565,12 @@ public class QvtoEvaluator {
 
 	/**
 	 * Coerces a value to match the expected EMF structural feature type.
-	 * OCL evaluates integer literals as Long, but EMF EInt expects Integer.
+	 * OCL evaluates an Integer as Long (BigInteger beyond 64 bits) and a Real as BigDecimal
+	 * (#322); the feature wants its own instance class — Integer for EInt, Double for EDouble.
 	 */
 	private static Object coerceForFeature(EStructuralFeature sf, Object value) {
-		if (value instanceof Long l && sf instanceof EAttribute attr) {
-			String typeName = attr.getEAttributeType().getName();
-			if ("EInt".equals(typeName) || "EIntegerObject".equals(typeName)) {
-				return l.intValue();
-			}
-			if ("EShort".equals(typeName) || "EShortObject".equals(typeName)) {
-				return l.shortValue();
-			}
-			if ("EByte".equals(typeName) || "EByteObject".equals(typeName)) {
-				return l.byteValue();
-			}
+		if (value instanceof Number && sf instanceof EAttribute attr) {
+			return OclValues.toEcore(value, attr.getEAttributeType());
 		}
 		return value;
 	}

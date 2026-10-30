@@ -15,15 +15,16 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.lang.reflect.InvocationTargetException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Locale;
-import java.util.Objects;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
@@ -40,18 +41,18 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
-import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.CallExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralPart;
 import org.eclipse.fennec.m2x.model.ocl.CollectionRange;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.EnumLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IntegerLiteralExp;
-import org.eclipse.fennec.m2x.model.ocl.InvalidType;
 import org.eclipse.fennec.m2x.model.ocl.InvalidLiteralExp;
+import org.eclipse.fennec.m2x.model.ocl.InvalidType;
 import org.eclipse.fennec.m2x.model.ocl.IterateExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.LetExp;
@@ -76,8 +77,8 @@ import org.eclipse.fennec.m2x.model.ocl.VoidType;
 import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclControlFlowSignal;
-import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
@@ -274,7 +275,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	@Override
 	public Object caseRealLiteralExp(RealLiteralExp exp) {
-		return exp.getRealSymbol();
+		// A Real is a BigDecimal (#322); the literal's double is read by its shortest decimal
+		// spelling, which is the text the expression wrote for every literal of up to 15 digits
+		return OclNumbers.real(BigDecimal.valueOf(exp.getRealSymbol()));
 	}
 
 	@Override
@@ -1589,8 +1592,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 					// Widening: Integer→Real. The first is kept, as for an exact match:
 					// several providers may define the same name, and which one answers
 					// must not depend on the order they happen to be bound in.
-					if ("Real".equals(typeName)
-							&& (source instanceof Long || source instanceof Integer)) {
+					if ("Real".equals(typeName) && OclNumbers.isInteger(source)) {
 						if (wideningMatch == null) {
 							wideningMatch = op;
 						}
@@ -1647,7 +1649,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 				return true;
 			}
 			// OCL §11.5.1: Integer conforms to Real (widening)
-			if ("Real".equals(typeName) && (source instanceof Long || source instanceof Integer)) {
+			if ("Real".equals(typeName) && OclNumbers.isInteger(source)) {
 				return true;
 			}
 			return false;
@@ -1883,8 +1885,8 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * mismatch in collection operations (includes, count, etc.).
 	 */
 	private static Object widenInteger(Object value) {
-		if (value instanceof Integer i) {
-			return (long) i;
+		if (value instanceof Integer || value instanceof Short || value instanceof Byte) {
+			return ((Number) value).longValue();
 		}
 		return value;
 	}
