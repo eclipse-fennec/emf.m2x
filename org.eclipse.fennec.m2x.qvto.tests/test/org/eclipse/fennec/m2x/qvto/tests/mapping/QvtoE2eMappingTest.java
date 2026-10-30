@@ -839,8 +839,8 @@ class QvtoE2eMappingTest extends AbstractQvtoEngineTest {
 				transformation test(out t : SRC) {
 				    mapping createInInit() : r : SourceElement {
 				        init {
-				            r.name := 'init-only';
-				            r.value := 42;
+				            -- §8.2.1.15: the result is null in init; init may assign it (#332)
+				            r := object SourceElement { name := 'init-only'; value := 42; };
 				        }
 				    }
 				    main() {

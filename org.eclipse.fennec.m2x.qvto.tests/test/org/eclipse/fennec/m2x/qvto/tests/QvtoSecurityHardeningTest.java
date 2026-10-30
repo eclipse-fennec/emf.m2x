@@ -195,11 +195,12 @@ class QvtoSecurityHardeningTest extends AbstractQvtoEngineTest {
 		QvtoExecutionResult result = executeWithExtents("""
 				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
 				transformation T(inout m : ECORE) {
-				    mapping EPackage::loop() : EPackage {
-				        result := self.map loop();
+				    mapping EPackage::loop(n : Integer) : EPackage {
+				        -- a new argument each time, so the trace never answers (§8.1.11.1, #332)
+				        result := self.map loop(n + 1);
 				    }
 				    main() {
-				        m.objectsOfType(EPackage)->forEach(p) { p.map loop(); };
+				        m.objectsOfType(EPackage)->forEach(p) { p.map loop(0); };
 				    }
 				}
 				""", QvtoEvaluationOptions.defaults().withMaxStackDepth(5),
