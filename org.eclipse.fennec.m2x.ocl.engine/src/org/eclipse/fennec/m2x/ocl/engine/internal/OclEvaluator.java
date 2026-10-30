@@ -463,6 +463,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 		if (exp.isIsPre() && preStateSnapshot.hasPreValue(exp)) {
 			return wrapNull(widenInteger(preStateSnapshot.getPreValue(exp)));
 		}
+		if (exp.isIsPre()) {
+			Object preValue = preStateValue(eo, sf);
+			if (preValue != NO_PRE_STATE) {
+				return wrapNull(preValue);
+			}
+		}
 
 		// Property interceptor (e.g., QVT-O intermediate properties)
 		Object intercepted = tryPropertyInterceptor(eo, sf.getName());
@@ -554,6 +560,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 			// §11.3.2 OclVoid: "oclIsNew() : Boolean — Evaluates to false." (#321)
 			if (source == null) {
 				return false;
+			}
+			// A.3.2.2: oclIsNew may only be used in a postcondition. Without a pre-state every
+			// object counted as new — an answer, but a made-up one (#323)
+			if (preStateSnapshot == PreStateSnapshot.EMPTY) {
+				return addError("oclIsNew() needs the pre-state of an operation; it is defined in"
+						+ " postconditions only (OCL v2.4 §7.5.9)");
 			}
 			return source instanceof EObject eo ? !preStateSnapshot.existedBefore(eo) : OclInvalid.INSTANCE;
 		}
@@ -1798,6 +1810,38 @@ public class OclEvaluator extends OclSwitch<Object> {
 					+ "' has no declared type (OCL v2.4 §7.4.3; required under specStrict)");
 		}
 		return null;
+	}
+
+	/** Marks "no pre-state applies here" for {@link #preStateValue}. */
+	private static final Object NO_PRE_STATE = new Object();
+
+	/**
+	 * The value of {@code object.feature@pre} (OCL v2.4 §7.5.14, A.3.2.2 (vii), #323): the
+	 * feature's value before the operation, read on the object the source denotes now. An object
+	 * the operation created has no pre-state — invalid. Outside a postcondition there is no
+	 * pre-state at all; the current value is used and a WARNING says so.
+	 *
+	 * @return the value, or {@link #NO_PRE_STATE} when the current value is to be read
+	 */
+	private Object preStateValue(EObject object, EStructuralFeature feature) {
+		if (preStateSnapshot == PreStateSnapshot.EMPTY) {
+			addWarning("'" + feature.getName() + "@pre' is evaluated without a pre-state — the"
+					+ " current value is used (@pre is defined in postconditions only, OCL v2.4 §7.5.14)");
+			return NO_PRE_STATE;
+		}
+		if (!preStateSnapshot.hasFeatureValues()) {
+			return NO_PRE_STATE;
+		}
+		EStructuralFeature own = object.eClass().getEStructuralFeature(feature.getName());
+		if (own != null && preStateSnapshot.hasFeatureValue(object, own)) {
+			return widenInteger(navigationValue(object, own, preStateSnapshot.getFeatureValue(object, own)));
+		}
+		if (!preStateSnapshot.existedBefore(object)) {
+			addWarning("'" + feature.getName() + "@pre' of an object the operation created has no"
+					+ " pre-state — it is invalid");
+			return OclInvalid.INSTANCE;
+		}
+		return NO_PRE_STATE;
 	}
 
 	/** Turns the standard library's {@link OclStdlib.ArgumentError} into an ERROR and invalid (#314). */

@@ -107,6 +107,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 	private final Map<DefKey, DefEntry> defProperties = new ConcurrentHashMap<>();
 	private final Map<DefKey, DefEntry> deriveProperties = new ConcurrentHashMap<>();
 	private final Map<DefKey, DefEntry> documentBodies = new ConcurrentHashMap<>();
+	/** The pre- and postconditions documents state, per operation (#323). */
+	private final Map<EOperation, List<Constraint>> documentConditions = new ConcurrentHashMap<>();
 	private final Map<EClassifier, List<Constraint>> documentInvariants = new ConcurrentHashMap<>();
 	private volatile OclEvaluationOptions delegateOptions;
 
@@ -211,7 +213,17 @@ public class OclEngineImpl implements OclDelegateSupport {
 		Set<DefKey> derivations = new LinkedHashSet<>();
 		Set<DefKey> bodies = new LinkedHashSet<>();
 		List<Constraint> invariants = new ArrayList<>();
+		List<Constraint> conditions = new ArrayList<>();
 		for (Constraint c : constraints) {
+			// pre: and post: are checked where the operation runs through the invocation
+			// delegate, next to the annotation's own (OCL v2.4 §12.7, #323)
+			if ((c.getKind() == ConstraintKind.PRE || c.getKind() == ConstraintKind.POST)
+					&& c.getContextOperation() != null && c.getSpecification() != null) {
+				documentConditions.computeIfAbsent(c.getContextOperation(),
+						key -> Collections.synchronizedList(new ArrayList<>())).add(c);
+				conditions.add(c);
+				continue;
+			}
 			// inv: feeds the document validator (#204) — EMF's Diagnostician reaches it through
 			// OclDocumentValidator, never through the annotation-driven delegates
 			if (c.getKind() == ConstraintKind.INV && c.getContextClassifier() != null
@@ -270,12 +282,30 @@ public class OclEngineImpl implements OclDelegateSupport {
 				}
 			}
 		}
-		return new LoadedDefs(keys, providers, derivations, bodies, invariants);
+		return new LoadedDefs(keys, providers, derivations, bodies, invariants, conditions);
 	}
 
 	/** What one Complete OCL document put into effect, so that it can be taken out again. */
 	private record LoadedDefs(Set<DefKey> properties, List<OclOperationProvider> providers,
-			Set<DefKey> derivations, Set<DefKey> bodies, List<Constraint> invariants) {
+			Set<DefKey> derivations, Set<DefKey> bodies, List<Constraint> invariants,
+			List<Constraint> conditions) {
+	}
+
+	@Override
+	public List<OclExpression> documentConditions(EOperation operation, ConstraintKind kind) {
+		List<Constraint> registered = documentConditions.get(operation);
+		if (registered == null) {
+			return List.of();
+		}
+		List<OclExpression> result = new ArrayList<>();
+		synchronized (registered) {
+			for (Constraint c : registered) {
+				if (c.getKind() == kind) {
+					result.add(c.getSpecification());
+				}
+			}
+		}
+		return result;
 	}
 
 	private OclOperationProvider registerDefOperation(EClassifier ctx, String opName,
@@ -298,7 +328,10 @@ public class OclEngineImpl implements OclDelegateSupport {
 		// Use AnyType as return type placeholder — actual type is determined at runtime
 		AnyType returnType = OclStandardLibrary.INSTANCE.oclAny();
 
-		OclOperation op = new OclOperation(opName, ownerType, List.of(), returnType, impl);
+		// One parameter per declared one, so that defs of the same name and different arity are
+		// told apart by the dispatcher (#324); their types are not checked at the call (GAP-3)
+		List<EClassifier> parameterTypes = Collections.nCopies(paramNames.size(), returnType);
+		OclOperation op = new OclOperation(opName, ownerType, parameterTypes, returnType, impl);
 		OclOperationProvider provider = () -> List.of(op);
 		defProviders.add(provider);
 		return provider;
@@ -385,6 +418,12 @@ public class OclEngineImpl implements OclDelegateSupport {
 		defProviders.removeAll(loaded.providers());
 		loaded.derivations().forEach(deriveProperties::remove);
 		loaded.bodies().forEach(documentBodies::remove);
+		for (Constraint condition : loaded.conditions()) {
+			List<Constraint> registered = documentConditions.get(condition.getContextOperation());
+			if (registered != null) {
+				registered.remove(condition);
+			}
+		}
 		for (Constraint invariant : loaded.invariants()) {
 			List<Constraint> registered = documentInvariants.get(invariant.getContextClassifier());
 			if (registered != null) {
@@ -429,6 +468,12 @@ public class OclEngineImpl implements OclDelegateSupport {
 		defProviders.removeAll(loaded.providers());
 		loaded.derivations().forEach(deriveProperties::remove);
 		loaded.bodies().forEach(documentBodies::remove);
+		for (Constraint condition : loaded.conditions()) {
+			List<Constraint> registered = documentConditions.get(condition.getContextOperation());
+			if (registered != null) {
+				registered.remove(condition);
+			}
+		}
 		for (Constraint invariant : loaded.invariants()) {
 			List<Constraint> registered = documentInvariants.get(invariant.getContextClassifier());
 			if (registered != null) {

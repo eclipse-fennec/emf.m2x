@@ -14,6 +14,10 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.util.List;
+
+import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
@@ -44,4 +48,15 @@ public interface OclDelegateSupport extends OclEngine {
 	 */
 	Object evaluatePostcondition(OclExpression expression, OclContext context,
 			PreStateSnapshot snapshot);
+
+	/**
+	 * The preconditions or postconditions that registered Complete OCL documents state for an
+	 * operation (OCL v2.4 §12.7, #323). The invocation delegate checks them next to those of the
+	 * operation's own annotation.
+	 *
+	 * @param operation the operation
+	 * @param kind {@link ConstraintKind#PRE} or {@link ConstraintKind#POST}
+	 * @return the condition expressions, empty if none
+	 */
+	List<OclExpression> documentConditions(EOperation operation, ConstraintKind kind);
 }

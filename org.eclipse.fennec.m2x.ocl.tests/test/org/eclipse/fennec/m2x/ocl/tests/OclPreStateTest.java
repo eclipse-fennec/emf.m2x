@@ -446,13 +446,14 @@ class OclPreStateTest {
 		}
 
 		@Test
-		void oclIsNew_emptySnapshot_alwaysTrue() {
-			// EMPTY has no pre-existing objects → everything is "new"
+		void oclIsNew_withoutPreState_isInvalid() {
+			// OCL v2.4 A.3.2.2: oclIsNew belongs to postconditions. Without a pre-state every
+			// object used to count as new — a made-up answer; now invalid with an ERROR (#323)
 			EObject person = createPerson("Anyone", 10000.0);
 
 			OperationCallExp isNew = oclIsNewCall(selfExp());
 
-			assertEquals(true, evaluateWithSnapshot(isNew, person, PreStateSnapshot.EMPTY).value());
+			assertSame(OclInvalid.INSTANCE, evaluateWithSnapshot(isNew, person, PreStateSnapshot.EMPTY).value());
 		}
 
 		@Test

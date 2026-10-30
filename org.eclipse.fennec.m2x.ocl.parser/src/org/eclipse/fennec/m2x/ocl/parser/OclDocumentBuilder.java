@@ -18,13 +18,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EParameter;
@@ -33,8 +36,10 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
+import org.eclipse.fennec.m2x.model.ocl.FeatureCallExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 
 /**
@@ -98,7 +103,36 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	List<Constraint> buildDocument(OclParser.CompleteOclDocumentEntryContext tree) {
 		constraints.clear();
 		visit(tree);
+		for (Constraint constraint : constraints) {
+			rejectPreStateOutsidePostcondition(constraint);
+		}
 		return new ArrayList<>(constraints);
+	}
+
+	/**
+	 * OCL v2.4 §12.5.1 [3], §12.6.1 [2], §12.7.1 [2], §12.8.1 [2]: "Inside a … constraint the use
+	 * of @pre is not allowed"; A.3.2.2 likewise for {@code oclIsNew()}. Both read the state before
+	 * an operation, which exists in a postcondition only. Elsewhere they used to evaluate the
+	 * current state silently (#323).
+	 */
+	private void rejectPreStateOutsidePostcondition(Constraint constraint) {
+		if (constraint.getKind() == ConstraintKind.POST || constraint.getSpecification() == null) {
+			return;
+		}
+		String where = constraint.getKind().getName() + (constraint.getName() != null ? " " + constraint.getName() : "");
+		List<EObject> nodes = new ArrayList<>();
+		nodes.add(constraint.getSpecification());
+		constraint.getSpecification().eAllContents().forEachRemaining(nodes::add);
+		for (EObject node : nodes) {
+			if (node instanceof FeatureCallExp call && call.isIsPre()) {
+				addError("@pre is allowed in postconditions only, not in " + where, null);
+				return;
+			}
+			if (node instanceof OperationCallExp call && "oclIsNew".equals(call.getName())) {
+				addError("oclIsNew() is allowed in postconditions only, not in " + where, null);
+				return;
+			}
+		}
 	}
 
 	@Override
@@ -289,6 +323,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (!ids.isEmpty()) {
 			constraint.setName(OclAstBuilder.identifierText(ids.get(ids.size() - 1)));
 		}
+		rejectConflictingDefinition(constraint.getName(), classifier,
+				ctx.parameterList() != null ? ctx.parameterList().parameter().size() : -1, ctx);
 
 		// Operation def: parameterList presence indicates operation definition.
 		// Store parameter names in a synthetic EOperation on contextOperation.
@@ -324,6 +360,32 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		return false;
 	}
 
+	/**
+	 * §7.4.4: "The names of the attributes / operations in a let [def] expression may not
+	 * conflict with the names of respective attributes/associationEnds and operations of the
+	 * Classifier." A definition that repeats a feature of the class was silently shadowed by it
+	 * at evaluation; one that repeats an earlier def of the same kind was ambiguous (#324).
+	 *
+	 * @param arity the number of parameters of an operation def, {@code -1} for an attribute def
+	 */
+	private void rejectConflictingDefinition(String name, EClassifier classifier, int arity, ParserRuleContext ctx) {
+		if (name == null || !(classifier instanceof EClass eClass)) {
+			return;
+		}
+		if (arity < 0 && eClass.getEStructuralFeature(name) != null) {
+			addError("Definition '" + name + "' conflicts with the property " + eClass.getName() + "::" + name, ctx);
+		}
+		if (arity >= 0 && resolveOperation(eClass, name, arity) != null) {
+			addError("Definition '" + name + "' conflicts with the operation " + eClass.getName() + "::" + name, ctx);
+		}
+		if (!definedSignatures.add(eClass.getName() + "::" + name + "/" + arity)) {
+			addError("'" + name + "' is defined twice for " + eClass.getName(), ctx);
+		}
+	}
+
+	/** The defs of this document so far, as {@code Class::name/arity}. */
+	private final Set<String> definedSignatures = new HashSet<>();
+
 	// ==================== Operation Context ====================
 
 	@Override
@@ -355,6 +417,13 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		opName = OclAstBuilder.identifierText(ctx.identifier());
 		int paramCount = ctx.parameterList() != null ? ctx.parameterList().parameter().size() : 0;
 		EOperation operation = resolveOperation(classifier, opName, paramCount);
+		if (operation == null && !definedProperties.contains(opName)) {
+			// §12.7/§12.10: pre, post and body belong to an existing operation of that signature;
+			// an unknown name or arity used to be skipped on load, silently (#324)
+			addError("Unknown operation '" + opName + "' with " + paramCount + " parameter(s) of "
+					+ classifier.getName() + " in operation context declaration", ctx);
+			return null;
+		}
 		currentParameters = ctx.parameterList();
 		currentResultType = ctx.typeExpression() != null ? ctx.typeExpression()
 				: operation != null && operation.getEType() != null ? operation.getEType() : RESULT_OF_UNKNOWN_TYPE;
@@ -437,6 +506,13 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 		String propName = OclAstBuilder.identifierText(ctx.identifier());
 		EStructuralFeature property = resolveProperty(classifier, propName);
+		if (property == null && !definedProperties.contains(propName)) {
+			// §12.8/§12.9: init and derive state the value of an existing property. An unknown
+			// name used to be built and then skipped on load, silently (#324)
+			addError("Unknown property '" + propName + "' of " + classifier.getName()
+					+ " in property context declaration", ctx);
+			return null;
+		}
 
 		for (OclParser.PropertyContextBodyContext bodyCtx : ctx.propertyContextBody()) {
 			if (bodyCtx instanceof OclParser.InitExpressionContext initCtx) {

@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -209,19 +210,16 @@ class OclDefExpressionTest {
 	}
 
 	@Test
-	void defProperty_realPropertyNotOverridden() throws OclParseException {
+	void defProperty_conflictingWithARealProperty_isRejected() {
+		// OCL v2.4 §7.4.4: a definition may not conflict with an attribute of the classifier.
+		// It used to be accepted and then silently shadowed by the real attribute (#324)
 		OclEngine eng = OclEngines.create(new OclParserSupport());
-		eng.loadDocument("""
+		assertThrows(OclParseException.class, () -> eng.loadDocument("""
 				package company
 				context Person
 				  def : name : String = 'OVERRIDDEN'
 				endpackage
-				""");
-		EObject person = createPerson("Alice", 30);
-
-		// Real EAttribute 'name' should take precedence over def
-		Object result = eng.evaluate("self.name", OclContext.of(person));
-		assertEquals("Alice", result);
+				"""));
 	}
 
 	@Test
