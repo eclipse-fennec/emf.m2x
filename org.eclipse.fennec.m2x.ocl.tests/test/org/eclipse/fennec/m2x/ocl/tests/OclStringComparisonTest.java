@@ -134,13 +134,16 @@ class OclStringComparisonTest extends AbstractOclTest {
 
 	@Test
 	void lessThan_caseSensitive_upperLower() throws OclParseException {
-		// 'A' (65) < 'a' (97) in standard comparison
-		assertEquals(true, eval("'A' < 'a'", self));
+		// OCL v2.4 §11.1: Unicode collation, not code points (#329) — the small letter comes
+		// first at the tertiary level; 'A' (65) < 'a' (97) was the code-point order
+		assertEquals(true, eval("'a' < 'A'", self));
+		assertEquals(false, eval("'A' < 'a'", self));
 	}
 
 	@Test
 	void greaterThan_caseSensitive() throws OclParseException {
-		assertEquals(true, eval("'a' > 'A'", self));
+		assertEquals(true, eval("'A' > 'a'", self));
+		assertEquals(false, eval("'A' = 'a'", self));
 	}
 
 	// --- Empty string ---

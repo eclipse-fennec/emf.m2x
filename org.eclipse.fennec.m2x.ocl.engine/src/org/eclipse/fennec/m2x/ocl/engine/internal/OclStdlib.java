@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -272,7 +273,7 @@ class OclStdlib {
 				Object ordered = dispatchOrderedCollection(name, l, args);
 				if (ordered != NOT_FOUND) return ordered;
 			}
-			return dispatchCollection(name, c, args, options);
+			return dispatchCollection(name, c, args, options, locale);
 		}
 
 		return NOT_FOUND;
@@ -1070,7 +1071,9 @@ class OclStdlib {
 	private static Object dispatchString(String name, String source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
 		return switch (name) {
-			case "size" -> (long) source.length();
+			// §11.4.3: a String is a sequence of characters — Unicode code points, not the UTF-16
+			// units Java counts, so '😀'.size() is 1 (#329)
+			case "size" -> (long) source.codePointCount(0, source.length());
 			case "+" , "concat" -> {
 				String other = asString(args[0]);
 				// Checked before the allocation, not after: the sum is known
@@ -1082,11 +1085,12 @@ class OclStdlib {
 			case "substring" -> {
 				int lower = asIndex(args[0]);
 				int upper = asIndex(args[1]);
+				int size = source.codePointCount(0, source.length());
 				// OCL v2.5 §11.5.1: 1 <= lower AND lower <= upper AND upper <= size
-				if (lower < 1 || upper > source.length() || lower > upper) {
+				if (lower < 1 || upper > size || lower > upper) {
 					yield OclInvalid.INSTANCE;
 				}
-				yield source.substring(lower - 1, upper);
+				yield source.substring(source.offsetByCodePoints(0, lower - 1), source.offsetByCodePoints(0, upper));
 			}
 			case "toUpperCase", "toUpper" -> source.toUpperCase(locale);
 			case "toLowerCase", "toLower" -> source.toLowerCase(locale);
@@ -1094,12 +1098,12 @@ class OclStdlib {
 			case "indexOf" -> {
 				// OCL v2.4 §11.5.3: "or zero if s is not a substring of self"
 				int idx = source.indexOf(asString(args[0]));
-				yield (long) (idx + 1); // 1-based, 0 if not found
+				yield idx < 0 ? 0L : (long) source.codePointCount(0, idx) + 1; // 1-based, 0 if not found
 			}
 			case "lastIndexOf" -> {
 				// Eclipse extension (not in OCL v2.4 spec), consistent with indexOf
 				int idx = source.lastIndexOf(asString(args[0]));
-				yield (long) (idx + 1); // 1-based, 0 if not found
+				yield idx < 0 ? 0L : (long) source.codePointCount(0, idx) + 1; // 1-based, 0 if not found
 			}
 			case "substituteAll" -> {
 				// Eclipse extension: literal (non-regex) replacement of all occurrences
@@ -1132,16 +1136,14 @@ class OclStdlib {
 			}
 			case "at" -> {
 				int idx = asIndex(args[0]);
-				if (idx < 1 || idx > source.length()) {
+				if (idx < 1 || idx > source.codePointCount(0, source.length())) {
 					yield OclInvalid.INSTANCE;
 				}
-				yield String.valueOf(source.charAt(idx - 1));
+				yield Character.toString(source.codePointAt(source.offsetByCodePoints(0, idx - 1)));
 			}
 			case "characters" -> {
 				List<String> chars = new ArrayList<>(source.length());
-				for (int i = 0; i < source.length(); i++) {
-					chars.add(String.valueOf(source.charAt(i)));
-				}
+				source.codePoints().forEach(cp -> chars.add(Character.toString(cp)));
 				yield chars;
 			}
 			case "toInteger" -> {
@@ -1182,13 +1184,16 @@ class OclStdlib {
 				}
 				yield replaceBounded(source, pattern, asString(args[1]), false, options.maxStringLength());
 			}
-			case "equalsIgnoreCase" -> source.equalsIgnoreCase(asString(args[0]));
+			// §11.5.3 post: result = (self.toUpperCase() = s.toUpperCase()) — with the locale, so
+			// 'ß' equals 'SS' and the Turkish dotted I is told apart (#329)
+			case "equalsIgnoreCase" -> source.toUpperCase(locale).equals(asString(args[0]).toUpperCase(locale));
 			case "startsWith" -> source.startsWith(asString(args[0]));
 			case "endsWith" -> source.endsWith(asString(args[0]));
-			case "<" -> source.compareTo(asString(args[0])) < 0;
-			case "<=" -> source.compareTo(asString(args[0])) <= 0;
-			case ">" -> source.compareTo(asString(args[0])) > 0;
-			case ">=" -> source.compareTo(asString(args[0])) >= 0;
+			// §11.1/§11.5.3: Unicode collation in the locale of oclLocale, not code-point order (#329)
+			case "<" -> collate(source, asString(args[0]), locale) < 0;
+			case "<=" -> collate(source, asString(args[0]), locale) <= 0;
+			case ">" -> collate(source, asString(args[0]), locale) > 0;
+			case ">=" -> collate(source, asString(args[0]), locale) >= 0;
 			case "toString" -> source;
 			// QVT-O §8.3.16.2: length (deprecated synonym for size)
 			case "length" -> (long) source.length();
@@ -1304,7 +1309,7 @@ class OclStdlib {
 	// --- Collection (OCL v2.4 Section 11.7) ---
 
 	private static Object dispatchCollection(String name, Collection<?> source, Object[] args,
-			OclEvaluationOptions options) {
+			OclEvaluationOptions options, Locale locale) {
 		return switch (name) {
 			case "size" -> (long) source.size();
 			case "isEmpty" -> source.isEmpty();
@@ -1517,7 +1522,7 @@ class OclStdlib {
 					if (!hasMaxMin(e)) yield OclInvalid.INSTANCE;
 					if (e instanceof OclUnlimitedNatural) {
 						max = e;
-					} else if (max == null || (!(max instanceof OclUnlimitedNatural) && compareOcl(e, max) > 0)) {
+					} else if (max == null || (!(max instanceof OclUnlimitedNatural) && compareOcl(e, max, locale) > 0)) {
 						max = e;
 					}
 				}
@@ -1529,7 +1534,7 @@ class OclStdlib {
 					if (!hasMaxMin(e)) yield OclInvalid.INSTANCE;
 					if (e instanceof OclUnlimitedNatural) {
 						if (min == null) min = e;
-					} else if (min == null || min instanceof OclUnlimitedNatural || compareOcl(e, min) < 0) {
+					} else if (min == null || min instanceof OclUnlimitedNatural || compareOcl(e, min, locale) < 0) {
 						min = e;
 					}
 				}
@@ -1787,6 +1792,28 @@ class OclStdlib {
 	}
 
 	private static int compareOcl(Object a, Object b) {
+		return OclCollectionUtil.compareOcl(a, b);
+	}
+
+	// --- String helpers ---
+
+	/**
+	 * Compares two strings by the Unicode Collation Algorithm in the given locale (OCL v2.4
+	 * §11.1: "Comparison of strings … conforms to the Unicode Collation algorithm"; §11.5.3:
+	 * "using the locale defined by looking up oclLocale", #329). A {@link Collator} is not
+	 * thread-safe, so each call takes its own instance; equal strings by the collator that
+	 * differ in their code points are ordered by those, so the order stays total.
+	 */
+	static int collate(String left, String right, Locale locale) {
+		int byCollation = Collator.getInstance(locale).compare(left, right);
+		return byCollation != 0 ? byCollation : left.compareTo(right);
+	}
+
+	/** {@link OclCollectionUtil#compareOcl} with strings collated in the given locale. */
+	static int compareOcl(Object a, Object b, Locale locale) {
+		if (a instanceof String left && b instanceof String right) {
+			return collate(left, right, locale);
+		}
 		return OclCollectionUtil.compareOcl(a, b);
 	}
 
