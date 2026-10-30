@@ -65,6 +65,7 @@ import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
+import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
@@ -160,6 +161,8 @@ public class QvtoEvaluator {
 	// §8.3.19: predefined tags "proxy" and "topclasses"
 	private final QvtoTagRegistry tagRegistry;
 	private final QvtoOperationResolver operationResolver;
+	/** The OCL engine's class for each collection kind, learnt from empty literals (#339). */
+	private Map<CollectionKind, Class<?>> collectionClasses;
 	/** The classes whose ambiguous extent was reported already (#337). */
 	private final Set<EClass> ambiguousClasses = new LinkedHashSet<>();
 	/** Per operation name: whether one of that name has out or inout parameters (#336). */
@@ -1313,8 +1316,12 @@ public class QvtoEvaluator {
 
 	/** An empty collection of the given type's kind, built the way OCL builds a literal. */
 	private Object emptyCollection(CollectionType type) {
+		return emptyCollection(type.getKind());
+	}
+
+	private Object emptyCollection(CollectionKind kind) {
 		CollectionLiteralExp literal = OclFactory.eINSTANCE.createCollectionLiteralExp();
-		literal.setKind(type.getKind() == CollectionKind.COLLECTION ? CollectionKind.SEQUENCE : type.getKind());
+		literal.setKind(kind == CollectionKind.COLLECTION ? CollectionKind.SEQUENCE : kind);
 		return eval(literal);
 	}
 
@@ -1597,21 +1604,174 @@ public class QvtoEvaluator {
 	 * §8.2.2.10: "zero for a numeric type, the empty string for a string,
 	 * and null for all other elements"
 	 */
-	private static Object defaultValueForType(EClassifier type) {
+	private Object defaultValueForType(EClassifier type) {
 		if (type == null) {
 			return null;
+		}
+		// §8.2.2.10: "an empty collection for a collection" (#339)
+		if (type instanceof CollectionType collectionType) {
+			return newCollection(collectionKind(collectionType, null), List.of());
+		}
+		if (type instanceof MapType) {
+			return new LinkedHashMap<>();
 		}
 		String typeName = type.getName();
 		if (typeName == null) {
 			return null;
 		}
+		// "zero for a numeric type, the empty string for a string, and null for all other
+		// elements" — Boolean included; Eclipse answers false (#339)
 		return switch (typeName) {
 			case "Integer" -> 0;
 			case "Real" -> 0.0;
-			case "Boolean" -> Boolean.FALSE;
 			case "String" -> "";
 			default -> null;
 		};
+	}
+
+	/**
+	 * The value a variable, tuple part or intermediate property holds after an assignment, by
+	 * the equivalent assignments of §8.2.2.11 (#339). A multi-valued target — declared as a
+	 * collection, or holding one — gets a new collection of its own kind: the right-hand side is
+	 * flattened into it, a null element replaced by the default value. A variable keeps the
+	 * remaining nulls, a property drops them. The collection the target held is not changed, so
+	 * a variable that shares it keeps its elements. Before, {@code +=} added the right-hand
+	 * collection as one element and mutated the shared value, and {@code := null} cleared it.
+	 *
+	 * @param property whether the target is a property
+	 * @return the new value, or {@link #UNHANDLED} if the target keeps its value
+	 */
+	private Object assignedValue(String target, EClassifier declared, Object current, Object value, AssignExp exp,
+			boolean property) {
+		boolean declaredMany = declared instanceof CollectionType;
+		if (exp.isIsSubtract()) {
+			if (!(current instanceof Collection<?> currentCollection)) {
+				return UNHANDLED;
+			}
+			Collection<Object> remaining = newCollection(collectionKind(declared, currentCollection), currentCollection);
+			flatten(value).forEach(remaining::remove);
+			return remaining;
+		}
+		if (exp.isIsReset()) {
+			// A collection is assigned element by element only to a target declared as one. A
+			// null or invalid right-hand side leaves a variable null (not LEFT{null}) and a property
+			// empty, as before
+			if (!declaredMany || value == OclInvalid.INSTANCE) {
+				return value;
+			}
+			if (value == null) {
+				return property ? newCollection(collectionKind(declared, null), List.of()) : null;
+			}
+			return appended(target, newCollection(collectionKind(declared, null), List.of()), value, exp, property);
+		}
+		// Eclipse bug449445: invalid is silently ignored on +=
+		if (value == OclInvalid.INSTANCE) {
+			return UNHANDLED;
+		}
+		if (current instanceof Collection<?> currentCollection) {
+			return appended(target, newCollection(collectionKind(declared, currentCollection), currentCollection),
+					value, exp, property);
+		}
+		if (declaredMany) {
+			return appended(target, newCollection(collectionKind(declared, null), List.of()), value, exp, property);
+		}
+		if (current == null) {
+			// An untyped variable that holds nothing yet takes the value
+			return value;
+		}
+		// "Equivalent Single valued Property or Variable append: invalid – append is not
+		// possible for single values"
+		addError("Cannot append to '" + target + "': append is not possible for single values");
+		return UNHANDLED;
+	}
+
+	/** Appends the flattened value to the new collection, within the collection size limit. */
+	private Object appended(String target, Collection<Object> acc, Object value, AssignExp exp, boolean property) {
+		Object defaultValue = UNHANDLED;
+		List<Object> elements = flatten(value);
+		// The size limit of #257 sees only standard-library results: `t.items += t.items` in a
+		// loop doubled on every step (#260)
+		int limit = oclOptions().maxCollectionSize();
+		if ((long) acc.size() + elements.size() > limit) {
+			addError("Collection size " + ((long) acc.size() + elements.size())
+					+ " exceeds maximum allowed size: " + limit + " — '" + target + "' is not changed");
+			return UNHANDLED;
+		}
+		for (Object element : elements) {
+			Object v = element;
+			if (v == null && exp.getDefaultValue() != null) {
+				if (defaultValue == UNHANDLED) {
+					defaultValue = eval(exp.getDefaultValue());
+				}
+				v = defaultValue;
+			}
+			if (v != null || !property) {
+				acc.add(v);
+			}
+		}
+		return acc;
+	}
+
+	/** {@code value->flatten()} of a single value or a collection, nested collections included. */
+	private static List<Object> flatten(Object value) {
+		List<Object> elements = new ArrayList<>();
+		if (value instanceof Collection<?> collection) {
+			for (Object element : collection) {
+				elements.addAll(flatten(element));
+			}
+		} else {
+			elements.add(value);
+		}
+		return elements;
+	}
+
+	/** The kind of collection a target holds: its declared kind, else that of its current value. */
+	private CollectionKind collectionKind(EClassifier declared, Collection<?> current) {
+		if (declared instanceof CollectionType collectionType && collectionType.getKind() != CollectionKind.COLLECTION) {
+			return collectionType.getKind();
+		}
+		return current != null ? kindOf(current) : CollectionKind.SEQUENCE;
+	}
+
+	/** The kind of a collection value, by the class the OCL engine builds that kind with. */
+	private CollectionKind kindOf(Collection<?> collection) {
+		collectionClasses();
+		for (Map.Entry<CollectionKind, Class<?>> entry : collectionClasses.entrySet()) {
+			if (entry.getValue() == collection.getClass()) {
+				return entry.getKey();
+			}
+		}
+		return collection instanceof Set<?> ? CollectionKind.SET : CollectionKind.SEQUENCE;
+	}
+
+	/**
+	 * A new collection of the kind, holding the elements. The OCL engine's collection classes
+	 * are internal to it: each is learnt once from an empty literal of its kind, and its
+	 * {@code (Collection)} constructor builds the copies — a literal evaluated per assignment
+	 * would cost a full OCL evaluation every time.
+	 */
+	@SuppressWarnings("unchecked")
+	private Collection<Object> newCollection(CollectionKind kind, Collection<?> elements) {
+		Class<?> type = collectionClasses().get(kind == CollectionKind.COLLECTION ? CollectionKind.SEQUENCE : kind);
+		try {
+			return (Collection<Object>) type.getConstructor(Collection.class).newInstance(elements);
+		} catch (ReflectiveOperationException e) {
+			Collection<Object> fallback = (Collection<Object>) emptyCollection(kind);
+			fallback.addAll(elements);
+			return fallback;
+		}
+	}
+
+	private Map<CollectionKind, Class<?>> collectionClasses() {
+		if (collectionClasses == null) {
+			Map<CollectionKind, Class<?>> classes = new LinkedHashMap<>();
+			for (CollectionKind kind : List.of(CollectionKind.SEQUENCE, CollectionKind.ORDERED_SET,
+					CollectionKind.SET, CollectionKind.BAG)) {
+				classes.put(kind, emptyCollection(kind).getClass());
+			}
+			collectionClasses = classes;
+		}
+		return collectionClasses;
 	}
 
 	/**
@@ -1840,6 +2000,15 @@ public class QvtoEvaluator {
 	 */
 	private Object evalAssignedValue(AssignExp exp) {
 		List<OclExpression> values = exp.getValue();
+		if (values.size() > 1) {
+			// §8.2.2.11: "A complex assignment is equivalent to a simple assignment comprising a
+			// Sequence of the compound expression values" (#339)
+			List<Object> sequence = new ArrayList<>(values.size());
+			for (OclExpression valueExp : values) {
+				sequence.add(unwrapNull(eval(valueExp)));
+			}
+			return sequence;
+		}
 		Object value = values.isEmpty() ? null : eval(values.get(0));
 		if (value == null && exp.getDefaultValue() != null) {
 			value = eval(exp.getDefaultValue());
@@ -1908,44 +2077,11 @@ public class QvtoEvaluator {
 		// are stored externally, so they ARE allowed on in-model objects.
 		ContextualProperty icp = intermediateStore.findIntermediateProperty(eo, sf.getName());
 		if (icp != null) {
-			// Eclipse bug449445: invalid → null for property assignment,
-			// or clear if current value is a collection
-			if (exp.isIsSubtract()) {
-				// -= on intermediate property: remove from collection
-				Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-				if (current instanceof Collection<?>) {
-					@SuppressWarnings("unchecked")
-					Collection<Object> col = (Collection<Object>) current;
-					col.remove(value);
-				}
-			} else if ((value == OclInvalid.INSTANCE || value == null) && exp.isIsReset()) {
-				Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-				if (current instanceof Collection<?>) {
-					@SuppressWarnings("unchecked")
-					Collection<Object> col = (Collection<Object>) current;
-					col.clear();
-				} else {
-					intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), null);
-				}
-			} else if (value == OclInvalid.INSTANCE) {
-				// += invalid: silently ignored
-			} else if (exp.isIsReset()) {
-				// §8.2.1: Collection assignment uses value-copy semantics
-				if (value instanceof Collection<?> srcCol) {
-					intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), new ArrayList<>(srcCol));
-				} else {
-					intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
-				}
-			} else {
-				// += on intermediate property: add to collection or set value
-				Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-				if (current instanceof Collection<?>) {
-					@SuppressWarnings("unchecked")
-					Collection<Object> col = (Collection<Object>) current;
-					col.add(value);
-				} else {
-					intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
-				}
+			// A property: a multi-valued one skips null elements (§8.2.2.11, #339)
+			Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
+			Object assigned = assignedValue(sf.getName(), icp.getEType(), current, value, exp, true);
+			if (assigned != UNHANDLED) {
+				intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), assigned);
 			}
 			return;
 		}
@@ -2045,11 +2181,11 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseBlockExp(BlockExp exp) {
-			Object lastResult = null;
 			for (OclExpression bodyExp : exp.getBody()) {
-				lastResult = eval(bodyExp);
+				eval(bodyExp);
 			}
-			return wrapNull(lastResult);
+			// §8.2.2.2: "The returned value is null" — as in Eclipse (#339)
+			return WRAPPED_NULL;
 		}
 
 		@Override
@@ -2111,35 +2247,12 @@ public class QvtoEvaluator {
 					}
 					return wrapNull(value);
 				}
-				// Variable assignment
-				if (exp.isIsSubtract()) {
-					// -= : remove element from collection variable
-					Object current = env.lookup(varName);
-					if (current instanceof Collection<?>) {
-						@SuppressWarnings("unchecked")
-						Collection<Object> col = (Collection<Object>) current;
-						col.remove(value);
-					}
-				} else if (exp.isIsReset()) {
-					Object current = env.lookup(varName);
-					if (value == null && current instanceof Collection<?>) {
-						((Collection<?>) current).clear();
-					} else {
-						env.assign(varName, value);
-					}
-				} else {
-					// += (append): add to collection
-					Object current = env.lookup(varName);
-					if (current instanceof Collection<?>) {
-						// Eclipse bug449445: invalid is silently ignored on +=
-						if (value != OclInvalid.INSTANCE) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							col.add(value);
-						}
-					} else {
-						env.assign(varName, value);
-					}
+				// Variable assignment (§8.2.2.11): the variable gets a new value, a collection it
+				// shared with another variable is not changed (#339)
+				Object assigned = assignedValue(varName, varExp.getReferredVariable().getType(),
+						env.lookup(varName), value, exp, false);
+				if (assigned != UNHANDLED) {
+					env.assign(varName, assigned);
 				}
 			} else if (left instanceof PropertyCallExp propExp) {
 				// Property assignment: eObject.eSet(feature, value) or tuple.part
@@ -2150,39 +2263,10 @@ public class QvtoEvaluator {
 					@SuppressWarnings("unchecked")
 					Map<String, Object> tuple = (Map<String, Object>) source;
 					String partName = sf.getName();
-					if (exp.isIsSubtract()) {
-						// -= on tuple part: remove from collection
-						Object current = tuple.get(partName);
-						if (current instanceof Collection<?>) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							col.remove(value);
-						}
-					} else if (exp.isIsReset()) {
-						tuple.put(partName, value);
-					} else {
-						// += on tuple part: only valid for mutable collections (List)
-						Object current = tuple.get(partName);
-						if (current instanceof Collection<?>) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							if (value instanceof Collection<?> rhs) {
-								// The operand is a navigation result, not a standard-library result,
-								// so the size limit of #257 never saw it: `t.items += t.items` in a
-								// loop doubled on every step (#260)
-								int limit = oclOptions().maxCollectionSize();
-								if ((long) col.size() + rhs.size() > limit) {
-									addError("Collection size " + ((long) col.size() + rhs.size())
-											+ " exceeds maximum allowed size: " + limit);
-								} else {
-									col.addAll(rhs);
-								}
-							} else {
-								col.add(value);
-							}
-						} else {
-							tuple.put(partName, value);
-						}
+					// A tuple part is assigned like a variable (§8.2.2.11, #339)
+					Object assigned = assignedValue(partName, sf.getEType(), tuple.get(partName), value, exp, false);
+					if (assigned != UNHANDLED) {
+						tuple.put(partName, assigned);
 					}
 				} else if (source instanceof EObject eo && sf != null) {
 					assignToProperty(eo, sf, value, exp);

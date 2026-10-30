@@ -983,6 +983,21 @@ still refuses is reported as an ERROR diagnostic, not thrown out of `execute` (#
 resolve outside a property assignment (a variable, say) is not deferred and yields null with
 a warning.
 
+Variables, tuple parts and intermediate properties follow the same equivalent assignments
+(#339). A multi-valued target is one declared as a collection or holding one. It gets a **new**
+collection of its own kind: `l += Sequence{2,3}` adds two elements, `var st : Set(Integer); st :=
+Sequence{1,1,2}` stays a Set of two, and a variable that shares the old collection (`var b := a; b
++= 2`) leaves `a` unchanged. A variable keeps null elements; a property drops them. `+=` on a
+single value is an ERROR ("append is not possible for single values"). `:= null` makes a variable
+null. The spec's formula would give `LEFT{null}`, and its "Multiple valued Variable assign"
+starts from `acc = left`, which contradicts `isReset` ("the list is reset"). Both are read as
+slips. A collection assigned to a single-valued target is not reduced to its first element:
+`value->at(1)` in the formula is the first of the composite values, not the first element of a
+collection value. `x := { a; b; }` is a composite assignment (several `AssignExp.value`, a
+Sequence); `x := do { … }` is a block, whose value is null (§8.2.2.2). Typed variables start with
+the §8.2.2.10 defaults: an empty collection of the declared kind, an empty `Dict`, 0, `''`, and
+null for everything else, Boolean included (Eclipse: `false`).
+
 ---
 
 ## 9. Multi-File Composition
