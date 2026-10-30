@@ -106,8 +106,10 @@ use site, and so did the evaluator, the MOFM2T standard library and the QVT-O op
 four sets of `Integer`, none contained anywhere, every one a satellite in a compiled unit. Now a
 reference to `Integer` is an external reference like one to `EString`: it serializes as
 `…/ocl/stdlib/1.0#//Integer`, resolves from any resource set, and enters a fingerprint as
-`nsURI#name` (#138). `PrimitiveType.instanceClass` says what the evaluator hands around
-(`Integer` → `Long`, `Real` → `Double`).
+`nsURI#name` (#138). `PrimitiveType.instanceClass` is `Long` for `Integer` and `Double` for
+`Real` — what `evaluate()` hands back for a Real. Inside an evaluation the numbers are wider than
+that: an Integer is a `BigInteger` once it leaves the 64-bit range, a Real is a `BigDecimal`
+(§6.5, #322).
 
 The library initializes the OCL metamodel with itself, so both are in the global registry before
 any name is resolved; in an Eclipse IDE that registration comes from `plugin.xml` instead (#157).
@@ -206,11 +208,15 @@ public record OclEvaluationOptions(
     NullHandling nullHandling,          // STRICT or LENIENT
     ErrorRecovery errorRecovery,        // FAIL_FAST or COLLECT_ERRORS
     int maxDepth,                       // Default 1,000
+    Duration timeout,                   // Default: none
     int maxCollectionSize,              // Default 1,000,000
     int maxClosureIterations,           // Default 100,000
     int maxRegexLength,                 // Default 1,000
     int maxStringLength,                // Default 10,000,000
-    Duration timeout                    // Default: none
+    boolean customOperationsEnabled,    // D29, default false
+    List<OclOperationProvider> additionalProviders,
+    boolean useEMFTypes,                // Default false
+    boolean specStrict                  // Default false, see §13.8 (#316, #326)
 ) {
     public static OclEvaluationOptions strict() { ... }
     public static OclEvaluationOptions lenient() { ... }
@@ -392,11 +398,21 @@ Parser resolves types during AST construction for hot-path performance.
 - Operator precedence encoded via rule ordering (ANTLR4 handles left-recursion)
 - Reference: Acceleo `Query.g4` for expression parsing patterns
 
-**Operator Precedence** (spec §7.4.8):
+**Operator Precedence** (spec §7.4.8, as `Ocl.g4` encodes it):
 
 1. `@pre` → 2. `.`, `->`, `?.`, `?->` → 3. `not`, `-` (unary) → 4. `*`, `/` →
-5. `+`, `-` → 6. `if-then-else-endif` → 7. `<`, `>`, `<=`, `>=` → 8. `=`, `<>` →
-9. `and` → 10. `or` → 11. `xor` → 12. `implies`
+5. `+`, `-` → 6. `<`, `>`, `<=`, `>=` → 7. `=`, `<>` → 8. `and` → 9. `or` → 10. `xor` →
+11. `implies`
+
+§7.4.8 lists `if-then-else-endif` between `+`/`-` and the relational operators. In the grammar
+it is a primary expression, like `let` and a parenthesised expression: `endif` closes it, so it
+has no binding strength to place in the list, and `1 + if c then 2 else 3 endif` parses as the
+operand of `+`. A `let` extends as far right as possible: `1 + let x : Integer = 2 in x + 3` is
+`6` (#330). `not` and unary minus bind weaker than `.`: `not 1 = 1` is `(not 1) = 1`, `invalid`,
+and `-1.abs()` is `-(1.abs())`, `-1`. §7.4.8 puts `and`, `or` and `xor` on one level; the
+grammar gives them three, `and` binding strongest — the same result for left-to-right chains
+such as `true or true xor true` (`false`), different for `a or b and c`, which reads as
+`a or (b and c)`.
 
 ### 5.5 Grammar Composition
 
@@ -550,23 +566,49 @@ when source is null.
 
 **Non-standard extensions (intentionally supported):**
 - `toUpperCase()`/`toLowerCase()` — aliases for OCL standard `toUpper()`/`toLower()`
-- `+` operator for String concatenation — alias for `concat()`
+- `+` operator for String concatenation — alias for `concat()`; both operands must be Strings, `'a' + 1` is `invalid` (#314)
 - `trim()` on String — not in OCL standard
 
 ### 6.4 OclEvalEnvironment — Runtime Bindings
 
 Chain-of-scopes variable environment. Per-evaluation instance, not shared.
 
-### 6.5 Collection Type Mapping
+### 6.5 Value Representation
 
 | OCL Type | Java Implementation |
 |----------|-------------------|
-| Set | `LinkedHashSet` |
+| Integer | `Long`; `BigInteger` where a result leaves the 64-bit range, back to `Long` when it fits (#322) |
+| Real | `BigDecimal`; division keeps at least 32 fraction digits, HALF_EVEN; NaN/±∞ are no Real (#322) |
+| UnlimitedNatural | finite values are Integers; `*` is `OclUnlimitedNatural.INSTANCE` |
+| Set | `OclSet` (`AbstractSet`, hashed by OCL lookup key) |
 | Sequence | `ArrayList` |
-| Bag | `ArrayList` (via `OclBag` marker) |
-| OrderedSet | `LinkedHashSet` (via `OclOrderedSet` marker) |
-| Tuple | `Map<String, Object>` |
+| Bag | `OclBag` (`ArrayList`) |
+| OrderedSet | `OclOrderedSet` (`ArrayList`, OCL equality) |
+| Tuple | `LinkedHashMap<String, Object>` |
 | Map (v2.5) | `LinkedHashMap` |
+
+`OclNumbers` (engine-internal) holds the arithmetic: `long` while it does not overflow, then
+`BigInteger`; any Real operand makes the operation `BigDecimal`. A `Double`/`Float` from the model
+enters by its shortest decimal (`BigDecimal.valueOf`). Equality, hashing and ordering go by the
+mathematical value (`OclEqualityUtil` lookup key): `1 = 1.0`, `-0.0 = 0.0`, Integers beyond 2^53
+stay distinct (#317). Objects are equal by identity, not structure (#318).
+
+**Boundaries.** `evaluate()` narrows the result recursively: `Long` → `Integer` where it fits,
+`BigDecimal` → `Double`; `evaluateWithDiagnostics()` keeps the exact values. Values written into
+a model — derived features and operations of the EMF delegates, QVT-O assignments, QVT-R
+enforcement — go through `OclValues.toEcore` (`ocl.api`) to the feature's instance class; M2T
+writes text through `OclValues.toText`. Literals are limited by the metamodel:
+`IntegerLiteralExp.integerSymbol` is an `ELong`, `RealLiteralExp.realSymbol` an `EDouble`, so a
+literal beyond 64 bits is a parse error and a Real literal is exact up to 15 significant digits.
+Unbounded literals would need `EBigInteger`/`EBigDecimal` in `ocl.ecore`.
+
+**Navigation results** of a many-valued feature take the feature's collection kind (§7.5.3,
+§7.5.11, #319) as a copy in the model's order, implemented by the engine-internal
+`FeatureValues.Feature{Set,OrderedSet,Bag,Sequence}`. Each implements `OclFeatureValue`
+(`ocl.api`: `owner()`, `feature()`), so the #182 guard still refuses mutating operations on model
+values and QVT-O's `feature.unlink(item)` reaches the live list. For a unique reference the copy
+skips the distinctness check: EMF keeps it distinct by identity, which is OCL equality for
+objects.
 
 **Indexing:** OCL uses 1-based indexing for `String.substring/at/indexOf` and
 `Collection.at/indexOf/subSequence`.
@@ -594,8 +636,10 @@ We don't need it:
 | Ecore→AS conversion on every parse | No conversion — direct Ecore access |
 
 UML models loaded in EMF are already `EObject` instances and work with our engine.
-UML-specific OCL operations (`oclIsInState`, stereotypes) can be added via an optional
-`ocl.uml` extension bundle using `OclOperationProvider`.
+UML-specific OCL operations (stereotypes) can be added via an optional `ocl.uml` extension
+bundle using `OclOperationProvider`. `oclIsInState` is answered by the evaluator itself with the
+ERROR "not supported: Ecore models have no state machines", before any provider is asked (#321);
+a UML bundle would have to lift that.
 
 ---
 
@@ -769,8 +813,17 @@ EMF delegate registries allow OCL expressions in Ecore models via `EAnnotation`:
 | Delegate | Purpose | Annotation Key |
 |----------|---------|---------------|
 | **ValidationDelegate** | OCL invariants as validation rules | constraint name |
-| **SettingDelegate** | Derived features (`derive:`) and defaults (`initial:`) | `derivation`, `initial` |
-| **InvocationDelegate** | Operation bodies (`body:`) with pre/post | `body`, `pre`, `post` |
+| **SettingDelegate** | Derived features; `initial` is read like a derivation on every access | `derivation`, `initial` |
+| **InvocationDelegate** | Operation bodies with pre/post, plus the `pre:`/`post:` of loaded Complete OCL documents (#323) | `body`, `pre`, `post` |
+
+The **validation delegate** counts only `true` as satisfied; a non-Boolean result violates the
+constraint like `null` and `invalid` (§12.6.1 [1], #324). The **setting delegate** is stateless:
+`initial` is used when there is no `derivation` and evaluated on every `eGet`, not once at
+creation (§12.8) — Eclipse's `OCLSettingDelegate` does the same (#324). The **invocation delegate**
+parses `body`, `pre` and `post` with the operation's parameters declared, and `result` in `post`
+(`OclEngine.parse(expression, contextType, variables)`, #324). It is reached only for operations
+that have an OCL delegate (`body` or `post`); a Java-implemented operation of a generated model
+never passes it, so a document's `pre:`/`post:` for it is not checked.
 
 ### 8.2 Annotation URI
 
@@ -784,7 +837,7 @@ Example in Ecore:
 <eStructuralFeatures xsi:type="ecore:EAttribute" name="fullName" eType="ecore:EDataType ...#//EString"
     changeable="false" volatile="true" transient="true" derived="true">
   <eAnnotations source="http://www.eclipse.org/fennec/m2x/ocl/1.0">
-    <details key="derive" value="self.firstName.concat(' ').concat(self.lastName)"/>
+    <details key="derivation" value="self.firstName.concat(' ').concat(self.lastName)"/>
   </eAnnotations>
 </eStructuralFeatures>
 ```
@@ -1169,7 +1222,7 @@ million characters each is within both limits. Building it takes time, which is 
 | S-7 | Parse amplification (repeated validation) | Medium | Mitigated: expression cache |
 | S-8 | allInstances on large extent | Medium | Mitigated: size check (see S-12) |
 | S-9 | Stack overflow via deep recursion | High | Mitigated: depth counter |
-| S-10 | Integer overflow | Low | Documented: accepted risk |
+| S-10 | Integer overflow | Low | Gone: Integer is unbounded since #322. A `BigInteger` has no size limit of its own — repeated squaring in an `iterate` is bounded by `timeout` only |
 | S-11 | String growth — `Sequence{1..31}->iterate(i; s = 'x' \| s + s)` | Medium | Mitigated: maxStringLength on every result |
 | S-12 | allInstances result size | Medium | Mitigated: maxCollectionSize |
 | S-13 | Custom operation provider abuse | Low | Mitigated: D29 disabled by default |
@@ -1402,6 +1455,7 @@ Results documented but not gating — the goal is awareness, not hard thresholds
 | D19 | `name: String` on OperationCallExp | Implemented |
 | D20 | OclResult record for diagnostics | Implemented |
 | D21 | OclExpressionParser interface in ocl.api | Implemented |
+| — | Spec-audit decisions of 2026-10-30 (#313–#330), see §13.8 | Implemented, except the `inv` message (#324) |
 
 ### 13.2 DR-D14: Configurable Evaluation (Strict / Lenient)
 
@@ -1446,6 +1500,39 @@ All benchmarks run both engines under identical conditions:
 
 See §12.6 above. Documents accepted gaps and gaps to close.
 
+### 13.8 Spec-Audit Decisions (2026-10-30, #313–#330)
+
+A section-by-section audit against OCL v2.4 led to these decisions. The rule was: follow the
+specification; where its text and the Eclipse OCL default disagree, keep the Eclipse default and
+offer the text behind `specStrict`; where Fennec deliberately differs from Eclipse, say so.
+
+| Topic | Decision | Issue |
+|-------|----------|-------|
+| `specStrict` | New flag on `OclEvaluationOptions` / `OclConfiguration` / `ocl.specStrict` (default `false`). Switches: `any` without a match `null` → `invalid`; `one`/`isUnique` evaluate every body; `any` evaluates every body before returning a match; a decreasing range is `invalid` + ERROR instead of empty + WARNING; an untyped `let`/accumulator is an ERROR. The last one is reported at evaluation, since parsed expressions are cached across option sets | #316, #326 |
+| Boolean operators with `null` | §11.5.4: after the short-circuits, `invalid` wins, then `null`. `true and null = null`; a non-Boolean operand is `invalid` + ERROR. Eclipse Pivot answers the same | #313 |
+| Argument checking | A signature table for the §11.5 operations checks arity and argument kind; a mismatch is ERROR + `invalid` instead of coercion. A model operation called with no matching arity is a parse error | #314 |
+| Non-Boolean iterator body | `select`/`reject`/`forAll`/`exists`/`any`/`one`: ERROR + `invalid`. `any` with a `null` body is `invalid` (it is defined by `select`) | #315 |
+| `invalid` in collections | Never an element (§11.7.1 [1]): literal parts, `collect`/`collectNested`/`closure` bodies make the result `invalid`. `collect` flattens recursively. `sortedBy` with a `null` key is `invalid` | #316 |
+| Numbers | Integer unbounded (`Long`, then `BigInteger`), Real `BigDecimal`, like Eclipse. `evaluate()` still returns a Real as `Double`; values written to a model are converted with `OclValues.toEcore`. `toString` plain decimal; `sum` concatenates Strings; `max`/`min` on Booleans `invalid` | #322 |
+| Equality | Numbers by mathematical value, also in `isUnique`, `intersection`, `-`; objects by identity, not `EcoreUtil.equals` | #317, #318 |
+| Navigation kind | A navigation yields the feature's collection kind, as a copy implementing `OclFeatureValue` | #319 |
+| Implicit collect of operations | A dot on a collection is an implicit collect for operations too, OclAny operations included (as Eclipse Pivot); the collection itself needs `->` | #320 |
+| Named iterators as implicit sources | §9.3.25 [A]: `self.employees->collect(p \| name)` reads `p.name`. **Deliberately differs from Eclipse.** Parameters therefore must be declared at parse time: `OclEngine.parse(expression, contextType, variables)` | #320, #324 |
+| Implicit operation source | An unqualified `op()` goes to the innermost implicit source whose type has it; OclAny operations to the innermost one; else `self`. All implicit sources are consulted, innermost first | #320 |
+| Shadowing | A `let`, iterator or accumulator variable that hides a variable in scope is a parse error (§9.3.41 [1]). **Deliberately stricter than Eclipse** | #326 |
+| Static well-formedness | `Collection{…}` literal, duplicate tuple parts and literal initial values that do not conform to the declared type are parse errors; full checking remains GAP-3 | #326 |
+| Type operations | `oclIsKindOf`/`oclIsTypeOf` with collection types check kind and element type; `5.oclAsType(Real) = 5.0`; `5.oclIsKindOf(UnlimitedNatural) = false`, but `oclAsType(UnlimitedNatural)` accepts values `>= 0` (Eclipse); `invalid.toString()` is `invalid`; `oclIsInState` reports that it is unsupported | #321 |
+| Unknown property | ERROR + `invalid` instead of an exception out of `evaluate()` | #327 |
+| `allInstances()` | Enumerations, `Boolean`, `OclVoid` need no extent; `OclInvalid.allInstances()` is `invalid` | #328 |
+| `@pre` / `oclIsNew()` | Outside `post:` a parse error in documents; ad hoc, `@pre` reads the current value with a WARNING and `oclIsNew()` is `invalid` + ERROR. Property `@pre` is captured per (object, feature) and read on the post-state object (A.3.2.2 (vii)). `op@pre()` is accepted next to `op()@pre`; an operation `@pre` is still evaluated once per node | #323 |
+| Document `pre:`/`post:` | Checked by the invocation delegate, only for operations with an OCL delegate | #323 |
+| Complete OCL | Form [B] context variable is `self`; parameters and `result` are variables; unknown operation/property contexts and conflicting `def`s are parse errors; operation `def`s keep their arity | #324 |
+| `initial` | Evaluated like a derivation on every access (Eclipse-compatible); documented, not changed | #324 |
+| `inv name('message'):` | To be evaluated as the violation message, like Eclipse. **Open:** needs a `messageExpression` containment on `Constraint` in `ocl.ecore`; until then the expression is parsed and dropped | #324 |
+| Grammar | Complete OCL keywords are names in expressions (one grammar); restricted words after `::`; escaped names take string escapes and keep the doubled quote; supplementary-plane letters; `iterate` without an iterator. M2T's own grammar copy is not changed | #320, #325 |
+| Qualified names | Package paths resolve through subpackages; the qualifier of `self.Type::feature` is checked; `Type::op()` is a call on `self` for a supertype, else an error (Ecore has no static operations) | #325 |
+| Strings | `<`/`>`/`<=`/`>=`, `sortedBy`, `max`/`min` use `java.text.Collator` in `oclLocale`, ties by code point; `equalsIgnoreCase` via `toUpperCase(locale)`; positions count code points | #329 |
+
 ---
 
 ## 14. Future / Planned Work
@@ -1475,7 +1562,7 @@ Static well-formedness checking visitor over entire AST.
 |---|-----|----------|--------|
 | GAP-1 | Complete OCL document parsing | Critical | Done |
 | GAP-2 | `@pre` parsed but never evaluated | Critical | **Done** ✅ (PreStateSnapshot) |
-| GAP-3 | `validate()` not implemented — refuses loudly since #186 | Critical | Open (= S-10 in spec-compliance) |
+| GAP-3 | `validate()` not implemented — refuses loudly since #186 | Critical | Open (= S-10 in spec-compliance). The parser enforces the static rules it can check without a type checker (#326, #314, #325, §13.8) |
 | GAP-6 | MessageExp has no evaluator case | Medium | Deferred (Eclipse also doesn't implement) |
 | GAP-7 | `oclIsNew` absent | Medium | **Done** ✅ (compares against PreStateSnapshot) |
 
