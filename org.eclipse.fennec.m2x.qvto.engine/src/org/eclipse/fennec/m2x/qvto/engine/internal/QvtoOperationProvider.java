@@ -16,7 +16,9 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,6 +37,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
+import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.Module;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
@@ -69,6 +72,8 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	private final QvtoOperationResolver operationResolver;
 	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final Map<String, int[]> stringCounters = new HashMap<>();
+	/** The mappings already registered, as name/arity — one OCL operation dispatches all candidates. */
+	private final Set<String> registeredMappings = new HashSet<>();
 	private List<OclOperation> operations;
 
 	public QvtoOperationProvider(OperationalTransformation transformation, QvtoEvaluator evaluator,
@@ -564,11 +569,21 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					// Blackbox operation — delegate to library's invoke()
 					ops.add(new OclOperation(name, ownerType, List.of(), ANY_TYPE,
 							(self, args) -> invokeBlackbox(impOp, self, args)));
+				} else if (impOp instanceof MappingOperation) {
+					// A mapping inside an OCL expression is called the way 'map' calls it: the
+					// candidates are chosen by argument count and type, a non-conforming source
+					// answers null (§8.2.1.15, #333). Registered once per name and arity, for any
+					// source, so the OCL dispatcher does not pick an overload by its context type.
+					int arity = QvtoEvaluator.parameterCount(impOp);
+					if (registeredMappings.add(name + "/" + arity)) {
+						ops.add(new OclOperation(name, ANY_TYPE, Collections.nCopies(arity, ANY_TYPE), ANY_TYPE,
+								(self, args) -> evaluator.callMappingByName(name, self, args, false)));
+					}
 				} else {
 					ops.add(new OclOperation(
 							name,
 							ownerType,
-							List.of(),
+							Collections.nCopies(QvtoEvaluator.parameterCount(impOp), ANY_TYPE),
 							ANY_TYPE,
 							(self, args) -> {
 								// §8.1.19: contextual operation on null → propagate null

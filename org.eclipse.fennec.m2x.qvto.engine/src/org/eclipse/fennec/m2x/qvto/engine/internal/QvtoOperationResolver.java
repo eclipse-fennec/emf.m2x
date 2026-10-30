@@ -175,7 +175,8 @@ class QvtoOperationResolver {
 			}
 		}
 		if (compatible.isEmpty()) {
-			return candidates; // fallback to all if nothing matches
+			// §8.2.1.15: no candidate conforms — the call answers null, it does not try them all (#333)
+			return compatible;
 		}
 		// Sort: most-derived context type first
 		compatible.sort((a, b) -> {
