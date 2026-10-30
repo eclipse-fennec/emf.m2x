@@ -130,7 +130,9 @@ primaryExpression
       'else' elseExp=expression 'endif'                                                  # IfExp
     | 'let' letBinding (',' letBinding)* 'in' expression                                 # LetExp
     | literalExpression                                                                  # LiteralExp
-    | pathName '(' argumentList? ')' isMarkedPre?                                        # OperationCallExp
+    // §7.5.14: the '@pre' is postfixed to the operation name, before the parameters —
+    // stockprice@pre(); the form after the parentheses stays accepted (#323)
+    | pathName preBefore=isMarkedPre? '(' argumentList? ')' preAfter=isMarkedPre?        # OperationCallExp
     | primitiveType                                                                      # PrimitiveTypeExp
     | collectionType                                                                     # CollectionTypeExp
     | mapType                                                                            # MapTypeExp
@@ -139,14 +141,15 @@ primaryExpression
     ;
 
 propertyOrCallSuffix
-    : (pathName '::')? identifier '(' argumentList? ')' isMarkedPre?                     # DotCallSuffix
+    : (pathName '::')? identifier preBefore=isMarkedPre? '(' argumentList? ')' preAfter=isMarkedPre? # DotCallSuffix
     | (pathName '::')? identifier isMarkedPre?                                           # PropertySuffix
     ;
 
 iteratorOrOperationCall
     : identifier '(' iteratorVariables '|' expression ')'                                # IteratorCall
-    | identifier '(' identifier (':' iterType=typeExpression)?
-      ';' identifier (':' accType=typeExpression)? '=' expression '|' expression ')'     # IterateCall
+    // §9.3.26: the iterator variable may be omitted — the body then has an implicit one (#320)
+    | identifier '(' (iterName=identifier (':' iterType=typeExpression)? ';')?
+      accName=identifier (':' accType=typeExpression)? '=' expression '|' expression ')' # IterateCall
     | identifier '(' argumentList? ')'                                                   # CollectionOperationCall
     ;
 
@@ -259,7 +262,14 @@ tupleTypePart
 // ==================== Path Names ====================
 
 pathName
-    : identifier ('::' identifier)*
+    : identifier ('::' (identifier | restrictedWord))*
+    ;
+
+/** §7.4.11: "A restricted word can only be used as a name when preceded by a '::'" (#325). */
+restrictedWord
+    : 'Bag' | 'Boolean' | 'Collection' | 'Integer' | 'OclAny' | 'OclInvalid' | 'OclMessage'
+    | 'OclVoid' | 'OrderedSet' | 'Real' | 'Sequence' | 'Set' | 'String' | 'Tuple'
+    | 'UnlimitedNatural'
     ;
 
 // ==================== Identifier (supports escaped identifiers §9.3.4) ====================
@@ -267,6 +277,18 @@ pathName
 identifier
     : IDENTIFIER
     | ESCAPED_IDENTIFIER
+    | documentKeyword
+    ;
+
+/**
+ * §13.2 (4): "The following names are not reserved or restricted in Essential OCL: OclMessage
+ * body context def derive endpackage init inv package post pre static" — they are keywords of
+ * a Complete OCL document only, so a feature may be called body or context (#325). Fennec's own
+ * document keywords import, include and library likewise.
+ */
+documentKeyword
+    : 'body' | 'context' | 'def' | 'derive' | 'endpackage' | 'init' | 'inv' | 'package'
+    | 'post' | 'pre' | 'static' | 'import' | 'include' | 'library'
     ;
 
 // ==================== Lexer Rules ====================
@@ -298,8 +320,14 @@ STRING_LITERAL
 // --- Identifiers ---
 
 // G-01: Escaped identifiers _'keyword' (§9.3.4) — must precede IDENTIFIER for priority
+// §9.3.4 [B]: simpleNameCS ::= '_' #x27 StringChar* #x27 — the escapes of a string literal
+// (_'\''); the doubled quote (_'it''s') stays accepted for compatibility (#325)
 ESCAPED_IDENTIFIER
-    : '_' '\'' ( '\'\'' | ~['] )* '\''
+    : '_' '\'' ( '\'\''
+               | '\\\\' | '\\\'' | '\\"' | '\\n' | '\\t' | '\\r' | '\\f' | '\\b'
+               | '\\x' [0-9a-fA-F] [0-9a-fA-F]
+               | '\\u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]
+               | ~['\\] )* '\''
     ;
 
 IDENTIFIER
@@ -313,6 +341,7 @@ fragment LETTER
     | [\u0370-\u037D\u037F-\u1FFF]
     | [\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF]
     | [\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]
+    | [\u{10000}-\u{EFFFF}]          // §9.3.4: supplementary planes (#325)
     ;
 
 // --- Whitespace and Comments ---

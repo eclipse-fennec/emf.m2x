@@ -332,7 +332,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 			return support.buildPropertyCall(source, propName, isSafe, isPre);
 		} else if (suffix instanceof OclParser.DotCallSuffixContext callCtx) {
 			String opName = identifierText(callCtx.identifier());
-			boolean isPre = callCtx.isMarkedPre() != null;
+			boolean isPre = callCtx.preBefore != null || callCtx.preAfter != null;
 			List<OclExpression> args = new ArrayList<>();
 			if (callCtx.argumentList() != null) {
 				for (OclParser.ExpressionContext argCtx : callCtx.argumentList().expression()) {
@@ -399,8 +399,10 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		// Accumulator variable
 		EClassifier accType = ctx.accType != null
 				? resolveTypeExpression(ctx.accType) : null;
-		List<Variable> iterateVars = support.declareIterateVariables(identifierText(ctx.identifier(1)), iterType,
-				identifierText(ctx.identifier(2)), accType, (OclExpression) visit(ctx.expression(0)));
+		// §9.3.26: without an iterator variable the body has an implicit one (#320)
+		String iterName = ctx.iterName != null ? identifierText(ctx.iterName) : support.implicitIteratorName();
+		List<Variable> iterateVars = support.declareIterateVariables(iterName, iterType,
+				identifierText(ctx.accName), accType, (OclExpression) visit(ctx.expression(0)));
 		Variable iterVar = iterateVars.get(0);
 		Variable accVar = iterateVars.get(1);
 
@@ -545,7 +547,7 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		}
 
 		OperationCallExp exp = support.buildImplicitOperationCall(opName, args,
-				ctx.isMarkedPre() != null);
+				ctx.preBefore != null || ctx.preAfter != null);
 		return exp;
 	}
 
@@ -604,13 +606,17 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 			return AbstractExpressionBuilder.extractEscapedIdentifier(
 					ctx.ESCAPED_IDENTIFIER().getText());
 		}
-		return ctx.IDENTIFIER().getText();
+		return ctx.getText(); // IDENTIFIER or a document keyword used as a name (#325)
 	}
 
-	private List<String> pathNameSegments(OclParser.PathNameContext ctx) {
+	static List<String> pathNameSegments(OclParser.PathNameContext ctx) {
 		List<String> segments = new ArrayList<>();
-		for (var id : ctx.identifier()) {
-			segments.add(identifierText(id));
+		for (var child : ctx.children) {
+			if (child instanceof OclParser.IdentifierContext id) {
+				segments.add(identifierText(id));
+			} else if (child instanceof OclParser.RestrictedWordContext word) {
+				segments.add(word.getText()); // §7.4.11: a restricted word after '::' (#325)
+			}
 		}
 		return segments;
 	}

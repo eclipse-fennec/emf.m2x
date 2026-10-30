@@ -394,14 +394,16 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 			QvtRParser.IterateCallContext ctx, boolean isSafe) {
 		OclEnvironment savedEnv = env();
 
-		EClassifier iterType = ctx.typeExpression().size() > 0
-				? resolveTypeExpression(ctx.typeExpression(0))
+		EClassifier iterType = ctx.iterType != null
+				? resolveTypeExpression(ctx.iterType)
 				: support.inferElementType(source);
 
-		EClassifier accType = ctx.typeExpression().size() > 1
-				? resolveTypeExpression(ctx.typeExpression(1)) : null;
-		List<Variable> iterateVars = support.declareIterateVariables(identifierText(ctx.identifier(1)), iterType,
-				identifierText(ctx.identifier(2)), accType, (OclExpression) visit(ctx.expression(0)));
+		EClassifier accType = ctx.accType != null
+				? resolveTypeExpression(ctx.accType) : null;
+		// §9.3.26: without an iterator variable the body has an implicit one (#320)
+		String iterName = ctx.iterName != null ? identifierText(ctx.iterName) : support.implicitIteratorName();
+		List<Variable> iterateVars = support.declareIterateVariables(iterName, iterType,
+				identifierText(ctx.accName), accType, (OclExpression) visit(ctx.expression(0)));
 		Variable iterVar = iterateVars.get(0);
 		Variable accVar = iterateVars.get(1);
 
@@ -600,8 +602,12 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 
 	static List<String> pathNameSegments(QvtRParser.PathNameContext ctx) {
 		List<String> segments = new ArrayList<>();
-		for (var id : ctx.identifier()) {
-			segments.add(identifierText(id));
+		for (var child : ctx.children) {
+			if (child instanceof QvtRParser.IdentifierContext id) {
+				segments.add(identifierText(id));
+			} else if (child instanceof QvtRParser.RestrictedWordContext word) {
+				segments.add(word.getText()); // §7.4.11: a restricted word after '::' (#325)
+			}
 		}
 		return segments;
 	}

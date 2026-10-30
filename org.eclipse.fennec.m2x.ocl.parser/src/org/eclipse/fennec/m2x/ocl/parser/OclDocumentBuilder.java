@@ -629,10 +629,6 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	// ==================== Utility ====================
 
 	private String pathNameText(OclParser.PathNameContext ctx) {
-		List<String> segments = new ArrayList<>();
-		for (var id : ctx.identifier()) {
-			segments.add(OclAstBuilder.identifierText(id));
-		}
-		return String.join("::", segments);
+		return String.join("::", OclAstBuilder.pathNameSegments(ctx));
 	}
 }
