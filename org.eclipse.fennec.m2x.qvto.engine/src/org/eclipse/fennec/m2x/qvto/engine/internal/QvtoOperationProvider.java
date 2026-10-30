@@ -33,6 +33,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
@@ -66,6 +67,8 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 public class QvtoOperationProvider implements OclOperationProvider {
 
 	private static final AnyType ANY_TYPE = OclStandardLibrary.INSTANCE.oclAny();
+	/** Any collection, as the owner of the element operations collected over one (#341). */
+	private static final CollectionType COLLECTION_TYPE = OclFactory.eINSTANCE.createCollectionType();
 
 	private final OperationalTransformation transformation;
 	private final QvtoEvaluator evaluator;
@@ -74,6 +77,8 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	private final Map<String, int[]> stringCounters = new HashMap<>();
 	/** The mappings already registered, as name/arity — one OCL operation dispatches all candidates. */
 	private final Set<String> registeredMappings = new HashSet<>();
+	/** Names and arities of the element operations already registered for collections (#341). */
+	private final Set<String> registeredElementCollects = new HashSet<>();
 	private List<OclOperation> operations;
 
 	public QvtoOperationProvider(OperationalTransformation transformation, QvtoEvaluator evaluator,
@@ -581,10 +586,11 @@ public class QvtoOperationProvider implements OclOperationProvider {
 										() -> evaluator.callMappingByName(name, self, args, false))));
 					}
 				} else {
+					int arity = QvtoEvaluator.parameterCount(impOp);
 					ops.add(new OclOperation(
 							name,
 							ownerType,
-							Collections.nCopies(QvtoEvaluator.parameterCount(impOp), ANY_TYPE),
+							Collections.nCopies(arity, ANY_TYPE),
 							ANY_TYPE,
 							(self, args) -> {
 								// §8.1.19: contextual operation on null → propagate null
@@ -594,9 +600,24 @@ public class QvtoOperationProvider implements OclOperationProvider {
 								return evaluator.callFromOcl(args, () -> evaluator.callOperation(impOp, self, args));
 							}
 					));
+					// §8.2.2.7: list->foo() collects the elements' foo(). Defined on collections,
+					// after the operation itself — a null source takes the first of the name — and
+					// never where the transformation has a foo() of a collection; the standard
+					// library answers before any provider, so its operations win (#341)
+					if (impOp.getContext() != null && !(impOp.getContext().getEType() instanceof CollectionType)
+							&& !hasCollectionContext(name) && registeredElementCollects.add(name + "/" + arity)) {
+						ops.add(new OclOperation(name, COLLECTION_TYPE, Collections.nCopies(arity, ANY_TYPE), ANY_TYPE,
+								(self, args) -> evaluator.collectElementOperation(name, self, args)));
+					}
 				}
 			}
 		}
+	}
+
+	/** Whether the transformation defines an operation of this name on a collection. */
+	private boolean hasCollectionContext(String name) {
+		return operationResolver.findAllOperations(name).stream()
+				.anyMatch(op -> op.getContext() != null && op.getContext().getEType() instanceof CollectionType);
 	}
 
 	/**

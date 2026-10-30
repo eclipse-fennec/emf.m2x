@@ -1651,6 +1651,65 @@ public class QvtoEvaluator {
 	}
 
 	/**
+	 * The source of an arrow construct — {@code forEach}, {@code forOne} and the imperative
+	 * iterate variants — as a collection: a single value as if it were {@code oclAsSet()}, null
+	 * as the empty set (OCL v2.4 §9.3.35 [B], as #171 did for operations) (#341).
+	 *
+	 * @return the collection, or invalid
+	 */
+	private Object arrowSource(Object source) {
+		if (source instanceof Collection<?> || source == OclInvalid.INSTANCE) {
+			return source;
+		}
+		Object value = unwrapNull(source);
+		return newCollection(CollectionKind.SET, value == null ? List.of() : List.of(value));
+	}
+
+	/**
+	 * {@code list->foo(args)} as {@code list->xcollect(i | i.foo(args))} (§8.2.2.7: "these defined
+	 * shorthand conventions used to collect property values equally apply to operations"): the
+	 * contextual helper or query of each element's type called on it, the results flattened
+	 * without nulls into a Bag or a Sequence. The operation provider calls this when neither the
+	 * standard library nor an operation of the collection itself answers — a predefined
+	 * collection operation wins (#341).
+	 *
+	 * @return the collected results, or invalid if the source is no collection
+	 */
+	Object collectElementOperation(String name, Object source, Object[] args) {
+		if (!(source instanceof Collection<?> collection)) {
+			addError("Unknown operation: " + name + " on "
+					+ (source == null ? "null" : source.getClass().getSimpleName()));
+			return OclInvalid.INSTANCE;
+		}
+		List<ImperativeOperation> candidates = new ArrayList<>();
+		for (ImperativeOperation op : operationResolver.findAllOperations(name)) {
+			if (op.getContext() != null && !(op.getContext().getEType() instanceof CollectionType)
+					&& parameterCount(op) == args.length) {
+				candidates.add(op);
+			}
+		}
+		List<Object> results = new ArrayList<>();
+		for (Object element : collection) {
+			List<ImperativeOperation> applicable = QvtoOperationResolver.filterAndSortByType(candidates, element);
+			if (applicable.isEmpty() || element == null) {
+				continue;
+			}
+			ImperativeOperation op = applicable.get(0);
+			Object result = op instanceof MappingOperation
+					? callMappingByName(name, element, args.clone(), false)
+					: callOperation(op, element, args.clone());
+			for (Object value : flatten(result)) {
+				if (value != null) {
+					results.add(value);
+				}
+			}
+		}
+		CollectionKind kind = kindOf(collection);
+		return newCollection(kind == CollectionKind.SET || kind == CollectionKind.BAG ? CollectionKind.BAG
+				: CollectionKind.SEQUENCE, results);
+	}
+
+	/**
 	 * The module property a variable reference stands for: the declaration itself, or the
 	 * untyped stand-in the parser builds for {@code this.name}; {@code null} for a variable.
 	 */
@@ -2399,10 +2458,9 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseForExp(ForExp exp) {
-			Object source = eval(exp.getOwnedSource());
+			Object source = arrowSource(eval(exp.getOwnedSource()));
 			if (!(source instanceof Collection<?> coll)) {
-				addError("for source must be a Collection, got: "
-						+ (source == null ? "null" : source.getClass().getSimpleName()));
+				addError("for source must be a Collection, got: invalid");
 				return WRAPPED_NULL;
 			}
 
@@ -2477,10 +2535,9 @@ public class QvtoEvaluator {
 		 */
 		@Override
 		public Object caseImperativeIterateExp(ImperativeIterateExp exp) {
-			Object source = eval(exp.getOwnedSource());
+			Object source = arrowSource(eval(exp.getOwnedSource()));
 			if (!(source instanceof Collection<?> coll)) {
-				addError("imperativeIterate source must be a Collection, got: "
-						+ (source == null ? "null" : source.getClass().getSimpleName()));
+				addError("imperativeIterate source must be a Collection, got: invalid");
 				return WRAPPED_NULL;
 			}
 			if (coll.size() > options.maxLoopIterations()) {
@@ -2544,11 +2601,14 @@ public class QvtoEvaluator {
 			if (firstOnly) {
 				return wrapNull(collected.isEmpty() ? null : collected.get(0));
 			}
-			// A List, as every other iterator of this evaluator answers. §8.2.2.7 says the kind
-			// follows the source (Bag for an unordered one, Sequence for an ordered one); this
-			// evaluator does not carry collection kinds through any iterator, so doing it here
-			// alone would be a difference without a rule.
-			return collected;
+			// §8.2.2.7: xselect answers "BagOrOrderedSetOrSequenceOrSet(T)" — the kind of its
+			// source; the collecting variants "BagOrSequence(TT)" — a Bag for an unordered
+			// source, a Sequence for an ordered one, as OCL's collect does (#341)
+			CollectionKind sourceKind = kindOf(coll);
+			CollectionKind resultKind = !collecting ? sourceKind
+					: sourceKind == CollectionKind.SET || sourceKind == CollectionKind.BAG ? CollectionKind.BAG
+					: CollectionKind.SEQUENCE;
+			return newCollection(resultKind, collected);
 		}
 
 		/**

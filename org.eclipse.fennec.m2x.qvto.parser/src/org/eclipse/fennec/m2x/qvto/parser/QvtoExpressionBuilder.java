@@ -656,6 +656,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		} else if (call instanceof QvtOParser.ArrowMappingCallContext mapCtx) {
 			// §8.2.2.7: list->map f() — mapping call on collection
 			result = createArrowMappingCallOnCollection(source, mapCtx);
+		} else if (call instanceof QvtOParser.ArrowMappingIteratorCallContext mapCtx) {
+			// §8.4.7, §8.2.1.21: list->xmap(i) i.m() — the declarator names the iterator
+			result = createArrowMappingIteratorCall(source, mapCtx);
+		} else if (call instanceof QvtOParser.ArrowNewCallContext newCtx) {
+			// §8.1.8, §8.2.2.22: list->new(a) T(args) = list->xcollect(a | new T(args))
+			result = createArrowNewCall(source, newCtx);
 		} else if (call instanceof QvtOParser.ArrowObjectCallContext objCtx) {
 			// §8.4.7: coll->object(x:T) Type { ... } = coll->collect(x | object Type { ... })
 			result = createArrowObjectCall(source, objCtx);
@@ -1373,6 +1379,11 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public InstantiationExp visitNewExp(QvtOParser.NewExpContext ctx) {
+		return buildInstantiation(ctx.newTail());
+	}
+
+	/** {@code new T@extent(args)}: a class instantiation, or of an imported transformation. */
+	private InstantiationExp buildInstantiation(QvtOParser.NewTailContext ctx) {
 		List<String> segments = pathNameSegments(ctx.pathName());
 		String typeName = String.join("::", segments);
 
@@ -2049,9 +2060,11 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return exp;
 	}
 
-	private IteratorExp createXcollectPropertyCall(OclExpression source,
+	private OclExpression createXcollectPropertyCall(OclExpression source,
 			QvtOParser.ArrowPropertyCallContext propCtx) {
-		// §8.2.2.7: list->prop desugars to list->collect(i | i.prop)
+		// §8.2.2.7: "list->prop; // same as list->xcollect(i | i.prop)" — and xcollect collects
+		// no null. Built as OCL's collect, which yields the same kind (Bag or Sequence), without
+		// the null elements: a property read needs no loop of its own (#341)
 		IteratorExp collectExp = OCL.createIteratorExp();
 		collectExp.setOwnedSource(source);
 		collectExp.setName("collect");
@@ -2073,23 +2086,88 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		resolveProperty(propAccess, propName);
 		collectExp.setOwnedBody(propAccess);
 
-		return collectExp;
+		return withoutNulls(collectExp);
 	}
 
-	private IteratorExp createArrowMappingCallOnCollection(OclExpression source,
-			QvtOParser.ArrowMappingCallContext mapCtx) {
-		// §8.2.2.7: list->map f() desugars to list->xcollect(i | i.map f())
-		IteratorExp collectExp = OCL.createIteratorExp();
-		collectExp.setOwnedSource(source);
-		collectExp.setName("collect");
+	/** {@code collection->excluding(null)}: what xcollect leaves out of its result. */
+	private OclExpression withoutNulls(OclExpression collection) {
+		OperationCallExp excluding = OCL.createOperationCallExp();
+		excluding.setName("excluding");
+		excluding.setOwnedSource(collection);
+		excluding.getOwnedArguments().add(OCL.createNullLiteralExp());
+		return excluding;
+	}
 
+	/** An {@code xcollect} over the source with the given iterator (§8.2.2.7). */
+	private static ImperativeIterateExp xcollect(OclExpression source, Variable iterVar) {
+		ImperativeIterateExp xcollectExp = IMP.createImperativeIterateExp();
+		xcollectExp.setOwnedSource(source);
+		xcollectExp.setName("xcollect");
+		xcollectExp.getOwnedIterators().add(iterVar);
+		return xcollectExp;
+	}
+
+	/** The iterator a declarator {@code (a)} or {@code (a : T)} names, typed by the source if untyped. */
+	private Variable arrowIterator(QvtOParser.ArrowIteratorContext ctx, OclExpression source) {
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName(qvtoIdentifierText(ctx.qvtoIdentifier()));
+		EClassifier type = ctx.typeExpression() != null ? resolveTypeExpression(ctx.typeExpression())
+				: inferElementType(source);
+		if (type != null) {
+			iterVar.setType(type);
+		}
+		return iterVar;
+	}
+
+	private ImperativeIterateExp createArrowMappingIteratorCall(OclExpression source,
+			QvtOParser.ArrowMappingIteratorCallContext ctx) {
+		Variable iterVar = arrowIterator(ctx.arrowIterator(), source);
+		ImperativeIterateExp xcollectExp = xcollect(source, iterVar);
+		QvtoEnvironment savedEnv = this.environment;
+		this.environment = this.environment.nested(iterVar);
+		try {
+			MappingCallExp mapCall = QVTO.createMappingCallExp();
+			mapCall.setIsStrict("xmap".equals(ctx.mappingCallKind().getText()));
+			mapCall.setName(scopedNameText(ctx.scopedName()));
+			String sourceName = qvtoIdentifierText(ctx.callSource);
+			mapCall.setOwnedSource(sourceName.equals(iterVar.getName()) ? createVariableExp(iterVar)
+					: (OclExpression) visit(ctx.callSource));
+			if (ctx.argumentList() != null) {
+				for (QvtOParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+					mapCall.getOwnedArguments().add((OclExpression) visit(argCtx));
+				}
+			}
+			xcollectExp.setOwnedBody(mapCall);
+		} finally {
+			this.environment = savedEnv;
+		}
+		return xcollectExp;
+	}
+
+	private ImperativeIterateExp createArrowNewCall(OclExpression source, QvtOParser.ArrowNewCallContext ctx) {
+		Variable iterVar = arrowIterator(ctx.arrowIterator(), source);
+		ImperativeIterateExp xcollectExp = xcollect(source, iterVar);
+		QvtoEnvironment savedEnv = this.environment;
+		this.environment = this.environment.nested(iterVar);
+		try {
+			xcollectExp.setOwnedBody(buildInstantiation(ctx.newTail()));
+		} finally {
+			this.environment = savedEnv;
+		}
+		return xcollectExp;
+	}
+
+	private ImperativeIterateExp createArrowMappingCallOnCollection(OclExpression source,
+			QvtOParser.ArrowMappingCallContext mapCtx) {
+		// §8.2.2.7: list->map f() desugars to list->xcollect(i | i.map f()) — an xcollect, which
+		// leaves the nulls of failed guards out; it was OCL's collect before #341
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName("_xmap_it");
 		EClassifier elementType = inferElementType(source);
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
-		collectExp.getOwnedIterators().add(iterVar);
+		ImperativeIterateExp collectExp = xcollect(source, iterVar);
 
 		// Build body: i.map f(args)
 		VariableExp iterRef = OCL.createVariableExp();
@@ -2109,21 +2187,19 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return collectExp;
 	}
 
-	private IteratorExp createArrowObjectCall(OclExpression source,
+	private ImperativeIterateExp createArrowObjectCall(OclExpression source,
 			QvtOParser.ArrowObjectCallContext ctx) {
-		// §8.4.7: coll->object(x:T) Type { ... } desugars to coll->collect(x | object Type { ... })
+		// §8.4.7: coll->object(x:T) Type { ... } desugars to coll->xcollect(x | object Type { ... })
 		QvtOParser.ObjectExpContext objCtx = ctx.objectExp();
 
-		IteratorExp collectExp = OCL.createIteratorExp();
-		collectExp.setOwnedSource(source);
-		collectExp.setName("collect");
-
-		// Iterator variable from objectIterator: (x : Type)
+		// Iterator variable from objectIterator: (x : Type), or (x) typed by the source (#341)
 		Variable iterVar = OCL.createVariable();
+		ImperativeIterateExp collectExp = xcollect(source, iterVar);
 		if (objCtx.objectIterator() != null) {
 			QvtOParser.ObjectIteratorContext iterCtx = objCtx.objectIterator();
 			iterVar.setName(qvtoIdentifierText(iterCtx.qvtoIdentifier()));
-			EClassifier iterType = resolveTypeExpression(iterCtx.typeExpression());
+			EClassifier iterType = iterCtx.typeExpression() != null
+					? resolveTypeExpression(iterCtx.typeExpression()) : inferElementType(source);
 			if (iterType != null) {
 				iterVar.setType(iterType);
 			}
@@ -2135,7 +2211,6 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				iterVar.setType(elementType);
 			}
 		}
-		collectExp.getOwnedIterators().add(iterVar);
 
 		// Build body: the ObjectExp (visited with the iterator variable in scope)
 		QvtoEnvironment savedEnv = this.environment;
@@ -2245,8 +2320,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return imperative ? imperativeExp : exp;
 	}
 
-	private IterateExp createIterateExp(OclExpression source,
+	private LoopExp createIterateExp(OclExpression source,
 			QvtOParser.IterateCallContext ctx, boolean isSafe) {
+		String name = qvtoIdentifierText(ctx.qvtoIdentifier(0));
+		if (IMPERATIVE_ITERATORS.contains(name)) {
+			return createTargetIterate(source, ctx, name, isSafe);
+		}
 		IterateExp exp = OCL.createIterateExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
@@ -2282,6 +2361,42 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return exp;
 	}
 
+	/**
+	 * §8.2.2.7 target form: {@code list->xcollectselect(i; res = i.prop | not res.startsWith('_'))}
+	 * — the body is computed into the target, which the condition then reads. Before #341 it was
+	 * built as OCL's iterate, whose accumulator syntax it shares, and the name was ignored.
+	 */
+	private ImperativeIterateExp createTargetIterate(OclExpression source, QvtOParser.IterateCallContext ctx,
+			String name, boolean isSafe) {
+		ImperativeIterateExp exp = IMP.createImperativeIterateExp();
+		exp.setOwnedSource(source);
+		exp.setName(name);
+		exp.setIsSafe(isSafe);
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName(qvtoIdentifierText(ctx.qvtoIdentifier(1)));
+		EClassifier iterType = ctx.iterType != null ? resolveTypeExpression(ctx.iterType) : inferElementType(source);
+		if (iterType != null) {
+			iterVar.setType(iterType);
+		}
+		exp.getOwnedIterators().add(iterVar);
+		Variable target = OCL.createVariable();
+		target.setName(qvtoIdentifierText(ctx.qvtoIdentifier(2)));
+		if (ctx.accType != null) {
+			target.setType(resolveTypeExpression(ctx.accType));
+		}
+		exp.setTarget(target);
+		QvtoEnvironment savedEnv = this.environment;
+		try {
+			this.environment = this.environment.nested(iterVar);
+			exp.setOwnedBody((OclExpression) visit(ctx.expression(0)));
+			this.environment = this.environment.nested(target);
+			exp.setCondition((OclExpression) visit(ctx.expression(1)));
+		} finally {
+			this.environment = savedEnv;
+		}
+		return exp;
+	}
+
 	private static final Set<String> ITERATOR_NAMES = Set.of(
 			"select", "reject", "collect", "collectNested", "forAll", "exists",
 			"any", "one", "isUnique", "sortedBy", "closure");
@@ -2293,6 +2408,35 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		// OCL v2.4 §7.6.3: an iterator whose variable is omitted — ->any(true),
 		// ->select(name = 'x') — has an implicit one, and a name in the body may be its
 		// property (#299)
+		// §8.2.2.7 notation "(<body_or_condition>)": the imperative variants have the implicit
+		// iterator too (#341)
+		if (IMPERATIVE_ITERATORS.contains(opName) && ctx.argumentList() != null
+				&& ctx.argumentList().expression().size() == 1) {
+			Variable iterVar = OCL.createVariable();
+			iterVar.setName("_implicit");
+			EClassifier elementType = inferElementType(source);
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
+			ImperativeIterateExp exp = IMP.createImperativeIterateExp();
+			exp.setOwnedSource(source);
+			exp.setName(opName);
+			exp.setIsSafe(isSafe);
+			exp.getOwnedIterators().add(iterVar);
+			QvtoEnvironment savedEnv = this.environment;
+			this.environment = this.environment.nestedImplicit(iterVar);
+			try {
+				OclExpression argument = (OclExpression) visit(ctx.argumentList().expression(0));
+				if (opName.startsWith("xselect")) {
+					exp.setCondition(argument);
+				} else {
+					exp.setOwnedBody(argument);
+				}
+			} finally {
+				this.environment = savedEnv;
+			}
+			return exp;
+		}
 		if (ITERATOR_NAMES.contains(opName) && ctx.argumentList() != null
 				&& ctx.argumentList().expression().size() == 1) {
 			Variable iterVar = OCL.createVariable();

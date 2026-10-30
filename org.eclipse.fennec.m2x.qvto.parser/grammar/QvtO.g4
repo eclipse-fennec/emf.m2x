@@ -627,12 +627,23 @@ objectExp
     : 'object' objectIterator? (varName=qvtoIdentifier ':')? typeExpression? ('@' extentName=qvtoIdentifier)? block
     ;
 
+// §8.4.7 <iter_declarator>: the type may be omitted — self.attribute->object(a) Column {…} (#341)
 objectIterator
-    : '(' qvtoIdentifier ':' typeExpression (varInitOp expression)? ')'
+    : '(' qvtoIdentifier (':' typeExpression)? (varInitOp expression)? ')'
     ;
 
 newExp
-    : 'new' pathName ('@' extentName=qvtoIdentifier)? '(' argumentList? ')'
+    : 'new' newTail
+    ;
+
+// §8.2.2.22 <instantiation_exp>: the class, an optional extent and the arguments
+newTail
+    : pathName ('@' extentName=qvtoIdentifier)? '(' argumentList? ')'
+    ;
+
+// §8.4.7 <declarator> of a rule call on a collection: ->map(i), ->new(a)
+arrowIterator
+    : '(' qvtoIdentifier (':' typeExpression)? ')'
     ;
 
 mappingCallExp
@@ -749,6 +760,10 @@ iteratorOrOperationCall
     | 'late'? resolveInKind '(' scopedName (',' resolveArgs)? ')'                           # ArrowResolveInCall
     // §8.2.2.7: list->map f() = list->xcollect(i | i.map f()) — mapping call on collection
     | mappingCallKind scopedName '(' argumentList? ')'                                      # ArrowMappingCall
+    // §8.4.7 <rule_call_exp>, §8.2.1.21: list->xmap(i) i.m() names the iterator (#341)
+    | mappingCallKind arrowIterator callSource=qvtoIdentifier '.' scopedName '(' argumentList? ')' # ArrowMappingIteratorCall
+    // §8.1.8, §8.2.2.22: list->new(a) T(args) = list->xcollect(a | new T(args)) (#341)
+    | 'new' arrowIterator newTail                                                           # ArrowNewCall
     // §8.4.7: coll->object(x:T) Type { ... } = coll->collect(x | object Type { ... })
     | objectExp                                                                             # ArrowObjectCall
     // §8.2.2.8: coll->switch(i) { ... } = coll->xcollect(i | switch { ... })
