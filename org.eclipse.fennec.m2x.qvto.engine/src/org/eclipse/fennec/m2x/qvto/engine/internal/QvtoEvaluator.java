@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -78,6 +79,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
 import org.eclipse.fennec.m2x.model.qvtoperational.DirectionKind;
+import org.eclipse.fennec.m2x.model.qvtoperational.Helper;
 import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingCallExp;
@@ -161,6 +163,13 @@ public class QvtoEvaluator {
 	// §8.3.19: predefined tags "proxy" and "topclasses"
 	private final QvtoTagRegistry tagRegistry;
 	private final QvtoOperationResolver operationResolver;
+	/** The query running now — its assignments are side effects (#347). */
+	private Helper runningQuery;
+	/** The inout objects of the mapping whose init section runs now, else null (#347). */
+	private Set<Object> initInouts;
+	private MappingOperation initMapping;
+	/** The operations whose side effect was reported already (#347). */
+	private final Set<EObject> reportedSideEffects = Collections.newSetFromMap(new IdentityHashMap<>());
 	/** The OCL engine's class for each collection kind, learnt from empty literals (#339). */
 	private Map<CollectionKind, Class<?>> collectionClasses;
 	/** The classes whose ambiguous extent was reported already (#337). */
@@ -808,6 +817,9 @@ public class QvtoEvaluator {
 			addError("Execution timeout exceeded");
 			return null;
 		}
+		// §8.2.1.12: "A query has no side-effects" — the query running now, null in a helper (#347)
+		Helper outerQuery = runningQuery;
+		runningQuery = operation instanceof Helper helper && helper.isIsQuery() ? helper : null;
 		try {
 			env.pushScope();
 			bindOperationParams(operation, self, args, false);
@@ -849,6 +861,7 @@ public class QvtoEvaluator {
 			exportOutArgs(operation, args);
 			env.popScope();
 			--stackDepth;
+			runningQuery = outerQuery;
 		}
 	}
 
@@ -1045,6 +1058,9 @@ public class QvtoEvaluator {
 		}
 		boolean traced = false;
 		boolean ran = false;
+		// A mapping is no query, even when a query calls it
+		Helper outerQuery = runningQuery;
+		runningQuery = null;
 		// §8.1.11.2: the record is matched on the context and the in parameters — what the
 		// caller holds in an out argument plays no part (#336)
 		Object[] keyArgs = traceKey(mappingOp, args);
@@ -1094,9 +1110,18 @@ public class QvtoEvaluator {
 			// init → instantiation → trace → inherited → population → end → merged
 			OperationBody body = mappingOp.getBody();
 			if (body instanceof MappingBody mappingBody) {
-				// 1. Init section — the results are still null here, so init may assign them
-				for (OclExpression initExpr : mappingBody.getInitSection()) {
-					eval(initExpr);
+				// 1. Init section — the results are still null here, so init may assign them.
+				// §8.1.11.2: "inout parameters may not be changed during the initialization
+				// section" — a property assigned on one is reported (#347)
+				Set<Object> outerInouts = initInouts;
+				initInouts = inoutObjects(mappingOp, self, args);
+				initMapping = mappingOp;
+				try {
+					for (OclExpression initExpr : mappingBody.getInitSection()) {
+						eval(initExpr);
+					}
+				} finally {
+					initInouts = outerInouts;
 				}
 			}
 			// "At the end of the initialization section, an implicit 'instantiation section' is
@@ -1171,6 +1196,7 @@ public class QvtoEvaluator {
 			}
 			env.popScope();
 			--stackDepth;
+			runningQuery = outerQuery;
 		}
 	}
 
@@ -1728,6 +1754,38 @@ public class QvtoEvaluator {
 		CollectionKind kind = kindOf(collection);
 		return newCollection(kind == CollectionKind.SET || kind == CollectionKind.BAG ? CollectionKind.BAG
 				: CollectionKind.SEQUENCE, results);
+	}
+
+	/** The objects a mapping receives as inout: its inout parameters, and an inout context. */
+	private Set<Object> inoutObjects(MappingOperation mappingOp, Object self, Object[] args) {
+		Set<Object> inouts = Collections.newSetFromMap(new IdentityHashMap<>());
+		if (mappingOp.getContext() != null && mappingOp.getContext().getKind() == DirectionKind.INOUT && self != null) {
+			inouts.add(self);
+		}
+		List<VarParameter> formals = formalParameters(mappingOp);
+		for (int i = 0; i < formals.size() && i < args.length; i++) {
+			if (formals.get(i).getKind() == DirectionKind.INOUT && args[i] != null) {
+				inouts.add(args[i]);
+			}
+		}
+		return inouts;
+	}
+
+	/**
+	 * Reports a side effect where the spec rules one out, once per operation (#347): a query
+	 * that assigns a property or a module property (§8.2.1.12 "A query has no side-effects"),
+	 * an init section that changes an inout parameter (§8.1.11.2). Only direct assignments are
+	 * seen — a helper the query calls is not followed. A WARNING: the assignment still happens.
+	 */
+	private void checkSideEffect(Object target, String feature) {
+		if (runningQuery != null && reportedSideEffects.add(runningQuery)) {
+			addWarning("query '" + runningQuery.getName() + "' assigns '" + feature
+					+ "': a query has no side effects (§8.2.1.12)");
+		}
+		if (initInouts != null && target != null && initInouts.contains(target) && reportedSideEffects.add(initMapping)) {
+			addWarning("mapping '" + initMapping.getName() + "' changes the inout parameter's '" + feature
+					+ "' in its init section, where inout parameters may not be changed (§8.1.11.2)");
+		}
 	}
 
 	/**
@@ -2363,6 +2421,7 @@ public class QvtoEvaluator {
 					EObject target = resolveImplicitPropertyTarget(varName);
 					if (target != null) {
 						checkNotReadOnly(target);
+						checkSideEffect(target, varName);
 						assignToModelFeature(target, implicitFeature(target, varName), value, exp);
 						return wrapNull(value);
 					}
@@ -2385,6 +2444,9 @@ public class QvtoEvaluator {
 				// shared with another variable is not changed (#339)
 				// A module property (§8.1.18, also reached as this.name) is assigned as a property
 				Variable moduleProperty = moduleProperty(varExp.getReferredVariable());
+				if (moduleProperty != null) {
+					checkSideEffect(null, varName);
+				}
 				Object assigned = moduleProperty != null
 						? assignedValue(varName, moduleProperty.getType(), env.lookup(varName), value, exp, true)
 						: assignedValue(varName, varExp.getReferredVariable().getType(), env.lookup(varName), value,
@@ -2407,6 +2469,7 @@ public class QvtoEvaluator {
 						tuple.put(partName, assigned);
 					}
 				} else if (source instanceof EObject eo && sf != null) {
+					checkSideEffect(eo, sf.getName());
 					assignToProperty(eo, sf, value, exp);
 				} else if (source == null || source == OclInvalid.INSTANCE) {
 					// §8.2.2.11: there is no object to assign to — the assignment cannot be

@@ -43,6 +43,7 @@ import org.eclipse.emf.ecore.ETypedElement;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
 import org.eclipse.fennec.m2x.model.imperativeocl.Typedef;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
@@ -2024,6 +2025,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private void applyQualifier(OperationalTransformation transformation, String qualifier) {
 		if ("blackbox".equals(qualifier)) {
 			transformation.setIsBlackbox(true);
+		} else if ("abstract".equals(qualifier)) {
+			// The metamodel has no feature for it; kept for the well-formedness check of §8.2.1.1
+			// ("No entry operation should be defined") (#347)
+			EcoreUtil.setAnnotation(transformation, QvtoParserSupport.QUALIFIER_ANNOTATION, "abstract", "true");
 		}
 	}
 

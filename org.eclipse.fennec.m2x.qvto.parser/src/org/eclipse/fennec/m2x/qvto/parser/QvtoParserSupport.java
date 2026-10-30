@@ -16,23 +16,33 @@ package org.eclipse.fennec.m2x.qvto.parser;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.imperativeocl.BreakExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeLoopExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
+import org.eclipse.fennec.m2x.model.qvtoperational.EntryOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
+import org.eclipse.fennec.m2x.model.qvtoperational.MappingBody;
+import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
@@ -111,6 +121,7 @@ public class QvtoParserSupport {
 		OperationalTransformation result = builder.visitCompilationUnitEntry(tree);
 		List<Resource.Diagnostic> diagnostics = new ArrayList<>(builder.getDiagnostics());
 		diagnostics.addAll(misplacedLoopControl(result, builder.getNodePositions()));
+		diagnostics.addAll(illFormedOperations(result));
 		checkResolutionErrors(diagnostics);
 
 		// Kept with the transformation rather than returned: the parse signature is API, and the
@@ -212,6 +223,84 @@ public class QvtoParserSupport {
 					position != null ? position.column() : ParseDiagnostic.UNKNOWN_POSITION));
 		});
 		return misplaced;
+	}
+
+	/** Annotation source for the qualifiers the metamodel has no feature for (#347). */
+	static final String QUALIFIER_ANNOTATION = "http://www.eclipse.org/fennec/m2x/qvto/qualifier";
+
+	/**
+	 * The well-formedness rules of the operations a parser can check (#347): "no more than an
+	 * entry operation", which "has no parameters" (§8.2.1.11), and none in an abstract
+	 * transformation (§8.2.1.1); a mapping with disjuncts has no body (§8.2.1.15:
+	 * disjunct->notEmpty() implies body = null); no two contextual operations of one name,
+	 * context and parameter types (§8.2.1.10). Each passed silently before — the first main
+	 * won, a disjunct's body was ignored.
+	 */
+	private static List<Resource.Diagnostic> illFormedOperations(OperationalTransformation transformation) {
+		List<Resource.Diagnostic> problems = new ArrayList<>();
+		List<ImperativeOperation> operations = new ArrayList<>();
+		for (EClassifier classifier : transformation.getEClassifiers()) {
+			if (classifier instanceof EClass moduleClass) {
+				for (EOperation operation : moduleClass.getEOperations()) {
+					if (operation instanceof ImperativeOperation imperative) {
+						operations.add(imperative);
+					}
+				}
+			}
+		}
+		List<EntryOperation> entries = operations.stream()
+				.filter(EntryOperation.class::isInstance).map(EntryOperation.class::cast).toList();
+		if (entries.size() > 1) {
+			problems.add(problem("more than one entry operation: a transformation has at most one main (§8.2.1.11)"));
+		}
+		for (EntryOperation entry : entries) {
+			if (entry.getEParameters().stream().anyMatch(p -> !entry.getResult().contains(p))) {
+				problems.add(problem("the entry operation has no parameters (§8.2.1.11)"));
+			}
+		}
+		if (!entries.isEmpty() && "true".equals(EcoreUtil.getAnnotation(transformation, QUALIFIER_ANNOTATION, "abstract"))) {
+			problems.add(problem("an abstract transformation defines no entry operation (§8.2.1.1)"));
+		}
+		Set<String> signatures = new HashSet<>();
+		for (ImperativeOperation operation : operations) {
+			if (operation instanceof MappingOperation mapping && !mapping.getDisjunct().isEmpty() && hasBody(mapping)) {
+				problems.add(problem("mapping '" + mapping.getName()
+						+ "' has disjuncts and a body: a disjunction has no body (§8.2.1.15)"));
+			}
+			if (operation.getContext() != null && !signatures.add(signature(operation))) {
+				problems.add(problem("operation '" + operation.getName() + "' is defined twice for "
+						+ typeName(operation.getContext().getEType()) + " with the same parameters (§8.2.1.10)"));
+			}
+		}
+		return problems;
+	}
+
+	private static boolean hasBody(MappingOperation mapping) {
+		return mapping.getBody() instanceof MappingBody body
+				&& !(body.getInitSection().isEmpty() && body.getContent().isEmpty() && body.getEndSection().isEmpty());
+	}
+
+	/** Name, context type and parameter types — what tells two contextual operations apart. */
+	private static String signature(ImperativeOperation operation) {
+		StringBuilder signature = new StringBuilder(operation.eClass().getName()).append(' ')
+				.append(operation.getName()).append('@').append(typeName(operation.getContext().getEType()));
+		for (Object param : operation.getEParameters()) {
+			if (param instanceof VarParameter vp && !operation.getResult().contains(vp)) {
+				signature.append(',').append(typeName(vp.getEType()));
+			}
+		}
+		return signature.toString();
+	}
+
+	private static String typeName(EClassifier type) {
+		if (type == null) {
+			return "?";
+		}
+		return type.getEPackage() != null ? type.getEPackage().getNsURI() + "#" + type.getName() : type.getName();
+	}
+
+	private static Resource.Diagnostic problem(String message) {
+		return new ParseDiagnostic(message, ParseDiagnostic.UNKNOWN_POSITION, ParseDiagnostic.UNKNOWN_POSITION);
 	}
 
 	private void checkResolutionErrors(List<Resource.Diagnostic> diagnostics)
