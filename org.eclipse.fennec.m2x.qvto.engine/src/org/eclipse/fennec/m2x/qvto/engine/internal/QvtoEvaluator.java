@@ -454,13 +454,6 @@ public class QvtoEvaluator {
 		}
 
 		@Override
-		public Object casePropertyCallExp(PropertyCallExp propCall) {
-			// §8.1.10: an intermediate property is read from the store, not from the object
-			Object handled = evalIntermediatePropertyRead(propCall);
-			return handled == UNHANDLED ? UNHANDLED : wrapNull(handled);
-		}
-
-		@Override
 		public Object defaultCase(EObject object) {
 			return UNHANDLED;
 		}
@@ -494,6 +487,15 @@ public class QvtoEvaluator {
 	 *
 	 * @return invalid, the value of the construct
 	 */
+	/** The value of a condition that is not true, for an assertion message: "" for false. */
+	private static String conditionValue(Object condition) {
+		if (Boolean.FALSE.equals(condition)) {
+			return "";
+		}
+		return " — the condition is " + (condition == null ? "null"
+				: condition == OclInvalid.INSTANCE ? "invalid" : condition.getClass().getSimpleName());
+	}
+
 	private Object undefinedCondition(String construct, Object condition) {
 		return undefinedCondition(construct, condition, "no branch is taken");
 	}
@@ -639,28 +641,6 @@ public class QvtoEvaluator {
 			}
 			default -> evalOcl(iterExp);
 		};
-	}
-
-	/**
-	 * §8.1.10: Checks if a PropertyCallExp refers to an intermediate property
-	 * and reads the value from intermediate storage if so.
-	 *
-	 * @return the value, or UNHANDLED if this is not an intermediate property
-	 */
-	private Object evalIntermediatePropertyRead(PropertyCallExp propCall) {
-		String propName = propCall.getReferredProperty() != null
-				? propCall.getReferredProperty().getName() : null;
-		if (propName == null) {
-			return UNHANDLED;
-		}
-		Object sourceObj = eval(propCall.getOwnedSource());
-		if (sourceObj instanceof EObject eo) {
-			ContextualProperty cp = intermediateStore.findIntermediateProperty(eo, propName);
-			if (cp != null) {
-				return wrapNull(intermediateStore.getIntermediatePropertyValue(eo, propName));
-			}
-		}
-		return UNHANDLED;
 	}
 
 	/**
@@ -813,36 +793,13 @@ public class QvtoEvaluator {
 			target = null;
 		}
 		if (target == null) {
-			addError("xmap pre-condition failed for mapping: " + mappingOp.getName()
+			// §8.2.1.21: "failure to evaluate the when clause as a pre-condition causes the
+			// mapping execution to fail" — a fatal assertion, as in Eclipse (#335)
+			throw new FatalAssertionException("xmap pre-condition failed for mapping: " + mappingOp.getName()
 					+ " — no candidate conforms to the source and argument types");
-			return null;
 		}
-		if (++stackDepth > options.maxStackDepth()) {
-			--stackDepth;
-			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
-			return null;
-		}
-		if (checkTimeout()) {
-			--stackDepth;
-			addError("Execution timeout exceeded");
-			return null;
-		}
-		try {
-			env.pushScope();
-			bindOperationParams(target, self, args, false);
-			for (OclExpression whenExpr : target.getWhen()) {
-				Object whenVal = eval(whenExpr);
-				if (!Boolean.TRUE.equals(whenVal)) {
-					addError("xmap pre-condition failed for mapping: " + target.getName());
-					return null;
-				}
-			}
-		} finally {
-			env.popScope();
-			--stackDepth;
-		}
-		// Pre-condition passed — delegate to standard callMapping for body execution
-		Object result = callMapping(target, self, args);
+		// The predicate is evaluated once, by callMapping, as the pre-condition (#335)
+		Object result = callMapping(target, self, args, true);
 		return result == GUARD_FAILED ? null : result;
 	}
 
@@ -940,6 +897,14 @@ public class QvtoEvaluator {
 	 * when-guard, init/population/end, result creation, where-postcondition, trace recording.
 	 */
 	private Object callMapping(MappingOperation mappingOp, Object self, Object[] args) {
+		return callMapping(mappingOp, self, args, false);
+	}
+
+	/**
+	 * @param strict {@code xmap}: the when clause is a pre-condition, whose failure is fatal
+	 *        (§8.2.1.21), not a guard
+	 */
+	private Object callMapping(MappingOperation mappingOp, Object self, Object[] args, boolean strict) {
 		// Disjuncts: try each disjunct, first with passing when-guard wins (§8.1.14.1)
 		EList<MappingOperation> disjuncts = mappingOp.getDisjunct();
 		if (disjuncts != null && !disjuncts.isEmpty()) {
@@ -984,6 +949,10 @@ public class QvtoEvaluator {
 			for (OclExpression whenExpr : mappingOp.getWhen()) {
 				Object whenVal = eval(whenExpr);
 				if (!Boolean.TRUE.equals(whenVal)) {
+					if (strict) {
+						throw new FatalAssertionException("xmap pre-condition failed for mapping: "
+								+ mappingOp.getName() + conditionValue(whenVal));
+					}
 					if (!Boolean.FALSE.equals(whenVal)) {
 						undefinedCondition("when", whenVal,
 								"mapping '" + mappingOp.getName() + "' is not executed");
@@ -1065,14 +1034,12 @@ public class QvtoEvaluator {
 			OclExpression whereExpr = mappingOp.getWhere();
 			if (whereExpr != null) {
 				Object whereVal = eval(whereExpr);
-				if (Boolean.FALSE.equals(whereVal)) {
-					addWarning("Mapping '" + mappingOp.getName()
-							+ "': where-postcondition failed");
-				} else if (!Boolean.TRUE.equals(whereVal)) {
-					// A postcondition is an assertion (§8.2.1.15): one that cannot be decided
-					// is an error (#310)
-					undefinedCondition("where", whereVal, "the postcondition of mapping '"
-							+ mappingOp.getName() + "' cannot be checked");
+				if (!Boolean.TRUE.equals(whereVal)) {
+					// §8.2.1.15: "pre-conditions and post-conditions are assertions; any execution
+					// failure is fatal" — one that is violated or cannot be decided ends the
+					// transformation, as in Eclipse (MappingPostconditionFailed) (#335)
+					throw new FatalAssertionException("where-postcondition failed for mapping: "
+							+ mappingOp.getName() + conditionValue(whereVal));
 				}
 			}
 

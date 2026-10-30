@@ -156,7 +156,7 @@ class QvtoE2eMappingTest extends AbstractQvtoEngineTest {
 	// ---- Where postcondition ----
 
 	@Test
-	void mapping_wherePostcondition_failsEmitsWarning() throws Exception {
+	void mapping_wherePostcondition_failsFatally() throws Exception {
 		QvtoModelExtent outExtent = emptyExtent();
 		QvtoExecutionResult result = executeWithExtents("""
 				modeltype SRC uses 'http://test/source/1.0';
@@ -171,10 +171,13 @@ class QvtoE2eMappingTest extends AbstractQvtoEngineTest {
 				}
 				""", outExtent);
 		assertNotNull(result);
-		boolean hasWarning = result.diagnostics().stream()
-				.anyMatch(d -> d.getSeverity() == Diagnostic.WARNING
-						&& d.getMessage().contains("where-postcondition"));
-		assertTrue(hasWarning, "Failing where-postcondition should emit warning");
+		// §8.2.1.15: "pre-conditions and post-conditions are assertions; any execution failure
+		// is fatal" (#335)
+		assertFalse(result.isSuccess());
+		boolean hasError = result.diagnostics().stream()
+				.anyMatch(d -> d.getSeverity() == Diagnostic.ERROR
+						&& d.getMessage().contains("where-postcondition failed"));
+		assertTrue(hasError, () -> "Expected a fatal where-postcondition failure: " + result.diagnostics());
 	}
 
 	// ---- Init / Population / End sections ----

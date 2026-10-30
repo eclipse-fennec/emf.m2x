@@ -181,7 +181,7 @@ class QvtoUndefinedConditionTest extends AbstractQvtoEngineTest {
 	}
 
 	@Test
-	@DisplayName("C: an undefined where-postcondition is an error")
+	@DisplayName("C: an undefined where-postcondition is a fatal assertion failure")
 	void whereConditionUndefined() throws QvtoParseException {
 		QvtoModelExtent out = emptyExtent();
 		QvtoExecutionResult result = runOnOneClass("""
@@ -190,13 +190,13 @@ class QvtoUndefinedConditionTest extends AbstractQvtoEngineTest {
 				    }
 				""", out);
 
-		assertError(result, "where-condition must be Boolean, got: invalid"
-				+ " — the postcondition of mapping 'copy' cannot be checked");
+		// §8.2.1.15: the postcondition is an assertion — one that cannot be decided fails it (#335)
+		assertError(result, "Assertion failed: where-postcondition failed for mapping: copy — the condition is invalid");
 	}
 
 	@Test
-	@DisplayName("C: a violated where-postcondition stays a warning")
-	void whereConditionFalseStaysAWarning() throws QvtoParseException {
+	@DisplayName("C: a violated where-postcondition ends the transformation")
+	void whereConditionFalseIsFatal() throws QvtoParseException {
 		QvtoModelExtent out = emptyExtent();
 		QvtoExecutionResult result = runOnOneClass("""
 				    mapping EClass::copy() : EClass where { false } {
@@ -204,8 +204,9 @@ class QvtoUndefinedConditionTest extends AbstractQvtoEngineTest {
 				    }
 				""", out);
 
-		assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
-		assertTrue(messages(result).contains("Mapping 'copy': where-postcondition failed"));
+		// §8.2.1.15: "pre-conditions and post-conditions are assertions; any execution failure is
+		// fatal"; Eclipse throws MappingPostconditionFailed (#335)
+		assertError(result, "Assertion failed: where-postcondition failed for mapping: copy");
 	}
 
 	// --- D: resolve condition ---
