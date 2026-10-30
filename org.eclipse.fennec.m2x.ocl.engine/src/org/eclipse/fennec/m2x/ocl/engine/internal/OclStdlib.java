@@ -1581,7 +1581,8 @@ class OclStdlib {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
 				if (source instanceof List<?> list) {
-					list.removeIf(e -> Objects.equals(e, args[0]));
+					// §8.3.9.35 post reject(e = element): OCL equality, 1 = 1.0 (#317)
+					list.removeIf(e -> OclEqualityUtil.oclEquals(e, args[0]));
 				}
 				yield null; // returns Void
 			}
@@ -1624,7 +1625,7 @@ class OclStdlib {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
 				if (args[0] instanceof Collection<?> toRemove && source instanceof List<?> list) {
-					list.removeIf(e -> toRemove.stream().anyMatch(r -> Objects.equals(e, r)));
+					list.removeIf(e -> toRemove.stream().anyMatch(r -> OclEqualityUtil.oclEquals(e, r)));
 				}
 				yield null; // returns Void
 			}
@@ -1738,11 +1739,15 @@ class OclStdlib {
 			case "size" -> (long) source.size();
 			case "isEmpty" -> source.isEmpty();
 			case "notEmpty" -> !source.isEmpty();
-			case "includes" -> source.containsKey(args[0]);
-			case "excludes" -> !source.containsKey(args[0]);
-			case "includesValue" -> source.containsValue(args[0]);
-			case "excludesValue" -> !source.containsValue(args[0]);
-			case "get", "at" -> source.get(args[0]);
+			// Keys are found by OCL equality, so a Dict(Real) answers get(1) for the key 1.0 (#317)
+			case "includes" -> dictKey(source, args[0]) != NOT_FOUND;
+			case "excludes" -> dictKey(source, args[0]) == NOT_FOUND;
+			case "includesValue" -> source.values().stream().anyMatch(v -> OclEqualityUtil.oclEquals(v, args[0]));
+			case "excludesValue" -> source.values().stream().noneMatch(v -> OclEqualityUtil.oclEquals(v, args[0]));
+			case "get", "at" -> {
+				Object key = dictKey(source, args[0]);
+				yield key == NOT_FOUND ? null : source.get(key);
+			}
 			case "keys" -> new OclSet<>(source.keySet());
 			case "values" -> new ArrayList<>(source.values());
 			case "including" -> {
@@ -1752,7 +1757,7 @@ class OclStdlib {
 			}
 			case "excluding" -> {
 				Map<Object, Object> result = new LinkedHashMap<>(source);
-				result.remove(args[0]);
+				result.remove(dictKey(source, args[0]));
 				yield result;
 			}
 			case "union" -> {
@@ -1763,11 +1768,12 @@ class OclStdlib {
 			}
 			case "toString" -> source.toString();
 			// QVT-O §8.3.8.2: Dict::hasKey(k) — check key existence
-			case "hasKey" -> source.containsKey(args[0]);
+			case "hasKey" -> dictKey(source, args[0]) != NOT_FOUND;
 			// QVT-O §8.3.8.3: Dict::defaultget(k, default) — get with fallback
 			case "defaultget" -> {
-				Object val = source.get(args[0]);
-				yield val != null && source.containsKey(args[0]) ? val : args[1];
+				Object key = dictKey(source, args[0]);
+				Object val = key == NOT_FOUND ? null : source.get(key);
+				yield val != null ? val : args[1];
 			}
 			// QVT-O §8.3.8.4: Dict::put(k, v) — mutable insert/update
 			case "put" -> {
@@ -1776,7 +1782,8 @@ class OclStdlib {
 				}
 				@SuppressWarnings("unchecked")
 				var mutableMap = (Map<Object, Object>) source;
-				mutableMap.put(args[0], args[1]);
+				Object existing = dictKey(source, args[0]);
+				mutableMap.put(existing == NOT_FOUND ? args[0] : existing, args[1]);
 				yield null; // returns Void
 			}
 			// QVT-O §8.3.8.5: Dict::clear() — mutable remove all
@@ -1793,6 +1800,22 @@ class OclStdlib {
 
 	private static int compareOcl(Object a, Object b) {
 		return OclCollectionUtil.compareOcl(a, b);
+	}
+
+	/**
+	 * The key of the Dict that is OCL-equal to {@code key} — the key itself on a hash hit,
+	 * otherwise the one {@code oclEquals} matches — or {@link #NOT_FOUND} (#317).
+	 */
+	private static Object dictKey(Map<?, ?> dict, Object key) {
+		if (dict.containsKey(key)) {
+			return key;
+		}
+		for (Object candidate : dict.keySet()) {
+			if (OclEqualityUtil.oclEquals(candidate, key)) {
+				return candidate;
+			}
+		}
+		return NOT_FOUND;
 	}
 
 	// --- String helpers ---
