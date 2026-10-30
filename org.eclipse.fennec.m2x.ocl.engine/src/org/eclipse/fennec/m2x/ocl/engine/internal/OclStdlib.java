@@ -194,7 +194,9 @@ class OclStdlib {
 			case "oclType" -> oclType(source);
 			case "oclContainer" -> oclContainer(source);
 			case "oclContents" -> oclContents(source);
-			case "toString" -> source == null ? OclInvalid.INSTANCE : String.valueOf(source);
+			// §11.2.4: toString is not among the operations defined on invalid (#321)
+			case "toString" -> source == null || source == OclInvalid.INSTANCE
+					? OclInvalid.INSTANCE : String.valueOf(source);
 			// QVT-O §8.3.3.1: Object::repr() — textual representation of any object
 			case "repr" -> String.valueOf(source);
 			// §8.4.4: stereotypedBy — UML-specific, not supported (P10-07)
@@ -231,6 +233,8 @@ class OclStdlib {
 	private static CollectionType createCollectionType(CollectionKind kind) {
 		CollectionType ct = OclFactory.eINSTANCE.createCollectionType();
 		ct.setKind(kind);
+		// The type is named after its kind, as the parser names Set(T) (#321)
+		ct.setName(kind.getName());
 		return ct;
 	}
 
@@ -389,20 +393,13 @@ class OclStdlib {
 		}
 		// Check primitive type match first
 		if (typeArg instanceof PrimitiveType pt) {
-			if (matchesPrimitiveType(source, pt.getName())) {
-				return true;
-			}
-			// Spec §11.5.1: UnlimitedNatural conforms to Integer conforms to Real
-			if (source instanceof OclUnlimitedNatural) {
-				return "Integer".equals(pt.getName()) || "Real".equals(pt.getName());
-			}
-			if (source instanceof Long || source instanceof Integer) {
-				return "Real".equals(pt.getName());
-			}
-			return false;
+			return conformsToPrimitive(source, pt.getName());
 		}
-		if (typeArg instanceof CollectionType) {
-			return source instanceof Collection<?>;
+		// §7.5.13: Set(T) does not conform to Bag(T), and Collection(T1) conforms to
+		// Collection(T2) only when T1 conforms to T2 — kind and elements both count (#321)
+		if (typeArg instanceof CollectionType ct) {
+			return source instanceof Collection<?> coll && collectionKindConforms(coll, ct.getKind())
+					&& (ct.getElementType() == null || allElementsConform(coll, ct.getElementType()));
 		}
 		EClassifier classifier = extractClassifier(typeArg);
 		if (classifier == null) {
@@ -424,6 +421,9 @@ class OclStdlib {
 		if (typeArg instanceof PrimitiveType pt) {
 			return matchesPrimitiveType(source, pt.getName());
 		}
+		if (typeArg instanceof CollectionType ct) {
+			return collectionIsTypeOf(source, ct);
+		}
 		EClassifier classifier = extractClassifier(typeArg);
 		if (classifier == null) {
 			return false;
@@ -435,17 +435,65 @@ class OclStdlib {
 				&& classifier.getInstanceClass().equals(source.getClass());
 	}
 
+	/**
+	 * Whether {@code source} is exactly of the predefined type {@code typeName}. A finite
+	 * integer is an Integer, never an UnlimitedNatural: UnlimitedNatural conforms to Integer,
+	 * not the reverse (§11.4.5), so only {@code *} is of type UnlimitedNatural (#321).
+	 */
 	static boolean matchesPrimitiveType(Object source, String typeName) {
 		return switch (typeName) {
 			case "Integer" -> source instanceof Long || source instanceof Integer;
 			case "Real" -> source instanceof Double || source instanceof Float;
 			case "String" -> source instanceof String;
 			case "Boolean" -> source instanceof Boolean;
-			case "UnlimitedNatural" -> source instanceof OclUnlimitedNatural
-					|| source instanceof Long || source instanceof Integer;
+			case "UnlimitedNatural" -> source instanceof OclUnlimitedNatural;
 			case "OclVoid" -> source == null;
 			default -> false;
 		};
+	}
+
+	/**
+	 * Whether {@code source} conforms to the predefined type {@code typeName} (§8.2.1, §11.4):
+	 * its exact type, or a supertype — Integer conforms to Real, UnlimitedNatural to Integer
+	 * and Real, everything to OclAny.
+	 */
+	static boolean conformsToPrimitive(Object source, String typeName) {
+		if ("OclAny".equals(typeName) || matchesPrimitiveType(source, typeName)) {
+			return true;
+		}
+		return switch (typeName) {
+			case "Real" -> source instanceof Long || source instanceof Integer
+					|| source instanceof OclUnlimitedNatural;
+			case "Integer" -> source instanceof OclUnlimitedNatural;
+			default -> false;
+		};
+	}
+
+	/**
+	 * {@code oclIsTypeOf} for a collection type: the exact kind ({@code Collection} is abstract,
+	 * no value is of that type) and the element type as the type of the elements. The dynamic
+	 * element type is the least common supertype of the elements; it equals {@code T} when all
+	 * elements conform to {@code T} and at least one is exactly of type {@code T}, or when the
+	 * collection is empty (#321).
+	 */
+	private static boolean collectionIsTypeOf(Object source, CollectionType type) {
+		if (!(source instanceof Collection<?> coll) || type.getKind() == CollectionKind.COLLECTION
+				|| !collectionKindConforms(coll, type.getKind())) {
+			return false;
+		}
+		EClassifier elementType = type.getElementType();
+		if (elementType == null || coll.isEmpty()) {
+			return true;
+		}
+		if (!allElementsConform(coll, elementType)) {
+			return false;
+		}
+		for (Object element : coll) {
+			if (element != null && Boolean.TRUE.equals(oclIsTypeOf(element, elementType))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static Object oclAsType(Object source, Object typeArg) {
@@ -455,7 +503,7 @@ class OclStdlib {
 		}
 		// Handle primitive types (PrimitiveType has no EClassifier)
 		if (typeArg instanceof PrimitiveType pt) {
-			return matchesPrimitiveType(source, pt.getName()) ? source : OclInvalid.INSTANCE;
+			return oclAsPrimitive(source, pt.getName());
 		}
 		// Handle collection types — check kind and element type conformance
 		if (typeArg instanceof CollectionType ct) {
@@ -474,6 +522,27 @@ class OclStdlib {
 			return OclInvalid.INSTANCE;
 		}
 		if (classifier.isInstance(source)) {
+			return source;
+		}
+		return OclInvalid.INSTANCE;
+	}
+
+	/**
+	 * {@code oclAsType} to a predefined type (§11.3.1): the value when it conforms, otherwise
+	 * invalid. Integer conforms to Real, so {@code 5.oclAsType(Real)} is the Real 5.0 (#321).
+	 * A non-negative Integer is accepted as an UnlimitedNatural, which is how Eclipse OCL
+	 * reads a multiplicity value; a negative one is invalid. {@code *} is not an Integer or
+	 * Real value (§11.4.5), so its cast to either is invalid.
+	 */
+	private static Object oclAsPrimitive(Object source, String typeName) {
+		if (matchesPrimitiveType(source, typeName) || "OclAny".equals(typeName)) {
+			return source;
+		}
+		if ("Real".equals(typeName) && (source instanceof Long || source instanceof Integer)) {
+			return ((Number) source).doubleValue();
+		}
+		if ("UnlimitedNatural".equals(typeName) && (source instanceof Long || source instanceof Integer)
+				&& ((Number) source).longValue() >= 0) {
 			return source;
 		}
 		return OclInvalid.INSTANCE;
@@ -531,7 +600,7 @@ class OclStdlib {
 				return true;
 			}
 			for (Object elem : coll) {
-				if (elem != null && !matchesPrimitiveType(elem, typeName)) {
+				if (elem != null && !conformsToPrimitive(elem, typeName)) {
 					return false;
 				}
 			}

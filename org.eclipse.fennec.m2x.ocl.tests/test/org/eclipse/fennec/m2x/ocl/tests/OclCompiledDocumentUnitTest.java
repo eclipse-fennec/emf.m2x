@@ -31,6 +31,7 @@ import org.eclipse.fennec.m2x.model.compiled.UnitNature;
 import org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.unit.api.PreparedContext;
@@ -121,10 +122,14 @@ class OclCompiledDocumentUnitTest {
 		assertEquals(Boolean.TRUE, runtime.evaluate("self.isAdult", contextOf(21)));
 
 		runtime.unregisterCompleteOclDocument(document);
-		Exception failure = assertThrows(Exception.class,
-				() -> runtime.evaluate("self.isAdult", contextOf(21)),
-				"what a registration put into effect, its removal takes back out");
-		assertTrue(failure.getMessage().contains("isAdult"), failure.getMessage());
+		// What a registration put into effect, its removal takes back out: the definition is
+		// gone, so isAdult is an unknown property — invalid with an ERROR naming it (#327)
+		OclContext context = contextOf(21);
+		OclResult result = runtime.evaluateWithDiagnostics(
+				runtime.parse("self.isAdult", context.self().eClass()), context, runtime.getDefaultOptions());
+		assertTrue(result.isInvalid(), String.valueOf(result.value()));
+		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("isAdult")),
+				result.diagnostics()::toString);
 	}
 
 	@Test
