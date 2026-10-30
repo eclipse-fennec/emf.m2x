@@ -582,7 +582,21 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		// §8.2.2.11: optional 'default' clause
 		OclExpression defaultValue = ctx.defaultValue != null
 				? (OclExpression) visit(ctx.defaultValue) : null;
-		return buildAssignment(left, right, ctx.assignOp().getText(), defaultValue);
+		AssignExp assign = buildAssignment(left, right, ctx.assignOp().getText(), defaultValue);
+		// §8.2.2.11: "feature := { self.attribute; self.operation; }" — a complex assignment, whose
+		// values are the expressions of the braces; 'do { … }' stays a block, whose value is
+		// null (§8.2.2.2) (#339)
+		if (right instanceof BlockExp block && ctx.expression(1) instanceof QvtOParser.BlockPrimaryContext primary
+				&& isBareBlock(primary.blockExp())) {
+			assign.getValue().clear();
+			assign.getValue().addAll(block.getBody());
+		}
+		return assign;
+	}
+
+	/** A block written as braces alone, not {@code do { … }}. */
+	private static boolean isBareBlock(QvtOParser.BlockExpContext ctx) {
+		return "{".equals(ctx.getStart().getText());
 	}
 
 	// ==================== Navigation ====================
