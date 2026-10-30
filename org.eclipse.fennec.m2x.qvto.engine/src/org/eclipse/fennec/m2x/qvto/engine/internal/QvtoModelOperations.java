@@ -68,9 +68,11 @@ class QvtoModelOperations {
 	}
 
 	private final Function<OclExpression, Object> evalFn;
+	private final Function<EObject, QvtoModelExtent> extentOf;
 
-	QvtoModelOperations(Function<OclExpression, Object> evalFn) {
+	QvtoModelOperations(Function<OclExpression, Object> evalFn, Function<EObject, QvtoModelExtent> extentOf) {
 		this.evalFn = Objects.requireNonNull(evalFn);
+		this.extentOf = Objects.requireNonNull(extentOf);
 	}
 
 	/**
@@ -108,7 +110,7 @@ class QvtoModelOperations {
 			checkExtentWritable(extent);
 			Object arg = evalFn.apply(opCall.getOwnedArguments().get(0));
 			if (arg instanceof EObject eo) {
-				extent.add(eo);
+				addElement(extent, eo);
 			}
 			return wrapNull(null);
 		}
@@ -117,7 +119,7 @@ class QvtoModelOperations {
 			checkExtentWritable(extent);
 			Object arg = evalFn.apply(opCall.getOwnedArguments().get(0));
 			if (arg instanceof EObject eo) {
-				extent.getContents().remove(eo);
+				removeElement(extent, eo);
 			}
 			return wrapNull(null);
 		}
@@ -127,13 +129,7 @@ class QvtoModelOperations {
 		}
 		// §8.3.5.8: copy — deep copy of model and its extent
 		if ("copy".equals(opName)) {
-			List<EObject> copies = new ArrayList<>();
-			for (EObject eo : extent.getContents()) {
-				copies.add(EcoreUtil.copy(eo));
-			}
-			BasicQvtoModelExtent copyExtent = new BasicQvtoModelExtent();
-			copyExtent.setContents(copies);
-			return wrapNull(copyExtent);
+			return wrapNull(copy(extent));
 		}
 		return UNHANDLED;
 	}
@@ -182,7 +178,7 @@ class QvtoModelOperations {
 				}
 				return wrapNull(result);
 			}
-			return wrapNull(new ArrayList<>(eObj.eContents()));
+			return wrapNull(new ArrayList<>()); // a data type or null: no child has it (#342)
 		}
 		// §8.3.4.8: subobjectsOfKind(type) — immediate children, includes subtypes
 		if ("subobjectsOfKind".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
@@ -196,7 +192,7 @@ class QvtoModelOperations {
 				}
 				return wrapNull(result);
 			}
-			return wrapNull(new ArrayList<>(eObj.eContents()));
+			return wrapNull(new ArrayList<>()); // a data type or null: no child has it (#342)
 		}
 		// §8.3.4.7: allSubobjectsOfType(type) — all descendants, exact type
 		if ("allSubobjectsOfType".equals(opName) && !opCall.getOwnedArguments().isEmpty()) {
@@ -230,26 +226,109 @@ class QvtoModelOperations {
 		}
 		// §8.3.4.10: clone() — shallow copy (containments NOT cloned)
 		if ("clone".equals(opName)) {
-			EcoreUtil.Copier copier = new EcoreUtil.Copier() {
-				private static final long serialVersionUID = 1L;
-				@Override
-				protected void copyContainment(EReference ref, EObject src, EObject tgt) {
-					// shallow: skip containment references
-				}
-			};
-			EObject result = copier.copy(eObj);
-			copier.copyReferences();
-			return wrapNull(result);
+			return wrapNull(cloneElement(eObj, false, extentOf.apply(eObj)));
 		}
 		// §8.3.4.11: deepclone() — deep copy (containments cloned recursively)
 		if ("deepclone".equals(opName)) {
-			return wrapNull(EcoreUtil.copy(eObj));
+			return wrapNull(cloneElement(eObj, true, extentOf.apply(eObj)));
 		}
 		// §8.3.4 (MOF reflective): container() — containing object
 		if ("container".equals(opName)) {
 			return wrapNull(eObj.eContainer());
 		}
 		return UNHANDLED;
+	}
+
+	/**
+	 * §8.3.5.5 addElement: "The object is first displaced from any usage by setting its container
+	 * to null, then it is added to the model's extent so that it provides another root" (#342).
+	 */
+	static void addElement(QvtoModelExtent extent, EObject element) {
+		checkExtentWritable(extent);
+		EcoreUtil.remove(element);
+		if (!extent.getContents().contains(element)) {
+			extent.add(element);
+		}
+	}
+
+	/**
+	 * §8.3.5.6 removeElement: "All references to or from the object are eliminated. References
+	 * from collections are removed. References from non-collections are set to null." — for the
+	 * element and what it contains, across the extent; it leaves its container or the roots (#342).
+	 */
+	static void removeElement(QvtoModelExtent extent, EObject element) {
+		checkExtentWritable(extent);
+		Set<EObject> removed = new LinkedHashSet<>();
+		removed.add(element);
+		element.eAllContents().forEachRemaining(removed::add);
+		for (EObject other : allObjects(extent)) {
+			if (!removed.contains(other)) {
+				dropReferencesTo(other, removed);
+			}
+		}
+		for (EObject gone : removed) {
+			dropReferencesTo(gone, null);
+		}
+		EcoreUtil.remove(element);
+		extent.getContents().remove(element);
+	}
+
+	/** Clears the non-containment references of {@code holder} to {@code targets}, or all of them when null. */
+	@SuppressWarnings("unchecked")
+	private static void dropReferencesTo(EObject holder, Set<EObject> targets) {
+		for (EReference reference : holder.eClass().getEAllReferences()) {
+			if (reference.isContainment() || reference.isContainer() || !reference.isChangeable()
+					|| reference.isDerived() || !holder.eIsSet(reference)) {
+				continue;
+			}
+			if (reference.isMany()) {
+				List<EObject> values = (List<EObject>) holder.eGet(reference);
+				values.removeIf(value -> targets == null || targets.contains(value));
+			} else if (targets == null || targets.contains(holder.eGet(reference))) {
+				holder.eUnset(reference);
+			}
+		}
+	}
+
+	/**
+	 * §8.3.5.8 copy: "Creates a deep copy of a model and its extent" — one copier for all roots,
+	 * so references between them point into the copy, not back to the original (#342).
+	 */
+	static QvtoModelExtent copy(QvtoModelExtent extent) {
+		BasicQvtoModelExtent copyExtent = new BasicQvtoModelExtent();
+		copyExtent.setContents(new ArrayList<>(EcoreUtil.copyAll(extent.getContents())));
+		return copyExtent;
+	}
+
+	/**
+	 * §8.3.4.10/§8.3.4.11 clone and deepclone: "The returned object is added to the root of the
+	 * model containing the source element" (§8.1.3.4: the extent of the source object, #342). An
+	 * element of a read-only (in) model has its copy returned without being added — the model
+	 * cannot change.
+	 *
+	 * @param deep whether contained objects are copied as well
+	 * @param sourceExtent the extent the source element belongs to, may be {@code null}
+	 */
+	static EObject cloneElement(EObject source, boolean deep, QvtoModelExtent sourceExtent) {
+		EObject copy;
+		if (deep) {
+			copy = EcoreUtil.copy(source);
+		} else {
+			EcoreUtil.Copier copier = new EcoreUtil.Copier() {
+				private static final long serialVersionUID = 1L;
+
+				@Override
+				protected void copyContainment(EReference ref, EObject src, EObject tgt) {
+					// shallow: skip containment references
+				}
+			};
+			copy = copier.copy(source);
+			copier.copyReferences();
+		}
+		if (sourceExtent != null && !sourceExtent.isReadOnly()) {
+			sourceExtent.add(copy);
+		}
+		return copy;
 	}
 
 	/**
@@ -287,8 +366,11 @@ class QvtoModelOperations {
 	static List<EObject> objectsOfType(QvtoModelExtent extent, Object typeArg) {
 		EClass filterType = resolveEClassArg(typeArg);
 		List<EObject> result = new ArrayList<>();
+		if (filterType == null) {
+			return result; // a data type or null names no model object: none has that type (#342)
+		}
 		for (EObject eo : allObjects(extent)) {
-			if (filterType == null || isExactType(eo, filterType)) {
+			if (isExactType(eo, filterType)) {
 				result.add(eo);
 			}
 		}
@@ -299,8 +381,11 @@ class QvtoModelOperations {
 	static List<EObject> objectsOfKind(QvtoModelExtent extent, Object typeArg) {
 		EClass filterType = resolveEClassArg(typeArg);
 		List<EObject> result = new ArrayList<>();
+		if (filterType == null) {
+			return result; // a data type or null names no model object: none has that type (#342)
+		}
 		for (EObject eo : allObjects(extent)) {
-			if (filterType == null || filterType.isInstance(eo)) {
+			if (filterType.isInstance(eo)) {
 				result.add(eo);
 			}
 		}

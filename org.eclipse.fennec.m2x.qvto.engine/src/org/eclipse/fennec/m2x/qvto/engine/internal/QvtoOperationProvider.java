@@ -116,8 +116,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
-						checkExtentWritable(extent);
-						extent.add(eo);
+						QvtoModelOperations.addElement(extent, eo);
 					}
 					return null;
 				}));
@@ -126,8 +125,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
-						checkExtentWritable(extent);
-						extent.add(eo);
+						QvtoModelOperations.addElement(extent, eo);
 					}
 					return null;
 				}));
@@ -136,8 +134,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
-						checkExtentWritable(extent);
-						extent.getContents().remove(eo);
+						QvtoModelOperations.removeElement(extent, eo);
 					}
 					return null;
 				}));
@@ -145,13 +142,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		ops.add(new OclOperation("copy", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent) {
-						List<EObject> copies = new ArrayList<>();
-						for (EObject eo : extent.getContents()) {
-							copies.add(EcoreUtil.copy(eo));
-						}
-						BasicQvtoModelExtent copyExtent = new BasicQvtoModelExtent();
-						copyExtent.setContents(copies);
-						return copyExtent;
+						return QvtoModelOperations.copy(extent);
 					}
 					return null;
 				}));
@@ -212,6 +203,15 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					if (self instanceof OclFeatureValue featureValue
 							&& featureValue.owner().eGet(featureValue.feature()) instanceof List<?> live) {
 						live.remove(args[0]);
+						// §8.2.2.12: "If the unlink affects a containment relationship, the no
+						// longer contained object becomes a root object of its model" (#342)
+						if (featureValue.feature() instanceof EReference ref && ref.isContainment()
+								&& args[0] instanceof EObject detached) {
+							QvtoModelExtent extent = evaluator.extentOf(featureValue.owner());
+							if (extent != null && !extent.getContents().contains(detached)) {
+								extent.add(detached);
+							}
+						}
 						if (self instanceof Collection<?> copy) {
 							copy.remove(args[0]);
 						}
@@ -328,17 +328,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		ops.add(new OclOperation("clone", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof EObject eo) {
-						EcoreUtil.Copier copier = new EcoreUtil.Copier() {
-							private static final long serialVersionUID = 1L;
-							@Override
-							protected void copyContainment(EReference ref,
-									EObject src, EObject tgt) {
-								// shallow: skip containment references
-							}
-						};
-						EObject result = copier.copy(eo);
-						copier.copyReferences();
-						return result;
+						return QvtoModelOperations.cloneElement(eo, false, evaluator.extentOf(eo));
 					}
 					return null;
 				}));
@@ -347,7 +337,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		ops.add(new OclOperation("deepclone", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof EObject eo) {
-						return EcoreUtil.copy(eo);
+						return QvtoModelOperations.cloneElement(eo, true, evaluator.extentOf(eo));
 					}
 					if (self instanceof Collection<?> coll) {
 						List<Object> result = new ArrayList<>();
