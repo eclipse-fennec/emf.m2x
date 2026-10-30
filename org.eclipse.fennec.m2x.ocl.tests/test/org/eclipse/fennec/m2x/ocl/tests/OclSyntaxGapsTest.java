@@ -49,8 +49,9 @@ class OclSyntaxGapsTest extends AbstractOclTest {
 
 	@Test
 	void g01_escapedIdentifier_asLetVariable() throws OclParseException {
-		// _'self' used as a let variable name (not the keyword 'self')
-		assertEquals(42, eval("let _'self' : Integer = 42 in _'self'", self));
+		// _'let' used as a let variable name (not the keyword 'let'). _'self' would hide the
+		// self variable, which §9.3.41 [1] forbids (#326)
+		assertEquals(42, eval("let _'let' : Integer = 42 in _'let'", self));
 	}
 
 	@Test

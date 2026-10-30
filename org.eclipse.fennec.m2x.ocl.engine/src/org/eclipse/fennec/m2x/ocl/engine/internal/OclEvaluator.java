@@ -360,6 +360,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 	@Override
 	public Object caseLetExp(LetExp exp) {
 		Variable variable = exp.getOwnedVariable();
+		Object untyped = requireDeclaredType("let variable", variable);
+		if (untyped != null) {
+			return untyped;
+		}
 		Object value = null;
 		if (variable.getOwnedInit() != null) {
 			value = eval(variable.getOwnedInit());
@@ -856,6 +860,10 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 
 		Variable accVar = exp.getOwnedResult();
+		Object untyped = requireDeclaredType("accumulator", accVar);
+		if (untyped != null) {
+			return untyped;
+		}
 		Object accValue = accVar.getOwnedInit() != null ? eval(accVar.getOwnedInit()) : null;
 		List<Variable> iterVars = exp.getOwnedIterators();
 
@@ -1753,6 +1761,24 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * @param sf the statically resolved feature from the AST
 	 * @return the feature valid for {@code eo.eGet()}, possibly name-resolved
 	 */
+	/**
+	 * OCL v2.4 §7.4.3 / §9.3.41 [2]: "A variable declaration inside a let must have a declared
+	 * type and an initial value"; §9.3.26: so must the result of iterate. Fennec infers the type
+	 * like Eclipse OCL does, and enforces the declaration under
+	 * {@link OclEvaluationOptions#specStrict()} only (#326). Checked here rather than in the
+	 * parser: the flag is an evaluation option, and a parsed expression is cached and evaluated
+	 * under whichever options a caller passes.
+	 *
+	 * @return the error result, or {@code null} when the declaration is acceptable
+	 */
+	private Object requireDeclaredType(String what, Variable variable) {
+		if (options.specStrict() && variable.getType() == null) {
+			return addError("The " + what + " '" + variable.getName()
+					+ "' has no declared type (OCL v2.4 §7.4.3; required under specStrict)");
+		}
+		return null;
+	}
+
 	/** Turns the standard library's {@link OclStdlib.ArgumentError} into an ERROR and invalid (#314). */
 	private Object reportArgumentError(Object result) {
 		return result instanceof OclStdlib.ArgumentError error ? addError(error.message()) : result;
