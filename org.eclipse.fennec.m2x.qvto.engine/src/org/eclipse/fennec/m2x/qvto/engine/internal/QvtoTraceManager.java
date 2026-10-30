@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -65,6 +66,8 @@ class QvtoTraceManager {
 
 	// Index 3: Result → Records (for invResolve/invResolveIn)
 	private final Map<Object, List<QvtoTraceRecord>> resultIndex = new IdentityHashMap<>();
+	// Index 4: Invoked (disjuncting) mapping → the records of the candidates that answered it
+	private final Map<MappingOperation, List<QvtoTraceRecord>> invokedIndex = new HashMap<>();
 
 	/**
 	 * Creates a new trace manager with the given record limit.
@@ -106,14 +109,16 @@ class QvtoTraceManager {
 		Object compositeKey = buildCompositeKey(source, clonedArgs);
 		mappingIndex.computeIfAbsent(mappingOp, k -> new HashMap<>()).put(compositeKey, record);
 
-		// Update source index (for resolve/resolveIn)
-		if (source != null) {
-			sourceIndex.computeIfAbsent(source, k -> new ArrayList<>()).add(record);
+		// Update source index (for resolve/resolveIn). A mapping without context is resolved from
+		// its first object argument, as Eclipse does (#334)
+		Object resolveSource = source != null ? source : firstObject(clonedArgs);
+		if (resolveSource != null) {
+			sourceIndex.computeIfAbsent(resolveSource, k -> new ArrayList<>()).add(record);
 		}
 
-		// Update result index (for invResolve/invResolveIn)
-		if (result != null) {
-			resultIndex.computeIfAbsent(result, k -> new ArrayList<>()).add(record);
+		// Update result index (for invResolve/invResolveIn) — every result object (#334)
+		for (EObject resultObject : resultObjects(result)) {
+			resultIndex.computeIfAbsent(resultObject, k -> new ArrayList<>()).add(record);
 		}
 
 		// Build parallel EMF TraceRecord for export
@@ -194,13 +199,93 @@ class QvtoTraceManager {
 	 * @return the cached result, or {@code null} if no cache hit
 	 */
 	Object lookupCachedResult(MappingOperation mappingOp, Object source, Object[] args) {
-		Map<Object, QvtoTraceRecord> byKey = mappingIndex.get(mappingOp);
-		if (byKey == null) {
-			return null;
-		}
-		Object compositeKey = buildCompositeKey(source, args);
-		QvtoTraceRecord record = byKey.get(compositeKey);
+		QvtoTraceRecord record = lookupRecord(mappingOp, source, args);
 		return record != null ? record.result() : null;
+	}
+
+	/**
+	 * The trace record of an earlier execution of the mapping with the same context and in
+	 * parameters, or {@code null}. A hit means the relation holds — also for a mapping without
+	 * a result, whose execution is then suppressed all the same (§8.1.11.2, #334).
+	 */
+	QvtoTraceRecord lookupRecord(MappingOperation mappingOp, Object source, Object[] args) {
+		Map<Object, QvtoTraceRecord> byKey = mappingIndex.get(mappingOp);
+		return byKey == null ? null : byKey.get(buildCompositeKey(source, args));
+	}
+
+	/**
+	 * Notes that a disjuncting mapping was answered by one of its candidates: the record
+	 * becomes visible to {@code resolveIn} of the invoked mapping too (§8.1.11.4, #334).
+	 */
+	void markInvoked(MappingOperation invokedMapping, QvtoTraceRecord record) {
+		if (record != null) {
+			invokedIndex.computeIfAbsent(invokedMapping, k -> new ArrayList<>()).add(record);
+		}
+	}
+
+	/** Whether the record was produced by, or answered a call of, the given mapping (§8.1.11.4). */
+	private boolean inMapping(QvtoTraceRecord record, MappingOperation mapping) {
+		if (sameMapping(record.mappingOp(), mapping)) {
+			return true;
+		}
+		for (Map.Entry<MappingOperation, List<QvtoTraceRecord>> invoked : invokedIndex.entrySet()) {
+			if (sameMapping(invoked.getKey(), mapping) && invoked.getValue().contains(record)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether two references denote the same mapping operation: the same object, or — for a
+	 * reference the parser resolved to a node of its own — the same name and context type, so
+	 * that SourceElement::toT is not SourceContainer::toT.
+	 */
+	private static boolean sameMapping(MappingOperation a, MappingOperation b) {
+		if (a == b) {
+			return true;
+		}
+		if (a == null || b == null || !a.getName().equals(b.getName())) {
+			return false;
+		}
+		Object contextA = a.getContext() != null ? a.getContext().getEType() : null;
+		Object contextB = b.getContext() != null ? b.getContext().getEType() : null;
+		if (contextA instanceof EClass classA && contextB instanceof EClass classB) {
+			return classA == classB || classA.getName().equals(classB.getName());
+		}
+		return contextA == null || contextB == null || contextA == contextB;
+	}
+
+	/**
+	 * The objects a mapping produced: its single result, the values of a tuple of several
+	 * results, or the elements of a collection result (§8.1.11.3: out-parameters union
+	 * result-parameters, #334).
+	 */
+	static List<EObject> resultObjects(Object result) {
+		List<EObject> objects = new ArrayList<>();
+		if (result instanceof EObject eo) {
+			objects.add(eo);
+		} else if (result instanceof Map<?, ?> tuple) {
+			for (Object value : tuple.values()) {
+				objects.addAll(resultObjects(value));
+			}
+		} else if (result instanceof Collection<?> values) {
+			for (Object value : values) {
+				if (value instanceof EObject eo) {
+					objects.add(eo);
+				}
+			}
+		}
+		return objects;
+	}
+
+	private static Object firstObject(Object[] args) {
+		for (Object arg : args) {
+			if (arg instanceof EObject) {
+				return arg;
+			}
+		}
+		return null;
 	}
 
 	/**
@@ -213,7 +298,7 @@ class QvtoTraceManager {
 				? sourceIndex.getOrDefault(source, List.of())
 				: records;
 		for (QvtoTraceRecord record : candidates) {
-			if (record.result() instanceof EObject eo) {
+			for (EObject eo : resultObjects(record.result())) {
 				if (targetType == null || targetType.isInstance(eo)) {
 					results.add(eo);
 				}
@@ -245,16 +330,17 @@ class QvtoTraceManager {
 	 * Forward resolve constrained to a specific mapping.
 	 * When source is null, ALL trace records for the mapping are searched.
 	 */
-	List<EObject> resolveIn(String mappingName, Object source, EClass targetType) {
+	List<EObject> resolveIn(MappingOperation mapping, Object source, EClass targetType) {
 		List<EObject> results = new ArrayList<>();
 		List<QvtoTraceRecord> candidates = source != null
 				? sourceIndex.getOrDefault(source, List.of())
 				: records;
 		for (QvtoTraceRecord record : candidates) {
-			if (!record.mappingName().equals(mappingName)) {
+			// §8.2.1.23: "by a unique mapping operation" — the operation, not its name (#334)
+			if (!inMapping(record, mapping)) {
 				continue;
 			}
-			if (record.result() instanceof EObject eo) {
+			for (EObject eo : resultObjects(record.result())) {
 				if (targetType == null || targetType.isInstance(eo)) {
 					results.add(eo);
 				}
@@ -269,13 +355,13 @@ class QvtoTraceManager {
 	 * where invoked-mapping or executed-mapping matches the given mapping.
 	 * When result is null, ALL trace records for the mapping are searched.
 	 */
-	List<EObject> invResolveIn(String mappingName, Object result, EClass sourceType) {
+	List<EObject> invResolveIn(MappingOperation mapping, Object result, EClass sourceType) {
 		List<EObject> results = new ArrayList<>();
 		List<QvtoTraceRecord> candidates = result != null
 				? resultIndex.getOrDefault(result, List.of())
 				: records;
 		for (QvtoTraceRecord record : candidates) {
-			if (!record.mappingName().equals(mappingName)) {
+			if (!inMapping(record, mapping)) {
 				continue;
 			}
 			if (record.source() instanceof EObject eo) {

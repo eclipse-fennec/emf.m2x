@@ -97,6 +97,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveInExp;
+import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
@@ -2584,6 +2585,18 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				: fullName;
 		MappingOperation stub = QVTO.createMappingOperation();
 		stub.setName(mappingName);
+		// The context type tells SourceElement::toT from SourceContainer::toT (§8.2.1.23, #334)
+		if (fullName.contains("::")) {
+			String typeName = fullName.substring(0, fullName.lastIndexOf("::"));
+			EClassifier contextType = findClassifier(typeName.contains("::")
+					? typeName.substring(typeName.lastIndexOf("::") + 2) : typeName);
+			if (contextType != null) {
+				VarParameter context = QVTO.createVarParameter();
+				context.setName("self");
+				context.setEType(contextType);
+				stub.setContext(context);
+			}
+		}
 		return stub;
 	}
 
