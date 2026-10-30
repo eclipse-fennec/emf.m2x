@@ -1177,6 +1177,14 @@ if (ro.oclIsKindOf(Family::Family)) then {
 - The deprecated `typedef X = T [cond]` beside Eclipse's `with`.
 - A class of the module (§8.4.8.1) comes before a model type of the same name.
 
+**Well-formedness (#347).** After parsing, these are errors:
+- more than one `main`, or a `main` with parameters (§8.2.1.11);
+- a `main` in an `abstract` transformation (§8.2.1.1);
+- a mapping with `disjuncts` and a body (§8.2.1.15);
+- two contextual operations of one name, context and parameter types (§8.2.1.10).
+
+At run time a WARNING reports two kinds of side effect, without stopping the assignment: a property or module property assigned by a `query` (§8.2.1.12), and a property of an `inout` parameter assigned in an `init` section (§8.1.11.2). Only direct assignments are seen; a helper the query calls is not followed. Override compatibility, `overridden`, the types of model parameters and of explicit disjuncts are not checked (GAP-3). `refines` is a stub: the refined transformation is recorded by name, a mapping's `refines` as an annotation, and `relation`/`referredDomain` do not exist in the metamodel.
+
 **Lenient superset.** `==` and `!=` are accepted without the `use-traditional-comparison-syntax` directive (§8.4.4), and `=`/`<>` stay valid after it, as in Eclipse. **Precedence:** `xor` binds tighter than `or`, as in OCL v2.4 §9.3, while the QVT EBNF puts both on one level: `true xor true or true` is `false`. Both are deliberate (#346), and `QvtoConcreteSyntaxSpecConformanceTest` covers them.
 
 ---
