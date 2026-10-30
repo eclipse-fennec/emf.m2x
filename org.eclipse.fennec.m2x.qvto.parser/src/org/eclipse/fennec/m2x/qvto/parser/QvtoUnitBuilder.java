@@ -39,11 +39,14 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.ETypedElement;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
 import org.eclipse.fennec.m2x.model.imperativeocl.Typedef;
+import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
@@ -1952,7 +1955,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void setFeatureType(ContextualProperty prop, EClassifier type) {
-		if (type != null && !(type instanceof OclType)) {
+		if (type instanceof CollectionType collectionType) {
+			// A collection-typed property is a multi-valued feature of its element type: an
+			// assignment flattens into it and drops nulls (§8.2.2.11). Before #339 it was left
+			// untyped and single-valued.
+			prop.setUpperBound(ETypedElement.UNBOUNDED_MULTIPLICITY);
+			CollectionKind kind = collectionType.getKind();
+			prop.setOrdered(kind == CollectionKind.SEQUENCE || kind == CollectionKind.ORDERED_SET);
+			prop.setUnique(kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET);
+			setFeatureType(prop, collectionType.getElementType());
+		} else if (type != null && !(type instanceof OclType)) {
 			prop.setEType(type);
 		}
 	}

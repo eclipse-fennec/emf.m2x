@@ -165,6 +165,10 @@ public class QvtoEvaluator {
 	private Map<CollectionKind, Class<?>> collectionClasses;
 	/** The classes whose ambiguous extent was reported already (#337). */
 	private final Set<EClass> ambiguousClasses = new LinkedHashSet<>();
+	/** Per operation: its in, inout and out parameters (#336). */
+	private final Map<ImperativeOperation, List<VarParameter>> formalParameters = new IdentityHashMap<>();
+	/** Per operation: whether it has out or inout parameters (#336). */
+	private final Map<ImperativeOperation, Boolean> passesBackOperations = new IdentityHashMap<>();
 	/** Per operation name: whether one of that name has out or inout parameters (#336). */
 	private final Map<String, Boolean> passesBackByName = new HashMap<>();
 	/** The last call the OCL engine made through {@link #callFromOcl} (#336). */
@@ -1196,15 +1200,26 @@ public class QvtoEvaluator {
 		}
 	}
 
-	/** The in, inout and out parameters of an operation in call order, results excluded. */
-	private static List<VarParameter> formalParameters(ImperativeOperation operation) {
-		List<VarParameter> formals = new ArrayList<>();
-		for (Object param : operation.getEParameters()) {
-			if (param instanceof VarParameter vp && !operation.getResult().contains(vp)) {
-				formals.add(vp);
+	/**
+	 * The in, inout and out parameters of an operation in call order, results excluded —
+	 * computed once per operation, as every call asks for them.
+	 */
+	private List<VarParameter> formalParameters(ImperativeOperation operation) {
+		return formalParameters.computeIfAbsent(operation, op -> {
+			List<VarParameter> formals = new ArrayList<>();
+			for (Object param : op.getEParameters()) {
+				if (param instanceof VarParameter vp && !op.getResult().contains(vp)) {
+					formals.add(vp);
+				}
 			}
-		}
-		return formals;
+			return List.copyOf(formals);
+		});
+	}
+
+	/** Whether an operation hands values back through out or inout parameters. */
+	private boolean passesBack(ImperativeOperation operation) {
+		return passesBackOperations.computeIfAbsent(operation,
+				op -> formalParameters(op).stream().anyMatch(QvtoEvaluator::passesBack));
 	}
 
 	/** Whether the final value of a parameter goes back to the caller (§8.2.1.12). */
@@ -1213,7 +1228,10 @@ public class QvtoEvaluator {
 	}
 
 	/** The arguments a trace record is matched on: the out positions are blanked (§8.1.11.2). */
-	private static Object[] traceKey(MappingOperation mappingOp, Object[] args) {
+	private Object[] traceKey(MappingOperation mappingOp, Object[] args) {
+		if (!passesBack(mappingOp)) {
+			return args;
+		}
 		List<VarParameter> formals = formalParameters(mappingOp);
 		Object[] key = null;
 		for (int i = 0; i < formals.size() && i < args.length; i++) {
@@ -1229,7 +1247,7 @@ public class QvtoEvaluator {
 
 	/** A copy of the arguments carrying the current out and inout values, or null without any. */
 	private Object[] currentOutArgs(ImperativeOperation operation, Object[] args) {
-		if (formalParameters(operation).stream().noneMatch(QvtoEvaluator::passesBack)) {
+		if (!passesBack(operation)) {
 			return null;
 		}
 		Object[] outs = args.clone();
@@ -1239,6 +1257,9 @@ public class QvtoEvaluator {
 
 	/** Writes the current values of the out and inout parameters into the argument array. */
 	private void exportOutArgs(ImperativeOperation operation, Object[] args) {
+		if (!passesBack(operation)) {
+			return;
+		}
 		List<VarParameter> formals = formalParameters(operation);
 		for (int i = 0; i < formals.size() && i < args.length; i++) {
 			if (passesBack(formals.get(i))) {
@@ -1249,7 +1270,7 @@ public class QvtoEvaluator {
 
 	/** Sets the out and inout parameters from an argument array (null: nothing to set). */
 	private void importOutArgs(ImperativeOperation operation, Object[] args) {
-		if (args == null) {
+		if (args == null || !passesBack(operation)) {
 			return;
 		}
 		List<VarParameter> formals = formalParameters(operation);
@@ -1303,7 +1324,7 @@ public class QvtoEvaluator {
 	/** Whether an operation of this name hands values back through out or inout parameters. */
 	private boolean passesBackByName(String name) {
 		return passesBackByName.computeIfAbsent(name, n -> operationResolver.findAllOperations(n).stream()
-				.anyMatch(op -> formalParameters(op).stream().anyMatch(QvtoEvaluator::passesBack)));
+				.anyMatch(this::passesBack));
 	}
 
 	/** The mapping's result as it stands: the single result, a tuple of several, or null. */
@@ -1630,6 +1651,20 @@ public class QvtoEvaluator {
 	}
 
 	/**
+	 * The module property a variable reference stands for: the declaration itself, or the
+	 * untyped stand-in the parser builds for {@code this.name}; {@code null} for a variable.
+	 */
+	private Variable moduleProperty(Variable referred) {
+		for (Variable moduleVar : transformation.getOwnedVariable()) {
+			if (moduleVar == referred || (referred.eContainer() == null && referred.getType() == null
+					&& moduleVar.getName() != null && moduleVar.getName().equals(referred.getName()))) {
+				return moduleVar;
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * The value a variable, tuple part or intermediate property holds after an assignment, by
 	 * the equivalent assignments of §8.2.2.11 (#339). A multi-valued target — declared as a
 	 * collection, or holding one — gets a new collection of its own kind: the right-hand side is
@@ -1643,7 +1678,15 @@ public class QvtoEvaluator {
 	 */
 	private Object assignedValue(String target, EClassifier declared, Object current, Object value, AssignExp exp,
 			boolean property) {
-		boolean declaredMany = declared instanceof CollectionType;
+		return assignedValue(target, declared, declared instanceof CollectionType, current, value, exp, property);
+	}
+
+	/**
+	 * @param declaredMany whether the target is declared multi-valued — a collection type, or a
+	 *        feature with an upper bound above one
+	 */
+	private Object assignedValue(String target, EClassifier declared, boolean declaredMany, Object current,
+			Object value, AssignExp exp, boolean property) {
 		if (exp.isIsSubtract()) {
 			if (!(current instanceof Collection<?> currentCollection)) {
 				return UNHANDLED;
@@ -2079,7 +2122,8 @@ public class QvtoEvaluator {
 		if (icp != null) {
 			// A property: a multi-valued one skips null elements (§8.2.2.11, #339)
 			Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-			Object assigned = assignedValue(sf.getName(), icp.getEType(), current, value, exp, true);
+			Object assigned = assignedValue(sf.getName(), icp.getEType(),
+					icp.isMany() || icp.getEType() instanceof CollectionType, current, value, exp, true);
 			if (assigned != UNHANDLED) {
 				intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), assigned);
 			}
@@ -2249,8 +2293,12 @@ public class QvtoEvaluator {
 				}
 				// Variable assignment (§8.2.2.11): the variable gets a new value, a collection it
 				// shared with another variable is not changed (#339)
-				Object assigned = assignedValue(varName, varExp.getReferredVariable().getType(),
-						env.lookup(varName), value, exp, false);
+				// A module property (§8.1.18, also reached as this.name) is assigned as a property
+				Variable moduleProperty = moduleProperty(varExp.getReferredVariable());
+				Object assigned = moduleProperty != null
+						? assignedValue(varName, moduleProperty.getType(), env.lookup(varName), value, exp, true)
+						: assignedValue(varName, varExp.getReferredVariable().getType(), env.lookup(varName), value,
+								exp, false);
 				if (assigned != UNHANDLED) {
 					env.assign(varName, assigned);
 				}
