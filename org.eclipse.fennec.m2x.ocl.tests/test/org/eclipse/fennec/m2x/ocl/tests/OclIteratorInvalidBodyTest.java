@@ -180,13 +180,11 @@ class OclIteratorInvalidBodyTest extends AbstractOclTest {
 	// === collect with invalid body ===
 
 	@Test
-	void collect_invalidBodyElement_includesInvalid() throws OclParseException {
-		// collect: invalid values are preserved in result
-		Object result = eval(
-				"Sequence{2, 0, 3}->collect(x | 10 / x)", self);
-		assertTrue(result instanceof Collection<?>);
-		Collection<?> coll = (Collection<?>) result;
-		assertEquals(3, coll.size()); // 5, invalid, 3 (rounded)
+	void collect_invalidBodyElement_isInvalid() throws OclParseException {
+		// OCL v2.4 §11.9.2: collectNested = iterate(… result->including(body)), and
+		// including(invalid) is invalid; collect = collectNested->flatten() (#316).
+		// Eclipse: GenericIteratorsTest.test_collect_invalidBody_142518
+		assertInvalid("Sequence{2, 0, 3}->collect(x | 10 / x)", self);
 	}
 
 	// === iterate with invalid ===

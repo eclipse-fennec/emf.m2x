@@ -85,9 +85,9 @@ class OclIteratorEdgeCaseTest extends AbstractOclTest {
 
 	@Test
 	void collect_invalidBody_propagates() throws OclParseException {
-		// Collect on invalid body element: invalid is included in result
-		Object result = eval("Sequence{1, 0, 2}->collect(x | 1.div(x))->size()", self);
-		assertEquals(3, result);
+		// OCL v2.4 §11.9.2: an invalid body makes collect invalid — a collection never holds
+		// invalid (§11.7.1 [1], #316)
+		assertInvalid("Sequence{1, 0, 2}->collect(x | 1.div(x))->size()", self);
 	}
 
 	// === any with invalid body ===

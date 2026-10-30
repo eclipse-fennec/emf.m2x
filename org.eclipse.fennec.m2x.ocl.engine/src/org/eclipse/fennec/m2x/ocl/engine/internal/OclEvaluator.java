@@ -675,7 +675,13 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 		for (CollectionLiteralPart part : exp.getOwnedParts()) {
 			if (part instanceof CollectionItem item) {
-				elements.add(eval(item.getOwnedItem()));
+				Object value = eval(item.getOwnedItem());
+				// §11.7.1 [1]: "A collection cannot contain invalid values" — the literal is invalid
+				// (§7.4.13: an expression with an invalid part is invalid itself, #316)
+				if (value == OclInvalid.INSTANCE) {
+					return OclInvalid.INSTANCE;
+				}
+				elements.add(value);
 			} else if (part instanceof CollectionRange range) {
 				Object first = eval(range.getOwnedFirst());
 				Object last = eval(range.getOwnedLast());
@@ -686,6 +692,17 @@ public class OclEvaluator extends OclSwitch<Object> {
 						return OclInvalid.INSTANCE;
 					}
 					return addError("Collection range requires Integer bounds");
+				}
+				// §8.3.7 CollectionRange [2] IncreasingRange: first <= last. A decreasing range has
+				// no defined value; it is empty with a WARNING, the way Eclipse and every
+				// Sequence{1..n} with n = 0 read it, and invalid under specStrict (#326)
+				if (f > l) {
+					if (options.specStrict()) {
+						return addError("Collection range " + f + ".." + l
+								+ " is decreasing (OCL v2.4 §8.3.7 CollectionRange [2])");
+					}
+					addWarning("Collection range " + f + ".." + l + " is decreasing — evaluated as empty");
+					continue;
 				}
 				long rangeSize = l - f + 1;
 				if (rangeSize > options.maxCollectionSize()) {
@@ -838,6 +855,19 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 	// --- Iterator implementations ---
 
+	/**
+	 * Checks the body of an iterator whose body is a condition (OCL v2.4 §8.3.7 IteratorExp [3]:
+	 * select, reject, forAll, exists, any, one). Boolean, null and invalid pass; anything else is
+	 * reported and becomes invalid instead of being read silently as false or null (#315).
+	 */
+	private Object booleanBody(String iterator, Object bodyResult) {
+		if (bodyResult == null || bodyResult instanceof Boolean || bodyResult == OclInvalid.INSTANCE) {
+			return bodyResult;
+		}
+		return addError("Body of '" + iterator + "' must be Boolean, got: "
+				+ bodyResult.getClass().getSimpleName());
+	}
+
 	private Object iteratorSelect(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
 		List<Object> result = new ArrayList<>();
@@ -845,7 +875,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = eval(body);
+				Object bodyResult = booleanBody("select", eval(body));
 				if (bodyResult == OclInvalid.INSTANCE || bodyResult == null) {
 					return OclInvalid.INSTANCE;
 				}
@@ -866,7 +896,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = eval(body);
+				Object bodyResult = booleanBody("reject", eval(body));
 				if (bodyResult == OclInvalid.INSTANCE || bodyResult == null) {
 					return OclInvalid.INSTANCE;
 				}
@@ -890,9 +920,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object bodyResult = eval(body);
-				// collect flattens one level
+				// §11.9.2: collectNested = iterate(… result->including(body)), and including(invalid)
+				// is invalid — a collection never holds invalid (§11.7.1 [1], #316)
+				if (bodyResult == OclInvalid.INSTANCE) {
+					return OclInvalid.INSTANCE;
+				}
+				// §11.9.1: collect = collectNested(…)->flatten(), and flatten is recursive (#316)
 				if (bodyResult instanceof Collection<?> nested) {
-					result.addAll(nested);
+					OclStdlib.flattenInto(nested, result);
 				} else {
 					result.add(bodyResult);
 				}
@@ -918,7 +953,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				result.add(eval(body));
+				Object bodyResult = eval(body);
+				if (bodyResult == OclInvalid.INSTANCE) {
+					return OclInvalid.INSTANCE; // including(invalid) is invalid (#316)
+				}
+				result.add(bodyResult);
 			}
 			return result; // collectNested does NOT flatten
 		} finally {
@@ -938,7 +977,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = eval(body);
+				Object bodyResult = booleanBody("forAll", eval(body));
 				if (Boolean.FALSE.equals(bodyResult)) {
 					return false;
 				}
@@ -967,7 +1006,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 				if (depth + 1 < iterVars.size()) {
 					result = iteratorForAllMulti(source, iterVars, body, depth + 1);
 				} else {
-					result = eval(body);
+					result = booleanBody("forAll", eval(body));
 				}
 				if (Boolean.FALSE.equals(result)) {
 					return false;
@@ -996,7 +1035,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = eval(body);
+				Object bodyResult = booleanBody("exists", eval(body));
 				if (Boolean.TRUE.equals(bodyResult)) {
 					return true;
 				}
@@ -1025,7 +1064,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 				if (depth + 1 < iterVars.size()) {
 					result = iteratorExistsMulti(source, iterVars, body, depth + 1);
 				} else {
-					result = eval(body);
+					result = booleanBody("exists", eval(body));
 				}
 				if (Boolean.TRUE.equals(result)) {
 					return true;
@@ -1042,42 +1081,67 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 	}
 
+	/**
+	 * {@code any} (OCL v2.4 §11.9.1): "Returns invalid if any body evaluates to invalid for any
+	 * element, otherwise if there are one or more elements for which body is true, an
+	 * indeterminate choice of one of them is returned, otherwise the result is invalid."
+	 *
+	 * <p>A null or invalid body is invalid — the mapping is {@code select(…)->asSequence()->first()},
+	 * and {@code select} is invalid for both. Without a match the result is {@code null} by
+	 * default, which is what Eclipse OCL answers (OMG issue 18504), and {@code invalid} under
+	 * {@link OclEvaluationOptions#specStrict()} (#316). Strict, every body is evaluated before a
+	 * match is returned, so an invalid body after the match is not missed.
+	 */
 	private Object iteratorAny(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
-		boolean hasInvalid = false;
+		boolean strict = options.specStrict();
+		boolean found = false;
+		Object match = null;
 		OclEvalEnvironment previousEnv = env;
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = eval(body);
-				if (Boolean.TRUE.equals(bodyResult)) {
-					return element;
+				Object bodyResult = booleanBody("any", eval(body));
+				if (bodyResult == OclInvalid.INSTANCE || bodyResult == null) {
+					return OclInvalid.INSTANCE;
 				}
-				if (bodyResult == OclInvalid.INSTANCE) {
-					hasInvalid = true;
+				if (Boolean.TRUE.equals(bodyResult) && !found) {
+					if (!strict) {
+						return element;
+					}
+					found = true;
+					match = element;
 				}
 			}
-			// Eclipse: if any body was invalid and no match found → invalid
-			return hasInvalid ? OclInvalid.INSTANCE : null;
+			if (found) {
+				return match;
+			}
+			return strict ? OclInvalid.INSTANCE : null;
 		} finally {
 			env = previousEnv;
 		}
 	}
 
+	/**
+	 * {@code one} (OCL v2.4 §11.9.1): "Results in invalid if there is any element for which body is
+	 * invalid, otherwise true if there is exactly one element for which body is true."
+	 * By default it stops at the second match, like Eclipse OCL; under
+	 * {@link OclEvaluationOptions#specStrict()} every body is evaluated first (#316).
+	 */
 	private Object iteratorOne(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
-		boolean foundOne = false;
+		boolean strict = options.specStrict();
+		int matches = 0;
 		boolean hasInvalid = false;
 		OclEvalEnvironment previousEnv = env;
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
-				Object bodyResult = eval(body);
+				Object bodyResult = booleanBody("one", eval(body));
 				if (Boolean.TRUE.equals(bodyResult)) {
-					if (foundOne) {
+					if (++matches > 1 && !strict) {
 						return false; // more than one
 					}
-					foundOne = true;
 				} else if (!Boolean.FALSE.equals(bodyResult)) {
 					hasInvalid = true; // invalid/null body
 				}
@@ -1085,29 +1149,40 @@ public class OclEvaluator extends OclSwitch<Object> {
 			if (hasInvalid) {
 				return OclInvalid.INSTANCE;
 			}
-			return foundOne;
+			return matches == 1;
 		} finally {
 			env = previousEnv;
 		}
 	}
 
+	/**
+	 * {@code isUnique} (OCL v2.4 §11.9.1): "Results in invalid if body evaluates to invalid for any
+	 * element in the source collection, otherwise true if body evaluates to a different, possibly
+	 * null, value for each element." Different means OCL {@code <>}, so {@code 1} and {@code 1.0}
+	 * are the same value (#317). By default the first duplicate ends the iteration, like Eclipse
+	 * OCL; under {@link OclEvaluationOptions#specStrict()} every body is evaluated first (#316).
+	 */
 	private Object iteratorIsUnique(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
-		Set<Object> seen = new HashSet<>();
+		boolean strict = options.specStrict();
+		boolean duplicate = false;
+		Set<Object> seen = new OclSet<>();
 		OclEvalEnvironment previousEnv = env;
 		try {
 			for (Object element : source) {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object bodyResult = eval(body);
-				// OCL v2.4 §11.9.1: "Results in invalid if body evaluates to invalid"
 				if (bodyResult == OclInvalid.INSTANCE) {
 					return OclInvalid.INSTANCE;
 				}
 				if (!seen.add(bodyResult)) {
-					return false; // duplicate
+					if (!strict) {
+						return false;
+					}
+					duplicate = true;
 				}
 			}
-			return true;
+			return !duplicate;
 		} finally {
 			env = previousEnv;
 		}
@@ -1124,6 +1199,12 @@ public class OclEvaluator extends OclSwitch<Object> {
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object key = eval(body);
 				if (key == OclInvalid.INSTANCE) {
+					return OclInvalid.INSTANCE;
+				}
+				// §11.9.2: the body type needs '<', and null < x is invalid (§11.2.3); Eclipse
+				// answers invalid even for a single element, so does Fennec (#316)
+				if (key == null) {
+					addWarning("sortedBy key is null for element " + element + " — sortedBy is invalid");
 					return OclInvalid.INSTANCE;
 				}
 				keys.add(key);
@@ -1177,9 +1258,14 @@ public class OclEvaluator extends OclSwitch<Object> {
 				}
 				env = previousEnv.nested(iterVars.get(0).getName(), element);
 				Object bodyResult = eval(body);
+				// §11.9.1 closure maps over including(body): an invalid body is invalid (#316);
+				// a null body adds nothing
+				if (bodyResult == OclInvalid.INSTANCE) {
+					return OclInvalid.INSTANCE;
+				}
 				if (bodyResult instanceof Collection<?> nested) {
 					workList.addAll(nested);
-				} else if (bodyResult != null && bodyResult != OclInvalid.INSTANCE) {
+				} else if (bodyResult != null) {
 					workList.add(bodyResult);
 				}
 			}

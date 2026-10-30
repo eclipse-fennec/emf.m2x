@@ -49,6 +49,9 @@ public @interface OclEngineConfiguration {
 	@AttributeDefinition(name = "Max String Length", description = "Maximum length of a string produced by an operation such as concat, replaceAll or format")
 	int maxStringLength() default OclEvaluationOptions.DEFAULT_MAX_STRING_LENGTH;
 
+	@AttributeDefinition(name = "Spec Strict", description = "Follow the OCL v2.4 text where it and the Eclipse OCL default disagree (any without a match is invalid, one/isUnique evaluate every body, a decreasing range is invalid)")
+	boolean specStrict() default false;
+
 	@AttributeDefinition(name = "Timeout (ms)", description = "Evaluation timeout in milliseconds (0 = no timeout)")
 	long timeout() default 0;
 
