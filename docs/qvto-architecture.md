@@ -825,6 +825,8 @@ as `false`, and again no test in any suite reached them:
 | `select`/`reject`/`forAll`/`exists`/`any` evaluated by QVT-O | as the OCL engine (§11.9.1): `select`/`reject` invalid, the quantifiers by their precedence, no diagnostic |
 | `resolve` condition (§8.2.1.22) | the resolve is `invalid`, as a `select` |
 
+Where a Boolean is expected, §8.4.5(2) converts first (#338): an element is `true` and a collection is `notEmpty()`. A null is `false` where the condition is typed as an element or a collection (`if (cl := …)` from §8.1.9, `var e : T := null; if (e)`). Only the remaining values, a null of no such type, a String, `invalid`, are the undefined conditions of the table above.
+
 Pre- and post-conditions are assertions (§8.2.1.15: "any execution failure is fatal"; §8.2.1.21): a
 `where` that does not hold and an `xmap` whose candidate does not conform or whose `when` does not
 hold raise `AssertionFailed`, as `assert fatal` does (§8.2.2.20). Eclipse does the same
