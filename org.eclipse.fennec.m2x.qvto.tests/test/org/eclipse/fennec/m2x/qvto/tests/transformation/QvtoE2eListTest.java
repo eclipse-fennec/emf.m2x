@@ -500,4 +500,46 @@ class QvtoE2eListTest extends AbstractQvtoEngineTest {
 					+ "' after index " + lastIdx + " but diagnostics were: " + messages);
 		}
 	}
+
+	@Test
+	void list_removeAndRemoveAll_useOclEquality() throws Exception {
+		// QVT v1.3 §8.3.9.35 post reject(e = element): OCL '=' makes 1 and 1.0 one value (#317)
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        var l : List(Real) := List{1.0, 2.0, 3.0};
+				        l->remove(1);
+				        log('after-remove:' + l->size().repr());
+				        l->removeAll(Sequence{2, 3});
+				        log('after-removeAll:' + l->size().repr());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "after-remove:2");
+		assertLogged(result, "after-removeAll:0");
+	}
+
+	@Test
+	void dict_keys_areFoundByOclEquality() throws Exception {
+		// A Dict key 1.0 is the key 1 (OCL '=', #317); put replaces it instead of adding a second
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        var d : Dict(Real, String) := Dict{};
+				        d->put(1.0, 'one');
+				        log('get:' + d->get(1));
+				        log('hasKey:' + d->hasKey(1).repr());
+				        d->put(1, 'uno');
+				        log('size:' + d->size().repr());
+				        log('get2:' + d->get(1.0));
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "get:one");
+		assertLogged(result, "hasKey:true");
+		assertLogged(result, "size:1");
+		assertLogged(result, "get2:uno");
+	}
 }
