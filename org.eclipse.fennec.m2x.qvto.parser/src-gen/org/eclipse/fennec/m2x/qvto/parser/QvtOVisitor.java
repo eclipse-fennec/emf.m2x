@@ -1046,6 +1046,18 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitNewExp(QvtOParser.NewExpContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#newTail}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitNewTail(QvtOParser.NewTailContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#arrowIterator}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArrowIterator(QvtOParser.ArrowIteratorContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#mappingCallExp}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -1236,6 +1248,20 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitArrowMappingCall(QvtOParser.ArrowMappingCallContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code ArrowMappingIteratorCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArrowMappingIteratorCall(QvtOParser.ArrowMappingIteratorCallContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code ArrowNewCall}
+	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitArrowNewCall(QvtOParser.ArrowNewCallContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code ArrowObjectCall}
 	 * labeled alternative in {@link QvtOParser#iteratorOrOperationCall}.

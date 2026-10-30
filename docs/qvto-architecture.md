@@ -823,6 +823,16 @@ catches it. Before #335 a violated `where` was a WARNING and a failed `xmap` an 
 transformation went on in both cases. Four tests encoded that, and they were changed with the spec
 quote.
 
+**Imperative iterate variants (§8.2.2.7, #341).** The variants keep their collection kind:
+`xselect` answers the kind of its source, and `xcollect`/`xcollectselect` answer a Bag for an
+unordered source and a Sequence for an ordered one. The shorthands are xcollects as well:
+- `list->prop` is OCL's `collect` with `->excluding(null)`. A property read needs no loop of its own, and the result is the same.
+- `list->map m()`, `list->xmap(i) i.m()`, `list->object(a) T {…}` (the type of `a` may be omitted) and `list->new(a) T(args)` are `ImperativeIterateExp`s, so `break` works and nulls are dropped.
+- `list->foo()` with a contextual query or helper of the elements collects `foo()` over them. It is registered on collections, so the standard library (`->size()`) and a `foo()` defined on a collection answer first.
+- The target form `xcollectselect(i; res = body | condition)` and the implicit iterator (`->xselect(value > 1)`) build the imperative variant.
+
+`forEach`, `forOne` and the variants take a single value as `oclAsSet()` and null as the empty set (OCL §9.3.35 [B]).
+
 The shorthands `list[T]` and `list![T]` share their notation with `list[condition]`; a simple name is
 the type form only when it names a type and is neither a variable in scope nor the shorthand's own
 iterator — `coll[i | b]` with a variable `b` used to fail with `Unknown type (b)` (#312).
