@@ -1518,12 +1518,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			if (ctx.expression() != null) {
 				raiseExp.setArgument((OclExpression) visit(ctx.expression()));
 			}
-		} else if (ctx.STRING_LITERAL() != null) {
-			// raise 'message' — create a StringLiteralExp as argument
+		} else {
+			// §8.2.2.15: raise "ProblemHere" is "a shorthand for raising a StringException with the
+			// string as the constructor argument" — a StringException, so except (StringException)
+			// catches it; it was an untyped Exception before (#340)
 			StringLiteralExp msgExp = OCL.createStringLiteralExp();
-			String text = ctx.STRING_LITERAL().getText();
+			String text = ctx.STRING_LITERAL() != null ? ctx.STRING_LITERAL().getText()
+					: ctx.DOUBLE_QUOTED_STRING().getText();
 			msgExp.setStringSymbol(unescapeString(text.substring(1, text.length() - 1)));
 			raiseExp.setArgument(msgExp);
+			raiseExp.setException(QvtoStandardLibraryTypes.lookup("StringException"));
 		}
 
 		return raiseExp;
