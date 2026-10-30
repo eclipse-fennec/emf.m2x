@@ -724,8 +724,12 @@ exceptionTypeList
     : pathName (',' pathName)*
     ;
 
+// §8.4 <raise_exp> ::= 'raise' <scoped_identifier> ('(' <arg_list>? ')')? | 'raise' <STRING>: the
+// string in either quote style (§8.1.13: raise "UmlModelTransformationFailed"), and raise new T(…)
+// as the instantiation the shorthand stands for (#340)
 raiseExp
-    : 'raise' (pathName ('(' expression? ')')? | STRING_LITERAL)
+    : 'raise' 'new'? pathName ('(' expression? ')')?
+    | 'raise' (STRING_LITERAL | DOUBLE_QUOTED_STRING)
     ;
 
 assertExp
