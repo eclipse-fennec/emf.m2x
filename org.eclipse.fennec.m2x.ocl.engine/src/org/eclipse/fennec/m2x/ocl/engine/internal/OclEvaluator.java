@@ -564,7 +564,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		// OclAny null/invalid-safe operations (must work on null/invalid source)
 		if (isNullSafeOperation(opName)) {
 			Object[] args = evaluateArguments(exp.getOwnedArguments());
-			return wrapNull(OclStdlib.dispatch(opName, source, args, options, resolveOclLocale()));
+			return wrapNull(reportArgumentError(OclStdlib.dispatch(opName, source, args, options, resolveOclLocale())));
 		}
 
 		// Three-valued boolean logic (OCL v2.4 §11.3.1)
@@ -670,6 +670,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 		// 2. Try standard library
 		Object result = OclStdlib.dispatch(opName, source, args, options, resolveOclLocale());
+		if (result instanceof OclStdlib.ArgumentError) {
+			return reportArgumentError(result);
+		}
 		if (result != OclStdlib.NOT_FOUND) {
 			reportInvalidOrigin(exp, result, source, args);
 			return wrapNull(result);
@@ -1750,6 +1753,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * @param sf the statically resolved feature from the AST
 	 * @return the feature valid for {@code eo.eGet()}, possibly name-resolved
 	 */
+	/** Turns the standard library's {@link OclStdlib.ArgumentError} into an ERROR and invalid (#314). */
+	private Object reportArgumentError(Object result) {
+		return result instanceof OclStdlib.ArgumentError error ? addError(error.message()) : result;
+	}
+
 	/**
 	 * A property the object's class does not have — a typo the parser could only keep as a
 	 * placeholder because the source type was not known (#153). Reported as an ERROR with an

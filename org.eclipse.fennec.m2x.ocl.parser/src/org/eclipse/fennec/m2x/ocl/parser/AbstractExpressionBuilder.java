@@ -891,6 +891,14 @@ public class AbstractExpressionBuilder {
 					}
 				}
 			}
+			if (bestMatch != null && bestMatch.getEParameters().size() != argCount) {
+				// §8.3.7 OperationCallExp [2]: "exactly as many arguments as the referred operation
+				// has parameters". The class has operations of this name, none of this arity —
+				// calling the first one anyway dropped or invented arguments silently (#314)
+				addError("Operation " + eClass.getName() + "::" + opName + " expects "
+						+ bestMatch.getEParameters().size() + " argument(s), got " + argCount);
+				return;
+			}
 			if (bestMatch != null) {
 				exp.setReferredOperation(bestMatch);
 			}
