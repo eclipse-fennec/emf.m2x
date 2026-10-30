@@ -1766,6 +1766,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			for (QvtOParser.ParamContext paramCtx : sigCtx.inputParams.param()) {
 				MappingParameter param = QVTO.createMappingParameter();
 				param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
+				// §8.2.1.12: the direction decides what the caller sees afterwards (#336)
+				if (paramCtx.directionKind() != null) {
+					param.setKind(resolveDirection(paramCtx.directionKind().getText()));
+				}
 				EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeSpec().typeExpression());
 				if (type != null) {
 					setParameterType(param, type);
@@ -1844,6 +1848,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ParamContext paramCtx : sigCtx.paramList().param()) {
 			VarParameter param = QVTO.createVarParameter();
 			param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
+			if (paramCtx.directionKind() != null) {
+				param.setKind(resolveDirection(paramCtx.directionKind().getText()));
+			}
 			EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeSpec().typeExpression());
 			if (type != null) {
 				setParameterType(param, type);

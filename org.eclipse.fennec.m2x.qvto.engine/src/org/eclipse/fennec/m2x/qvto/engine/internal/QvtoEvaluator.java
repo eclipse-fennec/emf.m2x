@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.SequencedSet;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
@@ -73,6 +75,7 @@ import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
+import org.eclipse.fennec.m2x.model.qvtoperational.DirectionKind;
 import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingCallExp;
@@ -155,6 +158,10 @@ public class QvtoEvaluator {
 	// §8.3.19: predefined tags "proxy" and "topclasses"
 	private final QvtoTagRegistry tagRegistry;
 	private final QvtoOperationResolver operationResolver;
+	/** Per operation name: whether one of that name has out or inout parameters (#336). */
+	private final Map<String, Boolean> passesBackByName = new HashMap<>();
+	/** The last call the OCL engine made through {@link #callFromOcl} (#336). */
+	private OclCall lastOclCall;
 	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final QvtoModelOperations modelOperations;
 	private final QvtoEngineServices engine;
@@ -403,6 +410,17 @@ public class QvtoEvaluator {
 						return wrapNull(QvtoModelOperations.unwrapNull(handled));
 					}
 				}
+			}
+			// §8.2.1.12: out and inout arguments of a helper or mapping called in an OCL
+			// expression — the OCL engine evaluates the call, this hands the values back (#336)
+			if (opCall.getName() != null && passesBackByName(opCall.getName())) {
+				lastOclCall = null;
+				Object value = evalOcl(opCall);
+				OclCall call = lastOclCall;
+				if (call != null && call.args().length == opCall.getOwnedArguments().size()) {
+					writeBackArgs(opCall.getOwnedArguments(), call.passed(), call.args());
+				}
+				return wrapNull(value);
 			}
 			// QVT-O reads null as the empty string in a string concatenation, where OCL's
 			// strict mode rejects the argument
@@ -722,7 +740,7 @@ public class QvtoEvaluator {
 		}
 		try {
 			env.pushScope();
-			bindOperationParams(operation, self, args);
+			bindOperationParams(operation, self, args, false);
 
 			// Execute body
 			OperationBody body = operation.getBody();
@@ -751,10 +769,14 @@ public class QvtoEvaluator {
 			}
 			return lastResult;
 		} catch (ReturnException e) {
-			return e.value;
+			// §8.2.2.14: "return;" answers the result parameters — a tuple of several (#336)
+			return e.valueless ? currentResult(operation.getResult()) : e.value;
 		} catch (BreakException | ContinueException e) {
 			return loopControlLeftOperation(operation);
 		} finally {
+			// §8.2.1.12: "the final value of each out, inout and result parameter is returned
+			// to the caller" — written into the caller's argument array (#336)
+			exportOutArgs(operation, args);
 			env.popScope();
 			--stackDepth;
 		}
@@ -807,7 +829,7 @@ public class QvtoEvaluator {
 		}
 		try {
 			env.pushScope();
-			bindOperationParams(target, self, args);
+			bindOperationParams(target, self, args, false);
 			for (OclExpression whenExpr : target.getWhen()) {
 				Object whenVal = eval(whenExpr);
 				if (!Boolean.TRUE.equals(whenVal)) {
@@ -892,7 +914,9 @@ public class QvtoEvaluator {
 			if (param instanceof VarParameter vp && !mapping.getResult().contains(vp)) {
 				Object arg = argIdx < args.length ? args[argIdx] : null;
 				argIdx++;
-				if (arg != null && vp.getEType() instanceof EClass parameterClass && !parameterClass.isInstance(arg)) {
+				// What the caller holds in an out argument is overwritten, not passed (#336)
+				if (arg != null && vp.getKind() != DirectionKind.OUT
+						&& vp.getEType() instanceof EClass parameterClass && !parameterClass.isInstance(arg)) {
 					return false;
 				}
 			}
@@ -923,7 +947,7 @@ public class QvtoEvaluator {
 				Object result = callMapping(disjunct, self, args);
 				if (result != GUARD_FAILED) {
 					// §8.1.11.4: the record counts for the invoked mapping too (resolveIn)
-					traceManager.markInvoked(mappingOp, traceManager.lookupRecord(disjunct, self, args));
+					traceManager.markInvoked(mappingOp, traceManager.lookupRecord(disjunct, self, traceKey(disjunct, args)));
 					return result; // First candidate whose guard passes wins (even if result is null)
 				}
 			}
@@ -947,9 +971,13 @@ public class QvtoEvaluator {
 			return null;
 		}
 		boolean traced = false;
+		boolean ran = false;
+		// §8.1.11.2: the record is matched on the context and the in parameters — what the
+		// caller holds in an out argument plays no part (#336)
+		Object[] keyArgs = traceKey(mappingOp, args);
 		try {
 			env.pushScope();
-			bindOperationParams(mappingOp, self, args);
+			bindOperationParams(mappingOp, self, args, false);
 
 			// when-guard: all must be true, otherwise skip. A guard that cannot be decided is an
 			// error, and the mapping does not run (§8.2.1.15, #310)
@@ -967,11 +995,14 @@ public class QvtoEvaluator {
 			// Implicit inhibition (§8.2.1.15 p106, §8.1.11.2): an earlier execution with the same
 			// context and in parameters answers — with its result, or none for a void mapping (#334)
 			if (traceManager != null) {
-				QvtoTraceRecord previous = traceManager.lookupRecord(mappingOp, self, args);
+				QvtoTraceRecord previous = traceManager.lookupRecord(mappingOp, self, keyArgs);
 				if (previous != null) {
+					importOutArgs(mappingOp, previous.outArgs());
+					ran = true;
 					return previous.result();
 				}
 			}
+			ran = true;
 
 			// §8.2.1.15: "The initial value of each out and result parameter is null … Collection
 			// types are initialized with empty collections." (#332)
@@ -996,12 +1027,13 @@ public class QvtoEvaluator {
 			// a null value." Then the relation holds: the trace is recorded now, so a mapping
 			// reached again from its own population finds it instead of recursing (§8.1.6, #332)
 			instantiateResults(resultParams);
-			recordTrace(mappingOp, self, args, currentResult(resultParams));
+			instantiateOutParams(mappingOp);
+			recordTrace(mappingOp, self, keyArgs, currentOutArgs(mappingOp, args), currentResult(resultParams));
 			traced = true;
 			if (body instanceof MappingBody mappingBody) {
 				// 2. Inherited mappings: after init+instantiation, before population (§8.1.15)
 				for (MappingOperation inherited : mappingOp.getInherited()) {
-					invokeReused(inherited, self, args, resultParams);
+					invokeReused(inherited, mappingOp, self, args);
 				}
 				// 3. Population section (main body)
 				for (OclExpression contentExpr : mappingBody.getContent()) {
@@ -1013,7 +1045,7 @@ public class QvtoEvaluator {
 				}
 				// 5. Merged mappings: after end section (§8.1.15)
 				for (MappingOperation merged : mappingOp.getMerged()) {
-					invokeReused(merged, self, args, resultParams);
+					invokeReused(merged, mappingOp, self, args);
 				}
 			} else if (body != null) {
 				for (OclExpression expr : body.getContent()) {
@@ -1022,10 +1054,10 @@ public class QvtoEvaluator {
 			} else {
 				// §8.4 S.168: bodyless mapping declaration — still execute inherited/merged
 				for (MappingOperation inherited : mappingOp.getInherited()) {
-					invokeReused(inherited, self, args, resultParams);
+					invokeReused(inherited, mappingOp, self, args);
 				}
 				for (MappingOperation merged : mappingOp.getMerged()) {
-					invokeReused(merged, self, args, resultParams);
+					invokeReused(merged, mappingOp, self, args);
 				}
 			}
 
@@ -1048,15 +1080,20 @@ public class QvtoEvaluator {
 		} catch (ReturnException e) {
 			Object result = e.value;
 			if (result == null && !mappingOp.getResult().isEmpty()) {
-				result = env.lookup(mappingOp.getResult().get(0).getName());
+				result = currentResult(mappingOp.getResult());
 			}
 			if (!traced) {
-				recordTrace(mappingOp, self, args, result);
+				recordTrace(mappingOp, self, keyArgs, currentOutArgs(mappingOp, args), result);
 			}
 			return result;
 		} catch (BreakException | ContinueException e) {
 			return loopControlLeftOperation(mappingOp);
 		} finally {
+			// A mapping that did not run (type or guard failed) leaves the caller's arguments
+			// as they were
+			if (ran) {
+				exportOutArgs(mappingOp, args);
+			}
 			env.popScope();
 			--stackDepth;
 		}
@@ -1082,6 +1119,138 @@ public class QvtoEvaluator {
 						: null);
 			}
 		}
+	}
+
+	/**
+	 * The instantiation section for the out parameters of a mapping (§8.2.1.15): "the
+	 * instantiation of all the out parameters that are object instances and that still have a
+	 * null value" (#336). Before, only the result parameters were created.
+	 */
+	private void instantiateOutParams(MappingOperation mappingOp) {
+		for (VarParameter parameter : formalParameters(mappingOp)) {
+			if (parameter.getKind() == DirectionKind.OUT && env.lookup(parameter.getName()) == null
+					&& parameter.getEType() instanceof EClass eClass && !eClass.isAbstract()) {
+				EObject created = EcoreUtil.create(eClass);
+				env.assign(parameter.getName(), created);
+				addToExtent(created, parameter instanceof MappingParameter mp && mp.getExtent() != null
+						? mp.getExtent().getName()
+						: null);
+			}
+		}
+		// §8.1.18: "result … is a tuple when there are multiple result parameters"
+		if (mappingOp.getResult().size() > 1) {
+			env.assign("result", collectMultiResult(mappingOp.getResult()));
+		}
+	}
+
+	/** The in, inout and out parameters of an operation in call order, results excluded. */
+	private static List<VarParameter> formalParameters(ImperativeOperation operation) {
+		List<VarParameter> formals = new ArrayList<>();
+		for (Object param : operation.getEParameters()) {
+			if (param instanceof VarParameter vp && !operation.getResult().contains(vp)) {
+				formals.add(vp);
+			}
+		}
+		return formals;
+	}
+
+	/** Whether the final value of a parameter goes back to the caller (§8.2.1.12). */
+	private static boolean passesBack(VarParameter parameter) {
+		return parameter.getKind() == DirectionKind.OUT || parameter.getKind() == DirectionKind.INOUT;
+	}
+
+	/** The arguments a trace record is matched on: the out positions are blanked (§8.1.11.2). */
+	private static Object[] traceKey(MappingOperation mappingOp, Object[] args) {
+		List<VarParameter> formals = formalParameters(mappingOp);
+		Object[] key = null;
+		for (int i = 0; i < formals.size() && i < args.length; i++) {
+			if (formals.get(i).getKind() == DirectionKind.OUT && args[i] != null) {
+				if (key == null) {
+					key = args.clone();
+				}
+				key[i] = null;
+			}
+		}
+		return key != null ? key : args;
+	}
+
+	/** A copy of the arguments carrying the current out and inout values, or null without any. */
+	private Object[] currentOutArgs(ImperativeOperation operation, Object[] args) {
+		if (formalParameters(operation).stream().noneMatch(QvtoEvaluator::passesBack)) {
+			return null;
+		}
+		Object[] outs = args.clone();
+		exportOutArgs(operation, outs);
+		return outs;
+	}
+
+	/** Writes the current values of the out and inout parameters into the argument array. */
+	private void exportOutArgs(ImperativeOperation operation, Object[] args) {
+		List<VarParameter> formals = formalParameters(operation);
+		for (int i = 0; i < formals.size() && i < args.length; i++) {
+			if (passesBack(formals.get(i))) {
+				args[i] = env.lookup(formals.get(i).getName());
+			}
+		}
+	}
+
+	/** Sets the out and inout parameters from an argument array (null: nothing to set). */
+	private void importOutArgs(ImperativeOperation operation, Object[] args) {
+		if (args == null) {
+			return;
+		}
+		List<VarParameter> formals = formalParameters(operation);
+		for (int i = 0; i < formals.size() && i < args.length; i++) {
+			if (passesBack(formals.get(i))) {
+				env.assign(formals.get(i).getName(), args[i]);
+			}
+		}
+	}
+
+	/**
+	 * Hands the final out and inout values of a call back to the caller (§8.2.1.12: "passed by
+	 * reference-to-variable … These updates are visible to the caller"): every argument whose
+	 * value the call changed is assigned to its argument expression, a variable or a property.
+	 * Another expression has nowhere to take the value (#336).
+	 */
+	private void writeBackArgs(List<OclExpression> argExprs, Object[] passed, Object[] args) {
+		for (int i = 0; i < argExprs.size() && i < args.length; i++) {
+			if (args[i] == passed[i]) {
+				continue;
+			}
+			OclExpression argExpr = argExprs.get(i);
+			if (argExpr instanceof VariableExp varExp && varExp.getReferredVariable() != null
+					&& env.contains(varExp.getReferredVariable().getName())) {
+				env.assign(varExp.getReferredVariable().getName(), args[i]);
+			} else if (argExpr instanceof PropertyCallExp propExp && propExp.getReferredProperty() != null
+					&& eval(propExp.getOwnedSource()) instanceof EObject target
+					&& target.eClass().getEAllStructuralFeatures().contains(propExp.getReferredProperty())) {
+				checkNotReadOnly(target);
+				target.eSet(propExp.getReferredProperty(), args[i]);
+			}
+		}
+	}
+
+	/**
+	 * Calls an operation for the OCL engine, which knows only the argument values: the call is
+	 * noted, so that the expression that made it can hand the out and inout values back to its
+	 * argument expressions (#336).
+	 */
+	Object callFromOcl(Object[] args, Supplier<Object> call) {
+		Object[] passed = args.clone();
+		Object result = call.get();
+		lastOclCall = new OclCall(passed, args);
+		return result;
+	}
+
+	/** The arguments of the last call through {@link #callFromOcl}, before and after it. */
+	private record OclCall(Object[] passed, Object[] args) {
+	}
+
+	/** Whether an operation of this name hands values back through out or inout parameters. */
+	private boolean passesBackByName(String name) {
+		return passesBackByName.computeIfAbsent(name, n -> operationResolver.findAllOperations(n).stream()
+				.anyMatch(op -> formalParameters(op).stream().anyMatch(QvtoEvaluator::passesBack)));
 	}
 
 	/** The mapping's result as it stands: the single result, a tuple of several, or null. */
@@ -1116,12 +1285,15 @@ public class QvtoEvaluator {
 	 * population and end — and hands its results back; it creates no trace record of its own.
 	 * Before #333 only its population ran, in the caller's scope.
 	 */
-	private void invokeReused(MappingOperation reused, Object self, Object[] args,
-			EList<VarParameter> callerResults) {
+	private void invokeReused(MappingOperation reused, MappingOperation caller, Object self, Object[] args) {
 		if (!typesConform(reused, self, args)) {
 			return;
 		}
+		EList<VarParameter> callerResults = caller.getResult();
 		EList<VarParameter> results = reused.getResult();
+		// "including the actual value of the out parameters" — passed positionally (#336)
+		Object[] passed = args.clone();
+		exportOutArgs(caller, passed);
 		// The caller's current results, read before the reused mapping's own names shadow them
 		List<Object> current = new ArrayList<>();
 		for (VarParameter callerResult : callerResults) {
@@ -1130,7 +1302,7 @@ public class QvtoEvaluator {
 		List<Object> passedBack = new ArrayList<>();
 		env.pushScope();
 		try {
-			bindOperationParams(reused, self, args);
+			bindOperationParams(reused, self, passed, true);
 			for (int i = 0; i < results.size(); i++) {
 				Object value = i < current.size() ? current.get(i) : null;
 				env.define(results.get(i).getName(), value);
@@ -1153,6 +1325,7 @@ public class QvtoEvaluator {
 			if (body instanceof MappingBody mappingBody) {
 				mappingBody.getInitSection().forEach(this::eval);
 				instantiateResults(results);
+				instantiateOutParams(reused);
 				mappingBody.getContent().forEach(this::eval);
 				mappingBody.getEndSection().forEach(this::eval);
 			} else if (body != null) {
@@ -1161,18 +1334,24 @@ public class QvtoEvaluator {
 			for (VarParameter result : results) {
 				passedBack.add(env.lookup(result.getName()));
 			}
+			exportOutArgs(reused, passed);
 		} finally {
 			env.popScope();
 		}
 		for (int i = 0; i < passedBack.size() && i < callerResults.size(); i++) {
 			env.assign(callerResults.get(i).getName(), passedBack.get(i));
 		}
+		importOutArgs(caller, passed);
 	}
 
 	/**
 	 * Binds operation parameters (self, formals, results) in the current scope.
+	 *
+	 * @param outsGiven an inherited or merged mapping, whose out parameters start with the
+	 *        caller's values; otherwise an out parameter starts null, or empty for a collection
+	 *        (§8.2.1.15)
 	 */
-	private void bindOperationParams(ImperativeOperation operation, Object self, Object[] args) {
+	private void bindOperationParams(ImperativeOperation operation, Object self, Object[] args, boolean outsGiven) {
 		// Bind 'self' if context parameter exists
 		if (self != null) {
 			env.define("self", self);
@@ -1193,6 +1372,9 @@ public class QvtoEvaluator {
 					continue;
 				}
 				Object value = argIdx < args.length ? args[argIdx++] : null;
+				if (vp.getKind() == DirectionKind.OUT && !outsGiven) {
+					value = vp.getEType() instanceof CollectionType collectionType ? emptyCollection(collectionType) : null;
+				}
 				env.define(vp.getName(), value);
 			}
 		}
@@ -1207,6 +1389,12 @@ public class QvtoEvaluator {
 			if (resultParams.size() == 1) {
 				env.define("result", initValue);
 			}
+		}
+		// §8.1.18: "result … is a tuple when there are multiple result parameters" (#336)
+		if (resultParams.size() > 1) {
+			Map<String, Object> tuple = new LinkedHashMap<>();
+			resultParams.forEach(rp -> tuple.put(rp.getName(), env.lookup(rp.getName())));
+			env.define("result", tuple);
 		}
 	}
 
@@ -1448,9 +1636,9 @@ public class QvtoEvaluator {
 	 * answer from an incomplete trace. Before #284 that happened in silence and the run reported
 	 * success; now it is an error, like every other limit, reported once.
 	 */
-	private void recordTrace(MappingOperation mappingOp, Object self, Object[] args, Object result) {
+	private void recordTrace(MappingOperation mappingOp, Object self, Object[] args, Object[] outArgs, Object result) {
 		boolean reachedBefore = traceManager.isLimitReached();
-		traceManager.addRecord(mappingOp, self, args, result);
+		traceManager.addRecord(mappingOp, self, args, outArgs, result);
 		if (!reachedBefore && traceManager.isLimitReached()) {
 			addError("Maximum trace records exceeded: " + options.maxTraceRecords()
 					+ " — resolve operations and mapping reuse may miss what was mapped after it");
@@ -1609,8 +1797,11 @@ public class QvtoEvaluator {
 	 */
 	private Map<String, Object> collectMultiResult(EList<VarParameter> resultParams) {
 		Map<String, Object> tuple = new LinkedHashMap<>();
+		// A part assigned through "result.a := …" is in the tuple bound to result (#336)
+		Map<?, ?> bound = env.contains("result") && env.lookup("result") instanceof Map<?, ?> map ? map : Map.of();
 		for (VarParameter rp : resultParams) {
-			tuple.put(rp.getName(), env.lookup(rp.getName()));
+			Object value = env.lookup(rp.getName());
+			tuple.put(rp.getName(), value != null ? value : bound.get(rp.getName()));
 		}
 		return tuple;
 	}
@@ -2293,7 +2484,7 @@ public class QvtoEvaluator {
 		@Override
 		public Object caseReturnExp(ReturnExp exp) {
 			Object value = exp.getValue() != null ? eval(exp.getValue()) : null;
-			throw new ReturnException(value);
+			throw new ReturnException(value, exp.getValue() == null);
 		}
 
 		@Override
@@ -2532,7 +2723,10 @@ public class QvtoEvaluator {
 				args[i] = eval(argExprs.get(i));
 			}
 
-			return wrapNull(callMappingByName(exp.getName(), sourceObj, args, exp.isIsStrict()));
+			Object[] passed = args.clone();
+			Object result = callMappingByName(exp.getName(), sourceObj, args, exp.isIsStrict());
+			writeBackArgs(argExprs, passed, args);
+			return wrapNull(result);
 		}
 
 		@Override

@@ -93,16 +93,18 @@ class QvtoTraceManager {
 	 * @param mappingOp the mapping operation AST node
 	 * @param source the source object
 	 * @param args the in/inout parameter values (may be empty)
+	 * @param outArgs the arguments with the out/inout values the mapping hands back, or
+	 *        {@code null} for a mapping without any
 	 * @param result the result object
 	 */
-	void addRecord(MappingOperation mappingOp, Object source, Object[] args, Object result) {
+	void addRecord(MappingOperation mappingOp, Object source, Object[] args, Object[] outArgs, Object result) {
 		if (maxTraceRecords > 0 && records.size() >= maxTraceRecords) {
 			limitReached = true;
 			return;
 		}
 		String mappingName = mappingOp.getName();
 		Object[] clonedArgs = args.clone();
-		QvtoTraceRecord record = new QvtoTraceRecord(mappingName, mappingOp, source, clonedArgs, result);
+		QvtoTraceRecord record = new QvtoTraceRecord(mappingName, mappingOp, source, clonedArgs, outArgs, result);
 		records.add(record);
 
 		// Update mapping index (for lookupCachedResult)
