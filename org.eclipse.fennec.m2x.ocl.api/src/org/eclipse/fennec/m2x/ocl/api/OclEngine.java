@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.api;
 
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
@@ -56,6 +57,21 @@ public interface OclEngine {
 	 * @throws OclParseException if the expression contains syntax or type errors
 	 */
 	OclExpression parse(String expression, EClassifier contextType) throws OclParseException;
+
+	/**
+	 * Parses an OCL expression with declared variables in scope — the parameters of an
+	 * operation, {@code result} in a postcondition (OCL v2.4 §12.2.1). Not cached: the
+	 * declarations are part of what the text means.
+	 *
+	 * @param expression the OCL expression text
+	 * @param contextType the {@code EClassifier} that defines the type of {@code self}
+	 * @param variables name and type of each variable in scope; a {@code null} type is unknown
+	 * @return the parsed expression AST with types resolved
+	 * @throws OclParseException if the expression contains syntax or type errors
+	 * @see OclExpressionParser#parse(String, EClassifier, Map)
+	 */
+	OclExpression parse(String expression, EClassifier contextType, Map<String, EClassifier> variables)
+			throws OclParseException;
 
 	/**
 	 * Parses a Complete OCL document, producing a list of constraints.

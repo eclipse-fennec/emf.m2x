@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.api;
 
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.resource.ResourceSet;
@@ -47,6 +48,25 @@ public interface OclExpressionParser {
 	 * @throws OclParseException if the expression contains syntax or type errors
 	 */
 	OclExpression parse(String expression, EClassifier contextType) throws OclParseException;
+
+	/**
+	 * Parses an OCL expression with variables in scope that evaluation will bind — the
+	 * parameters of an operation whose body this is, {@code result} in a postcondition (OCL v2.4
+	 * §12.2.1). A declared name is a variable; undeclared, the parser may read it as a property
+	 * of an implicit source.
+	 *
+	 * <p>The default ignores the declarations, for parsers that predate them.
+	 *
+	 * @param expression the OCL expression text
+	 * @param contextType the {@code EClassifier} that defines the type of {@code self}
+	 * @param variables name and type of each variable in scope; a {@code null} type is unknown
+	 * @return the parsed expression AST with types resolved
+	 * @throws OclParseException if the expression contains syntax or type errors
+	 */
+	default OclExpression parse(String expression, EClassifier contextType, Map<String, EClassifier> variables)
+			throws OclParseException {
+		return parse(expression, contextType);
+	}
 
 	/**
 	 * Parses a Complete OCL document, producing a list of constraints.

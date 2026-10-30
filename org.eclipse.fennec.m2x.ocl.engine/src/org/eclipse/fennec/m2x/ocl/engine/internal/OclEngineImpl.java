@@ -171,6 +171,13 @@ public class OclEngineImpl implements OclDelegateSupport {
 	}
 
 	@Override
+	public OclExpression parse(String expression, EClassifier contextType, Map<String, EClassifier> variables)
+			throws OclParseException {
+		Objects.requireNonNull(variables, "variables must not be null");
+		return variables.isEmpty() ? parse(expression, contextType) : parser.parse(expression, contextType, variables);
+	}
+
+	@Override
 	public List<Constraint> parseDocument(String oclDocument) throws OclParseException {
 		return parser.parseDocument(oclDocument);
 	}

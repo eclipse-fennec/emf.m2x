@@ -306,7 +306,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			constraint.setContextOperation(syntheticOp);
 		}
 
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier, selfAlias));
+		// The parameters of an operation def are variables of its body (§12.5, #324)
+		constraint.setSpecification(buildExpression(ctx.expression(), classifier, selfAlias, paramList, null));
 		constraints.add(constraint);
 	}
 
@@ -354,6 +355,9 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		opName = OclAstBuilder.identifierText(ctx.identifier());
 		int paramCount = ctx.parameterList() != null ? ctx.parameterList().parameter().size() : 0;
 		EOperation operation = resolveOperation(classifier, opName, paramCount);
+		currentParameters = ctx.parameterList();
+		currentResultType = ctx.typeExpression() != null ? ctx.typeExpression()
+				: operation != null && operation.getEType() != null ? operation.getEType() : RESULT_OF_UNKNOWN_TYPE;
 
 		for (OclParser.OperationContextBodyContext bodyCtx : ctx.operationContextBody()) {
 			if (bodyCtx instanceof OclParser.PreConditionContext preCtx) {
@@ -367,6 +371,14 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		return null;
 	}
 
+	/** The parameters of the operation context being built, for its pre, post and body. */
+	private OclParser.ParameterListContext currentParameters;
+	/** The type of {@code result} in the operation context being built. */
+	private Object currentResultType;
+
+	/** Marks a postcondition whose operation declares no return type the document can see. */
+	private static final Object RESULT_OF_UNKNOWN_TYPE = new Object();
+
 	private void buildPreCondition(OclParser.PreConditionContext ctx, EClassifier classifier,
 			EOperation operation) {
 		Constraint constraint = FACTORY.createConstraint();
@@ -376,7 +388,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (ctx.identifier() != null) {
 			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
+		constraint.setSpecification(buildExpression(ctx.expression(), classifier, null, currentParameters, null));
 		constraints.add(constraint);
 	}
 
@@ -389,7 +401,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (ctx.identifier() != null) {
 			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
+		constraint.setSpecification(
+				buildExpression(ctx.expression(), classifier, null, currentParameters, currentResultType));
 		constraints.add(constraint);
 	}
 
@@ -402,7 +415,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (ctx.identifier() != null) {
 			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
+		constraint.setSpecification(buildExpression(ctx.expression(), classifier, null, currentParameters, null));
 		constraints.add(constraint);
 	}
 
@@ -528,12 +541,39 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
 			EClassifier contextType, String selfAlias) {
+		return buildExpression(ctx, contextType, selfAlias, null, null);
+	}
+
+	/**
+	 * Builds a constraint's expression with the variables in scope that evaluation binds: the
+	 * context variable's alias, the operation's parameters and, in a postcondition,
+	 * {@code result} (OCL v2.4 §12.2.1, #324).
+	 *
+	 * @param params the declared parameters, or {@code null}
+	 * @param result the type of {@code result}, a {@link OclParser.TypeExpressionContext} or an
+	 *        {@link EClassifier}, or {@code null} when the expression has no {@code result}
+	 */
+	private OclExpression buildExpression(OclParser.ExpressionContext ctx, EClassifier contextType,
+			String selfAlias, OclParser.ParameterListContext params, Object result) {
 		OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry, strictPropertyResolution);
 		builder.support.declareDefinedProperties(definedProperties);
 		builder.support.registerPackageAliases(packageAliases);
 		importedPackages.forEach(builder.support::importPackage);
 		if (selfAlias != null) {
 			builder.registerSelfAlias(selfAlias);
+		}
+		if (params != null) {
+			for (OclParser.ParameterContext param : params.parameter()) {
+				builder.support.declareVariable(OclAstBuilder.identifierText(param.identifier()),
+						builder.resolveTypeExpression(param.typeExpression()));
+			}
+		}
+		if (result instanceof OclParser.TypeExpressionContext resultType) {
+			builder.support.declareVariable("result", builder.resolveTypeExpression(resultType));
+		} else if (result instanceof EClassifier resultType) {
+			builder.support.declareVariable("result", resultType);
+		} else if (result == RESULT_OF_UNKNOWN_TYPE) {
+			builder.support.declareVariable("result", null);
 		}
 		OclExpression expression = (OclExpression) builder.visit(ctx);
 		diagnostics.addAll(builder.support.getDiagnostics());

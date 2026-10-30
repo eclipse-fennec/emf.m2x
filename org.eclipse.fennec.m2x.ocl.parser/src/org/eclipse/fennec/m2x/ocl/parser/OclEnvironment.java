@@ -78,6 +78,21 @@ public class OclEnvironment {
 	}
 
 	/**
+	 * Creates a child environment in which {@code name} denotes an existing variable — the
+	 * variable of the explicit form of a classifier context, {@code context p : Person}, which
+	 * is {@code self} under another name (OCL v2.4 §12.12.5 [B], #324).
+	 *
+	 * @param name the second name
+	 * @param variable the variable it denotes
+	 * @return a new child environment
+	 */
+	public OclEnvironment alias(String name, Variable variable) {
+		Map<String, Variable> vars = new LinkedHashMap<>();
+		vars.put(name, variable);
+		return new OclEnvironment(this, vars, List.of());
+	}
+
+	/**
 	 * Creates a child environment with multiple additional variables.
 	 *
 	 * @param additionalVariables the variables to add
