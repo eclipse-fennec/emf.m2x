@@ -59,6 +59,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitPackageRef(QvtOParser.PackageRefContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#uri}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitUri(QvtOParser.UriContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#modeltypeWhere}.
 	 * @param ctx the parse tree
 	 * @return the visitor result

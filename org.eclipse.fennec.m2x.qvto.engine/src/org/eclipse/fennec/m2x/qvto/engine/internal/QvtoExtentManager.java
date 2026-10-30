@@ -52,6 +52,11 @@ public class QvtoExtentManager {
 	private final List<QvtoModelExtent> extents;
 	private final List<ModelParameter> modelParams;
 	private final Map<String, QvtoModelExtent> byName = new HashMap<>();
+	/**
+	 * The instances of intermediate classes created without an explicit extent: they belong to
+	 * no model parameter (§8.1.10, §8.2.1.24), but allInstances() still finds them (#337).
+	 */
+	private final QvtoModelExtent intermediateData = new BasicQvtoModelExtent();
 	/** For collection-of-models parameters: name → list of extents. */
 	private final Map<String, List<QvtoModelExtent>> groupedByName = new HashMap<>();
 
@@ -163,7 +168,41 @@ public class QvtoExtentManager {
 				return extent;
 			}
 		}
-		return null;
+		return intermediateData.getContents().contains(root) ? intermediateData : null;
+	}
+
+	/**
+	 * The extent of the transformation's own intermediate data, which no model parameter holds.
+	 *
+	 * @return the intermediate data extent
+	 */
+	QvtoModelExtent intermediateData() {
+		return intermediateData;
+	}
+
+	/**
+	 * Whether more than one out or inout model parameter could take an object of this class:
+	 * "two ModelParameters use the same ModelType … a programming hazard that can be diagnosed
+	 * by tooling" (§8.1.3.4, #337).
+	 *
+	 * @param classifier the object's class
+	 * @return {@code true} if the inferred extent is a guess among several
+	 */
+	boolean isAmbiguous(EClassifier classifier) {
+		EPackage objPkg = classifier == null ? null : classifier.getEPackage();
+		String nsURI = objPkg == null ? null : objPkg.getNsURI();
+		if (nsURI == null) {
+			return false;
+		}
+		Set<String> candidates = new LinkedHashSet<>();
+		for (ModelParameter mp : modelParams) {
+			if ((mp.getKind() == DirectionKind.OUT || mp.getKind() == DirectionKind.INOUT)
+					&& mp.getEType() instanceof ModelType modelType
+					&& modelType.getMetamodel().stream().anyMatch(mm -> nsURI.equals(mm.getNsURI()))) {
+				candidates.add(mp.getName());
+			}
+		}
+		return candidates.size() > 1;
 	}
 
 	/**
@@ -175,7 +214,9 @@ public class QvtoExtentManager {
 	 */
 	Collection<EObject> allInstances(EClass eClass) {
 		Set<EObject> instances = new LinkedHashSet<>();
-		for (QvtoModelExtent extent : extents) {
+		List<QvtoModelExtent> searched = new ArrayList<>(extents);
+		searched.add(intermediateData);
+		for (QvtoModelExtent extent : searched) {
 			for (EObject root : extent.getContents()) {
 				if (eClass.isInstance(root)) {
 					instances.add(root);

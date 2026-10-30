@@ -30,6 +30,7 @@ import java.util.function.Supplier;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.common.util.TreeIterator;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
@@ -82,6 +83,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.MappingCallExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModelParameter;
+import org.eclipse.fennec.m2x.model.qvtoperational.ModelType;
 import org.eclipse.fennec.m2x.model.qvtoperational.ObjectExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
@@ -158,6 +160,8 @@ public class QvtoEvaluator {
 	// §8.3.19: predefined tags "proxy" and "topclasses"
 	private final QvtoTagRegistry tagRegistry;
 	private final QvtoOperationResolver operationResolver;
+	/** The classes whose ambiguous extent was reported already (#337). */
+	private final Set<EClass> ambiguousClasses = new LinkedHashSet<>();
 	/** Per operation name: whether one of that name has out or inout parameters (#336). */
 	private final Map<String, Boolean> passesBackByName = new HashMap<>();
 	/** The last call the OCL engine made through {@link #callFromOcl} (#336). */
@@ -227,6 +231,9 @@ public class QvtoEvaluator {
 	 */
 	public List<Diagnostic> execute() {
 		prepare();
+		if (!modelsConform()) {
+			return diagnostics;
+		}
 
 		ImperativeOperation mainOp = operationResolver.findMainOperation();
 		if (mainOp == null) {
@@ -253,6 +260,9 @@ public class QvtoEvaluator {
 	 */
 	public Object invoke(ImperativeOperation operation, Object self, Object[] args) {
 		prepare();
+		if (!modelsConform()) {
+			return null;
+		}
 		Object result = invokeGuarded(operation, self, args);
 		processDeferredTasks();
 		return result;
@@ -287,6 +297,79 @@ public class QvtoEvaluator {
 	 * Sets the transformation up for a run: deadline, model parameters, configuration and module
 	 * properties, {@code this}, and the alias and tag registries.
 	 */
+	/**
+	 * Checks the in and inout models against their model types before anything runs (§8.2.1.6:
+	 * "model compliance implies that all the extra conditions … are satisfied"; §8.1.2). A
+	 * {@code strict} model type admits only objects of its own packages; every {@code where}
+	 * condition must hold with {@code self} bound to the model. Before #337 both were parsed and
+	 * never read. {@code effective} conformance (§8.2.1.6) is name-based and not checked.
+	 *
+	 * @return whether the transformation may run
+	 */
+	private boolean modelsConform() {
+		boolean conform = true;
+		for (ModelParameter mp : transformation.getModelParameter()) {
+			if (mp.getKind() == DirectionKind.OUT || mp.isSetCollectionKind()
+					|| !(mp.getEType() instanceof ModelType modelType)
+					|| !(env.lookup(mp.getName()) instanceof QvtoModelExtent model)) {
+				continue;
+			}
+			if ("strict".equals(modelType.getConformanceKind())) {
+				EObject foreign = firstForeignObject(model, modelType);
+				if (foreign != null) {
+					addError("Model '" + mp.getName() + "' does not conform to the strict model type '"
+							+ modelType.getName() + "': " + foreign.eClass().getName() + " is not in its metamodel");
+					conform = false;
+				}
+			}
+			if (!modelType.getAdditionalCondition().isEmpty()) {
+				env.pushScope();
+				try {
+					env.define("self", model);
+					for (OclExpression condition : modelType.getAdditionalCondition()) {
+						if (!Boolean.TRUE.equals(eval(condition))) {
+							addError("Model '" + mp.getName() + "' does not satisfy the where condition of model type '"
+									+ modelType.getName() + "'");
+							conform = false;
+							break;
+						}
+					}
+				} finally {
+					env.popScope();
+				}
+			}
+		}
+		return conform;
+	}
+
+	/** The first object of the model whose class is in none of the model type's packages. */
+	private static EObject firstForeignObject(QvtoModelExtent model, ModelType modelType) {
+		for (EObject root : model.getContents()) {
+			if (!inMetamodel(root.eClass(), modelType)) {
+				return root;
+			}
+			for (TreeIterator<EObject> it = root.eAllContents(); it.hasNext();) {
+				EObject child = it.next();
+				if (!inMetamodel(child.eClass(), modelType)) {
+					return child;
+				}
+			}
+		}
+		return null;
+	}
+
+	/** Whether the class belongs to one of the model type's packages or their subpackages. */
+	private static boolean inMetamodel(EClass eClass, ModelType modelType) {
+		for (EPackage pkg = eClass.getEPackage(); pkg != null; pkg = pkg.getESuperPackage()) {
+			for (EPackage metamodel : modelType.getMetamodel()) {
+				if (pkg == metamodel || (pkg.getNsURI() != null && pkg.getNsURI().equals(metamodel.getNsURI()))) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	private void prepare() {
 		// Set timeout deadline (Q-5 / M-3)
 		if (options.timeout() != null) {
@@ -1388,7 +1471,20 @@ public class QvtoEvaluator {
 				return;
 			}
 		}
+		if (transformation.getIntermediateClass().contains(eObject.eClass())) {
+			// §8.1.10: intermediate data does not exist outside the transformation — it goes to
+			// no output model unless an extent is named (#337)
+			extentManager.intermediateData().add(eObject);
+			return;
+		}
 		QvtoModelExtent extent = extentManager.getExtentForClassifier(eObject.eClass());
+		if (extent != null && extentManager.isAmbiguous(eObject.eClass()) && ambiguousClasses.add(eObject.eClass())) {
+			// §8.1.3.4: "If no extent can be inferred, typically because two ModelParameters use
+			// the same ModelType … a programming hazard that can be diagnosed by tooling". The
+			// first such parameter takes it, as in Eclipse (#337)
+			addWarning("The extent of " + eObject.eClass().getName() + " is ambiguous: it goes to '"
+					+ extentManager.getParameterName(extent) + "'; name the extent with @ to choose");
+		}
 		if (extent == null) {
 			extent = extentManager.getDefaultOutputExtent();
 		}
@@ -2000,6 +2096,20 @@ public class QvtoEvaluator {
 						assignToModelFeature(target, implicitFeature(target, varName), value, exp);
 						return wrapNull(value);
 					}
+				}
+				// §8.1.3.3: "A model assignment displaces any previous members associated with the
+				// extent in favor of the root model elements of the replacement Model" — the
+				// variable keeps its extent, whose contents change (#337)
+				if (exp.isIsReset() && env.lookup(varName) instanceof QvtoModelExtent target
+						&& value instanceof QvtoModelExtent replacement) {
+					if (target != replacement) {
+						if (target.isReadOnly()) {
+							addError("Cannot assign to the model '" + varName + "': it is an in model");
+						} else {
+							target.setContents(new ArrayList<>(replacement.getContents()));
+						}
+					}
+					return wrapNull(value);
 				}
 				// Variable assignment
 				if (exp.isIsSubtract()) {

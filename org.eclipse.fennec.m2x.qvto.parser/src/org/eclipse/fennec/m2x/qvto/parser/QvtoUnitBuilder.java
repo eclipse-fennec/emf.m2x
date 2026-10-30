@@ -418,6 +418,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		} else if (ctx.DOUBLE_QUOTED_STRING() != null) {
 			String text = ctx.DOUBLE_QUOTED_STRING().getText();
 			modelType.setConformanceKind(text.substring(1, text.length() - 1));
+		} else {
+			// §8.2.1.6: "The default value is effective" (#337)
+			modelType.setConformanceKind("effective");
 		}
 
 		// Package references: resolve metamodel packages
@@ -2044,6 +2047,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private EPackage resolvePackageRef(QvtOParser.PackageRefContext ctx) {
+		// §8.4 <uri> ::= <STRING>, in either quote style (#337)
+		String uri = ctx.uri() != null ? ctx.uri().getText().substring(1, ctx.uri().getText().length() - 1) : null;
 		if (ctx.pathName() != null) {
 			List<String> segments = new ArrayList<>();
 			for (var id : ctx.pathName().qvtoIdentifier()) {
@@ -2051,12 +2056,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 			String name = String.join("::", segments);
 
-			// Try nsURI from STRING_LITERAL in parens
-			if (ctx.STRING_LITERAL() != null) {
-				String nsURI = ctx.STRING_LITERAL().getText();
-				nsURI = nsURI.substring(1, nsURI.length() - 1);
+			// Try the nsURI in parens
+			if (uri != null) {
 				if (packageRegistry != null) {
-					EPackage pkg = packageRegistry.getEPackage(nsURI);
+					EPackage pkg = packageRegistry.getEPackage(uri);
 					if (pkg != null) {
 						return pkg;
 					}
@@ -2072,12 +2075,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					}
 				}
 			}
-		} else if (ctx.STRING_LITERAL() != null) {
-			String nsURI = ctx.STRING_LITERAL().getText();
-			nsURI = nsURI.substring(1, nsURI.length() - 1);
-			if (packageRegistry != null) {
-				return packageRegistry.getEPackage(nsURI);
-			}
+		} else if (uri != null && packageRegistry != null) {
+			return packageRegistry.getEPackage(uri);
 		}
 		return null;
 	}
