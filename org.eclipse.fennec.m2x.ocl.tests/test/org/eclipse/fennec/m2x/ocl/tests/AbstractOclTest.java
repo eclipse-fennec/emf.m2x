@@ -15,9 +15,11 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
@@ -25,6 +27,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.utils.EcoreHelper;
@@ -100,5 +103,24 @@ abstract class AbstractOclTest {
 	 */
 	static void assertInvalid(String expression, EObject self) throws OclParseException {
 		assertSame(OclInvalid.INSTANCE, eval(expression, self));
+	}
+
+	/**
+	 * Evaluates an OCL expression with the engine's default options and returns value and diagnostics.
+	 */
+	static OclResult evalWithDiagnostics(String expression, EObject self) throws OclParseException {
+		return engine.evaluateWithDiagnostics(engine.parse(expression, self.eClass()), OclContext.of(self),
+				engine.getDefaultOptions());
+	}
+
+	/**
+	 * Asserts that evaluating the expression reports an ERROR diagnostic whose message contains the fragment.
+	 */
+	static void assertHasError(String expression, EObject self, String messageFragment) throws OclParseException {
+		OclResult result = evalWithDiagnostics(expression, self);
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> d.getSeverity() == Diagnostic.ERROR && d.getMessage().contains(messageFragment)),
+				() -> "expected an ERROR containing '" + messageFragment + "' for " + expression + ", got "
+						+ result.diagnostics().stream().map(Diagnostic::getMessage).toList());
 	}
 }

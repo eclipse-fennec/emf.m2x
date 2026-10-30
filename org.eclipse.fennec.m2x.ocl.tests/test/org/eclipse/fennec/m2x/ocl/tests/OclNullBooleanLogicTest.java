@@ -15,23 +15,20 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
  * Tests for OCL three-valued boolean logic with null (OclVoid).
  *
- * <p>Per OCL v2.4 §11.5.4, null in boolean operations should return null
- * (not invalid) when the result is indeterminate. Eclipse OCL treats null
- * identically to invalid in boolean contexts (D28 Eclipse compatibility).
- *
- * <p>Tests marked {@code @Tag("spec-deviation")} document cases where
- * the Spec says null but Eclipse/Fennec return invalid.
+ * <p>Per OCL v2.4 §11.5.4, a boolean operation whose result is not decided by a
+ * short-circuit is invalid if either operand is invalid, otherwise null if either operand
+ * is null (#313). Eclipse Pivot ({@code BooleanAndOperation} and siblings) answers the same.
  *
  * <p>Companion to {@link OclThreeValuedBooleanTest} which covers
  * the invalid cases. This class covers null.
@@ -60,27 +57,21 @@ class OclNullBooleanLogicTest extends AbstractOclTest {
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void true_and_null_isInvalid() throws OclParseException {
+		void true_and_null_isNull() throws OclParseException {
 			// Spec §11.5.4 and(b): "Otherwise null if either self or b is null"
-			// → true and null = null. Eclipse returns invalid. D28.
-			assertInvalid("true and null", self);
+			assertNull(eval("true and null", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_and_true_isInvalid() throws OclParseException {
+		void null_and_true_isNull() throws OclParseException {
 			// Spec §11.5.4 and(b): "Otherwise null if either self or b is null"
-			// → null and true = null. Eclipse returns invalid. D28.
-			assertInvalid("null and true", self);
+			assertNull(eval("null and true", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_and_null_isInvalid() throws OclParseException {
+		void null_and_null_isNull() throws OclParseException {
 			// Spec §11.5.4 and(b): "Otherwise null if either self or b is null"
-			// → null and null = null. Eclipse returns invalid. D28.
-			assertInvalid("null and null", self);
+			assertNull(eval("null and null", self));
 		}
 	}
 
@@ -99,27 +90,21 @@ class OclNullBooleanLogicTest extends AbstractOclTest {
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void false_or_null_isInvalid() throws OclParseException {
+		void false_or_null_isNull() throws OclParseException {
 			// Spec §11.5.4 or(b): "Otherwise null if either self or b is null"
-			// → false or null = null. Eclipse returns invalid. D28.
-			assertInvalid("false or null", self);
+			assertNull(eval("false or null", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_or_false_isInvalid() throws OclParseException {
+		void null_or_false_isNull() throws OclParseException {
 			// Spec §11.5.4 or(b): "Otherwise null if either self or b is null"
-			// → null or false = null. Eclipse returns invalid. D28.
-			assertInvalid("null or false", self);
+			assertNull(eval("null or false", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_or_null_isInvalid() throws OclParseException {
+		void null_or_null_isNull() throws OclParseException {
 			// Spec §11.5.4 or(b): "Otherwise null if either self or b is null"
-			// → null or null = null. Eclipse returns invalid. D28.
-			assertInvalid("null or null", self);
+			assertNull(eval("null or null", self));
 		}
 	}
 
@@ -127,11 +112,9 @@ class OclNullBooleanLogicTest extends AbstractOclTest {
 	class NotWithNull {
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void not_null_isInvalid() throws OclParseException {
+		void not_null_isNull() throws OclParseException {
 			// Spec §11.5.4 not: "null if self is null"
-			// → not null = null. Eclipse returns invalid. D28.
-			assertInvalid("not null", self);
+			assertNull(eval("not null", self));
 		}
 	}
 
@@ -145,11 +128,9 @@ class OclNullBooleanLogicTest extends AbstractOclTest {
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void true_implies_null_isInvalid() throws OclParseException {
+		void true_implies_null_isNull() throws OclParseException {
 			// Spec §11.5.4 implies(b): "Otherwise null if either self or b is null"
-			// → true implies null = null. Eclipse returns invalid. D28.
-			assertInvalid("true implies null", self);
+			assertNull(eval("true implies null", self));
 		}
 
 		@Test
@@ -159,19 +140,15 @@ class OclNullBooleanLogicTest extends AbstractOclTest {
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_implies_false_isInvalid() throws OclParseException {
+		void null_implies_false_isNull() throws OclParseException {
 			// Spec §11.5.4 implies(b): "Otherwise null if either self or b is null"
-			// → null implies false = null. Eclipse returns invalid. D28.
-			assertInvalid("null implies false", self);
+			assertNull(eval("null implies false", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_implies_null_isInvalid() throws OclParseException {
+		void null_implies_null_isNull() throws OclParseException {
 			// Spec §11.5.4 implies(b): "Otherwise null if either self or b is null"
-			// → null implies null = null. Eclipse returns invalid. D28.
-			assertInvalid("null implies null", self);
+			assertNull(eval("null implies null", self));
 		}
 	}
 
@@ -179,43 +156,53 @@ class OclNullBooleanLogicTest extends AbstractOclTest {
 	class XorWithNull {
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void true_xor_null_isInvalid() throws OclParseException {
+		void true_xor_null_isNull() throws OclParseException {
 			// Spec §11.5.4 xor(b): "null if either self or b is null"
-			// → true xor null = null. Eclipse returns invalid. D28.
-			assertInvalid("true xor null", self);
+			assertNull(eval("true xor null", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_xor_true_isInvalid() throws OclParseException {
+		void null_xor_true_isNull() throws OclParseException {
 			// Spec §11.5.4 xor(b): "null if either self or b is null"
-			// → null xor true = null. Eclipse returns invalid. D28.
-			assertInvalid("null xor true", self);
+			assertNull(eval("null xor true", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void false_xor_null_isInvalid() throws OclParseException {
+		void false_xor_null_isNull() throws OclParseException {
 			// Spec §11.5.4 xor(b): "null if either self or b is null"
-			// → false xor null = null. Eclipse returns invalid. D28.
-			assertInvalid("false xor null", self);
+			assertNull(eval("false xor null", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_xor_false_isInvalid() throws OclParseException {
+		void null_xor_false_isNull() throws OclParseException {
 			// Spec §11.5.4 xor(b): "null if either self or b is null"
-			// → null xor false = null. Eclipse returns invalid. D28.
-			assertInvalid("null xor false", self);
+			assertNull(eval("null xor false", self));
 		}
 
 		@Test
-		@Tag("spec-deviation") // Spec §11.5.4: result = null. Eclipse/Fennec: invalid.
-		void null_xor_null_isInvalid() throws OclParseException {
+		void null_xor_null_isNull() throws OclParseException {
 			// Spec §11.5.4 xor(b): "null if either self or b is null"
-			// → null xor null = null. Eclipse returns invalid. D28.
-			assertInvalid("null xor null", self);
+			assertNull(eval("null xor null", self));
+		}
+	}
+
+	@Nested
+	class InvalidAndNonBoolean {
+
+		@Test
+		void invalid_winsOverNull() throws OclParseException {
+			// §11.5.4: "Otherwise invalid if either self or b is invalid. Otherwise null …"
+			assertInvalid("null and invalid", self);
+			assertInvalid("invalid or null", self);
+			assertInvalid("true implies invalid", self);
+			assertInvalid("null xor invalid", self);
+		}
+
+		@Test
+		void nonBooleanOperand_isInvalidWithError() throws OclParseException {
+			assertInvalid("true and 'x'", self);
+			assertInvalid("null or 1", self);
+			assertHasError("true and 'x'", self, "must be Boolean");
 		}
 	}
 }

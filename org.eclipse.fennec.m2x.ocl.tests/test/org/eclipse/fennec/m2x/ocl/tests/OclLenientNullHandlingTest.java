@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -210,19 +211,18 @@ class OclLenientNullHandlingTest extends AbstractOclTest {
 	// --- Boolean three-valued logic with null ---
 
 	@Test
-	void strict_nullAndTrue_returnsInvalid() throws OclParseException {
-		// Three-valued logic: null and true → OclInvalid
-		// (our implementation conflates null and invalid in Boolean operations)
+	void strict_nullAndTrue_returnsNull() throws OclParseException {
+		// OCL v2.4 §11.5.4 and: "Otherwise null if either self or b is null" (#313)
 		OclResult result = evalResult(
 				"let b : Boolean = null in b and true", self, STRICT);
-		assertSame(OclInvalid.INSTANCE, result.value());
+		assertNull(result.value());
 	}
 
 	@Test
-	void lenient_nullAndTrue_returnsInvalid() throws OclParseException {
+	void lenient_nullAndTrue_returnsNull() throws OclParseException {
 		OclResult result = evalResult(
 				"let b : Boolean = null in b and true", self, LENIENT);
-		assertSame(OclInvalid.INSTANCE, result.value());
+		assertNull(result.value());
 	}
 
 	@Test
