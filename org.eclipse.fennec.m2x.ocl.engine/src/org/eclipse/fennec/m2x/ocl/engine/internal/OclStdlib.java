@@ -235,6 +235,11 @@ class OclStdlib {
 
 	private static Object dispatchByType(String name, Object source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
+		// QVT v1.3 §8.3.17: Integer::range(start, end) is called on the type (#344)
+		if ("range".equals(name) && args.length == 2 && source instanceof PrimitiveType type
+				&& "Integer".equals(type.getName())) {
+			return range(args[0], args[1], options);
+		}
 		// OclAny operations apply to all types (including null/invalid)
 		Object result = dispatchOclAny(name, source, args);
 		if (result != NOT_FOUND) {
@@ -843,31 +848,9 @@ class OclStdlib {
 			case "ceiling" -> source;
 			case "round" -> source;
 			case "toString" -> source.toString();
-			case "range" -> {
-				long start, end;
-				if (args.length == 1 && args[0] instanceof Long e) {
-					// source.range(end) — source is start
-					start = source.longValue();
-					end = e;
-				} else if (args.length >= 2 && args[0] instanceof Long s && args[1] instanceof Long e) {
+			case "range" -> args.length == 1 ? range(source, args[0], options)
 					// source.range(start, end) — source ignored (§8.3.17 static-style)
-					start = s;
-					end = e;
-				} else {
-					yield OclInvalid.INSTANCE;
-				}
-				// Bounded like the literal form Sequence{1..n} (OclEvaluator), which this operation
-				// is the spelled-out version of — 1.range(2000000000) used to be an OOM (#182)
-				long size = end - start + 1;
-				if (size > options.maxCollectionSize()) {
-					yield OclInvalid.INSTANCE;
-				}
-				List<Object> result = new ArrayList<>();
-				for (long i = start; i <= end; i++) {
-					result.add(i);
-				}
-				yield result;
-			}
+					: range(args[0], args[1], options);
 			default -> NOT_FOUND;
 		};
 	}
@@ -892,27 +875,139 @@ class OclStdlib {
 	}
 
 	/**
-	 * {@code String.format} with a bound on the size of the result.
-	 *
-	 * <p>A format string is data — from the expression or from the model — and the width field
-	 * of a specifier is an allocation request: {@code '%1$999999999s'.format('x')} asks for a
-	 * gigabyte of padding. The bound is enforced where the output is written, not by inspecting
-	 * the format string, because the specifier grammar has more than one spelling for a width
-	 * ({@code %9s}, {@code %1$9s}, {@code %<9s}, {@code %-9s}) and {@link Formatter} writes the
-	 * padding character by character into its {@link Appendable}. A sink that refuses to grow
-	 * past the limit therefore stops the call before the padding exists (#182).
-	 *
-	 * @return the formatted string, or {@code invalid} if the format string is malformed or
-	 *         the result would exceed the limit
+	 * {@code Integer::range(start, end)}: the Integers from start to end, an Integer of any size
+	 * (#322) as a bound. Bounded like the literal form Sequence{1..n} (OclEvaluator), which this
+	 * operation is the spelled-out version of — 1.range(2000000000) used to be an OOM (#182).
 	 */
-	private static Object formatBounded(String format, Object[] args, int maxSize) {
+	private static Object range(Object start, Object end, OclEvaluationOptions options) {
+		if (!OclNumbers.isInteger(start) || !OclNumbers.isInteger(end)) {
+			return OclInvalid.INSTANCE;
+		}
+		BigInteger first = OclNumbers.bigInteger((Number) start);
+		BigInteger last = OclNumbers.bigInteger((Number) end);
+		BigInteger size = last.subtract(first).add(BigInteger.ONE);
+		if (size.compareTo(BigInteger.valueOf(options.maxCollectionSize())) > 0) {
+			return OclInvalid.INSTANCE;
+		}
+		List<Object> result = new ArrayList<>();
+		for (BigInteger i = first; i.compareTo(last) <= 0; i = i.add(BigInteger.ONE)) {
+			result.add(OclNumbers.integer(i));
+		}
+		return result;
+	}
+
+	/**
+	 * A hole of a QVT-O format string: %(key), Java's argument index (n$ or <), flags, width,
+	 * .precision and the conversion — or %%.
+	 */
+	private static final Pattern FORMAT_HOLE = Pattern.compile(
+			"%(?:\\(([^)]*)\\))?(\\d+\\$|<)?([-#+ 0,(]*)(\\d+)?(?:\\.(\\d+))?([a-zA-Z%])");
+
+	/**
+	 * QVT v1.3 §8.3.16.1 {@code String::format(value)}: "The value, necessarily a tuple if more
+	 * than a hole, … Formatting an object (with %s) implies the invocation of Object::repr() … A
+	 * dictionary can be passed … holes have the syntax %(key)s". A single hole takes the value
+	 * as it is — a collection too; several holes take the parts of a tuple, or the elements of a
+	 * collection, in order. Numbers are written in the evaluation's locale, {@link Locale#ROOT}
+	 * without one, not the JVM's. Before #344 the value went to {@link Formatter} as varargs: a
+	 * tuple and a Dict were invalid, a collection was spread, and %f wrote "1,500000" under a
+	 * German JVM.
+	 *
+	 * <p>The width field of a hole is an allocation request: {@code '%999999999s'.format('x')}
+	 * asks for a gigabyte of padding. {@link Formatter} writes the padding character by
+	 * character into its {@link Appendable}, so a sink that refuses to grow past the limit stops
+	 * the call before the padding exists (#182).
+	 *
+	 * @return the formatted string, or {@code invalid} if a hole has no value, the format is
+	 *         malformed or the result would exceed the limit
+	 */
+	private static Object formatQvto(String format, Object value, int maxSize, Locale locale) {
+		Matcher hole = FORMAT_HOLE.matcher(format);
+		List<Object> positional = null;
+		int next = 0;
+		Object previous = null;
 		BoundedOutput out = new BoundedOutput(maxSize);
-		try (Formatter formatter = new Formatter(out)) {
-			formatter.format(format, args);
+		try (Formatter formatter = new Formatter(out, locale != null ? locale : Locale.ROOT)) {
+			int copiedUpTo = 0;
+			while (hole.find()) {
+				out.append(format, copiedUpTo, hole.start());
+				copiedUpTo = hole.end();
+				char conversion = hole.group(6).charAt(0);
+				if (conversion == '%') {
+					out.append('%');
+					continue;
+				}
+				Object argument;
+				if (hole.group(1) != null) {
+					if (!(value instanceof Map<?, ?> dict) || !dict.containsKey(hole.group(1))) {
+						return OclInvalid.INSTANCE;
+					}
+					argument = dict.get(hole.group(1));
+				} else if ("<".equals(hole.group(2))) {
+					argument = previous;
+				} else {
+					if (positional == null) {
+						positional = holeCount(format) > 1 ? partsOf(value)
+								: Collections.singletonList(value);
+					}
+					int index = hole.group(2) != null
+							? Integer.parseInt(hole.group(2).substring(0, hole.group(2).length() - 1)) - 1
+							: next++;
+					if (index < 0 || index >= positional.size()) {
+						return OclInvalid.INSTANCE;
+					}
+					argument = positional.get(index);
+				}
+				previous = argument;
+				String spec = "%" + hole.group(3) + (hole.group(4) != null ? hole.group(4) : "")
+						+ (hole.group(5) != null ? "." + hole.group(5) : "") + conversion;
+				formatter.format(spec, formatArgument(conversion, argument));
+				formatter.flush();
+			}
+			out.append(format, copiedUpTo, format.length());
 			return out.toString();
 		} catch (RuntimeException malformedOrTooLarge) {
 			return OclInvalid.INSTANCE;
 		}
+	}
+
+	/** The number of values the positional holes take: their count, or the highest n$. */
+	private static int holeCount(String format) {
+		Matcher hole = FORMAT_HOLE.matcher(format);
+		int sequential = 0;
+		int highest = 0;
+		while (hole.find()) {
+			if (hole.group(6).charAt(0) == '%' || hole.group(1) != null || "<".equals(hole.group(2))) {
+				continue;
+			}
+			if (hole.group(2) != null) {
+				highest = Math.max(highest, Integer.parseInt(hole.group(2).substring(0, hole.group(2).length() - 1)));
+			} else {
+				sequential++;
+			}
+		}
+		return Math.max(sequential, highest);
+	}
+
+	/** The values of several holes: the parts of a tuple or the elements of a collection, in order. */
+	private static List<Object> partsOf(Object value) {
+		if (value instanceof Map<?, ?> tuple) {
+			return new ArrayList<>(tuple.values());
+		}
+		if (value instanceof Collection<?> collection) {
+			return new ArrayList<>(collection);
+		}
+		return Collections.singletonList(value);
+	}
+
+	/** A value as the conversion takes it: %s the repr(), numbers as Java numbers. */
+	private static Object formatArgument(char conversion, Object argument) {
+		return switch (Character.toLowerCase(conversion)) {
+			case 's' -> argument == null ? "null" : OclValues.toText(argument);
+			case 'd', 'x', 'o' -> OclNumbers.isInteger(argument) ? OclNumbers.bigInteger((Number) argument) : argument;
+			case 'f', 'e', 'g' -> argument instanceof Number number ? OclNumbers.bigDecimal(number) : argument;
+			default -> argument;
+		};
 	}
 
 	/**
@@ -1068,6 +1163,13 @@ class OclStdlib {
 
 	// --- String (OCL v2.4 Section 11.7) ---
 
+	private static final Pattern LEADING_OR_TRAILING_WHITE_SPACE =
+			Pattern.compile("^\\p{IsWhite_Space}+|\\p{IsWhite_Space}+$");
+
+	private static String stripWhiteSpace(String source) {
+		return LEADING_OR_TRAILING_WHITE_SPACE.matcher(source).replaceAll("");
+	}
+
 	private static Object dispatchString(String name, String source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
 		return switch (name) {
@@ -1094,7 +1196,8 @@ class OclStdlib {
 			}
 			case "toUpperCase", "toUpper" -> source.toUpperCase(locale);
 			case "toLowerCase", "toLower" -> source.toLowerCase(locale);
-			case "trim" -> source.trim();
+			// Any Unicode white space, not only the characters up to U+0020 (#344)
+			case "trim" -> stripWhiteSpace(source);
 			case "indexOf" -> {
 				// OCL v2.4 §11.5.3: "or zero if s is not a substring of self"
 				int idx = source.indexOf(asString(args[0]));
@@ -1196,7 +1299,8 @@ class OclStdlib {
 			case ">=" -> collate(source, asString(args[0]), locale) >= 0;
 			case "toString" -> source;
 			// QVT-O §8.3.16.2: length (deprecated synonym for size)
-			case "length" -> (long) source.length();
+			// Counted in code points, as size() is (#329, #344)
+			case "length" -> (long) source.codePointCount(0, source.length());
 			// QVT-O §8.3.16.3: substringBefore
 			case "substringBefore" -> {
 				int idx = source.indexOf(asString(args[0]));
@@ -1209,16 +1313,22 @@ class OclStdlib {
 				yield idx < 0 ? null : source.substring(idx + match.length());
 			}
 			// QVT-O §8.3.16.7: firstToUpper
+			// A code point, titlecased: ǆ → ǅ, and a character outside the BMP stays whole (#344)
 			case "firstToUpper" -> source.isEmpty() ? source
-					: Character.toUpperCase(source.charAt(0)) + source.substring(1);
+					: Character.toString(Character.toTitleCase(source.codePointAt(0)))
+					+ source.substring(Character.charCount(source.codePointAt(0)));
 			// QVT-O §8.3.16.8: lastToUpper
-			case "lastToUpper" -> source.isEmpty() ? source
-					: source.substring(0, source.length() - 1)
-					+ Character.toUpperCase(source.charAt(source.length() - 1));
-			// QVT-O §8.3.16.9: indexOf — 1-indexed, returns -1 if not found
-			// (Note: OCL indexOf returns 0 if not found; QVT-O version returns -1)
-			// QVT-O §8.3.16.13: normalizeSpace
-			case "normalizeSpace" -> source.trim().replaceAll("\\s+", " ");
+			case "lastToUpper" -> {
+				if (source.isEmpty()) {
+					yield source;
+				}
+				int last = source.offsetByCodePoints(source.length(), -1);
+				yield source.substring(0, last) + Character.toString(Character.toUpperCase(source.codePointAt(last)));
+			}
+			// QVT-O §8.3.16.9 indexOf: the OCL operation answers, 0 if not found (OCL v2.4 §11.4.3;
+			// QVT's "-1" is not taken over, the library being OCL's) (#344)
+			// QVT-O §8.3.16.13: normalizeSpace — any Unicode white space (#344)
+			case "normalizeSpace" -> stripWhiteSpace(source).replaceAll("\\p{IsWhite_Space}+", " ");
 			// QVT-O §8.3.16.14: replace (literal, all occurrences)
 			case "replace" -> source.replace(asString(args[0]), asString(args[1]));
 			// QVT-O §8.3.16.15: match (full-string regex)
@@ -1233,15 +1343,16 @@ class OclStdlib {
 					yield OclInvalid.INSTANCE;
 				}
 			}
-			// QVT-O §8.3.16.17: find — 1-indexed, returns -1 if not found
+			// QVT-O §8.3.16.17: find — the 1-based position in code points (#344), -1 if not found
+			// (the spec does not say; Eclipse answers 0)
 			case "find" -> {
 				int idx = source.indexOf(asString(args[0]));
-				yield (long) (idx < 0 ? -1 : idx + 1);
+				yield (long) (idx < 0 ? -1 : source.codePointCount(0, idx) + 1);
 			}
-			// QVT-O §8.3.16.18: rfind — 1-indexed from right, returns -1 if not found
+			// QVT-O §8.3.16.18: rfind — the position of the last occurrence, -1 if not found
 			case "rfind" -> {
 				int idx = source.lastIndexOf(asString(args[0]));
-				yield (long) (idx < 0 ? -1 : idx + 1);
+				yield (long) (idx < 0 ? -1 : source.codePointCount(0, idx) + 1);
 			}
 			// QVT-O §8.3.16.19: isQuoted
 			case "isQuoted" -> {
@@ -1296,12 +1407,7 @@ class OclStdlib {
 			// QVT-O §8.3.16.29/30: asFloat/asReal — returns null on failure
 			case "asFloat", "asReal" -> parseReal(source);
 			// QVT-O §8.3.16.1 + §8.4.4: format / % — placeholder substitution
-			case "format", "%" -> {
-				// The width field of a format string is an allocation request, see formatBounded
-				Object arg = args[0];
-				Object[] formatArgs = arg instanceof Collection<?> c ? c.toArray() : new Object[] { arg };
-				yield formatBounded(source, formatArgs, options.maxStringLength());
-			}
+			case "format", "%" -> formatQvto(source, args[0], options.maxStringLength(), locale);
 			default -> NOT_FOUND;
 		};
 	}
