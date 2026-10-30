@@ -553,7 +553,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		if (isBooleanThreeValuedOp(opName)
 				&& (source instanceof Boolean || source == OclInvalid.INSTANCE || source == null)) {
 			Object[] args = evaluateArguments(exp.getOwnedArguments());
-			return evaluateThreeValuedBoolean(opName, source, args);
+			return wrapNull(evaluateThreeValuedBoolean(opName, source, args));
 		}
 
 		// Null/Invalid handling for other operations
@@ -1259,31 +1259,45 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 */
 	private Object evaluateThreeValuedBoolean(String opName, Object source, Object[] args) {
 		Boolean src = source instanceof Boolean b ? b : null;
-		Boolean arg = args.length > 0 && args[0] instanceof Boolean b ? b : null;
+		Object argValue = args.length > 0 ? args[0] : null;
+		Boolean arg = argValue instanceof Boolean b ? b : null;
 
-		return switch (opName) {
-			case "not" -> src != null ? !src : OclInvalid.INSTANCE;
+		// The determinate cases first (short-circuits), then OCL v2.4 §11.5.4: "Otherwise invalid
+		// if either self or b is invalid. Otherwise null if either self or b is null." (#313)
+		Object determinate = switch (opName) {
+			case "not" -> src != null ? !src : null;
 			case "and" -> {
 				if (Boolean.FALSE.equals(src) || Boolean.FALSE.equals(arg)) yield false;
-				if (Boolean.TRUE.equals(src) && Boolean.TRUE.equals(arg)) yield true;
-				yield OclInvalid.INSTANCE;
+				yield src != null && arg != null ? true : null;
 			}
 			case "or" -> {
 				if (Boolean.TRUE.equals(src) || Boolean.TRUE.equals(arg)) yield true;
-				if (Boolean.FALSE.equals(src) && Boolean.FALSE.equals(arg)) yield false;
-				yield OclInvalid.INSTANCE;
+				yield src != null && arg != null ? false : null;
 			}
 			case "implies" -> {
 				if (Boolean.FALSE.equals(src) || Boolean.TRUE.equals(arg)) yield true;
-				if (Boolean.TRUE.equals(src) && Boolean.FALSE.equals(arg)) yield false;
-				yield OclInvalid.INSTANCE;
+				yield src != null && arg != null ? false : null;
 			}
-			case "xor" -> {
-				if (src != null && arg != null) yield src ^ arg;
-				yield OclInvalid.INSTANCE;
-			}
+			case "xor" -> src != null && arg != null ? src ^ arg : null;
 			default -> OclInvalid.INSTANCE;
 		};
+		if (determinate != null) {
+			return determinate;
+		}
+		boolean unary = "not".equals(opName);
+		if (source == OclInvalid.INSTANCE || (!unary && argValue == OclInvalid.INSTANCE)) {
+			return OclInvalid.INSTANCE;
+		}
+		if (!isBooleanOrNull(source) || (!unary && !isBooleanOrNull(argValue))) {
+			Object offending = isBooleanOrNull(source) ? argValue : source;
+			addError("Operand of '" + opName + "' must be Boolean, got: " + offending.getClass().getSimpleName());
+			return OclInvalid.INSTANCE;
+		}
+		return null;
+	}
+
+	private static boolean isBooleanOrNull(Object value) {
+		return value == null || value instanceof Boolean;
 	}
 
 	/**
