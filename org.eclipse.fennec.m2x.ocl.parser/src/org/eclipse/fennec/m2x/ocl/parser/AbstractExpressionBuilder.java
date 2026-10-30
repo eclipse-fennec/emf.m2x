@@ -381,6 +381,50 @@ public class AbstractExpressionBuilder {
 		return exp;
 	}
 
+	/**
+	 * Checks the qualifier of {@code source.Type::feature} (OCL v2.4 §9.3.36 [3]/[4], §9.3.35
+	 * [I]/[J], §7.5.8): it must name a classifier, and the source must conform to it. Before,
+	 * the qualifier was dropped unread, so {@code self.Nonsense::name} evaluated (#325).
+	 *
+	 * @param source the source expression, whose static type may be unknown
+	 * @param qualifier the qualifying path
+	 */
+	public void checkQualifier(OclExpression source, List<String> qualifier) {
+		EClassifier qualifierType = names.findClassifier(qualifier);
+		if (qualifierType == null) {
+			addError("Unknown type (" + String.join("::", qualifier) + ")");
+			return;
+		}
+		EClassifier sourceType = source.getType();
+		if (sourceType instanceof EClass sourceClass && qualifierType instanceof EClass qualifierClass
+				&& !qualifierClass.isSuperTypeOf(sourceClass)) {
+			addError("The source type " + sourceClass.getName() + " does not conform to "
+					+ qualifierClass.getName() + " (" + String.join("::", qualifier) + ")");
+		}
+	}
+
+	/**
+	 * Checks the qualifier of an unqualified-source call {@code Type::op(args)} (§9.3.35 [G]).
+	 * Ecore has no static operations, so the only reading Fennec has is a qualified call on
+	 * {@code self} (§7.5.8): the qualifier must be a classifier the context class conforms to.
+	 * An unknown type or an unrelated classifier is an error instead of a silent call on
+	 * {@code self} (#325).
+	 *
+	 * @param qualifier the qualifying path
+	 * @param opName the operation name, for the message
+	 */
+	public void checkStaticQualifier(List<String> qualifier, String opName) {
+		EClassifier qualifierType = names.findClassifier(qualifier);
+		String path = String.join("::", qualifier);
+		if (qualifierType == null) {
+			addError("Unknown type (" + path + ")");
+		} else if (!(qualifierType instanceof EClass qualifierClass && contextType instanceof EClass contextClass
+				&& qualifierClass.isSuperTypeOf(contextClass))) {
+			addError("'" + path + "::" + opName + "' is no static operation: Ecore has none, and "
+					+ path + " is not a supertype of the context");
+		}
+	}
+
 	/** The OclAny operations (§11.3.1), which every type has. */
 	private static final Set<String> OCL_ANY_OPERATIONS = Set.of("=", "<>", "oclIsKindOf", "oclIsTypeOf",
 			"oclAsType", "oclIsUndefined", "oclIsInvalid", "oclIsNew", "oclIsInState", "oclType", "oclAsSet",
@@ -785,9 +829,9 @@ public class AbstractExpressionBuilder {
 	/**
 	 * Creates a variable with optional type, suitable for let bindings or iterator vars.
 	 */
-	private void rejectDuplicateNames(String what, List<String> names) {
+	private void rejectDuplicateNames(String what, List<String> declared) {
 		Set<String> seen = new HashSet<>();
-		for (String name : names) {
+		for (String name : declared) {
 			if (!seen.add(name)) {
 				addError("Duplicate " + what + " '" + name + "'");
 			}
