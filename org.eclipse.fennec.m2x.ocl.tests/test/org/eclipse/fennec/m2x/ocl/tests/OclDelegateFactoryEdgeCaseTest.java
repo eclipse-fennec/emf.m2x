@@ -214,14 +214,14 @@ class OclDelegateFactoryEdgeCaseTest extends AbstractOclTest {
 	// === Validation delegate: non-boolean result ===
 
 	@Test
-	void validate_nonBooleanResult_returnsTrue() {
-		// Expression returns a non-null, non-boolean, non-OclInvalid value → true
+	void validate_nonBooleanResult_isAViolation() {
+		// OCL v2.4 §12.6.1 [1]: an invariant is Boolean; a String result is no true (#324)
 		EObject item = createItem("Widget", 50.0);
 		EValidator.ValidationDelegate delegate =
 				(EValidator.ValidationDelegate) EValidator.ValidationDelegate.Registry.INSTANCE.get(DELEGATE_URI);
 		boolean result = delegate.validate(itemClass, item, null,
 				"nameCheck", "self.name");
-		assertTrue(result);
+		assertFalse(result);
 	}
 
 	// === Validation delegate: parse error ===

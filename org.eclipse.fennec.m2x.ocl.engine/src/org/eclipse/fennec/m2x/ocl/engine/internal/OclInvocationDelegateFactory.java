@@ -31,6 +31,7 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.InternalEObject;
+import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.FeatureCallExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
@@ -114,9 +115,8 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 				Map<String, Object> variables = bindArguments(arguments);
 				OclContext context = OclContext.of(target, variables);
 
-				// 1. Evaluate precondition if present
-				if (pre != null) {
-					OclExpression preExpr = getParsedPre();
+				// 1. Evaluate the preconditions: the annotation's and those of registered documents
+				for (OclExpression preExpr : conditions(ConstraintKind.PRE)) {
 					Object preResult = engine.evaluate(preExpr, context, engine.getDelegateOptions());
 					if (!Boolean.TRUE.equals(preResult)) {
 						throw new IllegalStateException(
@@ -124,11 +124,14 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 					}
 				}
 
-				// 2. Pre-scan postcondition for @pre nodes and capture pre-state
+				// 2. Pre-scan the postconditions for @pre nodes and capture pre-state
+				List<OclExpression> postconditions = conditions(ConstraintKind.POST);
 				PreStateSnapshot snapshot = PreStateSnapshot.EMPTY;
-				if (post != null) {
-					OclExpression postExpr = getParsedPost();
-					List<FeatureCallExp> preNodes = PreStateScanCollector.findPreNodes(postExpr);
+				if (!postconditions.isEmpty()) {
+					List<FeatureCallExp> preNodes = new ArrayList<>();
+					for (OclExpression postExpr : postconditions) {
+						preNodes.addAll(PreStateScanCollector.findPreNodes(postExpr));
+					}
 					snapshot = PreStateScanCollector.capturePreState(
 							preNodes, context, engine.getDelegateOptions(),
 							engine.getOperationProviders(engine.getDelegateOptions()));
@@ -157,17 +160,17 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 					result = OclValues.toEcore(result, operation.getEType());
 				}
 
-				// 4. Evaluate postcondition if present
-				if (post != null) {
-					OclExpression postExpr = getParsedPost();
-					// Bind 'result' variable for postcondition
+				// 4. Evaluate the postconditions, with 'result' bound
+				if (!postconditions.isEmpty()) {
 					Map<String, Object> postVars = new LinkedHashMap<>(variables);
 					postVars.put("result", result);
 					OclContext postContext = OclContext.of(target, postVars);
-					Object postResult = engine.evaluatePostcondition(postExpr, postContext, snapshot);
-					if (!Boolean.TRUE.equals(postResult)) {
-						throw new IllegalStateException(
-								"Postcondition violated for operation: " + operation.getName());
+					for (OclExpression postExpr : postconditions) {
+						Object postResult = engine.evaluatePostcondition(postExpr, postContext, snapshot);
+						if (!Boolean.TRUE.equals(postResult)) {
+							throw new IllegalStateException(
+									"Postcondition violated for operation: " + operation.getName());
+						}
 					}
 				}
 
@@ -176,6 +179,22 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 				throw new InvocationTargetException(e,
 						"OCL invocation failed for " + operation.getName() + ": " + e.getMessage());
 			}
+		}
+
+		/**
+		 * The preconditions or postconditions to check: the annotation's, then those registered
+		 * Complete OCL documents state for this operation (OCL v2.4 §12.7, #323).
+		 */
+		private List<OclExpression> conditions(ConstraintKind kind) throws OclParseException {
+			List<OclExpression> result = new ArrayList<>();
+			if (kind == ConstraintKind.PRE && pre != null) {
+				result.add(getParsedPre());
+			}
+			if (kind == ConstraintKind.POST && post != null) {
+				result.add(getParsedPost());
+			}
+			result.addAll(engine.documentConditions(operation, kind));
+			return result;
 		}
 
 		private Map<String, Object> bindArguments(EList<?> arguments) {

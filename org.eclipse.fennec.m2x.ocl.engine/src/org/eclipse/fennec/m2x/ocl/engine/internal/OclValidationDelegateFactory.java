@@ -26,7 +26,6 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
-import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -139,10 +138,8 @@ public class OclValidationDelegateFactory implements EValidator.ValidationDelega
 		});
 		OclContext oclContext = OclContext.of(eObject);
 		Object result = engine.evaluate(parsed, oclContext, engine.getDelegateOptions());
-		if (result instanceof Boolean b) {
-			return b;
-		}
-		// Non-boolean result or OclInvalid → constraint violated
-		return result != null && result != OclInvalid.INSTANCE;
+		// §12.6.1 [1]: an invariant is Boolean; A.3.1.5: null or invalid violate it. Anything
+		// else is no Boolean either and violates it too — it used to count as satisfied (#324)
+		return Boolean.TRUE.equals(result);
 	}
 }
