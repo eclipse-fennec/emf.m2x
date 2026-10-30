@@ -44,14 +44,14 @@ class OclTypeOperationSpecConformanceTest extends AbstractOclTest {
 			assertEquals(true, eval("Set{1}->oclIsKindOf(Set(Integer))", self));
 			assertEquals(true, eval("Set{1}->oclIsKindOf(Collection(Integer))", self));
 			assertEquals(false, eval("Set{1}->oclIsKindOf(Bag(Integer))", self));
-			assertEquals(false, eval("Set{1}.oclIsKindOf(Sequence(Integer))", self));
+			assertEquals(false, eval("Set{1}->oclIsKindOf(Sequence(Integer))", self));
 			assertEquals(false, eval("Bag{1}->oclIsKindOf(Set(Integer))", self));
 		}
 
 		@Test
 		void oclIsKindOf_checksElementConformance() throws OclParseException {
 			assertEquals(false, eval("Set{1}->oclIsKindOf(Set(String))", self));
-			assertEquals(false, eval("Set{'a'}.oclIsKindOf(Set(Integer))", self));
+			assertEquals(false, eval("Set{'a'}->oclIsKindOf(Set(Integer))", self));
 			// Integer conforms to Real (§11.4.2)
 			assertEquals(true, eval("Set{1}->oclIsKindOf(Collection(Real))", self));
 		}
@@ -67,8 +67,15 @@ class OclTypeOperationSpecConformanceTest extends AbstractOclTest {
 
 		@Test
 		void oclType_ofCollection_isNamedAfterItsKind() throws OclParseException {
-			assertEquals("Set", eval("Set{1}.oclType().name", self));
-			assertEquals("Sequence", eval("Sequence{1}.oclType().name", self));
+			assertEquals("Set", eval("Set{1}->oclType().name", self));
+			assertEquals("Sequence", eval("Sequence{1}->oclType().name", self));
+		}
+
+		@Test
+		void dotOnCollection_appliesToEachElement() throws OclParseException {
+			// §7.6.2: a dot on a collection is an implicit collect, OclAny operations included (#320)
+			assertEquals(true, eval("Set{1}.oclIsKindOf(Integer) = Bag{true}", self));
+			assertEquals(true, eval("Sequence{1, 'a'}.oclType() = Sequence{Integer, String}", self));
 		}
 	}
 

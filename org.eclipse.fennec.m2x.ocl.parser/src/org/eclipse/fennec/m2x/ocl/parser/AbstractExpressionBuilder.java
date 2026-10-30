@@ -14,7 +14,10 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -112,6 +115,8 @@ public class AbstractExpressionBuilder {
 	private final OclNameResolver names;
 
 	private OclEnvironment environment;
+	/** Implicit iterators pushed for a body, awaiting {@link #buildImplicitIterator}. */
+	private final Deque<Variable> pushedImplicitIterators = new ArrayDeque<>();
 
 	/**
 	 * Held, not inherited: this class is a helper beside the visitors, and each of those already
@@ -359,18 +364,62 @@ public class AbstractExpressionBuilder {
 	// ==================== Implicit Operation Call ====================
 
 	/**
-	 * Builds an implicit operation call (unqualified, source is self).
+	 * Builds an implicit operation call — an unqualified {@code op(args)}. Its source is the
+	 * innermost implicit iterator that has the operation, otherwise {@code self} (OCL v2.4
+	 * §9.3.35 [D] {@code lookupImplicitSourceForOperation}, §7.4.7
+	 * {@code aCollection->collect(oclAsType(String))}, #320).
 	 */
 	public OperationCallExp buildImplicitOperationCall(String opName,
 			List<OclExpression> args, boolean isPre) {
 		OperationCallExp exp = FACTORY.createOperationCallExp();
 		exp.setIsImplicit(true);
 		exp.setIsPre(isPre);
-		VariableExp selfRef = createVariableExp(environment.lookup("self").orElseThrow());
-		exp.setOwnedSource(selfRef);
+		Variable source = implicitSourceForOperation(opName);
+		exp.setOwnedSource(createVariableExp(source));
 		exp.getOwnedArguments().addAll(args);
 		resolveOperation(exp, opName);
 		return exp;
+	}
+
+	/** The OclAny operations (§11.3.1), which every type has. */
+	private static final Set<String> OCL_ANY_OPERATIONS = Set.of("=", "<>", "oclIsKindOf", "oclIsTypeOf",
+			"oclAsType", "oclIsUndefined", "oclIsInvalid", "oclIsNew", "oclIsInState", "oclType", "oclAsSet",
+			"toString", "oclLocale");
+
+	/**
+	 * The variable an unqualified operation call applies to. A candidate of a known class
+	 * qualifies when the class has an operation of that name; an OclAny operation fits every
+	 * candidate. A candidate whose type the parser does not know — the iterator over a collection
+	 * literal, say — qualifies unless the context class itself has an operation of that name:
+	 * the call cannot be decided statically then, and the context class is the one place known
+	 * to answer it.
+	 */
+	private Variable implicitSourceForOperation(String opName) {
+		Variable self = environment.lookup("self").orElseThrow();
+		boolean selfHasIt = contextType instanceof EClass contextClass && hasOperationNamed(contextClass, opName);
+		for (Variable candidate : environment.lookupImplicitSources()) {
+			EClassifier type = candidate.getType();
+			if (OCL_ANY_OPERATIONS.contains(opName)) {
+				return candidate;
+			}
+			if (type instanceof EClass eClass) {
+				if (hasOperationNamed(eClass, opName)) {
+					return candidate;
+				}
+			} else if (!selfHasIt) {
+				return candidate;
+			}
+		}
+		return self;
+	}
+
+	private static boolean hasOperationNamed(EClass eClass, String opName) {
+		for (EOperation op : eClass.getEAllOperations()) {
+			if (opName.equals(op.getName())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ==================== Collection Literal ====================
@@ -467,7 +516,7 @@ public class AbstractExpressionBuilder {
 	public IteratorExp buildImplicitCollect(OclExpression source, String propName,
 			boolean isSafe, boolean isPre, CollectionType sourceColType) {
 		Variable iterVar = FACTORY.createVariable();
-		iterVar.setName("_implicit");
+		iterVar.setName(nextImplicitName());
 		if (sourceColType.getElementType() != null) {
 			iterVar.setType(copyType(sourceColType.getElementType()));
 		}
@@ -503,8 +552,13 @@ public class AbstractExpressionBuilder {
 	/**
 	 * Builds a dot operation call (e.g. {@code source.op(args)}).
 	 */
-	public OperationCallExp buildDotOperationCall(OclExpression source, String opName,
+	public OclExpression buildDotOperationCall(OclExpression source, String opName,
 			List<OclExpression> args, boolean isSafe, boolean isPre) {
+		// §7.6.2: "collection.propertyname(par1, par2, …)" and
+		// "collection->collect(propertyname(par1, par2, …))" are identical (#320)
+		if (source.getType() instanceof CollectionType || source instanceof CollectionLiteralExp) {
+			return buildImplicitOperationCollect(source, opName, args, isSafe, isPre);
+		}
 		OperationCallExp exp = FACTORY.createOperationCallExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
@@ -512,6 +566,44 @@ public class AbstractExpressionBuilder {
 		exp.getOwnedArguments().addAll(args);
 		resolveOperation(exp, opName);
 		return exp;
+	}
+
+	/**
+	 * Builds the implicit collect of an operation called with a dot on a collection (§7.6.2).
+	 * The arguments are evaluated once per element, in the scope of the call.
+	 */
+	private IteratorExp buildImplicitOperationCollect(OclExpression source, String opName,
+			List<OclExpression> args, boolean isSafe, boolean isPre) {
+		Variable iterVar = FACTORY.createVariable();
+		iterVar.setName(nextImplicitName());
+		EClassifier elementType = source.getType() instanceof CollectionType colType
+				? colType.getElementType() : null;
+		if (elementType != null) {
+			iterVar.setType(copyType(elementType));
+		}
+		OperationCallExp bodyExp = FACTORY.createOperationCallExp();
+		bodyExp.setOwnedSource(createVariableExp(iterVar));
+		bodyExp.setIsSafe(isSafe);
+		bodyExp.setIsPre(isPre);
+		bodyExp.getOwnedArguments().addAll(args);
+		resolveOperation(bodyExp, opName);
+
+		IteratorExp collectExp = FACTORY.createIteratorExp();
+		collectExp.setOwnedSource(source);
+		collectExp.setName("collect");
+		collectExp.getOwnedIterators().add(iterVar);
+		collectExp.setOwnedBody(bodyExp);
+		return collectExp;
+	}
+
+	/**
+	 * A name for a parser-created implicit iterator that differs from every one in scope. At
+	 * evaluation variables are found by name, so two nested {@code _implicit} iterators hid the
+	 * outer one from the inner body (#320). The outermost keeps the plain name.
+	 */
+	private String nextImplicitName() {
+		int depth = environment.implicitIteratorDepth();
+		return depth == 0 ? "_implicit" : "_implicit" + depth;
 	}
 
 	// ==================== Iterator / Iterate / Collection Ops ====================
@@ -610,10 +702,13 @@ public class AbstractExpressionBuilder {
 		markArrowCall(exp);
 
 		EClassifier elementType = inferElementType(source);
-		Variable iterVar = FACTORY.createVariable();
-		iterVar.setName("_implicit");
-		if (elementType != null) {
-			iterVar.setType(elementType);
+		Variable iterVar = pushedImplicitIterators.pollFirst();
+		if (iterVar == null) {
+			iterVar = FACTORY.createVariable();
+			iterVar.setName("_implicit");
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
 		}
 		exp.getOwnedIterators().add(iterVar);
 		exp.setOwnedBody(body);
@@ -640,11 +735,13 @@ public class AbstractExpressionBuilder {
 	public Variable pushImplicitIteratorEnv(OclExpression source) {
 		EClassifier elementType = inferElementType(source);
 		Variable iterVar = FACTORY.createVariable();
-		iterVar.setName("_implicit");
+		iterVar.setName(nextImplicitName());
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
 		this.environment = this.environment.nestedImplicit(iterVar);
+		// The iterator the body refers to is the one the expression declares (#320)
+		pushedImplicitIterators.addFirst(iterVar);
 		return iterVar;
 	}
 
@@ -739,6 +836,56 @@ public class AbstractExpressionBuilder {
 					|| "Real".equals(target);
 			default -> literalType.equals(target);
 		};
+	}
+
+	/**
+	 * Creates the variables of an iterator and checks their names: none may hide a variable in
+	 * scope, and no two may be the same (§9.3.25 [A], #326).
+	 *
+	 * @param names the declared names
+	 * @param types the declared types, {@code null} where none was declared
+	 * @return the variables, in order
+	 */
+	public List<Variable> declareIteratorVariables(List<String> names, List<EClassifier> types) {
+		List<Variable> variables = new ArrayList<>();
+		Set<String> seen = new HashSet<>();
+		for (int i = 0; i < names.size(); i++) {
+			String name = names.get(i);
+			rejectShadowing("iterator variable", name);
+			if (!seen.add(name)) {
+				addError("Variable name already used: '" + name + "' (iterator variable)");
+			}
+			variables.add(createVariable(name, types.get(i), null));
+		}
+		return variables;
+	}
+
+	/**
+	 * Creates the iterator and result variables of iterate after §9.3.26 and §8.3.7: the names
+	 * hide nothing in scope and differ from each other, and a literal initial value conforms
+	 * to the declared result type (#326).
+	 *
+	 * @return the iterator variable and the accumulator, in that order
+	 */
+	public List<Variable> declareIterateVariables(String iterName, EClassifier iterType, String accName,
+			EClassifier accType, OclExpression accInit) {
+		rejectShadowing("iterator variable", iterName);
+		rejectShadowing("accumulator", accName);
+		if (accName.equals(iterName)) {
+			addError("Variable name already used: '" + accName + "' (accumulator)");
+		}
+		checkDeclaredType("accumulator", accName, accType, accInit);
+		return List.of(createVariable(iterName, iterType, null), createVariable(accName, accType, accInit));
+	}
+
+	/**
+	 * Creates a let variable after §9.3.41: the name hides nothing in scope, and a literal
+	 * initial value conforms to the declared type (#326).
+	 */
+	public Variable declareLetVariable(String name, EClassifier type, OclExpression init) {
+		rejectShadowing("let variable", name);
+		checkDeclaredType("let variable", name, type, init);
+		return createVariable(name, type, init);
 	}
 
 	public Variable createVariable(String name, EClassifier type, OclExpression init) {
@@ -1032,10 +1179,13 @@ public class AbstractExpressionBuilder {
 		return names.findClassifier(segments);
 	}
 
+	/**
+	 * Resolves an unqualified name as a property of an implicit source: the implicit iterators
+	 * and iterator variables from the innermost scope outward, then {@code self} (OCL v2.4
+	 * §9.4.1 [10], §7.8 "the most inner scope", #320).
+	 */
 	public OclExpression resolveImplicitProperty(String name) {
-		Optional<Variable> implicitIter = environment.lookupImplicitIterator();
-		if (implicitIter.isPresent()) {
-			Variable iterVar = implicitIter.get();
+		for (Variable iterVar : environment.lookupImplicitSources()) {
 			EStructuralFeature feature = resolveFeatureOnType(iterVar.getType(), name);
 			if (feature != null) {
 				PropertyCallExp exp = FACTORY.createPropertyCallExp();

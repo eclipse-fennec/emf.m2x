@@ -112,35 +112,35 @@ class OclGapFixesTest extends AbstractOclTest {
 
 		@Test
 		void oclType_set() throws OclParseException {
-			Object result = eval("Set{1, 2}.oclType()", self);
+			Object result = eval("Set{1, 2}->oclType()", self);
 			assertInstanceOf(CollectionType.class, result);
 			assertEquals(CollectionKind.SET, ((CollectionType) result).getKind());
 		}
 
 		@Test
 		void oclType_bag() throws OclParseException {
-			Object result = eval("Bag{1, 2}.oclType()", self);
+			Object result = eval("Bag{1, 2}->oclType()", self);
 			assertInstanceOf(CollectionType.class, result);
 			assertEquals(CollectionKind.BAG, ((CollectionType) result).getKind());
 		}
 
 		@Test
 		void oclType_orderedSet() throws OclParseException {
-			Object result = eval("OrderedSet{1, 2}.oclType()", self);
+			Object result = eval("OrderedSet{1, 2}->oclType()", self);
 			assertInstanceOf(CollectionType.class, result);
 			assertEquals(CollectionKind.ORDERED_SET, ((CollectionType) result).getKind());
 		}
 
 		@Test
 		void oclType_sequence() throws OclParseException {
-			Object result = eval("Sequence{1, 2}.oclType()", self);
+			Object result = eval("Sequence{1, 2}->oclType()", self);
 			assertInstanceOf(CollectionType.class, result);
 			assertEquals(CollectionKind.SEQUENCE, ((CollectionType) result).getKind());
 		}
 
 		@Test
 		void oclType_map() throws OclParseException {
-			Object result = eval("Map{'a' with 1}.oclType()", self);
+			Object result = eval("Map{'a' with 1}->oclType()", self);
 			assertInstanceOf(MapType.class, result);
 		}
 
