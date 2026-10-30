@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 
@@ -79,7 +80,9 @@ final class FeatureValues {
 		private final transient EStructuralFeature feature;
 
 		FeatureOrderedSet(EObject owner, EStructuralFeature feature, Collection<?> elements) {
-			super(elements);
+			// EMF keeps a unique reference distinct by identity, which is OCL equality for objects;
+			// attribute values may still merge (-0.0 and 0.0), so they go through the check
+			super(elements, feature instanceof EReference);
 			this.owner = owner;
 			this.feature = feature;
 		}
