@@ -1506,9 +1506,21 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitTupleType(QvtOParser.TupleTypeContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtOParser#restrictedWord}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitRestrictedWord(QvtOParser.RestrictedWordContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtOParser#identifier}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitIdentifier(QvtOParser.IdentifierContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#documentKeyword}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDocumentKeyword(QvtOParser.DocumentKeywordContext ctx);
 }

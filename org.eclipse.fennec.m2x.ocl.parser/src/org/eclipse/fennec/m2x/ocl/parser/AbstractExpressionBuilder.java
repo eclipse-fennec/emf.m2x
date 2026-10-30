@@ -601,6 +601,15 @@ public class AbstractExpressionBuilder {
 	 * evaluation variables are found by name, so two nested {@code _implicit} iterators hid the
 	 * outer one from the inner body (#320). The outermost keeps the plain name.
 	 */
+	/**
+	 * A name for the iterator variable of an iterate that declares none (§9.3.26, #320).
+	 *
+	 * @return a name distinct from every implicit iterator in scope
+	 */
+	public String implicitIteratorName() {
+		return nextImplicitName();
+	}
+
 	private String nextImplicitName() {
 		int depth = environment.implicitIteratorDepth();
 		return depth == 0 ? "_implicit" : "_implicit" + depth;
@@ -1382,8 +1391,10 @@ public class AbstractExpressionBuilder {
 	 * @return the unescaped identifier text
 	 */
 	public static String extractEscapedIdentifier(String rawText) {
+		// §9.3.4 [B]: the characters between the quotes are StringChars, with the escapes of a
+		// string literal (_'\''); a doubled quote stays accepted for compatibility (#325)
 		String inner = rawText.substring(2, rawText.length() - 1);
-		return inner.replace("''", "'");
+		return unescapeString(inner.replace("''", "\\'"));
 	}
 
 	// ==================== Internal Helpers ====================
