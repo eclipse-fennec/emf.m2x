@@ -39,6 +39,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.Module;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.Status;
+import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
@@ -202,7 +203,21 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// Residence of removed object is unaffected.
 		ops.add(new OclOperation("unlink", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof List<?> list && args.length > 0) {
+					if (args.length == 0) {
+						return self;
+					}
+					// OCL hands out a copy of a navigated feature (#319) that remembers its owner
+					// and feature; the statement changes the feature itself
+					// and keeps the copy in step, which is what the statement answers
+					if (self instanceof OclFeatureValue featureValue
+							&& featureValue.owner().eGet(featureValue.feature()) instanceof List<?> live) {
+						live.remove(args[0]);
+						if (self instanceof Collection<?> copy) {
+							copy.remove(args[0]);
+						}
+						return self;
+					}
+					if (self instanceof List<?> list) {
 						@SuppressWarnings("unchecked")
 						List<Object> mutableList = (List<Object>) list;
 						mutableList.remove(args[0]);

@@ -41,6 +41,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
@@ -895,7 +896,9 @@ class OclStdlib {
 	 * @return {@code true} if it belongs to a model object
 	 */
 	private static boolean belongsToAModel(Object source) {
-		return source instanceof EList<?>;
+		// A navigation yields an OclFeatureValue (#319); an EList still reaches here from a
+		// provider or a variable bound by the host
+		return source instanceof OclFeatureValue || source instanceof EList<?>;
 	}
 
 	/**
