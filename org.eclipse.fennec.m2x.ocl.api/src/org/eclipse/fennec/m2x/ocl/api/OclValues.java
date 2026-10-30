@@ -19,6 +19,8 @@ import java.math.BigInteger;
 import java.util.Objects;
 
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EStructuralFeature;
 
 /**
  * Converts OCL values where they leave OCL — into a model, into text.
@@ -108,5 +110,27 @@ public final class OclValues {
 			return stripped.scale() <= 0 ? plain + ".0" : plain;
 		}
 		return value.toString();
+	}
+
+	/**
+	 * QVT v1.3 §8.3.3 {@code Object::repr()}: the text of a value, and for a model object its
+	 * class with its name — {@code Person 'Ann'}, or {@code Person} without a name — instead of
+	 * Java's {@code DynamicEObjectImpl@1b2c (eClass: …)} (#345). What {@code log} and the
+	 * {@code %s} of {@code String::format} print.
+	 *
+	 * @param value the value, may be {@code null}
+	 * @return its representation, {@code "null"} for null
+	 */
+	public static String repr(Object value) {
+		if (value == null) {
+			return "null";
+		}
+		if (value instanceof EObject eObject) {
+			EStructuralFeature nameFeature = eObject.eClass().getEStructuralFeature("name");
+			Object name = nameFeature != null && !nameFeature.isMany() ? eObject.eGet(nameFeature) : null;
+			String className = eObject.eClass().getName();
+			return name != null ? className + " '" + name + "'" : className;
+		}
+		return toText(value);
 	}
 }

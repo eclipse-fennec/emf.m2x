@@ -1981,9 +1981,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		}
 
 		String opName = qvtoIdentifierText(ctx.qvtoIdentifier());
-		resolveOperation(exp, opName);
+		resolveOperation(exp, DEPRECATED_SYNONYMS.getOrDefault(opName, opName));
 		return exp;
 	}
+
+	/**
+	 * §8.3.2: the deprecated synonyms an implementation "may support" — cheap to support, and
+	 * scripts written for older QVT tools use them (#345).
+	 */
+	private static final Map<String, String> DEPRECATED_SYNONYMS = Map.of(
+			"isKindOf", "oclIsKindOf", "isTypeOf", "oclIsTypeOf", "asType", "oclAsType");
 
 	private ResolveExp createDotResolveCall(OclExpression source,
 			QvtOParser.ResolveCallSuffixContext ctx) {

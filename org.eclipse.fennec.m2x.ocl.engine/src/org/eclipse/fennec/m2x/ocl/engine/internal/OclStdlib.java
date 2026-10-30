@@ -319,7 +319,7 @@ class OclStdlib {
 			case "toString" -> source == null || source == OclInvalid.INSTANCE
 					? OclInvalid.INSTANCE : OclValues.toText(source);
 			// QVT-O §8.3.3.1: Object::repr() — textual representation of any object
-			case "repr" -> source == null ? "null" : OclValues.toText(source);
+			case "repr" -> OclValues.repr(source);
 			// §8.4.4: stereotypedBy — UML-specific, not supported (P10-07)
 			case "stereotypedBy" -> OclInvalid.INSTANCE;
 			default -> NOT_FOUND;
@@ -1003,7 +1003,7 @@ class OclStdlib {
 	/** A value as the conversion takes it: %s the repr(), numbers as Java numbers. */
 	private static Object formatArgument(char conversion, Object argument) {
 		return switch (Character.toLowerCase(conversion)) {
-			case 's' -> argument == null ? "null" : OclValues.toText(argument);
+			case 's' -> OclValues.repr(argument);
 			case 'd', 'x', 'o' -> OclNumbers.isInteger(argument) ? OclNumbers.bigInteger((Number) argument) : argument;
 			case 'f', 'e', 'g' -> argument instanceof Number number ? OclNumbers.bigDecimal(number) : argument;
 			default -> argument;

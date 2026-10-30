@@ -26,6 +26,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.Module;
@@ -170,7 +171,10 @@ class QvtoOperationResolver {
 		List<ImperativeOperation> compatible = new ArrayList<>();
 		for (ImperativeOperation op : candidates) {
 			EClassifier ct = contextType(op);
-			if (ct == null || (ct instanceof EClass ctClass && ctClass.isSuperTypeOf(sourceClass))) {
+			// Element (§8.3.4, EObject) is the context of every model object, whose class does not
+			// list it among its supertypes (#345)
+			if (ct == null || ct == EcorePackage.Literals.EOBJECT
+					|| (ct instanceof EClass ctClass && ctClass.isSuperTypeOf(sourceClass))) {
 				compatible.add(op);
 			}
 		}

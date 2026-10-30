@@ -753,6 +753,17 @@ Alias tag targets (`tag "alias" RDBMS::Table::key_ = "key";`, §8.3.19) resolve 
 
 Type names resolve in this order: the module's own `typedef`s → the package registry → the QVT-O standard library (`QvtoStandardLibraryTypes`, QVT v1.3 §8.3.1). A name that resolves in none of them becomes an error diagnostic, collected and reported together with every other unresolved name when the unit has been visited. Typedefs are registered in a pre-pass, like intermediate class shells, so a reference ahead of the declaration resolves too.
 
+The standard library names (#345) are:
+- `Exception`, `StringException`, `AssertionFailed` and `Void`.
+- `Object` and its deprecated synonym `Any`, both `OclAny`.
+- `Element`, which is `EObject`. A helper with the context `Element::` applies to every model object.
+- `Status`, the Status class that `transform()` answers.
+- `Model` and `Transformation`, as data types, because their values are an extent and a transformation instance, not model objects.
+
+A metamodel class of the same name (a UML `Element`, say) comes first, by the order above. The deprecated operation synonyms `isKindOf`, `isTypeOf` and `asType` (§8.3.2) are renamed to their `ocl…` operations. `_localId` and `_globalId` (§8.3.4) are not supported, as in Eclipse.
+
+`repr()` (§8.3.3, `OclValues.repr`) writes a model object as its class and name (`Person 'Ann'`). `log` and the `%s` of `format` use it. `log(message, element, level)` evaluates its `when` condition first, prints the element through `repr()`, and carries the level as the diagnostic's code instead of in the text (§8.2.2.19).
+
 ---
 
 ## 6. Engine Architecture (`qvto.engine`)
