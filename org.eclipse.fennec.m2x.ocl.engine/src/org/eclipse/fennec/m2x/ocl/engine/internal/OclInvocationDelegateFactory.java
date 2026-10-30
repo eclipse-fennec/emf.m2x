@@ -27,6 +27,7 @@ import java.util.function.Supplier;
 import org.eclipse.emf.common.util.BasicEList;
 import org.eclipse.emf.common.util.ECollections;
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.InternalEObject;
@@ -189,15 +190,31 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 		}
 
 		private OclExpression getParsedBody() throws OclParseException {
-			return parseLazily(body, () -> parsedBody, expr -> parsedBody = expr);
+			return parseLazily(body, false, () -> parsedBody, expr -> parsedBody = expr);
 		}
 
 		private OclExpression getParsedPre() throws OclParseException {
-			return parseLazily(pre, () -> parsedPre, expr -> parsedPre = expr);
+			return parseLazily(pre, false, () -> parsedPre, expr -> parsedPre = expr);
 		}
 
 		private OclExpression getParsedPost() throws OclParseException {
-			return parseLazily(post, () -> parsedPost, expr -> parsedPost = expr);
+			return parseLazily(post, true, () -> parsedPost, expr -> parsedPost = expr);
+		}
+
+		/**
+		 * The variables evaluation binds for this operation: its parameters, and {@code result}
+		 * in the postcondition (OCL v2.4 §12.2.1, #324). Declared to the parser, a parameter
+		 * name is that parameter — undeclared it could read as a property of an iterator.
+		 */
+		private Map<String, EClassifier> declaredVariables(boolean withResult) {
+			Map<String, EClassifier> variables = new LinkedHashMap<>();
+			for (EParameter parameter : operation.getEParameters()) {
+				variables.put(parameter.getName(), parameter.getEType());
+			}
+			if (withResult) {
+				variables.put("result", operation.getEType());
+			}
+			return variables;
 		}
 
 		/**
@@ -205,14 +222,14 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 		 * Parses the OCL source string on first access and caches the result.
 		 * The {@code fieldReader} re-reads the volatile field inside the synchronized block.
 		 */
-		private OclExpression parseLazily(String source, Supplier<OclExpression> fieldReader,
+		private OclExpression parseLazily(String source, boolean withResult, Supplier<OclExpression> fieldReader,
 				Consumer<OclExpression> setter) throws OclParseException {
 			OclExpression result = fieldReader.get();
 			if (result == null) {
 				synchronized (this) {
 					result = fieldReader.get();
 					if (result == null) {
-						result = engine.parse(source, operation.getEContainingClass());
+						result = engine.parse(source, operation.getEContainingClass(), declaredVariables(withResult));
 						setter.accept(result);
 					}
 				}

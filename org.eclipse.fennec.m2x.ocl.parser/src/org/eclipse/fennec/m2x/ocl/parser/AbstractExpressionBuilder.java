@@ -234,11 +234,24 @@ public class AbstractExpressionBuilder {
 	 * Registers an alias name for the {@code self} variable (G-10: §12.12.5 form [B]).
 	 */
 	public void registerSelfAlias(String alias) {
-		Variable selfVar = environment.lookup("self").orElseThrow();
-		Variable aliasVar = FACTORY.createVariable();
-		aliasVar.setName(alias);
-		aliasVar.setType(selfVar.getType());
-		this.environment = this.environment.nested(aliasVar);
+		// The alias denotes self itself, so the expression refers to the variable evaluation
+		// binds. A variable of its own name was never bound: every form-[B] invariant evaluated
+		// to "Unresolved variable" (#324)
+		this.environment = this.environment.alias(alias, environment.lookup("self").orElseThrow());
+	}
+
+	/**
+	 * Declares a variable the expression may refer to and evaluation will bind: a parameter of
+	 * the operation whose body, pre- or postcondition this is, or {@code result} in a
+	 * postcondition (OCL v2.4 §12.2.1 {@code parameterVariable}, {@code resultVariable}, #324).
+	 * Declared, the name is a variable — not an unresolved name the parser might read as a
+	 * property of an implicit source.
+	 *
+	 * @param name the variable name
+	 * @param type its type, {@code null} if unknown
+	 */
+	public void declareVariable(String name, EClassifier type) {
+		this.environment = this.environment.nested(createVariable(name, type, null));
 	}
 
 	// ==================== Literal Builders ====================

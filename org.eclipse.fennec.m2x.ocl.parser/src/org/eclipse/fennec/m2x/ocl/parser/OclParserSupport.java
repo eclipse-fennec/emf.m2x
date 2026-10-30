@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import org.antlr.v4.runtime.CharStreams;
@@ -147,6 +148,12 @@ public class OclParserSupport implements OclExpressionParser {
 	}
 
 	public OclExpression parse(String expression, EClassifier contextType) throws OclParseException {
+		return parse(expression, contextType, Map.of());
+	}
+
+	@Override
+	public OclExpression parse(String expression, EClassifier contextType, Map<String, EClassifier> variables)
+			throws OclParseException {
 		requireWithinLimit(expression);
 		try {
 			OclParser parser = createParser(expression);
@@ -157,6 +164,7 @@ public class OclParserSupport implements OclExpressionParser {
 			checkErrors(errorListener, expression);
 
 			OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry, strictPropertyResolution);
+			variables.forEach(builder.support::declareVariable);
 			OclExpression result = builder.visitExpressionEntry(tree);
 			checkResolutionErrors(builder.support.getDiagnostics());
 			return result;
