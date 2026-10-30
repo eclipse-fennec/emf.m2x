@@ -16,10 +16,12 @@ package org.eclipse.fennec.m2x.qvto.tests.controlflow;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
+import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.tests.AbstractQvtoEngineTest;
 import org.junit.jupiter.api.Test;
 
@@ -2096,5 +2098,50 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 				.anyMatch(d -> d.getMessage().contains(expected));
 		assertTrue(found, "Expected log containing '" + expected
 				+ "' but diagnostics were: " + result.diagnostics());
+	}
+
+	@Test
+	void breakOutsideALoop_isAParseError() {
+		// QVT v1.3 §8.2.2.17: break acts on the innermost loop; a helper has none of its own,
+		// so the break used to end the caller's forEach silently (#338)
+		QvtoParseException failure = assertThrows(QvtoParseException.class, () -> execute("""
+				transformation test() {
+				    helper stop() : Integer { break; return 1; }
+				    main() {
+				        Sequence{1, 2, 3}->forEach(i) { log('i' + i.repr()); stop(); };
+				    }
+				}
+				"""));
+		assertTrue(failure.getMessage().contains("break outside of a loop"), failure::getMessage);
+	}
+
+	@Test
+	void continueOutsideALoop_isAParseError() {
+		assertThrows(QvtoParseException.class, () -> execute("""
+				transformation test() {
+				    main() {
+				        continue;
+				    }
+				}
+				"""));
+	}
+
+	@Test
+	void breakInsideALoop_ofAHelper_endsOnlyThatLoop() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    helper firstOver(limit : Integer) : Integer {
+				        var found : Integer := 0;
+				        Sequence{1, 5, 9}->forEach(i) { if (i > limit) then { found := i; break; } endif; };
+				        return found;
+				    }
+				    main() {
+				        Sequence{1, 2}->forEach(j) { log('j' + j.repr() + ':' + firstOver(4).repr()); };
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "j1:5");
+		assertLogged(result, "j2:5");
 	}
 }
