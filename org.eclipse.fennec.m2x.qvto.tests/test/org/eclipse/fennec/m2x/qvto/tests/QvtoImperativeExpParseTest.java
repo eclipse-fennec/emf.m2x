@@ -19,7 +19,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.imperativeocl.AltExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.BreakExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ComputeExp;
@@ -144,14 +146,18 @@ class QvtoImperativeExpParseTest extends AbstractQvtoParserTest {
 
 	@Test
 	void breakExpression() throws QvtoParseException {
-		OclExpression expr = parseBodyExpr("break;");
-		assertInstanceOf(BreakExp.class, expr);
+		// Inside a loop: §8.2.2.17/§8.2.2.18 give break and continue no meaning outside one (#338)
+		OclExpression expr = parseBodyExpr("while (true) { break; };");
+		WhileExp whileExp = assertInstanceOf(WhileExp.class, expr);
+		assertTrue(contains(whileExp, BreakExp.class));
 	}
 
 	@Test
 	void continueExpression() throws QvtoParseException {
-		OclExpression expr = parseBodyExpr("continue;");
-		assertInstanceOf(ContinueExp.class, expr);
+		// Inside a loop: §8.2.2.17/§8.2.2.18 give break and continue no meaning outside one (#338)
+		OclExpression expr = parseBodyExpr("while (true) { continue; };");
+		WhileExp whileExp = assertInstanceOf(WhileExp.class, expr);
+		assertTrue(contains(whileExp, ContinueExp.class));
 	}
 
 	@Test
@@ -172,5 +178,14 @@ class QvtoImperativeExpParseTest extends AbstractQvtoParserTest {
 		SwitchExp switchExp = assertInstanceOf(SwitchExp.class, expr);
 		assertEquals(2, switchExp.getAlternativePart().size());
 		assertNotNull(switchExp.getElsePart());
+	}
+
+	private static boolean contains(EObject root, Class<?> type) {
+		for (var it = root.eAllContents(); it.hasNext();) {
+			if (type.isInstance(it.next())) {
+				return true;
+			}
+		}
+		return false;
 	}
 }

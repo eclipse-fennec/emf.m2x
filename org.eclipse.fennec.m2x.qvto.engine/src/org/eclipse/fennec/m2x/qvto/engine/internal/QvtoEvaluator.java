@@ -751,10 +751,22 @@ public class QvtoEvaluator {
 			return lastResult;
 		} catch (ReturnException e) {
 			return e.value;
+		} catch (BreakException | ContinueException e) {
+			return loopControlLeftOperation(operation);
 		} finally {
 			env.popScope();
 			--stackDepth;
 		}
+	}
+
+	/**
+	 * A break or continue that reached the boundary of its operation had no loop of its own to
+	 * act on (§8.2.2.17/§8.2.2.18). The parser rejects it; an AST built elsewhere reaches this,
+	 * which stops it here instead of letting it end the caller's loop (#338).
+	 */
+	private Object loopControlLeftOperation(ImperativeOperation operation) {
+		addError("break or continue outside of a loop in '" + operation.getName() + "'");
+		return null;
 	}
 
 	/**
@@ -925,6 +937,8 @@ public class QvtoEvaluator {
 				recordTrace(mappingOp, self, args, result);
 			}
 			return result;
+		} catch (BreakException | ContinueException e) {
+			return loopControlLeftOperation(mappingOp);
 		} finally {
 			env.popScope();
 			--stackDepth;

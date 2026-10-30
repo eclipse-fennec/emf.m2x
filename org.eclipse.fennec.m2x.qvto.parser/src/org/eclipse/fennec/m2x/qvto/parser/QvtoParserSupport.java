@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvto.parser;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -26,7 +27,13 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.model.imperativeocl.BreakExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.ContinueExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeLoopExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
+import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 
@@ -102,7 +109,9 @@ public class QvtoParserSupport {
 
 		QvtoUnitBuilder builder = new QvtoUnitBuilder(registry);
 		OperationalTransformation result = builder.visitCompilationUnitEntry(tree);
-		checkResolutionErrors(builder.getDiagnostics());
+		List<Resource.Diagnostic> diagnostics = new ArrayList<>(builder.getDiagnostics());
+		diagnostics.addAll(misplacedLoopControl(result, builder.getNodePositions()));
+		checkResolutionErrors(diagnostics);
 
 		// Kept with the transformation rather than returned: the parse signature is API, and the
 		// positions are only interesting to whoever evaluates this transformation later (#116).
@@ -175,6 +184,36 @@ public class QvtoParserSupport {
 	 * @param diagnostics the diagnostics collected while building
 	 * @throws QvtoParseException if any were collected
 	 */
+	/**
+	 * QVT v1.3 §8.2.2.17/§8.2.2.18: break and continue act on the innermost loop — a while,
+	 * forEach or imperative iterate expression. One without a loop around it within its own
+	 * operation has no loop to act on; at run time it used to leave the operation and stop the
+	 * caller's loop, or escape execute() (#338).
+	 */
+	private static List<Resource.Diagnostic> misplacedLoopControl(OperationalTransformation transformation,
+			Map<EObject, SourcePosition> positions) {
+		List<Resource.Diagnostic> misplaced = new ArrayList<>();
+		transformation.eAllContents().forEachRemaining(node -> {
+			if (!(node instanceof BreakExp) && !(node instanceof ContinueExp)) {
+				return;
+			}
+			for (EObject container = node.eContainer(); container != null; container = container.eContainer()) {
+				if (container instanceof WhileExp || container instanceof ImperativeLoopExp) {
+					return;
+				}
+				if (container instanceof ImperativeOperation) {
+					break;
+				}
+			}
+			SourcePosition position = positions.get(node);
+			misplaced.add(new ParseDiagnostic((node instanceof BreakExp ? "break" : "continue")
+					+ " outside of a loop (while, forEach or an imperative iterate expression)",
+					position != null ? position.line() : ParseDiagnostic.UNKNOWN_POSITION,
+					position != null ? position.column() : ParseDiagnostic.UNKNOWN_POSITION));
+		});
+		return misplaced;
+	}
+
 	private void checkResolutionErrors(List<Resource.Diagnostic> diagnostics)
 			throws QvtoParseException {
 		if (!diagnostics.isEmpty()) {
