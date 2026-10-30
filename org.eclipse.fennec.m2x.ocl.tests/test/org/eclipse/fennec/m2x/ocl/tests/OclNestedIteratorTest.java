@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.util.Collection;
@@ -161,9 +162,10 @@ class OclNestedIteratorTest extends AbstractOclTest {
 	}
 
 	@Test
-	void nestedIterators_sameVarName() throws OclParseException {
-		// Inner 'i' should shadow outer 'i'
-		assertEquals(true, eval(
+	void nestedIterators_sameVarName_isAParseError() {
+		// OCL v2.4 §9.3.25 [A] adds the iterator to the environment like let does (§9.3.41 [1]):
+		// an inner iterator may not hide an outer one (#326; stricter than Eclipse)
+		assertThrows(OclParseException.class, () -> eval(
 				"Sequence{1, 2}->forAll(i | Sequence{1, 2}->exists(i | i > 0))",
 				alice));
 	}

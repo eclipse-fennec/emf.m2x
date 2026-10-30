@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,6 +35,7 @@ import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CallExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
@@ -55,11 +57,13 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
+import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.RealLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.TupleLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart;
+import org.eclipse.fennec.m2x.model.ocl.TupleType;
 import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
@@ -375,6 +379,11 @@ public class AbstractExpressionBuilder {
 			List<CollectionLiteralPart> parts) {
 		CollectionLiteralExp exp = FACTORY.createCollectionLiteralExp();
 		exp.setKind(resolveCollectionKind(kindText));
+		// §8.3.7 CollectionLiteralExp [1] / §9.3.10 [1]: "In a literal the collection type may
+		// not be Collection" — Collection(T) stays valid as a type (#326)
+		if (exp.getKind() == CollectionKind.COLLECTION) {
+			addError("'Collection' is abstract and has no literal; use Set, OrderedSet, Bag or Sequence");
+		}
 		if (parts != null) {
 			exp.getOwnedParts().addAll(parts);
 		}
@@ -397,6 +406,8 @@ public class AbstractExpressionBuilder {
 	// ==================== Tuple Literal ====================
 
 	public TupleLiteralExp buildTupleLiteral(List<TupleLiteralPart> parts) {
+		// §8.3.7 TupleLiteralExp [2]: part->isUnique(attribute.name) (#326)
+		rejectDuplicateNames("tuple part", parts.stream().map(TupleLiteralPart::getName).toList());
 		TupleLiteralExp exp = FACTORY.createTupleLiteralExp();
 		exp.getOwnedParts().addAll(parts);
 		return exp;
@@ -408,6 +419,8 @@ public class AbstractExpressionBuilder {
 		part.setName(name);
 		if (type != null) {
 			part.setType(type);
+			// §8.3.7 TupleLiteralPart [1]: the initial value conforms to the declared type
+			checkDeclaredType("tuple part", name, type, init);
 		}
 		part.setOwnedInit(init);
 		return part;
@@ -666,6 +679,68 @@ public class AbstractExpressionBuilder {
 	/**
 	 * Creates a variable with optional type, suitable for let bindings or iterator vars.
 	 */
+	private void rejectDuplicateNames(String what, List<String> names) {
+		Set<String> seen = new HashSet<>();
+		for (String name : names) {
+			if (!seen.add(name)) {
+				addError("Duplicate " + what + " '" + name + "'");
+			}
+		}
+	}
+
+	/**
+	 * Rejects a variable that hides one already in scope (OCL v2.4 §9.3.41 [1]
+	 * {@code env.lookup(varName).oclIsUndefined()}, §9.3.25 [A] for iterator variables). The
+	 * spec's {@code lookup} searches the enclosing scopes as well, so shadowing is an error —
+	 * deliberately stricter than Eclipse OCL, which only looks at the innermost scope (#326).
+	 * The parser's own {@code _implicit} iterators are exempt; they never appear in source.
+	 */
+	public void rejectShadowing(String what, String name) {
+		if (name != null && !name.startsWith("_implicit") && environment.lookup(name).isPresent()) {
+			addError("Variable name already used: '" + name + "' (" + what + " hides a variable in scope)");
+		}
+	}
+
+	/**
+	 * Checks that a literal initial value conforms to a declared type (OCL v2.4 §8.3.7
+	 * Variable [1], TupleLiteralPart [1], IterateExp [2]). Only literals carry a type the
+	 * parser knows for certain; anything else waits for the type checker (GAP-3, #326).
+	 */
+	public void checkDeclaredType(String what, String name, EClassifier declared, OclExpression init) {
+		String literalType = literalTypeName(init);
+		if (literalType == null || declared == null || conformsToDeclared(literalType, declared)) {
+			return;
+		}
+		addError("The " + what + " '" + name + "' is declared as " + declared.getName()
+				+ " but initialized with a " + literalType);
+	}
+
+	/** The predefined type of a literal, or {@code null} when the expression is no such literal. */
+	private static String literalTypeName(OclExpression init) {
+		if (init instanceof IntegerLiteralExp) return "Integer";
+		if (init instanceof RealLiteralExp) return "Real";
+		if (init instanceof StringLiteralExp) return "String";
+		if (init instanceof BooleanLiteralExp) return "Boolean";
+		if (init instanceof UnlimitedNaturalLiteralExp) return "UnlimitedNatural";
+		return null;
+	}
+
+	private static boolean conformsToDeclared(String literalType, EClassifier declared) {
+		if (declared instanceof AnyType || !(declared instanceof PrimitiveType)) {
+			// OclAny takes everything; a collection, tuple or model type never takes a primitive
+			// literal, except that an Ecore data type may wrap one — left to the type checker
+			return declared instanceof AnyType || !(declared instanceof CollectionType
+					|| declared instanceof TupleType || declared instanceof EClass);
+		}
+		String target = declared.getName();
+		return switch (literalType) {
+			case "Integer" -> "Integer".equals(target) || "Real".equals(target);
+			case "UnlimitedNatural" -> "UnlimitedNatural".equals(target) || "Integer".equals(target)
+					|| "Real".equals(target);
+			default -> literalType.equals(target);
+		};
+	}
+
 	public Variable createVariable(String name, EClassifier type, OclExpression init) {
 		Variable var = FACTORY.createVariable();
 		var.setName(name);
@@ -748,6 +823,8 @@ public class AbstractExpressionBuilder {
 	}
 
 	public OclType buildTupleType(List<String> partNames, List<EClassifier> partTypes) {
+		// §8.2.2 TupleType [2]: part names are unique (#326)
+		rejectDuplicateNames("tuple part", partNames);
 		var type = FACTORY.createTupleType();
 		for (int i = 0; i < partNames.size(); i++) {
 			var part = FACTORY.createTuplePart();
