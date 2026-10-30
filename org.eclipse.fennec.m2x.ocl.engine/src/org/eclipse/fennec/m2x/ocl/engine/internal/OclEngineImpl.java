@@ -709,7 +709,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 				config.maxStringLength(),
 				config.customOperationsEnabled(),
 				List.of(),
-				config.useEMFTypes());
+				config.useEMFTypes(),
+				config.specStrict());
 	}
 
 	/**

@@ -68,6 +68,7 @@ public final class OclConfiguration {
 	private final int maxRegexLength;
 	private final int maxStringLength;
 	private final boolean useEMFTypes;
+	private final boolean specStrict;
 
 	private OclConfiguration(Builder builder) {
 		this.parser = builder.parser;
@@ -83,6 +84,7 @@ public final class OclConfiguration {
 		this.maxRegexLength = builder.maxRegexLength;
 		this.maxStringLength = builder.maxStringLength;
 		this.useEMFTypes = builder.useEMFTypes;
+		this.specStrict = builder.specStrict;
 	}
 
 	/**
@@ -214,6 +216,17 @@ public final class OclConfiguration {
 	}
 
 	/**
+	 * Returns whether evaluation and parsing follow the OCL v2.4 text where it and the Eclipse
+	 * OCL default disagree. Defaults to {@code false}.
+	 *
+	 * @return {@code true} if the specification text wins
+	 * @see OclEvaluationOptions#withSpecStrict(boolean)
+	 */
+	public boolean specStrict() {
+		return specStrict;
+	}
+
+	/**
 	 * Creates a new builder with the given parser.
 	 *
 	 * @param parser the OCL expression parser, must not be {@code null}
@@ -241,6 +254,7 @@ public final class OclConfiguration {
 		private int maxRegexLength = DEFAULT_MAX_REGEX_LENGTH;
 		private int maxStringLength = DEFAULT_MAX_STRING_LENGTH;
 		private boolean useEMFTypes;
+		private boolean specStrict;
 
 		private Builder(OclExpressionParser parser) {
 			this.parser = Objects.requireNonNull(parser, "parser must not be null");
@@ -415,6 +429,19 @@ public final class OclConfiguration {
 		 */
 		public Builder useEMFTypes(boolean useEMFTypes) {
 			this.useEMFTypes = useEMFTypes;
+			return this;
+		}
+
+		/**
+		 * Sets whether the OCL v2.4 text wins where it and the Eclipse OCL default disagree.
+		 * Defaults to {@code false}.
+		 *
+		 * @param specStrict whether the specification text wins
+		 * @return this builder
+		 * @see OclEvaluationOptions#withSpecStrict(boolean)
+		 */
+		public Builder specStrict(boolean specStrict) {
+			this.specStrict = specStrict;
 			return this;
 		}
 

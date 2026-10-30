@@ -1179,7 +1179,7 @@ class OclStdlib {
 			case "count" -> source.stream().filter(e -> Boolean.TRUE.equals(oclEquals(e, args[0]))).count();
 			case "flatten" -> {
 				List<Object> flat = new ArrayList<>();
-				flatten(source, flat);
+				flattenInto(source, flat);
 				yield preserveCollectionKind(source, flat);
 			}
 			case "including" -> {
@@ -1644,10 +1644,10 @@ class OclStdlib {
 		return OclCollectionUtil.preserveCollectionKind(source, elements);
 	}
 
-	private static void flatten(Collection<?> source, List<Object> result) {
+	static void flattenInto(Collection<?> source, List<Object> result) {
 		for (Object element : source) {
 			if (element instanceof Collection<?> nested) {
-				flatten(nested, result);
+				flattenInto(nested, result);
 			} else {
 				result.add(element);
 			}

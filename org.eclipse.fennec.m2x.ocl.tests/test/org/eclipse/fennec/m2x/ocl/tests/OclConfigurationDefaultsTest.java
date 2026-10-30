@@ -183,6 +183,7 @@ class OclConfigurationDefaultsTest extends AbstractOclTest {
 			@Override public int maxClosureIterations() { return maxClosureIterations; }
 			@Override public int maxRegexLength() { return maxRegexLength; }
 			@Override public int maxStringLength() { return 2_000; }
+			@Override public boolean specStrict() { return false; }
 			@Override public long timeout() { return timeout; }
 			@Override public String nullHandling() { return nullHandling; }
 			@Override public String errorRecovery() { return errorRecovery; }

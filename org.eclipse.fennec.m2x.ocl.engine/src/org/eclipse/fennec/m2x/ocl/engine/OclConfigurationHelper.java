@@ -86,6 +86,7 @@ public final class OclConfigurationHelper {
 				.maxCollectionSize(config.maxCollectionSize())
 				.maxClosureIterations(config.maxClosureIterations())
 				.maxRegexLength(config.maxRegexLength())
-				.maxStringLength(config.maxStringLength());
+				.maxStringLength(config.maxStringLength())
+				.specStrict(config.specStrict());
 	}
 }
