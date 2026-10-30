@@ -23,6 +23,17 @@ grammar QvtO;
 
 import Ocl;
 
+@parser::members {
+    /**
+     * A switch alternative needs no ';' before the closing '}' or after a block body —
+     * case (c) { … } else { … } (#346).
+     */
+    private boolean alternativeSemicolonOptional() {
+        Token previous = _input.LT(-1);
+        return "}".equals(_input.LT(1).getText()) || previous != null && "}".equals(previous.getText());
+    }
+}
+
 // ==================== Entry Point ====================
 
 compilationUnitEntry
@@ -90,7 +101,7 @@ modeltypeWhere
 // <transformation_usage_refine> ::= <module_usage> | <transformation_refine>
 // <transformation_refine> ::= 'refines' <moduleref>
 transformationDef
-    : qualifier* 'transformation' qualifiedName '(' modelParamList? ')' (moduleUsage* | transformationRefine) ('{' moduleElement* '}' ';'? | ';')
+    : qualifier* 'transformation' qualifiedName '(' modelParamList? ')' (moduleUsage | transformationRefine)* ('{' moduleElement* '}' ';'? | ';')
     ;
 
 transformationRefine
@@ -108,9 +119,12 @@ modelParamList
 
 // §8.4: <model_param> ::= <direction>? <param_name>? ':' <typespec>
 // Named: out output : ecore — Unnamed: out ecore (name derived from type)
+// The direction defaults to in (§8.2.1.15): library L(SRC) (§8.1.4) (#346)
 modelParam
     : directionKind qvtoIdentifier ':' typeSpec
     | directionKind typeSpec
+    | qvtoIdentifier ':' typeSpec
+    | typeSpec
     ;
 
 directionKind
@@ -184,7 +198,7 @@ mappingDef
     : qualifier* 'mapping' directionKind? scopedName mappingSignature
       mappingExtension* whenClause? whereClause? mappingBody ';'?
     | qualifier* 'mapping' directionKind? scopedName mappingSignature
-      mappingExtension* ';'
+      mappingExtension* whenClause? whereClause? ';'
     ;
 
 mappingSignature
@@ -207,9 +221,12 @@ paramList
     : param (',' param)*
     ;
 
-// §8.4: <param> ::= <param_direction>? <declarator>, whose <typespec> may name an extent (#302)
+// §8.4: <param> ::= <param_direction>? <declarator>, whose <typespec> may name an extent (#302).
+// <declarator> ::= <typespec> <init_part>? | <scoped_identifier> ':' <typespec> <init_part>?: the
+// name may be omitted — constructor Column::Column(String, String) (§8.1.8) — and a default
+// value given (#346)
 param
-    : directionKind? qvtoIdentifier ':' typeSpec
+    : directionKind? (qvtoIdentifier ':')? typeSpec (('=' | ':=') defaultValue=expression)?
     ;
 
 // §8.4.7: <mapping_extra> ::= <mapping_extension> | <mapping_refinement>
@@ -259,7 +276,7 @@ endSection
 // ==================== Helper / Query / Constructor / Entry ====================
 
 helperDef
-    : qualifier* 'helper' scopedName simpleSignature (':' typeExpression)? (block | '=' expression ';' | ';')
+    : qualifier* 'helper' scopedName simpleSignature (':' resultList)? (block | '=' expression ';' | ';')
     ;
 
 queryDef
@@ -275,7 +292,7 @@ constructorDef
 // §8.4: <entry> ::= 'main' <simple_signature> <expression_block>
 // Supports main() and main(in param : Type) forms
 entryDef
-    : 'main' simpleSignature block ';'?
+    : 'main' simpleSignature (block ';'? | ';')
     | 'entry' simpleSignature? block ';'?
     ;
 
@@ -289,18 +306,21 @@ simpleSignature
 // <declarator> ::= <typespec> <init_part>? | <scoped_identifier> ':' <typespec> <init_part>?
 propertyDecl
     : 'intermediate' 'property' scopedName ':' typeExpression ('=' expression)? ';'
-    | 'configuration' 'property' qvtoIdentifier ':' typeExpression ('=' expression)? ';'
+    | 'configuration' 'property'? qvtoIdentifier ':' typeExpression ('=' expression)? ';'
+    // §8.4: <property_key> ::= 'derived' | 'literal' | 'configuration' | 'property' (#346)
+    | ('derived' | 'literal')+ 'property'? qvtoIdentifier ':' typeExpression ('=' expression)? ';'
     | 'property' qvtoIdentifier ':' typeExpression ('=' expression)? ';'
     | 'property' qvtoIdentifier '=' expression ';'                                       // untyped module property
     ;
 
+// §8.4.6: a class of a metamodel block, abstract or not, and a declaration without a body (#346)
 intermediateClassDef
-    : 'intermediate' 'class' qvtoIdentifier ('extends' typeList)? '{' classifierFeature* '}' ';'?
+    : 'intermediate'? 'abstract'? 'class' qvtoIdentifier ('extends' typeList)? ('{' classifierFeature* '}' ';'? | ';')
     ;
 
-// §8.4: <classifier_info> ::= 'exception' — exception classifier declaration
+// §8.4: <classifier_info> ::= 'exception' — exception classifier declaration; exception E; (#346)
 exceptionDef
-    : 'exception' qvtoIdentifier ('extends' typeList)? '{' classifierFeature* '}' ';'?
+    : 'exception' qvtoIdentifier ('extends' typeList)? ('{' classifierFeature* '}' ';'? | ';')
     ;
 
 // §8.4: <classifier_info> ::= 'datatype' — user-defined datatype declaration
@@ -330,7 +350,7 @@ enumLiteral
 
 // §8.4.6: <metamodel> ::= ('metamodel' | 'package') <name> '{' <metamodel_element>* '}' ';'?
 metamodelDef
-    : ('metamodel' | 'package') qvtoIdentifier '{' metamodelElement* '}' ';'?
+    : ('metamodel' | 'package') qvtoIdentifier ('{' metamodelElement* '}' ';'? | ';')
     ;
 
 metamodelElement
@@ -389,8 +409,9 @@ tagTarget
     : qvtoIdentifier ('::' qvtoIdentifier)*
     ;
 
+// §8.4.7.1 typedef X = T [cond] (deprecated) and Eclipse's typedef X = T with cond (#346)
 typedefDecl
-    : 'typedef' qvtoIdentifier '=' typeExpression ('with' expression)?
+    : 'typedef' qvtoIdentifier '=' typeExpression ('[' expression ']' | 'with' expression)?
     ;
 
 // ==================== Statements ====================
@@ -413,8 +434,11 @@ assignOp
 
 // ==================== Block ====================
 
+// §8.4 <expression_list> ::= <expression_semi_list> ';'?: the last expression of a block needs no
+// ';' (#346). Structural, not a predicate on statement: in a mapping body, 'end' followed by a
+// block would otherwise read as two statements
 block
-    : '{' statement* '}'
+    : '{' statement* last=expression? '}'
     ;
 
 // ==================== Expression Override ====================
@@ -575,14 +599,16 @@ literalSimple
 
 // §8.2.2.2: 'do' keyword can be skipped inside if, switch, compute, and for expressions
 blockExp
-    : 'do' '{' statement* '}'
-    | '{' statement* '}'
+    : 'do' '{' statement* last=expression? '}'
+    | '{' statement* last=expression? '}'
     ;
 
 whileExp
     // §8.2.2.4: while with init variable (compute shorthand) — must be before WhileBasic
     // while (x:Type := init; condition) { body }
-    : 'while' '(' varName=qvtoIdentifier ':' type=typeExpression ':=' initValue=expression ';' condition=expression ')' block  # WhileWithInit
+    // <while_exp> ::= 'while' '(' (<declarator> ';')? <expression> ')': the type may be omitted and
+    // the init written with '=' (§8.1.17) (#346)
+    : 'while' '(' varName=qvtoIdentifier (':' type=typeExpression)? varInitOp initValue=expression ';' condition=expression ')' block  # WhileWithInit
     | 'while' '(' expression ')' block                                                    # WhileBasic
     ;
 
@@ -605,7 +631,7 @@ forVarList
     ;
 
 switchExp
-    : 'switch' ('(' switchIterator ')')? '{' switchAlt* ('else' expression ';')? '}'
+    : 'switch' ('(' switchIterator ')')? '{' switchAlt* ('else' expression (';' | {alternativeSemicolonOptional()}?))? '}'
     ;
 
 // §8.4.7: <switch_exp> ::= 'switch' ('(' <iter_declarator> ')')? <switch_body>
@@ -615,7 +641,7 @@ switchIterator
     ;
 
 switchAlt
-    : 'case' '(' expression ')' expression ';'
+    : 'case' '(' expression ')' expression (';' | {alternativeSemicolonOptional()}?)
     ;
 
 computeExp
@@ -800,10 +826,11 @@ tupleLiteralPart
 
 // §8.4.7: <scoped_identifier> ::= <identifier> ('::' <identifier>)*
 // Also supports primitive/collection context types (e.g., String::wrap(), Collection(Real)::sum())
+// §8.4.8: <mapping_id> ::= (<transformation_id> ':::')? (<type_id> '::')? <mapping_name> (#346)
 scopedName
     : primitiveType '::' qvtoIdentifier
     | collectionType '::' qvtoIdentifier
-    | qvtoIdentifier ('::' qvtoIdentifier)*
+    | (transformationId=qvtoIdentifier ':::')? qvtoIdentifier ('::' qvtoIdentifier)*
     ;
 
 scopedNameList
@@ -885,6 +912,7 @@ qvtoIdentifier
     | 'opposites'
     | 'datatype'
     | 'derived'
+    | 'literal'
     | 'enum'
     | 'exception'
     | 'metamodel'

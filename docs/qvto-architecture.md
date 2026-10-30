@@ -1162,6 +1162,23 @@ if (ro.oclIsKindOf(Family::Family)) then {
 } endif;
 ```
 
+### 10.x Spec notation accepted since #346
+
+- Model parameters without a direction, which defaults to `in`: `transformation T(src : SRC)`, `library L(SRC)`.
+- Unnamed parameters (`constructor Column::Column(String, String)`) and default values: `helper h(x : Integer = 3)`. A call may omit trailing parameters that have a default.
+- Named and multiple helper results: `helper h() : a : String, b : Integer`. Several results form a tuple.
+- `refines` together with `access`/`extends`.
+- A bodyless mapping with `when`/`where`, and `main();`.
+- The last expression of a block needs no `;` (`{ log('a'); log('b') }`). A switch alternative whose body is a block needs none either. The `end` section of a mapping body keeps its `;` rule, because there `end` followed by a block would read as two statements.
+- `while (i = 0; i < 3)`: the declarator may use `=`, `:=` or `::=` and omit the type.
+- `map T:::Type::m()`: the transformation and type qualifiers of a `<mapping_id>`. Calls resolve by name, and the source type chooses the candidate.
+- `class` and `abstract class` in a `metamodel` block and at module level, and declarations without a body (`exception E;`, `intermediate class IC;`, `metamodel MM;`).
+- The property keys `derived`, `literal` and `configuration` (the latter without `property`).
+- The deprecated `typedef X = T [cond]` beside Eclipse's `with`.
+- A class of the module (§8.4.8.1) comes before a model type of the same name.
+
+**Lenient superset.** `==` and `!=` are accepted without the `use-traditional-comparison-syntax` directive (§8.4.4), and `=`/`<>` stay valid after it, as in Eclipse. **Precedence:** `xor` binds tighter than `or`, as in OCL v2.4 §9.3, while the QVT EBNF puts both on one level: `true xor true or true` is `false`. Both are deliberate (#346), and `QvtoConcreteSyntaxSpecConformanceTest` covers them.
+
 ---
 
 ## 11. Design Decisions (QVT-O-specific)

@@ -911,7 +911,7 @@ public class QvtoEvaluator {
 			return null;
 		}
 		List<ImperativeOperation> candidates = named.stream()
-				.filter(op -> parameterCount(op) == args.length).toList();
+				.filter(op -> accepts(op, args.length)).toList();
 		if (candidates.isEmpty()) {
 			addError("Mapping " + opName + " takes no " + args.length + " argument(s)");
 			return null;
@@ -969,6 +969,24 @@ public class QvtoEvaluator {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Whether a call with this many arguments reaches the operation: all its parameters, or
+	 * fewer where the rest have default values (§8.4 <init_part>, #346).
+	 */
+	static boolean accepts(ImperativeOperation operation, int argumentCount) {
+		int count = 0;
+		int required = 0;
+		for (Object param : operation.getEParameters()) {
+			if (param instanceof VarParameter vp && !operation.getResult().contains(vp)) {
+				count++;
+				if (vp.getOwnedInit() == null) {
+					required = count;
+				}
+			}
+		}
+		return argumentCount >= required && argumentCount <= count;
 	}
 
 	/** The number of in, inout and out parameters of an operation, results excluded. */
@@ -1449,7 +1467,10 @@ public class QvtoEvaluator {
 				if (resultParams.contains(vp)) {
 					continue;
 				}
-				Object value = argIdx < args.length ? args[argIdx++] : null;
+				// An omitted argument takes the parameter's default value (§8.4 <init_part>, #346)
+				Object value = argIdx < args.length ? args[argIdx]
+						: vp.getOwnedInit() != null ? eval(vp.getOwnedInit()) : null;
+				argIdx++;
 				if (vp.getKind() == DirectionKind.OUT && !outsGiven) {
 					value = vp.getEType() instanceof CollectionType collectionType ? emptyCollection(collectionType) : null;
 				}
@@ -1684,7 +1705,7 @@ public class QvtoEvaluator {
 		List<ImperativeOperation> candidates = new ArrayList<>();
 		for (ImperativeOperation op : operationResolver.findAllOperations(name)) {
 			if (op.getContext() != null && !(op.getContext().getEType() instanceof CollectionType)
-					&& parameterCount(op) == args.length) {
+					&& accepts(op, args.length)) {
 				candidates.add(op);
 			}
 		}
