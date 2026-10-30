@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Formatter;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -1326,24 +1327,49 @@ class OclStdlib {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
 				// §11.7.2: Set->intersection(Set)→Set, Set->intersection(Bag)→Set
 				// §11.7.4: Bag->intersection(Bag)→Bag, Bag->intersection(Set)→Set
-				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
-					Set<Object> result = new OclSet<>(source);
-					result.retainAll(other);
-					yield result;
-				}
-				if (source instanceof OclBag<?> && other instanceof Set<?>) {
-					// Bag->intersection(Set) → Set
-					OclSet<Object> result = new OclSet<>();
+				// Membership is OCL equality (1 = 1.0, #317), never Java equals — retainAll and
+				// List.remove asked the argument's equals and lost Set{1}->intersection(Bag{1.0})
+				boolean uniqueSource = source instanceof Set<?> || source instanceof OclOrderedSet<?>;
+				if ((source instanceof Set<?> && !(source instanceof OclOrderedSet<?>))
+						|| (source instanceof OclBag<?> && isUniqueCollection(other))) {
+					Set<Object> lookup = asOclSet(other);
+					Set<Object> result = new OclSet<>();
 					for (Object e : source) {
-						if (oclContains(other, e)) {
-							result.add(e); // OclSet deduplicates
+						if (lookup.contains(e)) {
+							result.add(e);
 						}
 					}
 					yield result;
 				}
-				// Bag->intersection(Bag): frequency-based (min frequency)
-				// Other: frequency-based intersection
-				List<Object> remaining = new ArrayList<>(other);
+				// Bag->intersection(Bag) and the rest: frequency-based (min frequency)
+				Map<Object, Integer> remaining = frequencies(other);
+				List<Object> result;
+				if (source instanceof OclBag<?>) {
+					result = new OclBag<>();
+				} else if (uniqueSource) {
+					result = new OclOrderedSet<>();
+				} else {
+					result = new ArrayList<>();
+				}
+				for (Object e : source) {
+					if (takeOne(remaining, e)) {
+						result.add(e);
+					}
+				}
+				yield result;
+			}
+			case "-" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				// §11.7.2 Set - Set: elements of self not in s, by OCL equality (#317)
+				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
+					Set<Object> result = new OclSet<>(source);
+					for (Object o : other) {
+						result.remove(o); // OclSet.remove uses the OCL lookup key
+					}
+					yield result;
+				}
+				// Bag/Sequence/OrderedSet: frequency-based subtraction (subtract per occurrence)
+				Map<Object, Integer> toRemove = frequencies(other);
 				List<Object> result;
 				if (source instanceof OclBag<?>) {
 					result = new OclBag<>();
@@ -1353,31 +1379,9 @@ class OclStdlib {
 					result = new ArrayList<>();
 				}
 				for (Object e : source) {
-					if (remaining.remove(e)) {
+					if (!takeOne(toRemove, e)) {
 						result.add(e);
 					}
-				}
-				yield result;
-			}
-			case "-" -> {
-				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
-				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
-					Set<Object> result = new OclSet<>(source);
-					result.removeAll(other);
-					yield result;
-				}
-				// Bag/Sequence: frequency-based subtraction (subtract per occurrence)
-				List<Object> toRemove = new ArrayList<>(other);
-				List<Object> result;
-				if (source instanceof OclBag<?>) {
-					result = new OclBag<>(source);
-				} else if (source instanceof OclOrderedSet<?>) {
-					result = new OclOrderedSet<>(source);
-				} else {
-					result = new ArrayList<>(source);
-				}
-				for (Object e : toRemove) {
-					result.remove(e);
 				}
 				yield result;
 			}
@@ -1709,6 +1713,39 @@ class OclStdlib {
 	}
 
 	// --- Collection helpers ---
+
+	private static boolean isUniqueCollection(Collection<?> collection) {
+		return collection instanceof Set<?> || collection instanceof OclOrderedSet<?>;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Set<Object> asOclSet(Collection<?> collection) {
+		return collection instanceof OclSet<?> set ? (Set<Object>) set : new OclSet<>(collection);
+	}
+
+	/** Counts the elements of a collection per OCL value (lookup key, #317). */
+	private static Map<Object, Integer> frequencies(Collection<?> collection) {
+		Map<Object, Integer> counts = new HashMap<>();
+		for (Object e : collection) {
+			counts.merge(OclEqualityUtil.lookupKey(e), 1, Integer::sum);
+		}
+		return counts;
+	}
+
+	/** Takes one occurrence of {@code element}'s value from the counts; false if none is left. */
+	private static boolean takeOne(Map<Object, Integer> counts, Object element) {
+		Object key = OclEqualityUtil.lookupKey(element);
+		Integer count = counts.get(key);
+		if (count == null) {
+			return false;
+		}
+		if (count == 1) {
+			counts.remove(key);
+		} else {
+			counts.put(key, count - 1);
+		}
+		return true;
+	}
 
 	private static Collection<Object> preserveCollectionKind(Collection<?> source, List<Object> elements) {
 		return OclCollectionUtil.preserveCollectionKind(source, elements);

@@ -243,4 +243,36 @@ class OclIteratorSpecConformanceTest extends AbstractOclTest {
 		assertEquals(false, OclEvaluationOptions.lenient().specStrict());
 		assertEquals(true, OclEvaluationOptions.strict().withSpecStrict(true).specStrict());
 	}
+
+	/** §11.7.2 / §11.7.4: set operations compare with OCL equality, 1 = 1.0 (#317). */
+	@Nested
+	class SetOperationsUseOclEquality {
+
+		@Test
+		void intersection_acrossIntegerAndReal() throws OclParseException {
+			assertEquals(1, eval("Set{1}->intersection(Bag{1.0})->size()", self));
+			assertEquals(1, eval("Bag{1, 1}->intersection(Bag{1.0})->size()", self));
+			assertEquals(2, eval("Bag{1, 1, 2}->intersection(Bag{1.0, 2.0, 2.0})->size()", self));
+		}
+
+		@Test
+		void intersection_ofBagWithUniqueCollection_isSet() throws OclParseException {
+			assertEquals(true, eval("Bag{1, 2, 2}->intersection(OrderedSet{2})->oclIsKindOf(Set(Integer))", self));
+			assertEquals(true, eval("Bag{1, 2, 2}->intersection(Set{2}) = Set{2}", self));
+		}
+
+		@Test
+		void minus_acrossIntegerAndReal() throws OclParseException {
+			assertEquals(true, eval("Set{1, 2} - Set{1.0} = Set{2}", self));
+			assertEquals(0, eval("(Set{1} - Bag{1.0})->size()", self));
+			assertEquals(1, eval("(Bag{1, 1} - Bag{1.0})->size()", self));
+		}
+
+		@Test
+		void symmetricDifference_acrossIntegerAndReal_andEmpty() throws OclParseException {
+			assertEquals(true, eval("Set{1, 2}->symmetricDifference(Set{2.0, 3}) = Set{1, 3}", self));
+			assertEquals(true, eval("Set{}->symmetricDifference(Set{1}) = Set{1}", self));
+			assertEquals(true, eval("Set{1}->symmetricDifference(Set{}) = Set{1}", self));
+		}
+	}
 }
