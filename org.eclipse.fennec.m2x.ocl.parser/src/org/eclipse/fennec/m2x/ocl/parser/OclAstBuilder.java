@@ -327,10 +327,16 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 
 		OclParser.PropertyOrCallSuffixContext suffix = ctx.propertyOrCallSuffix();
 		if (suffix instanceof OclParser.PropertySuffixContext propCtx) {
+			if (propCtx.pathName() != null) {
+				support.checkQualifier(source, pathNameSegments(propCtx.pathName()));
+			}
 			String propName = identifierText(propCtx.identifier());
 			boolean isPre = propCtx.isMarkedPre() != null;
 			return support.buildPropertyCall(source, propName, isSafe, isPre);
 		} else if (suffix instanceof OclParser.DotCallSuffixContext callCtx) {
+			if (callCtx.pathName() != null) {
+				support.checkQualifier(source, pathNameSegments(callCtx.pathName()));
+			}
 			String opName = identifierText(callCtx.identifier());
 			boolean isPre = callCtx.preBefore != null || callCtx.preAfter != null;
 			List<OclExpression> args = new ArrayList<>();
@@ -538,6 +544,9 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	public OperationCallExp visitOperationCallExp(OclParser.OperationCallExpContext ctx) {
 		List<String> segments = pathNameSegments(ctx.pathName());
 		String opName = segments.get(segments.size() - 1);
+		if (segments.size() > 1) {
+			support.checkStaticQualifier(segments.subList(0, segments.size() - 1), opName);
+		}
 
 		List<OclExpression> args = new ArrayList<>();
 		if (ctx.argumentList() != null) {

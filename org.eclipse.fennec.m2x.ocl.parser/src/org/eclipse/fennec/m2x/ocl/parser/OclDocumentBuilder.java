@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -479,8 +480,9 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		}
 		for (String key : registryKeys()) {
 			EPackage pkg = packageRegistry.getEPackage(key);
-			if (pkg != null && matchesPackage(pkg, unquoted)) {
-				return pkg;
+			EPackage target = pkg == null ? null : OclNameResolver.packageAt(pkg, unquoted);
+			if (target != null) {
+				return target;
 			}
 		}
 		// A classifier path (import company::Company) imports the classifier's package
@@ -490,9 +492,9 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			String classifierName = unquoted.substring(separator + 2);
 			for (String key : registryKeys()) {
 				EPackage pkg = packageRegistry.getEPackage(key);
-				if (pkg != null && matchesPackage(pkg, packagePath)
-						&& pkg.getEClassifier(classifierName) != null) {
-					return pkg;
+				EPackage target = pkg == null ? null : OclNameResolver.packageAt(pkg, packagePath);
+				if (target != null && target.getEClassifier(classifierName) != null) {
+					return target;
 				}
 			}
 		}
@@ -552,7 +554,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		// Build the package path prefix (if any segments before the classifier name)
 		String packagePath = null;
 		if (segments.length > 1) {
-			packagePath = String.join("::", java.util.Arrays.copyOf(segments, segments.length - 1));
+			packagePath = String.join("::", Arrays.copyOf(segments, segments.length - 1));
 		} else if (currentPackagePath != null) {
 			packagePath = currentPackagePath;
 		}
@@ -561,11 +563,10 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			// Qualified, or inside a package … endpackage: the named package, and only that one.
 			// What the document imported comes first — it named that package on purpose
 			for (EPackage imported : importedPackages) {
-				if (matchesPackage(imported, packagePath)) {
-					EClassifier found = imported.getEClassifier(classifierName);
-					if (found != null) {
-						return found;
-					}
+				EPackage target = OclNameResolver.packageAt(imported, packagePath);
+				EClassifier found = target == null ? null : target.getEClassifier(classifierName);
+				if (found != null) {
+					return found;
 				}
 			}
 			EPackage byUri = packageRegistry.getEPackage(packagePath);
@@ -577,11 +578,10 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			}
 			for (String key : registryKeys()) {
 				EPackage pkg = packageRegistry.getEPackage(key);
-				if (pkg != null && matchesPackage(pkg, packagePath)) {
-					EClassifier found = pkg.getEClassifier(classifierName);
-					if (found != null) {
-						return found;
-					}
+				EPackage target = pkg == null ? null : OclNameResolver.packageAt(pkg, packagePath);
+				EClassifier found = target == null ? null : target.getEClassifier(classifierName);
+				if (found != null) {
+					return found;
 				}
 			}
 			return null;
@@ -596,13 +596,6 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			}
 		}
 		return null;
-	}
-
-	private boolean matchesPackage(EPackage pkg, String packagePath) {
-		// Match by package name or nsURI
-		return packagePath.equals(pkg.getName())
-				|| packagePath.equals(pkg.getNsURI())
-				|| packagePath.equals(pkg.getNsPrefix());
 	}
 
 	// ==================== Operation/Property Resolution ====================

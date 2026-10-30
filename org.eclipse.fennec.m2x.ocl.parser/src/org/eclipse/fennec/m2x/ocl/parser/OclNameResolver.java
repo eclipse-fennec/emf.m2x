@@ -181,9 +181,10 @@ public final class OclNameResolver {
 		packageName = packageAliases.getOrDefault(packageName, packageName);
 
 		if (contextType instanceof EClass contextClass) {
+			// The context package, and its root for a path that starts there (root::sub::Type)
 			EPackage ctxPkg = contextClass.getEPackage();
-			if (ctxPkg.getName().equals(packageName) || ctxPkg.getNsURI().equals(packageName)) {
-				EClassifier found = ctxPkg.getEClassifier(classifierName);
+			for (EPackage start : List.of(ctxPkg, rootOf(ctxPkg))) {
+				EClassifier found = classifierAt(start, packageName, classifierName);
 				if (found != null) {
 					return found;
 				}
@@ -192,11 +193,9 @@ public final class OclNameResolver {
 		// What this expression declared beats what happens to be registered: an import or an
 		// alias names one package, the registry names whatever a bundle put there
 		for (EPackage pkg : scopePackages()) {
-			if (pkg.getName().equals(packageName) || pkg.getNsURI().equals(packageName)) {
-				EClassifier found = pkg.getEClassifier(classifierName);
-				if (found != null) {
-					return found;
-				}
+			EClassifier found = classifierAt(pkg, packageName, classifierName);
+			if (found != null) {
+				return found;
 			}
 		}
 		return findInRegistry(packageName, classifierName);
@@ -250,15 +249,59 @@ public final class OclNameResolver {
 		Collections.sort(keys);
 		for (String key : keys) {
 			EPackage pkg = packageRegistry.getEPackage(key);
-			if (pkg != null && (pkg.getName().equals(packageName)
-					|| pkg.getNsURI().equals(packageName))) {
-				EClassifier found = pkg.getEClassifier(classifierName);
-				if (found != null) {
-					return found;
-				}
+			EClassifier found = pkg == null ? null : classifierAt(pkg, packageName, classifierName);
+			if (found != null) {
+				return found;
 			}
 		}
 		return null;
+	}
+
+	private static EClassifier classifierAt(EPackage start, String packagePath, String classifierName) {
+		EPackage pkg = packageAt(start, packagePath);
+		return pkg == null ? null : pkg.getEClassifier(classifierName);
+	}
+
+	private static EPackage rootOf(EPackage pkg) {
+		EPackage root = pkg;
+		while (root.getESuperPackage() != null) {
+			root = root.getESuperPackage();
+		}
+		return root;
+	}
+
+	/**
+	 * The package a path names, starting at {@code pkg}: {@code pkg} itself when the path is its
+	 * name, nsURI or nsPrefix, otherwise the subpackage reached segment by segment from
+	 * {@code pkg} when the first segment is its name — OCL v2.4 §7.5.7
+	 * {@code Packagename1::Packagename2::Typename}, §7.3.5 {@code package Package::SubPackage}
+	 * (#325). Before, the path was compared as one string and a nested package never matched.
+	 *
+	 * @param pkg the package to start at
+	 * @param packagePath the path, {@code ::}-separated
+	 * @return the package, or {@code null} if the path does not lead anywhere from {@code pkg}
+	 */
+	public static EPackage packageAt(EPackage pkg, String packagePath) {
+		if (packagePath.equals(pkg.getName()) || packagePath.equals(pkg.getNsURI())
+				|| packagePath.equals(pkg.getNsPrefix())) {
+			return pkg;
+		}
+		String[] segments = packagePath.split("::");
+		if (segments.length < 2 || !segments[0].equals(pkg.getName())) {
+			return null;
+		}
+		EPackage current = pkg;
+		for (int i = 1; i < segments.length && current != null; i++) {
+			EPackage next = null;
+			for (EPackage subpackage : current.getESubpackages()) {
+				if (segments[i].equals(subpackage.getName())) {
+					next = subpackage;
+					break;
+				}
+			}
+			current = next;
+		}
+		return current;
 	}
 
 	/**
