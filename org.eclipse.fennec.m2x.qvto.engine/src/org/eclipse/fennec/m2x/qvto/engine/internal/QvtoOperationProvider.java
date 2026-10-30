@@ -577,7 +577,8 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					int arity = QvtoEvaluator.parameterCount(impOp);
 					if (registeredMappings.add(name + "/" + arity)) {
 						ops.add(new OclOperation(name, ANY_TYPE, Collections.nCopies(arity, ANY_TYPE), ANY_TYPE,
-								(self, args) -> evaluator.callMappingByName(name, self, args, false)));
+								(self, args) -> evaluator.callFromOcl(args,
+										() -> evaluator.callMappingByName(name, self, args, false))));
 					}
 				} else {
 					ops.add(new OclOperation(
@@ -590,7 +591,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 								if (self == null && impOp.getContext() != null) {
 									return null;
 								}
-								return evaluator.callOperation(impOp, self, args);
+								return evaluator.callFromOcl(args, () -> evaluator.callOperation(impOp, self, args));
 							}
 					));
 				}

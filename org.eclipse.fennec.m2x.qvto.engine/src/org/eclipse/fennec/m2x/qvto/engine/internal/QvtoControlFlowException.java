@@ -50,9 +50,12 @@ sealed abstract class QvtoControlFlowException extends RuntimeException implemen
 	static final class ReturnException extends QvtoControlFlowException {
 		private static final long serialVersionUID = 1L;
 		final Object value;
+		/** {@code return;} without a value: the operation answers its result parameters (#336). */
+		final boolean valueless;
 
-		ReturnException(Object value) {
+		ReturnException(Object value, boolean valueless) {
 			this.value = value;
+			this.valueless = valueless;
 		}
 	}
 
