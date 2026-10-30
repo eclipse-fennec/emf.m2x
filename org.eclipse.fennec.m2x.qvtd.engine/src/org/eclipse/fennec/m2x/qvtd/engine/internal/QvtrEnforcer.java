@@ -40,6 +40,7 @@ import org.eclipse.fennec.m2x.model.qvttemplate.CollectionTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 
 /**
  * Handles target domain enforcement for QVT-R transformations (§7.10.2).
@@ -245,6 +246,8 @@ public class QvtrEnforcer {
 				value = oclCallback.evaluate(valueExpr, bindings);
 			}
 			if (value != null) {
+				// OCL numbers are Long/BigInteger/BigDecimal; the feature wants its instance class (#322)
+				value = OclValues.toEcore(value, feature.getEType());
 				if (feature.isMany()) {
 					((List<Object>) target.eGet(feature)).add(value);
 				} else {

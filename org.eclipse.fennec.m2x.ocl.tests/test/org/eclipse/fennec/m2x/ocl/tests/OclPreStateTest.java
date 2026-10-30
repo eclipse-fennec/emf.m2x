@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.eclipse.emf.common.util.BasicEList;
@@ -202,9 +203,9 @@ class OclPreStateTest {
 			person.eSet(personAgeFeature, 35);
 
 			OclResult result = evaluateWithSnapshot(plus, person, snapshot);
-			// 50000.0 + 30L: stdlib dispatches "+" on Double source with Long arg
-			// OclStdlib adds these as doubles: 50000.0 + 30.0 = 50030.0
-			assertEquals(50030.0, result.value());
+			// 50000.0 + 30L: a Real plus an Integer is the Real 50030.0, exact inside the
+			// evaluation (#322)
+			assertEquals(0, new BigDecimal("50030.0").compareTo((BigDecimal) result.value()));
 		}
 
 		@Test
