@@ -15,11 +15,15 @@
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
+import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
@@ -146,6 +150,46 @@ public class QvtoExtentManager {
 	 * @param name the model parameter name
 	 * @return the list of extents, or {@code null} if not a collection parameter
 	 */
+	/**
+	 * The extent whose contents hold the object's root container, or {@code null} (#342).
+	 *
+	 * @param object the object
+	 * @return its extent
+	 */
+	QvtoModelExtent extentOf(EObject object) {
+		EObject root = EcoreUtil.getRootContainer(object);
+		for (QvtoModelExtent extent : extents) {
+			if (extent.getContents().contains(root) || extent.getContents().contains(object)) {
+				return extent;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Every instance of the class in the models of this transformation — the extents OCL's
+	 * {@code allInstances()} ranges over in QVT-O (#342).
+	 *
+	 * @param eClass the class
+	 * @return its instances, subclasses included, each once
+	 */
+	Collection<EObject> allInstances(EClass eClass) {
+		Set<EObject> instances = new LinkedHashSet<>();
+		for (QvtoModelExtent extent : extents) {
+			for (EObject root : extent.getContents()) {
+				if (eClass.isInstance(root)) {
+					instances.add(root);
+				}
+				root.eAllContents().forEachRemaining(child -> {
+					if (eClass.isInstance(child)) {
+						instances.add(child);
+					}
+				});
+			}
+		}
+		return instances;
+	}
+
 	List<QvtoModelExtent> getExtents(String name) {
 		return groupedByName.get(name);
 	}

@@ -201,7 +201,7 @@ public class QvtoEvaluator {
 		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager, packageRegistry, diagnostics);
 		this.tagRegistry = new QvtoTagRegistry(transformation);
 		this.operationResolver = new QvtoOperationResolver(transformation);
-		this.modelOperations = new QvtoModelOperations(this::eval);
+		this.modelOperations = new QvtoModelOperations(this::eval, this::extentOf);
 	}
 
 	/**
@@ -658,7 +658,8 @@ public class QvtoEvaluator {
 		}
 		// §8.1.10: Intermediate property interceptor for OCL sub-expressions; and the imperative
 		// expressions nested in the OCL one come back here (#296)
-		OclContext oclCtx = new OclContext(self, null, vars, null,
+		// The transformation's models are the extent allInstances() ranges over (#342)
+		OclContext oclCtx = new OclContext(self, extentManager::allInstances, vars, null,
 				intermediateStore.hasIntermediateProperties()
 						? intermediateStore::interceptIntermediateProperty
 						: null,
@@ -980,6 +981,14 @@ public class QvtoEvaluator {
 		CollectionLiteralExp literal = OclFactory.eINSTANCE.createCollectionLiteralExp();
 		literal.setKind(type.getKind() == CollectionKind.COLLECTION ? CollectionKind.SEQUENCE : type.getKind());
 		return eval(literal);
+	}
+
+	/**
+	 * The model extent an object belongs to: the one holding its root container, or
+	 * {@code null} for an object in none (#342).
+	 */
+	QvtoModelExtent extentOf(EObject object) {
+		return extentManager == null ? null : extentManager.extentOf(object);
 	}
 
 	/**
