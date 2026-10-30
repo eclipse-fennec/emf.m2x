@@ -316,12 +316,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ModuleUsageContext usageCtx : ctx.moduleUsage()) {
 			processModuleUsage(transformation, usageCtx);
 		}
-		if (ctx.transformationRefine() != null) {
+		if (!ctx.transformationRefine().isEmpty()) {
 			// §8.4.7: <transformation_refine> ::= 'refines' <moduleref>
 			// Create a stub Transformation with the name set (D40).
 			// The engine replaces this stub with the real QVT-R Transformation
-			// loaded via QvtdEngine.
-			QvtOParser.ModuleRefContext refCtx = ctx.transformationRefine().moduleRef();
+			// loaded via QvtdEngine. It may stand beside access/extends (§8.2.1.1, #346).
+			QvtOParser.ModuleRefContext refCtx = ctx.transformationRefine(0).moduleRef();
 			String refinedName = moduleRefNameText(refCtx.moduleRefName());
 			Transformation stub = QvtbaseFactory.eINSTANCE.createTransformation();
 			stub.setName(refinedName);
@@ -605,22 +605,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Init section
 		if (ctx.initSection() != null) {
-			for (QvtOParser.StatementContext stmtCtx : ctx.initSection().block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getInitSection().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.initSection().block())) {
+				body.getInitSection().add(expr);
 			}
 		}
 
 		// Population section (main body between init and end)
 		if (ctx.populationSection() != null) {
 			// §8.2.1.19: Explicit population keyword — content goes into body.content
-			for (QvtOParser.StatementContext stmtCtx : ctx.populationSection().block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getContent().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.populationSection().block())) {
+				body.getContent().add(expr);
 			}
 		} else if (ctx.statementList() != null) {
 			for (QvtOParser.StatementContext stmtCtx : ctx.statementList().statement()) {
@@ -633,11 +627,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// End section
 		if (ctx.endSection() != null) {
-			for (QvtOParser.StatementContext stmtCtx : ctx.endSection().block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getEndSection().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.endSection().block())) {
+				body.getEndSection().add(expr);
 			}
 		}
 
@@ -660,10 +651,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Signature
 		buildSimpleSignature(helper, ctx.simpleSignature());
 
-		// Return type
-		if (ctx.typeExpression() != null) {
-			EClassifier returnType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
-			setReturnType(helper, returnType);
+		// Results: a type, a named result, or several — "When more than one result is declared in
+		// the signature of a helper operation … returns a tuple" (§8.2.1.12, #346)
+		if (ctx.resultList() != null) {
+			buildResults(helper, ctx.resultList());
 		}
 
 		// Body
@@ -672,11 +663,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		if (ctx.block() != null) {
 			OperationBody body = QVTO.createOperationBody();
-			for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getContent().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.block())) {
+				body.getContent().add(expr);
 			}
 			helper.setBody(body);
 		} else if (ctx.expression() != null) {
@@ -705,7 +693,32 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		buildSimpleSignature(query, ctx.simpleSignature());
 
 		// §8.4: query supports resultList (single or multi-result)
-		for (QvtOParser.ResultParamContext rCtx : ctx.resultList().resultParam()) {
+		buildResults(query, ctx.resultList());
+
+		QvtoEnvironment savedEnv = this.environment;
+		setupOperationEnvironment(query);
+
+		if (ctx.block() != null) {
+			OperationBody body = QVTO.createOperationBody();
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.block())) {
+				body.getContent().add(expr);
+			}
+			query.setBody(body);
+		} else if (ctx.expression() != null) {
+			OperationBody body = QVTO.createOperationBody();
+			OclExpression expr = (OclExpression) expressionBuilder.visit(ctx.expression());
+			body.getContent().add(expr);
+			query.setBody(body);
+		}
+
+		this.environment = savedEnv;
+		updateExpressionBuilder();
+		return query;
+	}
+
+	/** The result parameters of a helper or query: named, or the implicit 'result'. */
+	private void buildResults(ImperativeOperation operation, QvtOParser.ResultListContext resultList) {
+		for (QvtOParser.ResultParamContext rCtx : resultList.resultParam()) {
 			VarParameter resultParam = QVTO.createVarParameter();
 			if (rCtx instanceof QvtOParser.NamedResultContext named) {
 				resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
@@ -721,31 +734,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					setParameterType(resultParam, type);
 				}
 			}
-			query.getResult().add(resultParam);
+			operation.getResult().add(resultParam);
 		}
-
-		QvtoEnvironment savedEnv = this.environment;
-		setupOperationEnvironment(query);
-
-		if (ctx.block() != null) {
-			OperationBody body = QVTO.createOperationBody();
-			for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getContent().add(expr);
-				}
-			}
-			query.setBody(body);
-		} else if (ctx.expression() != null) {
-			OperationBody body = QVTO.createOperationBody();
-			OclExpression expr = (OclExpression) expressionBuilder.visit(ctx.expression());
-			body.getContent().add(expr);
-			query.setBody(body);
-		}
-
-		this.environment = savedEnv;
-		updateExpressionBuilder();
-		return query;
 	}
 
 	// ==================== Constructor ====================
@@ -768,11 +758,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			setupOperationEnvironment(constructor);
 
 			var body = QVTO.createConstructorBody();
-			for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getContent().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.block())) {
+				body.getContent().add(expr);
 			}
 			constructor.setBody(body);
 
@@ -796,10 +783,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		QvtoEnvironment savedEnv = this.environment;
 		setupOperationEnvironment(entry);
 
+		// main(); declares the entry without a body (§8.4 <entry>, #346)
 		OperationBody body = QVTO.createOperationBody();
-		for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-			OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-			if (expr != null) {
+		if (ctx.block() != null) {
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.block())) {
 				body.getContent().add(expr);
 			}
 		}
@@ -936,6 +923,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 						intermPkg.getEClassifiers().add(shell);
 					}
 				}
+				// §8.4.8.1: "First, a type definition existing at the level of the current module
+				// … is searched" — before the model types (#346). A class keeps its shell; a data
+				// type's shell is replaced later, and is found through its package
+				if (!isDataType) {
+					localTypes.putIfAbsent(name, intermPkg.getEClassifier(name));
+				}
 			}
 		}
 	}
@@ -1006,6 +999,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			intermediateClass.setName(className);
 			intermPkg.getEClassifiers().add(intermediateClass);
 		}
+
+		intermediateClass.setAbstract(isAbstract(ctx));
 
 		// Resolve intermediate class supertypes (extends clause)
 		if (ctx.typeList() != null) {
@@ -1245,7 +1240,14 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	/**
 	 * Processes an intermediate class inside a specific package (metamodel block).
 	 */
-	private void processIntermediateClassInPackage(
+	/** §8.4.6: an abstract class — the keyword before 'class', not a class named so (#346). */
+	private static boolean isAbstract(QvtOParser.IntermediateClassDefContext ctx) {
+		return ctx.children.stream()
+				.takeWhile(child -> !"class".equals(child.getText()))
+				.anyMatch(child -> "abstract".equals(child.getText()));
+	}
+
+		private void processIntermediateClassInPackage(
 			QvtOParser.IntermediateClassDefContext ctx, Module module, EPackage targetPkg) {
 		String className = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
 
@@ -1255,6 +1257,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			intermediateClass.setName(className);
 			targetPkg.getEClassifiers().add(intermediateClass);
 		}
+		intermediateClass.setAbstract(isAbstract(ctx));
 
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
@@ -1536,8 +1539,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					featureCtx.simpleSignature().paramList().param()) {
 				EParameter eParam =
 						EcoreFactory.eINSTANCE.createEParameter();
-				eParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
-						paramCtx.qvtoIdentifier()));
+				eParam.setName(paramName(paramCtx, op.getEParameters().size()));
 
 				EClassifier paramType = expressionBuilder.resolveTypeExpression(
 						paramCtx.typeSpec().typeExpression());
@@ -1729,7 +1731,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private ModelParameter buildModelParameter(QvtOParser.ModelParamContext ctx) {
 		ModelParameter param = QVTO.createModelParameter();
-		param.setKind(resolveDirection(ctx.directionKind().getText()));
+		// §8.2.1.15: "The default direction kind is in" — library L(SRC) (§8.1.4, #346)
+		param.setKind(ctx.directionKind() != null ? resolveDirection(ctx.directionKind().getText()) : DirectionKind.IN);
 
 		// §8.1.1, §8.2.1.5: Check if typeSpec wraps a CollectionType around a ModelType
 		// e.g. 'in many : Sequence(SRC)' → collectionKind=SEQUENCE, inner type name='SRC'
@@ -1771,7 +1774,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (sigCtx.inputParams != null) {
 			for (QvtOParser.ParamContext paramCtx : sigCtx.inputParams.param()) {
 				MappingParameter param = QVTO.createMappingParameter();
-				param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
+				param.setName(paramName(paramCtx, operation.getEParameters().size()));
+				setDefaultValue(param, paramCtx);
 				// §8.2.1.12: the direction decides what the caller sees afterwards (#336)
 				if (paramCtx.directionKind() != null) {
 					param.setKind(resolveDirection(paramCtx.directionKind().getText()));
@@ -1853,7 +1857,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 		for (QvtOParser.ParamContext paramCtx : sigCtx.paramList().param()) {
 			VarParameter param = QVTO.createVarParameter();
-			param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
+			param.setName(paramName(paramCtx, operation.getEParameters().size()));
+			setDefaultValue(param, paramCtx);
 			if (paramCtx.directionKind() != null) {
 				param.setKind(resolveDirection(paramCtx.directionKind().getText()));
 			}
@@ -2134,6 +2139,22 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		moduleClass.setName(className);
 		module.getEClassifiers().add(moduleClass);
 		return moduleClass;
+	}
+
+	/**
+	 * A parameter's name, or for an unnamed one — constructor Column::Column(String, String)
+	 * (§8.1.8) — a synthetic name by its position, which no script can write (#346).
+	 */
+	private static String paramName(QvtOParser.ParamContext ctx, int index) {
+		return ctx.qvtoIdentifier() != null ? QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier())
+				: "_param" + (index + 1);
+	}
+
+	/** §8.4 <init_part>: the value an omitted argument takes (#346). */
+	private void setDefaultValue(VarParameter param, QvtOParser.ParamContext ctx) {
+		if (ctx.defaultValue != null) {
+			param.setOwnedInit((OclExpression) expressionBuilder.visit(ctx.defaultValue));
+		}
 	}
 
 	private DirectionKind resolveDirection(String text) {

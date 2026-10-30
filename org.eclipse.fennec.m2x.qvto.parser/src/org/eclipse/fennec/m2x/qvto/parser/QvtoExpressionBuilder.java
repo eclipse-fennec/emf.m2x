@@ -1105,11 +1105,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	@Override
 	public BlockExp visitBlockExp(QvtOParser.BlockExpContext ctx) {
 		BlockExp block = IMP.createBlockExp();
-		for (QvtOParser.StatementContext stmtCtx : ctx.statement()) {
-			OclExpression stmtExpr = buildStatement(stmtCtx);
-			if (stmtExpr != null) {
-				block.getBody().add(stmtExpr);
-			}
+		for (OclExpression stmtExpr : blockContents(ctx)) {
+			block.getBody().add(stmtExpr);
 		}
 		return block;
 	}
@@ -1130,7 +1127,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable returnedElement = OCL.createVariable();
 		returnedElement.setName(qvtoIdentifierText(ctx.varName));
-		returnedElement.setType(resolveTypeExpression(ctx.type));
+		if (ctx.type != null) {
+			returnedElement.setType(resolveTypeExpression(ctx.type));
+		}
 		returnedElement.setOwnedInit((OclExpression) visit(ctx.initValue));
 		this.environment = this.environment.nested(returnedElement);
 
@@ -1362,11 +1361,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		// Body as ConstructorBody
 		var body = QVTO.createConstructorBody();
-		for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-			OclExpression stmtExpr = buildStatement(stmtCtx);
-			if (stmtExpr != null) {
-				body.getContent().add(stmtExpr);
-			}
+		for (OclExpression stmtExpr : blockContents(ctx.block())) {
+			body.getContent().add(stmtExpr);
 		}
 		objectExp.setBody(body);
 
@@ -1430,8 +1426,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		MappingCallExp exp = QVTO.createMappingCallExp();
 		exp.setIsStrict("xmap".equals(ctx.mappingCallKind().getText()));
 
-		String name = scopedNameText(ctx.scopedName());
-		exp.setName(name);
+		exp.setName(mappingName(ctx.scopedName()));
 
 		if (ctx.argumentList() != null) {
 			for (QvtOParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
@@ -1482,11 +1477,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		TryExp tryExp = IMP.createTryExp();
 
 		// Try body
-		for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-			OclExpression stmtExpr = buildStatement(stmtCtx);
-			if (stmtExpr != null) {
-				tryExp.getTryBody().add(stmtExpr);
-			}
+		for (OclExpression stmtExpr : blockContents(ctx.block())) {
+			tryExp.getTryBody().add(stmtExpr);
 		}
 
 		// Catch clauses
@@ -1503,11 +1495,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				}
 			}
 
-			for (QvtOParser.StatementContext stmtCtx : catchCtx.block().statement()) {
-				OclExpression stmtExpr = buildStatement(stmtCtx);
-				if (stmtExpr != null) {
-					catchExp.getBody().add(stmtExpr);
-				}
+			for (OclExpression stmtExpr : blockContents(catchCtx.block())) {
+				catchExp.getBody().add(stmtExpr);
 			}
 
 			tryExp.getExceptClause().add(catchExp);
@@ -2068,8 +2057,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		exp.setIsSafe(isSafe);
 		exp.setIsStrict("xmap".equals(ctx.mappingCallKind().getText()));
 
-		String name = scopedNameText(ctx.scopedName());
-		exp.setName(name);
+		exp.setName(mappingName(ctx.scopedName()));
 
 		if (ctx.argumentList() != null) {
 			for (QvtOParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
@@ -2148,7 +2136,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		try {
 			MappingCallExp mapCall = QVTO.createMappingCallExp();
 			mapCall.setIsStrict("xmap".equals(ctx.mappingCallKind().getText()));
-			mapCall.setName(scopedNameText(ctx.scopedName()));
+			mapCall.setName(mappingName(ctx.scopedName()));
 			String sourceName = qvtoIdentifierText(ctx.callSource);
 			mapCall.setOwnedSource(sourceName.equals(iterVar.getName()) ? createVariableExp(iterVar)
 					: (OclExpression) visit(ctx.callSource));
@@ -2195,8 +2183,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		MappingCallExp mapCall = QVTO.createMappingCallExp();
 		mapCall.setOwnedSource(iterRef);
 		mapCall.setIsStrict("xmap".equals(mapCtx.mappingCallKind().getText()));
-		String name = scopedNameText(mapCtx.scopedName());
-		mapCall.setName(name);
+		mapCall.setName(mappingName(mapCtx.scopedName()));
 		if (mapCtx.argumentList() != null) {
 			for (QvtOParser.ExpressionContext argCtx : mapCtx.argumentList().expression()) {
 				mapCall.getOwnedArguments().add((OclExpression) visit(argCtx));
@@ -2639,13 +2626,37 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return type;
 	}
 
-	private BlockExp buildBlock(QvtOParser.BlockContext ctx) {
-		BlockExp block = IMP.createBlockExp();
-		for (QvtOParser.StatementContext stmtCtx : ctx.statement()) {
+	/**
+	 * The expressions of a block: its statements, and the last expression, which needs no ';'
+	 * (§8.4 <expression_list> ::= <expression_semi_list> ';'?, #346).
+	 */
+	List<OclExpression> blockContents(QvtOParser.BlockContext ctx) {
+		return blockContents(ctx.statement(), ctx.last);
+	}
+
+	List<OclExpression> blockContents(QvtOParser.BlockExpContext ctx) {
+		return blockContents(ctx.statement(), ctx.last);
+	}
+
+	private List<OclExpression> blockContents(List<QvtOParser.StatementContext> statements,
+			QvtOParser.ExpressionContext last) {
+		List<OclExpression> contents = new ArrayList<>();
+		for (QvtOParser.StatementContext stmtCtx : statements) {
 			OclExpression stmtExpr = buildStatement(stmtCtx);
 			if (stmtExpr != null) {
-				block.getBody().add(stmtExpr);
+				contents.add(stmtExpr);
 			}
+		}
+		if (last != null) {
+			contents.add((OclExpression) visit(last));
+		}
+		return contents;
+	}
+
+	private BlockExp buildBlock(QvtOParser.BlockContext ctx) {
+		BlockExp block = IMP.createBlockExp();
+		for (OclExpression stmtExpr : blockContents(ctx)) {
+			block.getBody().add(stmtExpr);
 		}
 		return block;
 	}
@@ -2792,15 +2803,30 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier(0));
 		}
 		// §8.4.7: scoped_identifier ::= identifier ('::' identifier)*
+		// §8.4.8 transformation_id ':::' — the mapping is found by its name and type (#346)
 		List<QvtOParser.QvtoIdentifierContext> ids = ctx.qvtoIdentifier();
 		List<String> parts = new ArrayList<>();
 		for (QvtOParser.QvtoIdentifierContext idCtx : ids) {
-			parts.add(qvtoIdentifierText(idCtx));
+			if (idCtx != ctx.transformationId) {
+				parts.add(qvtoIdentifierText(idCtx));
+			}
 		}
 		return String.join("::", parts);
 	}
 
-	String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {
+	/**
+	 * The name a mapping call is resolved by. §8.4.8 <mapping_id> ::= (<transformation_id> ':::')?
+	 * (<type_id> '::')? <mapping_name>: the qualifiers say where the mapping is defined, and the
+	 * candidates are chosen by the source's type anyway (§8.1.14) — so only the name is kept. A
+	 * qualified name used to reach the OCL engine verbatim and found no operation (#346).
+	 */
+	String mappingName(QvtOParser.ScopedNameContext ctx) {
+		String qualified = scopedNameText(ctx);
+		int separator = qualified.lastIndexOf("::");
+		return separator < 0 ? qualified : qualified.substring(separator + 2);
+	}
+
+		String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {
 		List<String> parts = new ArrayList<>();
 		for (QvtOParser.QvtoIdentifierContext idCtx : ctx.qvtoIdentifier()) {
 			parts.add(qvtoIdentifierText(idCtx));
