@@ -67,6 +67,114 @@ class OclStdlib {
 	/** Sentinel for "operation not found" — distinct from null (OclVoid) and OclInvalid. */
 	static final Object NOT_FOUND = new Object();
 
+	/**
+	 * The answer to a call whose arguments do not fit the operation's signature (OCL v2.4
+	 * §8.3.7 OperationCallExp [1]/[2]). The result is {@code invalid}; the message is for the
+	 * evaluator to report as an ERROR (#314).
+	 */
+	record ArgumentError(String message) {
+	}
+
+	/** What a parameter of a predefined operation accepts. */
+	private enum Param {
+		/** Integer: a finite whole number. */
+		INTEGER("Integer"),
+		/** Real, Integer or UnlimitedNatural — the numbers an arithmetic operation takes. */
+		NUMBER("Integer or Real"),
+		STRING("String"),
+		BOOLEAN("Boolean");
+
+		private final String label;
+
+		Param(String label) {
+			this.label = label;
+		}
+
+		boolean accepts(Object value) {
+			return switch (this) {
+				case INTEGER -> value instanceof Long || value instanceof Integer;
+				case NUMBER -> value instanceof Number || value instanceof OclUnlimitedNatural;
+				case STRING -> value instanceof String;
+				case BOOLEAN -> value instanceof Boolean;
+			};
+		}
+	}
+
+	private static final Param[] ONE_NUMBER = { Param.NUMBER };
+	private static final Param[] ONE_INTEGER = { Param.INTEGER };
+	private static final Param[] ONE_STRING = { Param.STRING };
+	private static final Param[] TWO_STRINGS = { Param.STRING, Param.STRING };
+	private static final Param[] ONE_BOOLEAN = { Param.BOOLEAN };
+
+	/**
+	 * Signatures of the predefined operations of the primitive types (OCL v2.4 §11.5) whose
+	 * arguments used to be coerced silently — {@code 1 + 'motorcycle'} was 1 (§7.4.5, #314).
+	 * Operations not listed here keep their own checks.
+	 */
+	private static final Map<String, Map<String, Param[]>> SIGNATURES = Map.of(
+			"Integer", Map.ofEntries(
+					Map.entry("+", ONE_NUMBER), Map.entry("-", ONE_NUMBER), Map.entry("*", ONE_NUMBER),
+					Map.entry("/", ONE_NUMBER), Map.entry("div", ONE_INTEGER), Map.entry("mod", ONE_INTEGER),
+					Map.entry("max", ONE_NUMBER), Map.entry("min", ONE_NUMBER),
+					Map.entry("<", ONE_NUMBER), Map.entry("<=", ONE_NUMBER),
+					Map.entry(">", ONE_NUMBER), Map.entry(">=", ONE_NUMBER)),
+			"Real", Map.ofEntries(
+					Map.entry("+", ONE_NUMBER), Map.entry("-", ONE_NUMBER), Map.entry("*", ONE_NUMBER),
+					Map.entry("/", ONE_NUMBER), Map.entry("max", ONE_NUMBER), Map.entry("min", ONE_NUMBER),
+					Map.entry("<", ONE_NUMBER), Map.entry("<=", ONE_NUMBER),
+					Map.entry(">", ONE_NUMBER), Map.entry(">=", ONE_NUMBER)),
+			"UnlimitedNatural", Map.of(
+					"max", ONE_NUMBER, "min", ONE_NUMBER,
+					"<", ONE_NUMBER, "<=", ONE_NUMBER, ">", ONE_NUMBER, ">=", ONE_NUMBER),
+			"Boolean", Map.of(
+					"and", ONE_BOOLEAN, "or", ONE_BOOLEAN, "xor", ONE_BOOLEAN, "implies", ONE_BOOLEAN),
+			"String", Map.ofEntries(
+					Map.entry("+", ONE_STRING), Map.entry("concat", ONE_STRING),
+					Map.entry("substring", new Param[] { Param.INTEGER, Param.INTEGER }),
+					Map.entry("indexOf", ONE_STRING), Map.entry("lastIndexOf", ONE_STRING),
+					Map.entry("at", ONE_INTEGER), Map.entry("equalsIgnoreCase", ONE_STRING),
+					Map.entry("startsWith", ONE_STRING), Map.entry("endsWith", ONE_STRING),
+					Map.entry("<", ONE_STRING), Map.entry("<=", ONE_STRING),
+					Map.entry(">", ONE_STRING), Map.entry(">=", ONE_STRING),
+					Map.entry("matches", ONE_STRING), Map.entry("replaceAll", TWO_STRINGS),
+					Map.entry("replaceFirst", TWO_STRINGS), Map.entry("substituteAll", TWO_STRINGS),
+					Map.entry("substituteFirst", TWO_STRINGS)));
+
+	private static String primitiveTypeName(Object source) {
+		if (source instanceof OclUnlimitedNatural) return "UnlimitedNatural";
+		if (source instanceof Long || source instanceof Integer) return "Integer";
+		if (source instanceof Double || source instanceof Float) return "Real";
+		if (source instanceof String) return "String";
+		if (source instanceof Boolean) return "Boolean";
+		return null;
+	}
+
+	/**
+	 * Checks a call on a primitive value against {@link #SIGNATURES}: as many arguments as the
+	 * operation has parameters, each of a conforming type. Unary minus takes none.
+	 *
+	 * @return the error, or {@code null} when the call fits or the operation is not listed
+	 */
+	private static ArgumentError checkSignature(String name, Object source, Object[] args) {
+		String typeName = primitiveTypeName(source);
+		Param[] params = typeName == null ? null : SIGNATURES.get(typeName).get(name);
+		if (params == null || ("-".equals(name) && args.length == 0)) {
+			return null;
+		}
+		String operation = typeName + "::" + name;
+		if (args.length != params.length) {
+			return new ArgumentError("Operation '" + operation + "' expects " + params.length
+					+ " argument(s), got " + args.length);
+		}
+		for (int i = 0; i < params.length; i++) {
+			if (!params[i].accepts(args[i])) {
+				return new ArgumentError("Argument " + (i + 1) + " of '" + operation + "' must be "
+						+ params[i].label + ", got " + args[i].getClass().getSimpleName());
+			}
+		}
+		return null;
+	}
+
 	private OclStdlib() {
 	}
 
@@ -83,6 +191,10 @@ class OclStdlib {
 	static Object dispatch(String name, Object source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
 		try {
+			ArgumentError mismatch = checkSignature(name, source, args);
+			if (mismatch != null) {
+				return mismatch;
+			}
 			return withinLimits(dispatchByType(name, source, args, options, locale), options);
 		} catch (ArrayIndexOutOfBoundsException wrongArity) {
 			// Operations are resolved by name at evaluation time, so `Set{1}->includes()` or
