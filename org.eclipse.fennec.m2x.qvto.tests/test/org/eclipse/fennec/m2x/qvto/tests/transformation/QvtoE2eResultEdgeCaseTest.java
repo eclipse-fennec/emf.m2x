@@ -56,7 +56,8 @@ class QvtoE2eResultEdgeCaseTest extends AbstractQvtoEngineTest {
 				transformation test(in s : SRC, out t : TGT) {
 				    mapping SourceElement::toTarget() : TargetElement {
 				        init {
-				            result.name := 'from_init';
+				            log(if result = null then 'init:null' else 'init:set' endif);
+				            result := object TargetElement { name := 'from_init'; };
 				        }
 				        value := self.value;
 				    }
@@ -66,9 +67,35 @@ class QvtoE2eResultEdgeCaseTest extends AbstractQvtoEngineTest {
 				}
 				""", inExtent, outExtent);
 		assertSuccess(result);
+		// §8.2.1.15: "The initial value of each out and result parameter is null" — the object
+		// init assigns is the result, no second instance is created (#332)
+		assertLogged(result, "init:null");
 		assertEquals(1, outExtent.getContents().size());
 		assertEquals("from_init", eGet(outExtent.getContents().get(0), "name"));
 		assertEquals(10, eGet(outExtent.getContents().get(0), "value"));
+	}
+
+	@Test
+	void result_propertyAssignmentInInit_isAnError() throws Exception {
+		// §8.2.1.15: in init the result is still null, so assigning one of its properties has no
+		// target (#332); before, the result was instantiated ahead of init
+		EObject src = createSourceElement("elem", 10);
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        init {
+				            result.name := 'from_init';
+				        }
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->map toTarget();
+				    }
+				}
+				""", new BasicQvtoModelExtent(src), emptyExtent());
+		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("the target is null")),
+				() -> result.diagnostics().toString());
 	}
 
 	@Test
@@ -225,5 +252,69 @@ class QvtoE2eResultEdgeCaseTest extends AbstractQvtoEngineTest {
 
 	private static Object eGet(EObject obj, String featureName) {
 		return obj.eGet(obj.eClass().getEStructuralFeature(featureName));
+	}
+
+	@Test
+	void trace_isRecordedBeforePopulation_soTheMappingFindsItsOwnResult() throws Exception {
+		// §8.1.6: "The trace … is created immediately after the instantiation and hence can be
+		// used within any inner mapping operation invoked within the population section" (#332)
+		EObject src = createSourceElement("elem", 10);
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        name := if self.resolveone(TargetElement) = result then 'found' else 'missing' endif;
+				        log('again:' + (self.map toTarget() = result).repr());
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->map toTarget();
+				    }
+				}
+				""", new BasicQvtoModelExtent(src), emptyExtent());
+		assertSuccess(result);
+		assertLogged(result, "again:true");
+	}
+
+	@Test
+	void recursiveSelfMapping_endsAtTheTrace_notInAStackOverflow() throws Exception {
+		// The same mapping on the same source again is answered from the trace (§8.1.11.1);
+		// before #332 it recursed until the Java stack overflowed out of execute()
+		EObject src = createSourceElement("elem", 10);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        name := self.map toTarget().name + 'x';
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->map toTarget();
+				    }
+				}
+				""", new BasicQvtoModelExtent(src), outExtent);
+		assertEquals(1, outExtent.getContents().size());
+	}
+
+	@Test
+	void collectionResult_startsEmpty() throws Exception {
+		// §8.2.1.15: "Collection types are initialized with empty collections" (#332)
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    mapping names() : r : Sequence(String) {
+				        init {
+				            log('init-size:' + r->size().repr());
+				        }
+				        r += 'a';
+				    }
+				    main() {
+				        log('size:' + map names()->size().repr());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "init-size:0");
+		assertLogged(result, "size:1");
 	}
 }

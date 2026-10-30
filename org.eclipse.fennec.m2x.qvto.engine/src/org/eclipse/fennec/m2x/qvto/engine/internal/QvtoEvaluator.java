@@ -57,9 +57,13 @@ import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.util.ImperativeOclSwitch;
+import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
@@ -263,6 +267,11 @@ public class QvtoEvaluator {
 			// §8.2.2.15: uncaught raise terminates execution
 			addError("Uncaught exception: " + e.exceptionType
 					+ (e.argument != null ? " - " + e.argument : ""));
+		} catch (StackOverflowError e) {
+			// Every QVT-O call takes many Java frames, so a deep recursion can exhaust the Java
+			// stack before maxStackDepth is reached. Reported, not thrown out of execute() (#332)
+			addError("Recursion too deep: the Java stack overflowed before maxStackDepth ("
+					+ options.maxStackDepth() + ") was reached");
 		}
 		return null;
 	}
@@ -809,6 +818,7 @@ public class QvtoEvaluator {
 			addError("Execution timeout exceeded");
 			return null;
 		}
+		boolean traced = false;
 		try {
 			env.pushScope();
 			bindOperationParams(mappingOp, self, args);
@@ -834,34 +844,32 @@ public class QvtoEvaluator {
 				}
 			}
 
-			// Create result objects for output parameters with EClass type
+			// §8.2.1.15: "The initial value of each out and result parameter is null … Collection
+			// types are initialized with empty collections." (#332)
 			EList<VarParameter> resultParams = mappingOp.getResult();
 			for (VarParameter rp : resultParams) {
-				Object existing = env.lookup(rp.getName());
-				if (existing == null) {
-					EClassifier type = rp.getEType();
-					if (type instanceof EClass eClass && !eClass.isAbstract()) {
-						EObject created = EcoreUtil.create(eClass);
-						env.assign(rp.getName(), created);
-						if (resultParams.size() == 1) {
-							env.assign("result", created);
-						}
-						// §8.2.1.16: the extent the result names (T@extent), else the inferred one
-						addToExtent(created, rp instanceof MappingParameter mp && mp.getExtent() != null
-								? mp.getExtent().getName()
-								: null);
-					}
+				if (env.lookup(rp.getName()) == null && rp.getEType() instanceof CollectionType collectionType) {
+					env.assign(rp.getName(), emptyCollection(collectionType));
 				}
 			}
 
 			// Execute mapping body (§8.2.1.15 p106-107):
-			// init → inherited → population → end → merged
+			// init → instantiation → trace → inherited → population → end → merged
 			OperationBody body = mappingOp.getBody();
 			if (body instanceof MappingBody mappingBody) {
-				// 1. Init section
+				// 1. Init section — the results are still null here, so init may assign them
 				for (OclExpression initExpr : mappingBody.getInitSection()) {
 					eval(initExpr);
 				}
+			}
+			// "At the end of the initialization section, an implicit 'instantiation section' is
+			// entered, which provokes the instantiation of all the out parameters … that still have
+			// a null value." Then the relation holds: the trace is recorded now, so a mapping
+			// reached again from its own population finds it instead of recursing (§8.1.6, #332)
+			instantiateResults(resultParams);
+			recordTrace(mappingOp, self, args, currentResult(resultParams));
+			traced = true;
+			if (body instanceof MappingBody mappingBody) {
 				// 2. Inherited mappings: after init+instantiation, before population (§8.1.15)
 				for (MappingOperation inherited : mappingOp.getInherited()) {
 					executePopulationOnly(inherited, self, args);
@@ -907,31 +915,57 @@ public class QvtoEvaluator {
 				}
 			}
 
-			// Collect result
-			Object result = null;
-			if (!resultParams.isEmpty()) {
-				if (resultParams.size() > 1) {
-					result = collectMultiResult(resultParams);
-				} else {
-					result = env.lookup(resultParams.get(0).getName());
-				}
-			}
-
-			// Record trace (§8.1.11.1: context, in-params, result)
-			recordTrace(mappingOp, self, args, result);
-
-			return result;
+			return currentResult(resultParams);
 		} catch (ReturnException e) {
 			Object result = e.value;
 			if (result == null && !mappingOp.getResult().isEmpty()) {
 				result = env.lookup(mappingOp.getResult().get(0).getName());
 			}
-			recordTrace(mappingOp, self, args, result);
+			if (!traced) {
+				recordTrace(mappingOp, self, args, result);
+			}
 			return result;
 		} finally {
 			env.popScope();
 			--stackDepth;
 		}
+	}
+
+	/**
+	 * The instantiation section of a mapping (§8.2.1.15): every result of a class type that is
+	 * still null after {@code init} is created and added to its extent (§8.2.1.16, T@extent).
+	 */
+	private void instantiateResults(EList<VarParameter> resultParams) {
+		for (VarParameter rp : resultParams) {
+			if (env.lookup(rp.getName()) != null) {
+				continue;
+			}
+			if (rp.getEType() instanceof EClass eClass && !eClass.isAbstract()) {
+				EObject created = EcoreUtil.create(eClass);
+				env.assign(rp.getName(), created);
+				if (resultParams.size() == 1) {
+					env.assign("result", created);
+				}
+				addToExtent(created, rp instanceof MappingParameter mp && mp.getExtent() != null
+						? mp.getExtent().getName()
+						: null);
+			}
+		}
+	}
+
+	/** The mapping's result as it stands: the single result, a tuple of several, or null. */
+	private Object currentResult(EList<VarParameter> resultParams) {
+		if (resultParams.isEmpty()) {
+			return null;
+		}
+		return resultParams.size() > 1 ? collectMultiResult(resultParams) : env.lookup(resultParams.get(0).getName());
+	}
+
+	/** An empty collection of the given type's kind, built the way OCL builds a literal. */
+	private Object emptyCollection(CollectionType type) {
+		CollectionLiteralExp literal = OclFactory.eINSTANCE.createCollectionLiteralExp();
+		literal.setKind(type.getKind() == CollectionKind.COLLECTION ? CollectionKind.SEQUENCE : type.getKind());
+		return eval(literal);
 	}
 
 	/**
