@@ -808,10 +808,20 @@ as `false`, and again no test in any suite reached them:
 | `forEach`/`forOne` condition (§8.2.2.6: `if (condition) body` per element) | ERROR, that element is skipped, the loop goes on |
 | `xselect`/`xcollectselect…` condition (§8.2.2.7, same `if`) | ERROR, that element is skipped |
 | `log … when` (§8.2.2.19) | ERROR, nothing is logged |
-| `when` guard (§8.2.1.15), `map` and inherited/merged | ERROR, the mapping does not run (`xmap` was already an error) |
-| `where` postcondition | ERROR; a violated one (`false`) stays a WARNING |
+| `when` guard (§8.2.1.15), `map` and inherited/merged | ERROR, the mapping does not run |
+| `when` as the pre-condition of `xmap` (§8.2.1.21) | fatal assertion, as when it is `false`; evaluated once (#335) |
+| `where` postcondition | fatal assertion, as when it is `false` (#335) |
 | `select`/`reject`/`forAll`/`exists`/`any` evaluated by QVT-O | as the OCL engine (§11.9.1): `select`/`reject` invalid, the quantifiers by their precedence, no diagnostic |
 | `resolve` condition (§8.2.1.22) | the resolve is `invalid`, as a `select` |
+
+Pre- and post-conditions are assertions (§8.2.1.15: "any execution failure is fatal"; §8.2.1.21): a
+`where` that does not hold and an `xmap` whose candidate does not conform or whose `when` does not
+hold raise `AssertionFailed`, as `assert fatal` does (§8.2.2.20). Eclipse does the same
+(`MappingPostconditionFailed`). The transformation ends with
+`Assertion failed: where-postcondition failed for mapping: m`, unless a `try … except (AssertionFailed)`
+catches it. Before #335 a violated `where` was a WARNING and a failed `xmap` an ERROR, and the
+transformation went on in both cases. Four tests encoded that, and they were changed with the spec
+quote.
 
 The shorthands `list[T]` and `list![T]` share their notation with `list[condition]`; a simple name is
 the type form only when it names a type and is neither a variable in scope nor the shorthand's own
