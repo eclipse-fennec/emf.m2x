@@ -78,6 +78,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclControlFlowSignal;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
+import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
@@ -440,7 +441,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 						if (elemObj.eClass().getFeatureID(actual) == -1) {
 							return unknownProperty(elemObj, actual);
 						}
-						Object value = getProperty(elemObj, actual);
+						Object value = navigationValue(elemObj, actual, getProperty(elemObj, actual));
 						result.add(value == null ? OCL_NULL : widenInteger(value));
 					}
 				} else {
@@ -480,7 +481,7 @@ public class OclEvaluator extends OclSwitch<Object> {
 		EStructuralFeature realFeature = eo.eClass().getEStructuralFeature(sf.getName());
 		if (realFeature != null) {
 			sf = resolveFeature(eo, sf);
-			Object value = getProperty(eo, sf);
+			Object value = navigationValue(eo, sf, getProperty(eo, sf));
 			return value == null ? OCL_NULL : widenInteger(value);
 		}
 
@@ -498,8 +499,26 @@ public class OclEvaluator extends OclSwitch<Object> {
 		if (eo.eClass().getFeatureID(sf) == -1) {
 			return unknownProperty(eo, sf);
 		}
-		Object value = getProperty(eo, sf);
+		Object value = navigationValue(eo, sf, getProperty(eo, sf));
 		return value == null ? OCL_NULL : widenInteger(value);
+	}
+
+	/**
+	 * The OCL value of a many-valued feature: a Set, OrderedSet, Bag or Sequence according to the
+	 * feature's {@code unique} and {@code ordered} flags (OCL v2.4 §7.5.3, §7.5.11) — the kind the
+	 * parser already gives the navigation. EMF's own list classified as a Sequence, so
+	 * {@code self.employees->including(self.employees->first())} grew an OrderedSet (#319).
+	 *
+	 * <p>A copy, not a view: it keeps an expression from writing into the model through a
+	 * collection operation and from seeing a later change of the model, which matters for a
+	 * value captured as {@code @pre}. The order of the model's list is kept, and the copy
+	 * remembers owner and feature ({@link OclFeatureValue}) for the #182 guard and for QVT-O.
+	 */
+	private static Object navigationValue(EObject owner, EStructuralFeature feature, Object value) {
+		if (!feature.isMany() || !(value instanceof Collection<?> list)) {
+			return value;
+		}
+		return FeatureValues.of(owner, feature, list);
 	}
 
 	// --- Operation Call ---
