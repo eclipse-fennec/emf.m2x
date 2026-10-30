@@ -468,6 +468,14 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	}
 
 	/**
+	 * The receiver of the static String counter operations: the type, {@code String.incrStrCounter('x')},
+	 * or a string, {@code 'c'.incrStrCounter('x')} — which was a silent no-op before #344.
+	 */
+	private static boolean isStringReceiver(Object self) {
+		return self instanceof PrimitiveType pt && "String".equals(pt.getName()) || self instanceof String;
+	}
+
+	/**
 	 * §8.3.16.31–35: String counter operations for generating unique names.
 	 *
 	 * <p>Static operations (31–34) are invoked as {@code String.startStrCounter('Foo')}
@@ -478,7 +486,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// §8.3.16.31: String::startStrCounter(s:String) : Void — initialize/reset counter to 0
 		ops.add(new OclOperation("startStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+					if (isStringReceiver(self)
 							&& args.length > 0 && args[0] instanceof String s) {
 						stringCounters.put(s, new int[]{0});
 					}
@@ -488,7 +496,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// §8.3.16.32: String::getStrCounter(s:String) : Integer — get current value or null
 		ops.add(new OclOperation("getStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+					if (isStringReceiver(self)
 							&& args.length > 0 && args[0] instanceof String s) {
 						int[] counter = stringCounters.get(s);
 						return counter != null ? (long) counter[0] : null;
@@ -499,7 +507,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// §8.3.16.33: String::incrStrCounter(s:String) : Integer — increment and return new value
 		ops.add(new OclOperation("incrStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+					if (isStringReceiver(self)
 							&& args.length > 0 && args[0] instanceof String s) {
 						int[] counter = stringCounters.get(s);
 						if (counter == null) {
@@ -514,7 +522,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// §8.3.16.34: String::restartAllStrCounter() : Void — reset all counters to 0
 		ops.add(new OclOperation("restartAllStrCounter", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())) {
+					if (isStringReceiver(self)) {
 						for (int[] counter : stringCounters.values()) {
 							counter[0] = 0;
 						}

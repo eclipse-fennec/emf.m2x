@@ -124,7 +124,9 @@ class OclStdlibHardeningTest extends AbstractOclTest {
 
 	@Test
 	void ordinaryFormat_stillWorks() throws OclParseException {
-		assertEquals("x=1", eval("'x=%d'.format(Sequence{1})", createPerson("A", 1, 1.0, false)));
+		// QVT v1.3 §8.3.16.1: a single hole takes the value as it is — a Sequence is one value, not
+		// an argument list (#344)
+		assertEquals("x=1", eval("'x=%d'.format(1)", createPerson("A", 1, 1.0, false)));
 	}
 
 	@Test

@@ -23,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -208,9 +209,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public IntegerLiteralExp visitIntegerLiteral(QvtOParser.IntegerLiteralContext ctx) {
-		IntegerLiteralExp exp = OCL.createIntegerLiteralExp();
-		exp.setIntegerSymbol(Long.parseLong(ctx.INTEGER_LITERAL().getText()));
-		return exp;
+		return integerLiteral(ctx.INTEGER_LITERAL().getText(), ctx.getStart());
 	}
 
 	@Override
@@ -271,9 +270,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public IntegerLiteralExp visitSimpleLitInt(QvtOParser.SimpleLitIntContext ctx) {
-		IntegerLiteralExp exp = OCL.createIntegerLiteralExp();
-		exp.setIntegerSymbol(Long.parseLong(ctx.INTEGER_LITERAL().getText()));
-		return exp;
+		return integerLiteral(ctx.INTEGER_LITERAL().getText(), ctx.getStart());
 	}
 
 	@Override
@@ -1806,7 +1803,23 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return QvtoStandardLibraryTypes.lookup(name);
 	}
 
-	private EClassifier unresolvedName(String name) {
+	/**
+	 * An Integer literal. It is held as an ELong; larger Integers are reached by arithmetic or
+	 * toInteger(), which are unbounded (#322). A larger literal is a parse error, as in the OCL
+	 * parser — it used to escape as Java's NumberFormatException (#344).
+	 */
+	private IntegerLiteralExp integerLiteral(String text, Token start) {
+		IntegerLiteralExp exp = OCL.createIntegerLiteralExp();
+		try {
+			exp.setIntegerSymbol(Long.parseLong(text));
+		} catch (NumberFormatException e) {
+			positions.positionAt(start.getLine(), start.getCharPositionInLine());
+			diagnostics.add(positions.at("Integer literal out of range (64 bit): " + text));
+		}
+		return exp;
+	}
+
+		private EClassifier unresolvedName(String name) {
 		diagnostics.add(positions.at("Unknown type (" + name + ")"));
 		EClass placeholder = EcoreFactory.eINSTANCE.createEClass();
 		placeholder.setName(name);
