@@ -1276,7 +1276,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 			// Sort by pre-computed keys using cross-type numeric comparison
 			Integer[] indices = new Integer[elements.size()];
 			for (int i = 0; i < indices.length; i++) indices[i] = i;
-			Arrays.sort(indices, (i, j) -> compareOcl(keys.get(i), keys.get(j)));
+			// Strings sort by collation in the oclLocale, like '<' (#329)
+			Locale locale = resolveOclLocale();
+			Arrays.sort(indices, (i, j) -> OclStdlib.compareOcl(keys.get(i), keys.get(j), locale));
 			// sortedBy on Set/OrderedSet → OclOrderedSet; on Sequence → Sequence
 			List<Object> sorted;
 			if (source instanceof Set<?> || source instanceof OclOrderedSet<?>) {

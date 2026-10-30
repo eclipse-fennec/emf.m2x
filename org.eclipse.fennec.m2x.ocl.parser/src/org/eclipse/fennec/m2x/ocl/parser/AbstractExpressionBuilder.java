@@ -258,7 +258,13 @@ public class AbstractExpressionBuilder {
 
 	public IntegerLiteralExp buildIntegerLiteral(String text) {
 		IntegerLiteralExp exp = FACTORY.createIntegerLiteralExp();
-		exp.setIntegerSymbol(Long.parseLong(text));
+		try {
+			exp.setIntegerSymbol(Long.parseLong(text));
+		} catch (NumberFormatException e) {
+			// The literal is held as an ELong; larger Integers are reached by arithmetic or
+			// toInteger(), which are unbounded (#322). Said in words, not as Java's message
+			addError("Integer literal out of range (64 bit): " + text);
+		}
 		return exp;
 	}
 
