@@ -272,10 +272,12 @@ class M2tHardeningTest {
 			M2tResult result = assertDoesNotThrow(
 					() -> engine.execute(m, M2tContext.of(testClass)));
 			assertNotNull(result);
-			// OCL evaluation error should be ERROR severity
+			// OCL evaluation error should be ERROR severity — OCL reports the unknown property
+			// itself now instead of throwing out of evaluate() (#327)
 			assertTrue(result.diagnostics().stream()
 					.anyMatch(d -> d.getSeverity() == Diagnostic.ERROR
-							&& d.getMessage().contains("OCL evaluation error")));
+							&& d.getMessage().contains("Unknown property 'nonExistentProperty'")),
+					result.diagnostics()::toString);
 			assertFalse(result.isSuccess(), "OCL error should mark result as not successful");
 		}
 	}

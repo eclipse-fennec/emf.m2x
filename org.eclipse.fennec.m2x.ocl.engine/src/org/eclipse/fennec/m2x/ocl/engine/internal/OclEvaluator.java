@@ -33,6 +33,7 @@ import org.eclipse.emf.common.util.ECollections;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
@@ -49,6 +50,7 @@ import org.eclipse.fennec.m2x.model.ocl.CollectionRange;
 import org.eclipse.fennec.m2x.model.ocl.EnumLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IntegerLiteralExp;
+import org.eclipse.fennec.m2x.model.ocl.InvalidType;
 import org.eclipse.fennec.m2x.model.ocl.InvalidLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.IterateExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
@@ -70,6 +72,7 @@ import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.ocl.VoidType;
 import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclControlFlowSignal;
@@ -430,6 +433,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 							}
 						}
 						EStructuralFeature actual = resolveFeature(elemObj, sf);
+						if (elemObj.eClass().getFeatureID(actual) == -1) {
+							return unknownProperty(elemObj, actual);
+						}
 						Object value = getProperty(elemObj, actual);
 						result.add(value == null ? OCL_NULL : widenInteger(value));
 					}
@@ -485,6 +491,9 @@ public class OclEvaluator extends OclSwitch<Object> {
 
 		// Fallback: try resolveFeature (may work for cross-type features)
 		sf = resolveFeature(eo, sf);
+		if (eo.eClass().getFeatureID(sf) == -1) {
+			return unknownProperty(eo, sf);
+		}
 		Object value = getProperty(eo, sf);
 		return value == null ? OCL_NULL : widenInteger(value);
 	}
@@ -508,8 +517,18 @@ public class OclEvaluator extends OclSwitch<Object> {
 			return wrapNull(preStateSnapshot.getPreValue(exp));
 		}
 
+		// oclIsInState (§11.3.1) needs UML state machines, which Ecore models do not have. Say so
+		// before the argument — a state name — is evaluated as an unknown variable (#321)
+		if ("oclIsInState".equals(opName)) {
+			return addError("oclIsInState is not supported: Ecore models have no state machines");
+		}
+
 		// oclIsNew(): check if object existed before the operation
 		if ("oclIsNew".equals(opName)) {
+			// §11.3.2 OclVoid: "oclIsNew() : Boolean — Evaluates to false." (#321)
+			if (source == null) {
+				return false;
+			}
 			return source instanceof EObject eo ? !preStateSnapshot.existedBefore(eo) : OclInvalid.INSTANCE;
 		}
 
@@ -1435,6 +1454,26 @@ public class OclEvaluator extends OclSwitch<Object> {
 	}
 
 	private Object evaluateAllInstances(Object typeObj) {
+		// Types whose instances are known without a model (§8.2.2, A.2.3.1, #328): the literals
+		// of an enumeration, Boolean's two values, OclVoid's null; OclInvalid has none
+		if (typeObj instanceof EEnum eEnum) {
+			Set<Object> literals = new OclSet<>();
+			for (EEnumLiteral literal : eEnum.getELiterals()) {
+				literals.add(literal.getInstance());
+			}
+			return literals;
+		}
+		if (typeObj instanceof PrimitiveType pt && "Boolean".equals(pt.getName())) {
+			return new OclSet<>(List.of(true, false));
+		}
+		if (typeObj instanceof VoidType) {
+			Set<Object> voidInstances = new OclSet<>();
+			voidInstances.add(null);
+			return voidInstances;
+		}
+		if (typeObj instanceof InvalidType) {
+			return OclInvalid.INSTANCE;
+		}
 		OclContext ctx = env.getContext();
 		if (ctx == null || ctx.extent() == null) {
 			return addError("allInstances() requires a model extent in the evaluation context");
@@ -1711,6 +1750,16 @@ public class OclEvaluator extends OclSwitch<Object> {
 	 * @param sf the statically resolved feature from the AST
 	 * @return the feature valid for {@code eo.eGet()}, possibly name-resolved
 	 */
+	/**
+	 * A property the object's class does not have — a typo the parser could only keep as a
+	 * placeholder because the source type was not known (#153). Reported as an ERROR with an
+	 * invalid result instead of letting {@code eGet} throw out of {@code evaluate()}
+	 * (A.2.4.3: an undefined attribute access is invalid, #327).
+	 */
+	private Object unknownProperty(EObject eo, EStructuralFeature sf) {
+		return addError("Unknown property '" + sf.getName() + "' on " + eo.eClass().getName());
+	}
+
 	private EStructuralFeature resolveFeature(EObject eo, EStructuralFeature sf) {
 		EClass eClass = eo.eClass();
 

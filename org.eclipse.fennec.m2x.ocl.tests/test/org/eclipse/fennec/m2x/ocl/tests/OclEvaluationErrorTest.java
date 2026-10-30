@@ -58,9 +58,20 @@ class OclEvaluationErrorTest extends AbstractOclTest {
 	}
 
 	// --- Invalid property access ---
-	// Note: nonExistent properties are caught at parse time as synthetic
-	// attributes; the evaluator throws IllegalArgumentException from EMF.
-	// This is acceptable behavior for our implementation.
+
+	@Test
+	void unknownProperty_isInvalidWithError_notAnException() throws OclParseException {
+		// OCL v2.4 A.2.4.3: an undefined attribute access is invalid; the parser keeps an
+		// unknown name as a placeholder in the default mode (#153), the evaluator reports it (#327)
+		assertInvalid("self.noSuchProp", self);
+		assertHasError("self.noSuchProp", self, "Unknown property 'noSuchProp' on Person");
+	}
+
+	@Test
+	void unknownProperty_onCollectionElements_isInvalidWithError() throws OclParseException {
+		assertInvalid("Sequence{self}.noSuchProp", self);
+		assertInvalid("self.oclAsSet()->collect(p | p.noSuchProp)", self);
+	}
 
 	// --- Invalid on invalid ---
 
