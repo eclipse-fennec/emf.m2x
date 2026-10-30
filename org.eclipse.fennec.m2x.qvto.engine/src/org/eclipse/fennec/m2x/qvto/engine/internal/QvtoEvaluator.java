@@ -70,6 +70,7 @@ import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
+import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
@@ -343,7 +344,7 @@ public class QvtoEvaluator {
 				try {
 					env.define("self", model);
 					for (OclExpression condition : modelType.getAdditionalCondition()) {
-						if (!Boolean.TRUE.equals(eval(condition))) {
+						if (!Boolean.TRUE.equals(evalCondition(condition))) {
 							addError("Model '" + mp.getName() + "' does not satisfy the where condition of model type '"
 									+ modelType.getName() + "'");
 							conform = false;
@@ -567,8 +568,35 @@ public class QvtoEvaluator {
 	 * "otherwise the result is invalid" (OCL v2.4 §10.3, IfExpEval [1]). Imperatively that is a
 	 * statement that does not run, so it is an error of the transformation (#308).
 	 */
+	/**
+	 * A condition — wherever a Boolean is expected: if, while, forEach, the imperative iterate
+	 * variants, when, where, log … when, assert and the condition of a resolve. QVT v1.3 §8.4.5(2):
+	 * "if an Element instance is passed there is an implicit comparison with the null value … if
+	 * a collection value is passed there is an implicit comparison with the size of the
+	 * collection" — so the §8.1.9 example if (cl := …) return false works. A null counts as
+	 * false only where the condition is typed as an element or a collection; anywhere else
+	 * undefined stays the error of #308/#310 (#338).
+	 */
+	private Object evalCondition(OclExpression condition) {
+		Object value = eval(condition);
+		if (value instanceof Boolean || value == OclInvalid.INSTANCE) {
+			return value;
+		}
+		if (value instanceof EObject) {
+			return Boolean.TRUE;
+		}
+		if (value instanceof Collection<?> collection) {
+			return !collection.isEmpty();
+		}
+		if (value == null && (condition.getType() instanceof CollectionType
+				|| condition.getType() instanceof EClass && !(condition.getType() instanceof OclType))) {
+			return Boolean.FALSE;
+		}
+		return value;
+	}
+
 	private Object evalIfExp(IfExp ifExp) {
-		Object condVal = eval(ifExp.getOwnedCondition());
+		Object condVal = evalCondition(ifExp.getOwnedCondition());
 		if (Boolean.TRUE.equals(condVal)) {
 			return eval(ifExp.getOwnedThen());
 		}
@@ -1071,7 +1099,7 @@ public class QvtoEvaluator {
 			// when-guard: all must be true, otherwise skip. A guard that cannot be decided is an
 			// error, and the mapping does not run (§8.2.1.15, #310)
 			for (OclExpression whenExpr : mappingOp.getWhen()) {
-				Object whenVal = eval(whenExpr);
+				Object whenVal = evalCondition(whenExpr);
 				if (!Boolean.TRUE.equals(whenVal)) {
 					if (strict) {
 						throw new FatalAssertionException("xmap pre-condition failed for mapping: "
@@ -1166,7 +1194,7 @@ public class QvtoEvaluator {
 			// where-postcondition
 			OclExpression whereExpr = mappingOp.getWhere();
 			if (whereExpr != null) {
-				Object whereVal = eval(whereExpr);
+				Object whereVal = evalCondition(whereExpr);
 				if (!Boolean.TRUE.equals(whereVal)) {
 					// §8.2.1.15: "pre-conditions and post-conditions are assertions; any execution
 					// failure is fatal" — one that is violated or cannot be decided ends the
@@ -1434,7 +1462,7 @@ public class QvtoEvaluator {
 			}
 			// §8.1.15: a reused mapping is not invoked if its when-guard is not satisfied
 			for (OclExpression whenExpr : reused.getWhen()) {
-				Object whenVal = eval(whenExpr);
+				Object whenVal = evalCondition(whenExpr);
 				if (!Boolean.TRUE.equals(whenVal)) {
 					if (!Boolean.FALSE.equals(whenVal)) {
 						undefinedCondition("when", whenVal,
@@ -1531,6 +1559,19 @@ public class QvtoEvaluator {
 	 * Adds an EObject to the named extent, or — without a name — to the one inferred from its
 	 * metamodel.
 	 */
+	/**
+	 * Adds a created object to an extent, which an in model is not: an object the inference
+	 * would put there is an error of the transformation, reported — it used to throw the
+	 * extent's UnsupportedOperationException out of execute() (#338 side find).
+	 */
+	private void addToWritableExtent(QvtoModelExtent extent, EObject eObject) {
+		if (extent.isReadOnly()) {
+			addError("Cannot add " + OclValues.repr(eObject) + " to an in model: it is read-only (§8.1.3.2)");
+			return;
+		}
+		extent.add(eObject);
+	}
+
 	private void addToExtent(EObject eObject, String extentName) {
 		if (extentName != null) {
 			QvtoModelExtent extent = extentManager.getExtent(extentName);
@@ -1542,7 +1583,7 @@ public class QvtoEvaluator {
 							+ " is not allowed as root in extent '" + extentName + "'");
 					return;
 				}
-				extent.add(eObject);
+				addToWritableExtent(extent, eObject);
 				return;
 			}
 		}
@@ -1574,7 +1615,7 @@ public class QvtoEvaluator {
 					return;
 				}
 			}
-			extent.add(eObject);
+			addToWritableExtent(extent, eObject);
 		}
 	}
 
@@ -2530,7 +2571,7 @@ public class QvtoEvaluator {
 					addError("Execution timeout exceeded");
 					break;
 				}
-				Object condition = eval(exp.getCondition());
+				Object condition = evalCondition(exp.getCondition());
 				if (!Boolean.TRUE.equals(condition)) {
 					// §8.2.2.4: iterates "until a condition becomes false" — an undefined one
 					// ends the loop too, but not without a word (#310)
@@ -2586,7 +2627,7 @@ public class QvtoEvaluator {
 					env.define(iterName, element);
 					// Optional condition filter
 					if (condition != null) {
-						Object condVal = eval(condition);
+						Object condVal = evalCondition(condition);
 						if (!Boolean.TRUE.equals(condVal)) {
 							// §8.2.2.6 defines the condition as "if (condition) body" per element:
 							// the if of #308, so this element is skipped with an error (#310)
@@ -2720,7 +2761,7 @@ public class QvtoEvaluator {
 				env.define(target != null ? target.getName() : iterName, candidate);
 				// §8.2.2.7 defines the variants with "if (SELECTOR <> null and CONDITION)": the
 				// if of #308, so an undefined condition skips the element with an error (#310)
-				Object condVal = eval(condition);
+				Object condVal = evalCondition(condition);
 				if (!(condVal instanceof Boolean)) {
 					undefinedCondition("xselect", condVal, "the element is skipped");
 				}
@@ -2865,7 +2906,7 @@ public class QvtoEvaluator {
 			// §8.2.2.19: "No log record is produced if it evaluates to false" — the condition
 			// first, so the arguments of a record that is not produced are not evaluated (#345)
 			if (exp.getCondition() != null) {
-				Object cond = eval(exp.getCondition());
+				Object cond = evalCondition(exp.getCondition());
 				if (!Boolean.TRUE.equals(cond)) {
 					if (!Boolean.FALSE.equals(cond)) {
 						undefinedCondition("log", cond, "nothing is logged");
@@ -2972,7 +3013,7 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseAssertExp(AssertExp exp) {
-			Object condition = eval(exp.getAssertion());
+			Object condition = evalCondition(exp.getAssertion());
 			if (!Boolean.TRUE.equals(condition)) {
 				SeverityKind severity = exp.getSeverity();
 				int diagSeverity = switch (severity) {
@@ -3192,7 +3233,7 @@ public class QvtoEvaluator {
 					env.pushScope();
 					try {
 						env.define(targetVarName, candidate);
-						Object condVal = eval(exp.getCondition());
+						Object condVal = evalCondition(exp.getCondition());
 						if (!(condVal instanceof Boolean)) {
 							// §8.2.1.22: the condition filters as a select does, and a select
 							// whose body is neither true nor false is invalid (#310)
