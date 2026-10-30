@@ -156,6 +156,28 @@ class OclEqualityEdgeCaseTest extends AbstractOclTest {
 				"self.employees->at(1) <> self.employees->at(2)", company));
 	}
 
+	/**
+	 * OCL v2.4 §11.3.1 {@code =}: "True if self is the same object as object2" — two distinct
+	 * objects with identical attribute values are not equal (Annex A.2.4, #318).
+	 */
+	@Test
+	void eObject_structuralTwins_areNotEqual() throws OclParseException {
+		EObject twins = createCompany("Twins", createPerson("Carl", 40, 1.0, false),
+				createPerson("Carl", 40, 1.0, false));
+		assertEquals(false, eval("self.employees->at(1) = self.employees->at(2)", twins));
+		assertEquals(true, eval("self.employees->at(1) <> self.employees->at(2)", twins));
+		assertEquals(2, eval("Set{self.employees->at(1), self.employees->at(2)}->size()", twins));
+		assertEquals(false, eval("Sequence{self.employees->at(1)}->includes(self.employees->at(2))", twins));
+		assertEquals(0, eval("Sequence{self.employees->at(1)}->count(self.employees->at(2))", twins));
+		assertEquals(1, eval("self.employees->select(e | e = self.employees->first())->size()", twins));
+	}
+
+	@Test
+	void eObject_sameObject_isEqual() throws OclParseException {
+		assertEquals(true, eval("self = self", alice));
+		assertEquals(true, eval("self.employees->first() = self.employees->at(1)", company));
+	}
+
 	@Test
 	void eObject_equalInCollection() throws OclParseException {
 		assertEquals(true, eval(
