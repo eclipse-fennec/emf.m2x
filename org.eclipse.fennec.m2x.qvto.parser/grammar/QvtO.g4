@@ -62,13 +62,22 @@ packageRefList
     : packageRef (',' packageRef)*
     ;
 
+// §8.4: <packageref> ::= <scoped_identifier> ( '(' <uri> ')' )? | <uri>, <uri> ::= <STRING> in either
+// quote style (#337)
 packageRef
-    : pathName ('(' STRING_LITERAL ')')?
-    | STRING_LITERAL
+    : pathName ('(' uri ')')?
+    | uri
     ;
 
+uri
+    : STRING_LITERAL
+    | DOUBLE_QUOTED_STRING
+    ;
+
+// §8.4: <modeltype_where> ::= 'where' <expression_block>, whose expressions are separated by ';'.
+// ',' was the only separator before #337 and stays accepted.
 modeltypeWhere
-    : 'where' '{' expression (',' expression)* '}'
+    : 'where' '{' (expression ((';' | ',') expression)* ';'?)? '}'
     ;
 
 // ==================== Transformation + Library ====================
