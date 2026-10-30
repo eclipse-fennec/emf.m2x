@@ -586,7 +586,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		// §8.2.2.11: "feature := { self.attribute; self.operation; }" — a complex assignment, whose
 		// values are the expressions of the braces; 'do { … }' stays a block, whose value is
 		// null (§8.2.2.2) (#339)
-		if (right instanceof BlockExp block && ctx.expression(1) instanceof QvtOParser.BlockPrimaryContext primary
+		if (right instanceof BlockExp block && ctx.expression(1) instanceof QvtOParser.PrimaryExpContext primaryExp
+				&& primaryExp.primaryExpression() instanceof QvtOParser.BlockPrimaryContext primary
 				&& isBareBlock(primary.blockExp())) {
 			assign.getValue().clear();
 			assign.getValue().addAll(block.getBody());
@@ -1295,12 +1296,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			this.environment = savedEnv;
 		}
 
-		// If there's an iterator with init, wrap: { var x := expr; switch { ... } }
+		// If there's an iterator with init, wrap: let x = expr in switch { ... } — a block would
+		// answer null (§8.2.2.2), the let answers the switch (#339)
 		if (varInitExp != null) {
-			BlockExp block = IMP.createBlockExp();
-			block.getBody().add(varInitExp);
-			block.getBody().add(switchExp);
-			return block;
+			LetExp letExp = OCL.createLetExp();
+			letExp.setOwnedVariable(varInitExp.getReferredVariable());
+			letExp.setOwnedIn(switchExp);
+			return letExp;
 		}
 
 		return switchExp;
