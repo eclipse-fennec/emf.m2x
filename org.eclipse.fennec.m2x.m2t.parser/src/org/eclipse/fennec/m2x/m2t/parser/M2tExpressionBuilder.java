@@ -375,18 +375,18 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 		EClassifier elementType = support.inferElementType(source);
 		M2tParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
-		List<Variable> iterVars = new ArrayList<>();
+		List<String> iterNames = new ArrayList<>();
+		List<EClassifier> iterTypes = new ArrayList<>();
 		for (int i = 0; i < varsCtx.identifier().size(); i++) {
-			EClassifier varType = (i < varsCtx.typeExpression().size()
-					&& varsCtx.typeExpression(i) != null)
-					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType;
-			Variable iterVar = support.createVariable(
-					identifierText(varsCtx.identifier(i)), varType, null);
-			iterVars.add(iterVar);
+			iterNames.add(identifierText(varsCtx.identifier(i)));
+			iterTypes.add((i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null)
+					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType);
 		}
+		List<Variable> iterVars = support.declareIteratorVariables(iterNames, iterTypes);
 		support.validateIteratorVarCount(iterName, iterVars.size());
 
-		setEnv(env().nested(iterVars));
+		// Named iterator variables are implicit sources too (§9.3.25 [A], #320)
+		setEnv(env().nestedIterators(iterVars));
 		OclExpression body = (OclExpression) visit(ctx.expression());
 		setEnv(savedEnv);
 
@@ -400,17 +400,16 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 		EClassifier iterType = ctx.typeExpression().size() > 0
 				? resolveTypeExpression(ctx.typeExpression(0))
 				: support.inferElementType(source);
-		Variable iterVar = support.createVariable(
-				identifierText(ctx.identifier(1)), iterType, null);
 
 		EClassifier accType = ctx.typeExpression().size() > 1
 				? resolveTypeExpression(ctx.typeExpression(1)) : null;
-		Variable accVar = support.createVariable(
-				identifierText(ctx.identifier(2)), accType,
-				(OclExpression) visit(ctx.expression(0)));
+		List<Variable> iterateVars = support.declareIterateVariables(identifierText(ctx.identifier(1)), iterType,
+				identifierText(ctx.identifier(2)), accType, (OclExpression) visit(ctx.expression(0)));
+		Variable iterVar = iterateVars.get(0);
+		Variable accVar = iterateVars.get(1);
 
-		setEnv(env().nested(iterVar));
-		setEnv(env().nested(accVar));
+		// Iterator and result are both implicit sources (§9.3.26, #320)
+		setEnv(env().nestedIterators(List.of(iterVar, accVar)));
 
 		OclExpression body = (OclExpression) visit(ctx.expression(1));
 		setEnv(savedEnv);
@@ -478,9 +477,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 		for (M2tParser.LetBindingContext bindCtx : bindings) {
 			EClassifier type = bindCtx.typeExpression() != null
 					? resolveTypeExpression(bindCtx.typeExpression()) : null;
-			Variable var = support.createVariable(
-					identifierText(bindCtx.identifier()),
-					type,
+			Variable var = support.declareLetVariable(identifierText(bindCtx.identifier()), type,
 					(OclExpression) visit(bindCtx.expression()));
 			setEnv(env().nested(var));
 

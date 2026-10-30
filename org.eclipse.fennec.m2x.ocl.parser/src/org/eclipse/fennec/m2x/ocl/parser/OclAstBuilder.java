@@ -368,25 +368,19 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		EClassifier elementType = support.inferElementType(source);
 
 		OclParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
-		List<Variable> iterVars = new ArrayList<>();
+		List<String> iterNames = new ArrayList<>();
+		List<EClassifier> iterTypes = new ArrayList<>();
 		for (int i = 0; i < varsCtx.identifier().size(); i++) {
-			EClassifier varType = (i < varsCtx.typeExpression().size()
-					&& varsCtx.typeExpression(i) != null)
-					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType;
-			String varName = identifierText(varsCtx.identifier(i));
-			support.rejectShadowing("iterator variable", varName);
-			for (Variable sibling : iterVars) {
-				if (sibling.getName().equals(varName)) {
-					support.addError("Variable name already used: '" + varName + "' (iterator variable)");
-				}
-			}
-			Variable iterVar = support.createVariable(varName, varType, null);
-			iterVars.add(iterVar);
+			iterNames.add(identifierText(varsCtx.identifier(i)));
+			iterTypes.add((i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null)
+					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType);
 		}
+		List<Variable> iterVars = support.declareIteratorVariables(iterNames, iterTypes);
 
 		support.validateIteratorVarCount(iterName, iterVars.size());
 
-		setEnv(env().nested(iterVars));
+		// Named iterator variables are implicit sources too (§9.3.25 [A], #320)
+		setEnv(env().nestedIterators(iterVars));
 		OclExpression body = (OclExpression) visit(ctx.expression());
 		setEnv(savedEnv);
 
@@ -401,24 +395,17 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		EClassifier iterType = ctx.iterType != null
 				? resolveTypeExpression(ctx.iterType)
 				: support.inferElementType(source);
-		String iterName = identifierText(ctx.identifier(1));
-		support.rejectShadowing("iterator variable", iterName);
-		Variable iterVar = support.createVariable(iterName, iterType, null);
 
 		// Accumulator variable
 		EClassifier accType = ctx.accType != null
 				? resolveTypeExpression(ctx.accType) : null;
-		String accName = identifierText(ctx.identifier(2));
-		OclExpression accInit = (OclExpression) visit(ctx.expression(0));
-		support.rejectShadowing("accumulator", accName);
-		if (accName.equals(iterName)) {
-			support.addError("Variable name already used: '" + accName + "' (accumulator)");
-		}
-		support.checkDeclaredType("accumulator", accName, accType, accInit);
-		Variable accVar = support.createVariable(accName, accType, accInit);
+		List<Variable> iterateVars = support.declareIterateVariables(identifierText(ctx.identifier(1)), iterType,
+				identifierText(ctx.identifier(2)), accType, (OclExpression) visit(ctx.expression(0)));
+		Variable iterVar = iterateVars.get(0);
+		Variable accVar = iterateVars.get(1);
 
-		setEnv(env().nested(iterVar));
-		setEnv(env().nested(accVar));
+		// Iterator and result are both implicit sources (§9.3.26, #320)
+		setEnv(env().nestedIterators(List.of(iterVar, accVar)));
 
 		OclExpression body = (OclExpression) visit(ctx.expression(1));
 		setEnv(savedEnv);
@@ -482,11 +469,8 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 		for (OclParser.LetBindingContext bindCtx : bindings) {
 			EClassifier type = bindCtx.typeExpression() != null
 					? resolveTypeExpression(bindCtx.typeExpression()) : null;
-			String varName = identifierText(bindCtx.identifier());
-			OclExpression init = (OclExpression) visit(bindCtx.expression());
-			support.rejectShadowing("let variable", varName);
-			support.checkDeclaredType("let variable", varName, type, init);
-			Variable var = support.createVariable(varName, type, init);
+			Variable var = support.declareLetVariable(identifierText(bindCtx.identifier()), type,
+					(OclExpression) visit(bindCtx.expression()));
 
 			setEnv(env().nested(var));
 
