@@ -46,16 +46,14 @@ import org.osgi.service.component.annotations.Reference;
  * expressions per class the last one placed is the one the aspect shows. The aspect is the
  * model-anchored entry point, not a query API; ask the registry when you need all of them.
  *
- * <p>Configured by target, as the bridge expects. The bridge takes its resolver as an optional
- * static reference, so the minimum cardinality is what keeps it from starting without this one
- * and anchoring every entry on the expression instead of its class:
+ * <p>Configured by target, as the bridge expects. The bridge waits for the resolver its target
+ * names (eclipse-fennec/emf.osgi#127):
  *
  * <pre>
  * "EObjectRegistryMetadataBridge~ocl": {
  *     "emf.eobject.registry.name": "ocl-compiled",
  *     "aspect.type.id": "ocl.compiled",
- *     "anchorResolver.target": "(anchor.resolver.name=ocl)",
- *     "anchorResolver.cardinality.minimum": 1
+ *     "anchorResolver.target": "(anchor.resolver.name=ocl)"
  * }
  * </pre>
  *
