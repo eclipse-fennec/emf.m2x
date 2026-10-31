@@ -15,6 +15,8 @@
 package org.eclipse.fennec.m2x.qvto.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -24,7 +26,10 @@ import java.util.List;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EReference;
+import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.ocl.IntegerLiteralExp;
@@ -348,6 +353,74 @@ class QvtoStaticTypingTest extends AbstractQvtoEngineTest {
 			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains(
 					"Operation 'twice' overrides the one of Base, but its parameter 'i' is a String, which does not comply with Integer")),
 					() -> "" + result.diagnostics());
+		}
+	}
+
+	@Nested
+	@DisplayName("intermediate class attributes have their declared type (§8.1.10, #404)")
+	class IntermediateAttributes {
+
+		private static final String HOLDER = """
+				intermediate class Holder {
+				    label : String = 'none';
+				    count : Integer;
+				    flag : Boolean;
+				    ratio : Real;
+				    names : Sequence(String);
+				    owner : SourceElement;
+				}
+				""";
+
+		private EClass holder() throws QvtoParseException {
+			OperationalTransformation t = parse(transformation(HOLDER, ""));
+			return t.getIntermediateClass().stream().filter(c -> "Holder".equals(c.getName())).findFirst().orElseThrow();
+		}
+
+		@Test
+		@DisplayName("each attribute has the Ecore type of what the engine computes with")
+		void attributeTypes() throws QvtoParseException {
+			EClass holder = holder();
+			assertSame(EcorePackage.Literals.ESTRING, holder.getEStructuralFeature("label").getEType());
+			assertSame(EcorePackage.Literals.EBIG_INTEGER, holder.getEStructuralFeature("count").getEType());
+			assertSame(EcorePackage.Literals.EBOOLEAN_OBJECT, holder.getEStructuralFeature("flag").getEType());
+			assertSame(EcorePackage.Literals.EBIG_DECIMAL, holder.getEStructuralFeature("ratio").getEType());
+		}
+
+		@Test
+		@DisplayName("a collection type is a multi-valued feature of its element type; a class type a reference")
+		void collectionsAndClasses() throws QvtoParseException {
+			EClass holder = holder();
+			EStructuralFeature names = holder.getEStructuralFeature("names");
+			assertSame(EcorePackage.Literals.ESTRING, names.getEType());
+			assertTrue(names.isMany() && names.isOrdered() && !names.isUnique());
+			EReference owner = assertInstanceOf(EReference.class, holder.getEStructuralFeature("owner"));
+			assertEquals("SourceElement", owner.getEType().getName());
+			assertTrue(!owner.isContainment());
+		}
+
+		@Test
+		@DisplayName("a value the declared type does not take is a type error; a correct use is none")
+		void theDeclaredTypeIsChecked() throws QvtoParseException {
+			assertTypeError(HOLDER, "var h := object Holder {}; h.label := 5;", "A Integer cannot be assigned to a String");
+			parse(transformation(HOLDER, "var h := object Holder {}; log('label:' + h.label);"));
+		}
+
+		@Test
+		@DisplayName("values are written and read back as the same OCL values")
+		void valuesRoundTrip() throws QvtoParseException {
+			QvtoExecutionResult result = execute(transformation(HOLDER, """
+					var h := object Holder {};
+					h.count := 2;
+					h.count := h.count * 9223372036854775807;
+					h.ratio := 1.5;
+					h.names += 'a';
+					h.names += Sequence{'b', 'b'};
+					log(h.label + '|' + h.count.toString() + '|' + (h.ratio * 2).toString() + '|'
+					    + h.flag.oclIsUndefined().toString() + '|' + h.names->size().toString());
+					"""));
+			assertTrue(result.isSuccess(), () -> "" + result.diagnostics());
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage()
+					.contains("none|18446744073709551614|3.0|true|3")), () -> "" + result.diagnostics());
 		}
 	}
 }
