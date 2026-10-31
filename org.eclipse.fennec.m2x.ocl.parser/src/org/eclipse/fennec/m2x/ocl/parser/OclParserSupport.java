@@ -20,6 +20,7 @@ import java.util.Objects;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
@@ -28,6 +29,8 @@ import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclLibrarySignatures;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeChecker;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -173,6 +176,17 @@ public class OclParserSupport implements OclExpressionParser {
 		} catch (RuntimeException | StackOverflowError failure) {
 			throw asParseException(failure);
 		}
+	}
+
+	/**
+	 * Checks the types of an expression with the rules this parser applies while it builds
+	 * (GAP-3, #378).
+	 */
+	@Override
+	public List<Diagnostic> validate(OclExpression expression, EClassifier contextType) {
+		Objects.requireNonNull(expression, "expression must not be null");
+		Objects.requireNonNull(contextType, "contextType must not be null");
+		return new OclTypeChecker(OclLibrarySignatures.OCL).check(expression);
 	}
 
 	/**

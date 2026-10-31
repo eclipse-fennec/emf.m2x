@@ -34,6 +34,7 @@ import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.ETypedElement;
@@ -199,6 +200,42 @@ public class AbstractExpressionBuilder {
 	 */
 	public void useSignatures(OclLibrarySignatures signatures) {
 		this.signatures = Objects.requireNonNull(signatures, "signatures must not be null");
+	}
+
+	/**
+	 * A feature a Complete OCL {@code def:} adds to a classifier (OCL v2.4 §12.5).
+	 *
+	 * @param owner the context classifier of the definition
+	 * @param name the feature name
+	 * @param parameterNames the parameter names of an operation, {@code null} for an attribute
+	 * @param parameterTypes the parameter types of an operation, {@code null} for an attribute
+	 * @param type the declared type
+	 */
+	public record Definition(EClassifier owner, String name, List<String> parameterNames,
+			List<EClassifier> parameterTypes, EClassifier type) {
+
+		boolean isOperation() {
+			return parameterTypes != null;
+		}
+
+		boolean appliesTo(EClassifier receiver) {
+			return receiver == owner
+					|| receiver instanceof EClass r && owner instanceof EClass o && o.isSuperTypeOf(r);
+		}
+	}
+
+	/** The features the document's {@code def:}s add, known before any expression is built. */
+	private final List<Definition> definitions = new ArrayList<>();
+
+	/**
+	 * Makes the features of a document's {@code def:}s known, so that a call of a defined
+	 * operation has its declared type and its arguments are checked against its parameters
+	 * (#324, #378). A document collects them before it builds a single expression.
+	 *
+	 * @param defined the definitions
+	 */
+	public void declareDefinitions(Collection<Definition> defined) {
+		definitions.addAll(Objects.requireNonNull(defined, "defined must not be null"));
 	}
 
 	/** @return the library operations of the language being parsed */
@@ -802,7 +839,20 @@ public class AbstractExpressionBuilder {
 		if (resultType != null) {
 			exp.setType(resultType);
 		}
+		checkConditionBody(iterName, body);
 		return exp;
+	}
+
+	/** The iterators whose body is a condition (§11.9). */
+	private static final Set<String> BOOLEAN_BODY_ITERATORS = Set.of("select", "reject", "forAll", "exists", "any",
+			"one");
+
+	/** Records a condition body known not to be a Boolean (§11.9: "body : Boolean"). */
+	private void checkConditionBody(String iterName, OclExpression body) {
+		EClassifier bodyType = body != null ? body.getType() : null;
+		if (BOOLEAN_BODY_ITERATORS.contains(iterName) && !OclTypeRules.conformsTo(bodyType, LIBRARY.booleanType())) {
+			addTypeFinding("The body of " + iterName + " is a " + OclTypeRules.nameOf(bodyType) + ", not a Boolean");
+		}
 	}
 
 	/**
@@ -943,6 +993,7 @@ public class AbstractExpressionBuilder {
 		if (resultType != null) {
 			exp.setType(resultType);
 		}
+		checkConditionBody(iterName, body);
 		return exp;
 	}
 
@@ -1277,6 +1328,14 @@ public class AbstractExpressionBuilder {
 			if (strictPropertyResolution && !names.isDefinedProperty(propName)) {
 				addError("Unknown property (" + eClass.getName() + "::" + propName + ")");
 			}
+			// a def: attribute of the type has its declared type (§12.5, #378)
+			for (Definition definition : definitions) {
+				if (!definition.isOperation() && definition.name().equals(propName) && definition.appliesTo(eClass)
+						&& definition.type() != null) {
+					exp.setType(copyType(definition.type()));
+					break;
+				}
+			}
 		}
 		exp.setReferredProperty(unresolvedProperty(propName));
 	}
@@ -1400,11 +1459,24 @@ public class AbstractExpressionBuilder {
 	 * name is a finding.
 	 */
 	private void typeOperationCall(OperationCallExp exp) {
-		if (exp.getReferredOperation() != null) {
-			exp.setType(typeOf(exp.getReferredOperation()));
+		if (exp.getReferredOperation() instanceof EOperation operation) {
+			// §8.3.7 OperationCallExp [1]: each argument conforms to its parameter
+			for (int i = 0; i < operation.getEParameters().size() && i < exp.getOwnedArguments().size(); i++) {
+				EParameter parameter = operation.getEParameters().get(i);
+				EClassifier argument = exp.getOwnedArguments().get(i).getType();
+				if (!OclTypeRules.conformsTo(argument, typeOf(parameter))) {
+					addTypeFinding("Argument " + (i + 1) + " of " + operation.getName() + " is a "
+							+ OclTypeRules.nameOf(argument) + ", but the parameter '" + parameter.getName() + "' is a "
+							+ OclTypeRules.nameOf(typeOf(parameter)));
+				}
+			}
+			exp.setType(typeOf(operation));
 			return;
 		}
 		EClassifier receiver = exp.getOwnedSource() != null ? exp.getOwnedSource().getType() : null;
+		if (typeDefinedOperationCall(exp, receiver)) {
+			return;
+		}
 		if (exp.isIsArrow() && receiver != null && !(OclTypeRules.normalize(receiver) instanceof CollectionType)
 				&& !(OclTypeRules.normalize(receiver) instanceof MapType)) {
 			receiver = collectionType(CollectionKind.SET, copyType(receiver));
@@ -1417,6 +1489,39 @@ public class AbstractExpressionBuilder {
 		if (resolution.problem() != null) {
 			addTypeFinding(resolution.problem());
 		}
+	}
+
+	/**
+	 * Types a call of an operation a {@code def:} defines for the receiver's type, and checks its
+	 * arguments against the declared parameters (§8.3.7 OperationCallExp [1], #324).
+	 *
+	 * @return whether a definition of that name and arity applies
+	 */
+	private boolean typeDefinedOperationCall(OperationCallExp exp, EClassifier receiver) {
+		if (receiver == null) {
+			return false;
+		}
+		for (Definition definition : definitions) {
+			if (!definition.isOperation() || !definition.name().equals(exp.getName())
+					|| definition.parameterTypes().size() != exp.getOwnedArguments().size()
+					|| !definition.appliesTo(OclTypeRules.normalize(receiver))) {
+				continue;
+			}
+			for (int i = 0; i < definition.parameterTypes().size(); i++) {
+				EClassifier argument = exp.getOwnedArguments().get(i).getType();
+				EClassifier parameter = definition.parameterTypes().get(i);
+				if (!OclTypeRules.conformsTo(argument, parameter)) {
+					addTypeFinding("Argument " + (i + 1) + " of " + definition.name() + " is a "
+							+ OclTypeRules.nameOf(argument) + ", but the parameter '" + definition.parameterNames().get(i)
+							+ "' is a " + OclTypeRules.nameOf(parameter));
+				}
+			}
+			if (definition.type() != null) {
+				exp.setType(copyType(definition.type()));
+			}
+			return true;
+		}
+		return false;
 	}
 
 	/**

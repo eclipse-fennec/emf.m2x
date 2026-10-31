@@ -150,6 +150,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		// stands further down (chained defs, OCL v2.4 §12.12). Strict resolution would otherwise
 		// report it as unknown (#153).
 		collectDefNames(ctx, definedProperties);
+		collectDefinitions(ctx);
 		for (int i = 0; i < ctx.getChildCount(); i++) {
 			var child = ctx.getChild(i);
 			if (child instanceof OclParser.PackageDeclarationContext pkgCtx) {
@@ -162,6 +163,66 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	}
 
 	private final List<String> definedProperties = new ArrayList<>();
+
+	/** The signatures the document's defs declare, collected before any expression is built. */
+	private final List<AbstractExpressionBuilder.Definition> definitions = new ArrayList<>();
+
+	/**
+	 * Collects what each {@code def:} declares — its classifier, parameters and type — so that a
+	 * call of a defined operation is typed and its arguments checked, wherever in the document it
+	 * stands (#324, #378). A classifier or type that does not resolve is reported where the def
+	 * is built; here it is just left out.
+	 */
+	private void collectDefinitions(OclParser.CompleteOclDocumentContext ctx) {
+		for (int i = 0; i < ctx.getChildCount(); i++) {
+			if (ctx.getChild(i) instanceof OclParser.PackageDeclarationContext pkgCtx) {
+				String savedPackagePath = currentPackagePath;
+				currentPackagePath = pathNameText(pkgCtx.pathName());
+				pkgCtx.contextDeclaration().forEach(this::collectDefinitions);
+				currentPackagePath = savedPackagePath;
+			} else if (ctx.getChild(i) instanceof OclParser.ContextDeclarationContext ctxDecl) {
+				collectDefinitions(ctxDecl);
+			}
+		}
+	}
+
+	private void collectDefinitions(OclParser.ContextDeclarationContext ctx) {
+		OclParser.ClassifierContextDeclarationContext classifierCtx = ctx.classifierContextDeclaration();
+		if (classifierCtx == null) {
+			return;
+		}
+		EClassifier classifier = resolveClassifierFromPath(pathNameText(classifierCtx.pathName()));
+		if (classifier == null) {
+			return;
+		}
+		// A builder of its own only to resolve type names; what it reports is reported again
+		// when the definition is built
+		OclAstBuilder types = new OclAstBuilder(classifier, packageRegistry, strictPropertyResolution);
+		types.support.registerPackageAliases(packageAliases);
+		importedPackages.forEach(types.support::importPackage);
+		for (OclParser.ClassifierContextBodyContext body : classifierCtx.classifierContextBody()) {
+			OclParser.DefinitionConstraintContext def = body.definitionConstraint();
+			if (def == null || def.identifier().isEmpty() || def.typeExpression() == null) {
+				continue;
+			}
+			String name = OclAstBuilder.identifierText(def.identifier().get(def.identifier().size() - 1));
+			EClassifier type = types.resolveTypeExpression(def.typeExpression());
+			if (def.parameterList() == null && !isOperationDef(def)) {
+				definitions.add(new AbstractExpressionBuilder.Definition(classifier, name, null, null, type));
+				continue;
+			}
+			List<String> parameterNames = new ArrayList<>();
+			List<EClassifier> parameterTypes = new ArrayList<>();
+			if (def.parameterList() != null) {
+				for (OclParser.ParameterContext param : def.parameterList().parameter()) {
+					parameterNames.add(OclAstBuilder.identifierText(param.identifier()));
+					parameterTypes.add(types.resolveTypeExpression(param.typeExpression()));
+				}
+			}
+			definitions.add(new AbstractExpressionBuilder.Definition(classifier, name, parameterNames, parameterTypes,
+					type));
+		}
+	}
 
 	private static void collectDefNames(ParseTree node, List<String> names) {
 		if (node instanceof OclParser.DefinitionConstraintContext def) {
@@ -635,6 +696,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			String selfAlias, OclParser.ParameterListContext params, Object result) {
 		OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry, strictPropertyResolution);
 		builder.support.declareDefinedProperties(definedProperties);
+		builder.support.declareDefinitions(definitions);
 		builder.support.registerPackageAliases(packageAliases);
 		importedPackages.forEach(builder.support::importPackage);
 		if (selfAlias != null) {

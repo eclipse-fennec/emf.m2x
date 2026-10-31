@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.ocl.api;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
@@ -88,5 +89,21 @@ public interface OclExpressionParser {
 	default List<Constraint> parseDocument(String oclDocument, ResourceSet resourceSet)
 			throws OclParseException {
 		return parseDocument(oclDocument);
+	}
+
+	/**
+	 * Checks the types of a parsed expression (OCL v2.4 §8.3.7): what {@code parse} reports as
+	 * type errors, for an expression that may not have come from it — built by hand, loaded from
+	 * a stored unit.
+	 *
+	 * <p>The default has no type checker and says so.
+	 *
+	 * @param expression the expression
+	 * @param contextType the {@code EClassifier} that defines the type of {@code self}
+	 * @return one ERROR per type that is known and does not fit; empty if the expression is valid
+	 * @throws UnsupportedOperationException if this parser has no type checker
+	 */
+	default List<Diagnostic> validate(OclExpression expression, EClassifier contextType) {
+		throw new UnsupportedOperationException("This parser has no type checker");
 	}
 }
