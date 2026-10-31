@@ -31,7 +31,6 @@ import java.util.stream.Collectors;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
-import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -126,6 +125,8 @@ public class QvtrEvaluator {
 	 * of an enforce run (#348).
 	 */
 	private boolean checking;
+	/** The relations overriding each relation (§7.11.1.4). */
+	private final Map<Relation, List<Relation>> overriders = new IdentityHashMap<>();
 	private long deadlineNanos;
 
 	/**
@@ -195,14 +196,10 @@ public class QvtrEvaluator {
 				? nanoTimeSource.getAsLong() + timeout * 1_000_000L
 				: 0;
 
-		// Resolve deferred overrides (EAnnotation → Rule.overrides reference)
-		resolveOverrides();
-
-		// Collect overridden relations so they can be skipped
-		Set<String> overriddenNames = new HashSet<>();
+		// Which relations override which: the parser set Rule.overrides (#356)
 		for (Rule rule : transformation.getRule()) {
-			if (rule instanceof Relation rel && rel.getOverrides() != null) {
-				overriddenNames.add(rel.getOverrides().getName());
+			if (rule instanceof Relation rel && rel.getOverrides() instanceof Relation overridden) {
+				overriders.computeIfAbsent(overridden, r -> new ArrayList<>()).add(rel);
 			}
 		}
 
@@ -210,11 +207,10 @@ public class QvtrEvaluator {
 		for (Rule rule : transformation.getRule()) {
 			if (rule instanceof Relation relation && relation.isIsTopLevel()) {
 				if (relation.isIsAbstract()) {
-					continue; // §7.11.3.2: abstract relations are templates only
+					continue; // §7.11.1.4: "An abstract rule is never matched directly"
 				}
-				if (overriddenNames.contains(relation.getName())) {
-					continue; // §7.6: overridden relations are skipped
-				}
+				// An overridden relation still runs: it is replaced only for the bindings an
+				// overriding relation applies to (§7.11.1.4, #356)
 				topRelations.add(relation);
 			}
 		}
@@ -222,7 +218,7 @@ public class QvtrEvaluator {
 		checking = context.checkOnly();
 		runAll(topRelations);
 		if (!checking && config.deleteUnmatched()) {
-			deleteUnmatched(overriddenNames);
+			deleteUnmatched();
 		}
 		// An enforce run checks only the target model's checked domains, unless asked to check
 		// every direction once it is done (#348)
@@ -377,6 +373,9 @@ public class QvtrEvaluator {
 				continue;
 			}
 			if (!whenConditionHolds(relation, sourceBinding)) {
+				continue;
+			}
+			if (overridden(relation, sourceDomains, sourceBinding)) {
 				continue;
 			}
 			// A where predicate that reads only what the sources bind and is false: nothing could
@@ -674,7 +673,7 @@ public class QvtrEvaluator {
 	 * nested objects (decided in #352) — and those no trace of any relation holds are deleted.
 	 * Only objects of the target model; never in a check, never towards a checkonly domain.
 	 */
-	private void deleteUnmatched(Set<String> overriddenNames) {
+	private void deleteUnmatched() {
 		if (traceLimitReported) {
 			// A cut trace misses bindings that hold: what it does not show is not unrequired
 			return;
@@ -689,8 +688,7 @@ public class QvtrEvaluator {
 		}
 		Set<EObject> doomed = Collections.newSetFromMap(new IdentityHashMap<>());
 		for (Rule rule : transformation.getRule()) {
-			if (!(rule instanceof Relation relation) || relation.isIsAbstract()
-					|| overriddenNames.contains(relation.getName())) {
+			if (!(rule instanceof Relation relation) || relation.isIsAbstract()) {
 				continue;
 			}
 			for (RelationDomain domain : modelDomains(relation)) {
@@ -827,6 +825,9 @@ public class QvtrEvaluator {
 			}
 			if (!whenConditionHolds(relation, sourceBinding)) {
 				continue;
+			}
+			if (applicableOverride(relation, others, sourceBinding) != null) {
+				continue; // the overriding relation is checked in its place
 			}
 			queryEvaluator.preComputeWhereBindings(relation, sourceBinding);
 			Map<String, Object> holding = null;
@@ -1163,31 +1164,84 @@ public class QvtrEvaluator {
 		return false;
 	}
 
-	/**
-	 * Resolves deferred override references from EAnnotations to actual
-	 * Rule.overrides references (§7.6).
-	 */
-	private void resolveOverrides() {
-		Map<String, Relation> relationsByName = new HashMap<>();
-		for (Rule rule : transformation.getRule()) {
-			if (rule instanceof Relation rel) {
-				relationsByName.put(rel.getName(), rel);
-			}
-		}
+	// ── Overrides (§7.11.1.4) ─────────────────────────────────────────
 
-		for (Rule rule : transformation.getRule()) {
-			if (rule instanceof Relation rel) {
-				EAnnotation ann = rel.getEAnnotation("qvtr.overrides");
-				if (ann != null) {
-					String overridesName = ann.getDetails().get("name");
-					if (overridesName != null) {
-						Relation base = relationsByName.get(overridesName);
-						if (base != null) {
-							rel.setOverrides(base);
-						}
+	/**
+	 * Whether a binding of the relation is handled elsewhere: "The overriding rule is executed in
+	 * place of the overridden rule when the overriding conditions are satisfied" (§7.11.1.4) —
+	 * its when clause and the patterns of its non-target domains, decided in #356. A top-level
+	 * overriding relation covers the binding in its own run; any other one, and every one a where
+	 * clause reached the relation through, is invoked with the binding's roots. An abstract
+	 * relation "is never matched directly": without an overriding relation for the binding it is
+	 * an ERROR.
+	 */
+	private boolean overridden(Relation relation, List<RelationDomain> sourceDomains, Map<String, Object> binding) {
+		Relation overriding = applicableOverride(relation, sourceDomains, binding);
+		if (overriding != null) {
+			if (relationCallDepth > 0 || !overriding.isIsTopLevel()) {
+				executeRelationWithBindings(overriding, overrideBindings(relation, overriding, binding));
+			}
+			return true;
+		}
+		if (relation.isIsAbstract()) {
+			StringBuilder roots = new StringBuilder();
+			for (RelationDomain domain : sourceDomains) {
+				for (Variable root : domain.getRootVariable()) {
+					roots.append(roots.isEmpty() ? "" : ", ").append(root.getName()).append(" = ")
+							.append(describe(binding.get(root.getName())));
+				}
+			}
+			diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0,
+					"Abstract relation '%s' is called, but no relation overriding it applies to %s (§7.11.1.4)"
+							.formatted(relation.getName(), roots), null));
+			return true;
+		}
+		return false;
+	}
+
+	/** The first overriding relation whose when clause and source patterns match the binding. */
+	private Relation applicableOverride(Relation relation, List<RelationDomain> sourceDomains,
+			Map<String, Object> binding) {
+		List<RelationDomain> domains = modelDomains(relation);
+		for (Relation overriding : overriders.getOrDefault(relation, List.of())) {
+			List<RelationDomain> overridingDomains = modelDomains(overriding);
+			List<RelationDomain> overridingSources = new ArrayList<>();
+			for (RelationDomain source : sourceDomains) {
+				int index = domains.indexOf(source);
+				if (index >= 0 && index < overridingDomains.size()) {
+					overridingSources.add(overridingDomains.get(index));
+				}
+			}
+			Map<String, Object> pre = initializedBindings(overriding, overrideBindings(relation, overriding, binding));
+			for (Map<String, Object> whenBinding : evaluateWhenPreBindings(overriding, pre)) {
+				for (Map<String, Object> match : matchSourceDomains(overridingSources, whenBinding)) {
+					if (whenConditionHolds(overriding, new HashMap<>(match))) {
+						return overriding;
 					}
 				}
 			}
 		}
+		return null;
+	}
+
+	/**
+	 * The roots of a binding of the overridden relation, under the overriding relation's names:
+	 * the domains correspond by position, the root variables of a domain too.
+	 */
+	private Map<String, Object> overrideBindings(Relation relation, Relation overriding, Map<String, Object> binding) {
+		Map<String, Object> pre = new HashMap<>();
+		List<RelationDomain> from = modelDomains(relation);
+		List<RelationDomain> to = modelDomains(overriding);
+		for (int i = 0; i < Math.min(from.size(), to.size()); i++) {
+			List<Variable> fromRoots = from.get(i).getRootVariable();
+			List<Variable> toRoots = to.get(i).getRootVariable();
+			for (int j = 0; j < Math.min(fromRoots.size(), toRoots.size()); j++) {
+				String name = fromRoots.get(j).getName();
+				if (binding.containsKey(name)) {
+					pre.put(toRoots.get(j).getName(), binding.get(name));
+				}
+			}
+		}
+		return pre;
 	}
 }

@@ -776,7 +776,7 @@ The modifiers come in this order: `top`, `abstract`, `relation`. Every relation 
 
 An overriding relation replaces the overridden one only for the bindings where its `when` clause and the patterns of its non-target domains match (§7.11.1.4).
 
-> **Known gap (#356):** the engine currently replaces the overridden relation unconditionally.
+For every other binding, the overridden relation runs. A call from a `where` clause reaches the overriding relation in the same way. An abstract relation never runs itself: a call to it runs the overriding relation that applies, and if none applies, the call is an ERROR naming the relation and the binding. A relation may override one it inherits through `extends`. Overriding a name that is no relation of the transformation is a parse error.
 
 ### 7.9 Transformation Extends
 
@@ -1280,7 +1280,7 @@ The trace is **implicit and internal** — there is no public API to read trace 
 | Object templates | §7.11.2 | Fully implemented |
 | Collection templates | §7.11.2.3, §7.11.2.4 | Fully implemented (as domain root: parse error) |
 | Primitive domains | §7.13.4 | Fully implemented |
-| Abstract relations | §7.11.1.4 | Partly — the override replaces the base unconditionally (#356) |
+| Abstract relations | §7.11.1.4 | Fully implemented — conditional overrides, also for where calls |
 | Transformation extends | §7.11.1.1 | Fully implemented |
 | Blackbox / implementedby | §7.8 | Fully implemented |
 | In-place transforms | §7.7 | Partly — no copy of the old state (#353) |
