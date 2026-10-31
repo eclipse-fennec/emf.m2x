@@ -23,7 +23,6 @@ import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -86,9 +85,6 @@ class QvtoRuntimeDiagnosticPositionTest extends AbstractQvtoEngineTest {
 	}
 
 	@Test
-	@Disabled("#116: the position does not arrive yet — QVT-O's builders are driven by direct "
-			+ "calls rather than visit(ParseTree), so the recording anchors are incomplete and no "
-			+ "node of the expression is in the position map")
 	@DisplayName("a problem while running names the unit, the line and the column")
 	void runtimeDiagnosticCarriesItsPosition() throws QvtoParseException {
 		// eSuperTypes of a fresh EClass is empty, so first() has nothing — the expression on

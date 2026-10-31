@@ -136,6 +136,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 * places what it cannot resolve here (#264).
 	 */
 	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
+	/** The positions the builders of earlier operations recorded (#116). */
+	private final Map<EObject, SourcePosition> earlierPositions = new IdentityHashMap<>();
 	/** What this unit knows so far, shared with every expression builder it creates. */
 	private final QvtoScope scope;
 	private String intermediatePackageUri;
@@ -2060,6 +2062,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 */
 	Map<EObject, SourcePosition> getNodePositions() {
 		Map<EObject, SourcePosition> positions = new IdentityHashMap<>(importPositions);
+		positions.putAll(earlierPositions);
 		if (expressionBuilder != null) {
 			positions.putAll(expressionBuilder.getNodePositions());
 		}
@@ -2227,6 +2230,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void updateExpressionBuilder() {
+		// Every operation gets a builder of its own; what the previous one recorded is kept — only
+		// the last builder's positions reached the engine, so a run-time diagnostic of every
+		// operation but the last had no position (#116)
+		if (this.expressionBuilder != null) {
+			earlierPositions.putAll(this.expressionBuilder.getNodePositions());
+		}
 		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry, scope);
 	}
 

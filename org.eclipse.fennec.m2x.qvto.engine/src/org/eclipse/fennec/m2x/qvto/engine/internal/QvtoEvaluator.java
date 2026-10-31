@@ -1372,7 +1372,7 @@ public class QvtoEvaluator {
 			} else if (argExpr instanceof PropertyCallExp propExp && propExp.getReferredProperty() != null
 					&& eval(propExp.getOwnedSource()) instanceof EObject target
 					&& target.eClass().getEAllStructuralFeatures().contains(propExp.getReferredProperty())) {
-				checkNotReadOnly(target);
+				checkNotReadOnly(target, propExp.getReferredProperty().getName(), argExpr);
 				target.eSet(propExp.getReferredProperty(), args[i]);
 			}
 		}
@@ -2295,12 +2295,20 @@ public class QvtoEvaluator {
 
 
 	/**
-	 * §8.1.3.2: Guards property assignment on EObjects belonging to read-only (in) extents.
+	 * §8.1.3.2: Guards property assignment on EObjects belonging to read-only (in) extents. The
+	 * message names the place in the script, the object, the feature and the in model — it named
+	 * none of them, so a generator failing this way could only be found with a debugger.
+	 *
+	 * @param node the assignment (or argument) that writes, for its position; may be null
 	 */
-	private void checkNotReadOnly(EObject target) {
+	private void checkNotReadOnly(EObject target, String feature, EObject node) {
 		if (extentManager.isReadOnly(target)) {
-			throw new RaiseException("InvalidModelMutation",
-					"Cannot modify object in read-only model extent (in-parameter)");
+			QvtoModelExtent extent = extentManager.extentOf(target);
+			String model = extent != null ? extentManager.getParameterName(extent) : null;
+			SourcePosition position = node != null ? engine.positionOf(node) : null;
+			throw new RaiseException("InvalidModelMutation", (position != null ? position + " " : "")
+					+ "Cannot assign '" + feature + "' of " + OclValues.repr(target) + ": it belongs to the in model"
+					+ (model != null ? " '" + model + "'" : "") + ", which is read-only (§8.1.3.2)");
 		}
 	}
 
@@ -2323,7 +2331,7 @@ public class QvtoEvaluator {
 			return;
 		}
 		// §8.1.3.2: Guard non-intermediate property assignment on in-model objects
-		checkNotReadOnly(eo);
+		checkNotReadOnly(eo, sf.getName(), exp);
 		// Resolve the feature from the actual EClass to handle
 		// cross-package identity (dynamic Ecore models)
 		EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
@@ -2465,7 +2473,7 @@ public class QvtoEvaluator {
 				if (!env.contains(varName)) {
 					EObject target = resolveImplicitPropertyTarget(varName);
 					if (target != null) {
-						checkNotReadOnly(target);
+						checkNotReadOnly(target, varName, exp);
 						checkSideEffect(target, varName);
 						assignToModelFeature(target, implicitFeature(target, varName), value, exp);
 						return wrapNull(value);
