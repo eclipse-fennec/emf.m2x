@@ -122,6 +122,8 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 			positions.putIfAbsent(node, new SourcePosition(context.getStart().getLine(),
 					context.getStart().getCharPositionInLine()));
 		}
+		// and so a type error about the node is reported where it begins (#378)
+		support.recordNode(built, context);
 		return built;
 	}
 

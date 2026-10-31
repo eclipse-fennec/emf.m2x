@@ -131,6 +131,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private boolean unitImports;
 	/** The metamodels the imports made available, by alias or name (§7.1.1, #360). */
 	private final Map<String, EPackage> importedMetamodels = new HashMap<>();
+	/** Where the nodes of the transformations built before the current one stood. */
+	private final Map<EObject, SourcePosition> earlierNodePositions = new IdentityHashMap<>();
 	/** Where each import was written, keyed by the annotation detail that carries it (#264). */
 	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
 	/**
@@ -432,6 +434,12 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		// transformationId ::= pathNameCS (§7.13.4): the name is the last segment
 		currentTransformation.setName(lastSegment(ctx.name));
 
+		// A unit may hold several transformations (#360): what the previous one's expressions
+		// reported, and where they stood, is kept before its builder is replaced (#378)
+		if (expressionBuilder != null) {
+			diagnostics.addAll(expressionBuilder.support.getDiagnostics());
+			earlierNodePositions.putAll(expressionBuilder.getNodePositions());
+		}
 		// Create expression builder with EObject as context type
 		expressionBuilder = new QvtrExpressionBuilder(
 				EcorePackage.Literals.EOBJECT, packageRegistry);
@@ -1326,6 +1334,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	Map<EObject, SourcePosition> getNodePositions() {
 		Map<EObject, SourcePosition> positions = new IdentityHashMap<>(importPositions);
 		positions.putAll(templatePositions);
+		positions.putAll(earlierNodePositions);
 		if (expressionBuilder != null) {
 			positions.putAll(expressionBuilder.getNodePositions());
 		}
