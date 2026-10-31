@@ -44,6 +44,7 @@ import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.MacroInvocation;
@@ -62,6 +63,7 @@ import org.eclipse.fennec.m2x.model.m2t.util.M2tSwitch;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
@@ -404,13 +406,20 @@ public class M2tEvaluator {
 		}
 
 		@Override
-		public Object caseLetBlock(LetBlock block) {
-			// Inline expression wrapper — special case, no elseLet/else semantics
-			Variable letVar = block.getLetVariable();
-			if (block.getBody().isEmpty() && letVar.getName().startsWith("__inline__")) {
-				writers.append(render(letVar.getOwnedInit()));
+		public Object caseInlineExpression(InlineExpression inline) {
+			// §7.4: a macro's Body parameter, referred to, inserts the body of the call
+			if (inline.getExpression() instanceof VariableExp reference && reference.getReferredVariable() != null
+					&& env.lookup(reference.getReferredVariable().getName()) instanceof BodyArgument body) {
+				expandBody(body);
 				return WRAPPED_NULL;
 			}
+			// §8.2 '[' OclExpressionCS '/]': the value goes into the document (#370)
+			writers.append(render(inline.getExpression()));
+			return WRAPPED_NULL;
+		}
+
+		@Override
+		public Object caseLetBlock(LetBlock block) {
 
 			// MOFM2T §8.1.16: LetBlock is a subtype test chain.
 			// Evaluate init — if value is non-null (cast succeeded), bind and execute body.
@@ -653,11 +662,13 @@ public class M2tEvaluator {
 						+ ") — possible infinite recursion in macro '" + macro.getName() + "'");
 				return WRAPPED_NULL;
 			}
-			// Evaluate all arguments once, in the caller's scope
+			// Evaluate all arguments once, in the caller's scope; the body of the call is kept
+			// with that scope, as §7.4 expands it "in the context of the macro call" (#371)
 			List<Variable> params = macro.getParameter();
 			List<Object> evalArgs = new ArrayList<>();
-			for (int i = 0; i < invocation.getArgument().size(); i++) {
-				evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
+			for (OclExpression argument : invocation.getArgument()) {
+				evalArgs.add(argument instanceof Block body ? new BodyArgument(body, env.allVisibleVariables())
+						: evaluateOcl(argument));
 			}
 			env.pushFrame();
 			try {
@@ -939,6 +950,21 @@ public class M2tEvaluator {
 		} finally {
 			env.popFrame();
 			queryDepth--;
+		}
+	}
+
+	/** The body of a macro invocation, with the variables of the scope it was written in (#371). */
+	private record BodyArgument(Block block, Map<String, Object> scope) {
+	}
+
+	/** Writes the body of a macro invocation, in the scope of the call. */
+	private void expandBody(BodyArgument body) {
+		env.pushFrame();
+		try {
+			body.scope().forEach(env::define);
+			executeBody(body.block());
+		} finally {
+			env.popFrame();
 		}
 	}
 

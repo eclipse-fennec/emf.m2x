@@ -23,10 +23,12 @@ import org.eclipse.emf.ecore.impl.EFactoryImpl;
 
 import org.eclipse.emf.ecore.plugin.EcorePlugin;
 
+import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.InitSection;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
 import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
@@ -87,6 +89,7 @@ public class M2tFactoryImpl extends EFactoryImpl implements M2tFactory {
 	public EObject create(EClass eClass) {
 		switch (eClass.getClassifierID()) {
 			case M2tPackage.MODULE: return createModule();
+			case M2tPackage.BLOCK: return createBlock();
 			case M2tPackage.INIT_SECTION: return createInitSection();
 			case M2tPackage.TEMPLATE: return createTemplate();
 			case M2tPackage.QUERY: return createQuery();
@@ -97,6 +100,7 @@ public class M2tFactoryImpl extends EFactoryImpl implements M2tFactory {
 			case M2tPackage.FILE_BLOCK: return createFileBlock();
 			case M2tPackage.PROTECTED_AREA_BLOCK: return createProtectedAreaBlock();
 			case M2tPackage.TRACE_BLOCK: return createTraceBlock();
+			case M2tPackage.INLINE_EXPRESSION: return createInlineExpression();
 			case M2tPackage.TEXT_EXPRESSION: return createTextExpression();
 			case M2tPackage.TEMPLATE_INVOCATION: return createTemplateInvocation();
 			case M2tPackage.QUERY_INVOCATION: return createQueryInvocation();
@@ -118,6 +122,8 @@ public class M2tFactoryImpl extends EFactoryImpl implements M2tFactory {
 				return createOpenModeKindFromString(eDataType, initialValue);
 			case M2tPackage.VISIBILITY_KIND:
 				return createVisibilityKindFromString(eDataType, initialValue);
+			case M2tPackage.BODY:
+				return createBodyFromString(eDataType, initialValue);
 			default:
 				throw new IllegalArgumentException("The datatype '" + eDataType.getName() + "' is not a valid classifier");
 		}
@@ -135,6 +141,8 @@ public class M2tFactoryImpl extends EFactoryImpl implements M2tFactory {
 				return convertOpenModeKindToString(eDataType, instanceValue);
 			case M2tPackage.VISIBILITY_KIND:
 				return convertVisibilityKindToString(eDataType, instanceValue);
+			case M2tPackage.BODY:
+				return convertBodyToString(eDataType, instanceValue);
 			default:
 				throw new IllegalArgumentException("The datatype '" + eDataType.getName() + "' is not a valid classifier");
 		}
@@ -149,6 +157,17 @@ public class M2tFactoryImpl extends EFactoryImpl implements M2tFactory {
 	public org.eclipse.fennec.m2x.model.m2t.Module createModule() {
 		ModuleImpl module = new ModuleImpl();
 		return module;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public Block createBlock() {
+		BlockImpl block = new BlockImpl();
+		return block;
 	}
 
 	/**
@@ -267,6 +286,17 @@ public class M2tFactoryImpl extends EFactoryImpl implements M2tFactory {
 	 * @generated
 	 */
 	@Override
+	public InlineExpression createInlineExpression() {
+		InlineExpressionImpl inlineExpression = new InlineExpressionImpl();
+		return inlineExpression;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public TextExpression createTextExpression() {
 		TextExpressionImpl textExpression = new TextExpressionImpl();
 		return textExpression;
@@ -343,6 +373,24 @@ public class M2tFactoryImpl extends EFactoryImpl implements M2tFactory {
 	 */
 	public String convertVisibilityKindToString(EDataType eDataType, Object instanceValue) {
 		return instanceValue == null ? null : instanceValue.toString();
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public Object createBodyFromString(EDataType eDataType, String initialValue) {
+		return super.createFromString(eDataType, initialValue);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public String convertBodyToString(EDataType eDataType, Object instanceValue) {
+		return super.convertToString(eDataType, instanceValue);
 	}
 
 	/**

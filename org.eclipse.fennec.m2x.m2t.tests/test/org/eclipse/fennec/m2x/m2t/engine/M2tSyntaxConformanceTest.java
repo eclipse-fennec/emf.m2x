@@ -27,6 +27,7 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.util.Diagnostician;
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
@@ -300,6 +301,93 @@ class M2tSyntaxConformanceTest {
 		@DisplayName("a macro body is a block in the sense of §8.4: its head and tail lines go")
 		void macroBodyNormalized() throws M2tParseException {
 			assertEquals("A<Employee>Z", output("[macro wrap(c : EClass)]\n<[c.name/]>\n[/macro]\n", "A[wrap(c)/]Z"));
+		}
+	}
+
+	@Nested
+	@DisplayName("#371: macros with a Body parameter (§7.4, §8.1.19, §8.1.20)")
+	class MacroBodies {
+
+		private static final String JAVA_METHOD = """
+				[macro javaMethod(visibility : String, name : String, resultType : String, body : Body)]
+				[visibility/] [resultType/] [name/]() {
+				  [resultType/] result;
+				  [body/]
+				  return result;
+				}
+				[/macro]
+				""";
+
+		@Test
+		@DisplayName("the spec's example: the body of the call is inserted where the Body parameter is referred")
+		void specExample() throws M2tParseException {
+			String output = output(JAVA_METHOD, "[javaMethod('public', 'm', 'int')]result = 1;[/javaMethod]");
+			assertTrue(output.contains("public int m() {") && output.contains("int result;")
+					&& output.indexOf("result = 1;") > output.indexOf("int result;")
+					&& output.indexOf("return result;") > output.indexOf("result = 1;"), output);
+		}
+
+		@Test
+		@DisplayName("the body is expanded in the context of the call: it sees the caller's variables")
+		void bodySeesTheCallersScope() throws M2tParseException {
+			assertEquals("(<Employee>)", output("[macro wrap(c : EClass, b : Body)]([b/])[/macro]\n",
+					"[let n : String = c.name][wrap(c)]<[n/]>[/wrap][/let]"));
+		}
+
+		@Test
+		@DisplayName("a body for a macro without a Body parameter, or none for one with, ends the generation")
+		void bodyAndParameterMustAgree() throws M2tParseException {
+			M2tResult withBody = run("[macro plain(c : EClass)]x[/macro]\n", "[plain(c)]inner[/plain]");
+			assertTrue(withBody.diagnostics().stream().anyMatch(d -> d.getMessage()
+					.contains("'plain' is called with a body, but the macro has no Body parameter")), () -> "" + withBody.diagnostics());
+			M2tResult withoutBody = run("[macro wrap(c : EClass, b : Body)][b/][/macro]\n", "[wrap(c)/]");
+			assertTrue(withoutBody.diagnostics().stream().anyMatch(d -> d.getMessage()
+					.contains("Macro 'wrap' takes a body")), () -> "" + withoutBody.diagnostics());
+		}
+
+		@Test
+		@DisplayName("Body is the type of a macro's last parameter only")
+		void bodyOnlyLast() {
+			assertTrue(messages(parseError(HEADER + "[macro m(b : Body, c : EClass)][/macro]\n[template public main(c : EClass)][/template]"))
+					.stream().anyMatch(m -> m.contains("only the last parameter of a macro may be")));
+			assertTrue(messages(parseError(HEADER + "[template public main(c : EClass, b : Body)][/template]"))
+					.stream().anyMatch(m -> m.contains("only the last parameter of a macro may be")));
+		}
+
+		@Test
+		@DisplayName("the end tag names the macro it closes")
+		void endTagMustMatch() {
+			assertTrue(messages(parseError(HEADER + "[macro wrap(c : EClass, b : Body)][b/][/macro]\n"
+					+ "[template public main(c : EClass)][wrap(c)]x[/other][/template]"))
+					.stream().anyMatch(m -> m.contains("[/other] closes the invocation of 'wrap'")));
+		}
+	}
+
+	@Nested
+	@DisplayName("#370: the parsed module is a well-formed Ecore model")
+	class WellFormed {
+
+		@Test
+		@DisplayName("else branches, inline expressions, file, for, let and protected areas validate")
+		void diagnosticianOk() throws M2tParseException {
+			Module module = ENGINE.parse(HEADER + """
+					[template public main(c : EClass)]
+					[file ('out.txt', false)]
+					[if (c.abstract)]A[elseif (c.interface)]I[else]C[/if]
+					[let r : EReference = c.eStructuralFeatures->first()]R[elselet a : EAttribute = c.eStructuralFeatures->first()]T[else]N[/let]
+					[for (f : EStructuralFeature | c.eStructuralFeatures)][f.name/][/for]
+					[protected ('id')]keep[/protected]
+					[/file]
+					[/template]
+					""", "doc");
+			assertEquals(Diagnostic.OK, Diagnostician.INSTANCE.validate(module).getSeverity(),
+					() -> Diagnostician.INSTANCE.validate(module).getChildren().toString());
+		}
+
+		@Test
+		@DisplayName("[expr/] is an InlineExpression; a user's variable named __inline__x is an ordinary let")
+		void inlineExpressions() throws M2tParseException {
+			assertEquals("a", output("[let __inline__x : String = 'a'][__inline__x/][/let]"));
 		}
 	}
 

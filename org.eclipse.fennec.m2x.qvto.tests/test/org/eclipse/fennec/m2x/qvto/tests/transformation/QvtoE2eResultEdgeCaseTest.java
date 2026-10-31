@@ -282,7 +282,7 @@ class QvtoE2eResultEdgeCaseTest extends AbstractQvtoEngineTest {
 		// before #332 it recursed until the Java stack overflowed out of execute()
 		EObject src = createSourceElement("elem", 10);
 		QvtoModelExtent outExtent = emptyExtent();
-		QvtoExecutionResult result = executeWithExtents("""
+		executeWithExtents("""
 				modeltype SRC uses 'http://test/source/1.0';
 				modeltype TGT uses 'http://test/target/1.0';
 				transformation test(in s : SRC, out t : TGT) {

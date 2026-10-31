@@ -48,7 +48,7 @@ import org.eclipse.fennec.m2x.model.m2t.TemplateExpression;
  *
  * @generated
  */
-public abstract class BlockImpl extends TemplateExpressionImpl implements Block {
+public class BlockImpl extends TemplateExpressionImpl implements Block {
 	/**
 	 * The cached value of the '{@link #getBody() <em>Body</em>}' containment reference list.
 	 * <!-- begin-user-doc -->
