@@ -98,7 +98,7 @@ class QvtoStringIntegerSpecConformanceTest extends AbstractQvtoEngineTest {
 		assertSuccess(result);
 		assertLogged(result, "len=3 size=3");
 		assertLogged(result, "find=3 rfind=4");
-		assertLogged(result, "missing=-1");
+		assertLogged(result, "missing=0");
 	}
 
 	@Test
