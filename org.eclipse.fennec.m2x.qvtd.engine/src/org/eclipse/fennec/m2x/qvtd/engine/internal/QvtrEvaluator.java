@@ -353,6 +353,22 @@ public class QvtrEvaluator {
 		}
 		List<RelationDomain> sourceDomains = without(modelDomains, targetDomain);
 
+		// Called from a where clause: an overriding relation that applies to the roots it was
+		// called with runs in its place, whatever this relation's own patterns say; an abstract
+		// relation never runs itself (§7.11.1.4, #356)
+		if (relationCallDepth > 0 && (relation.isIsAbstract() || overriders.containsKey(relation))) {
+			Map<String, Object> roots = initializedBindings(relation, preBindings);
+			Relation overriding = applicableOverride(relation, sourceDomains, roots);
+			if (overriding != null) {
+				executeRelationWithBindings(overriding, overrideBindings(relation, overriding, roots));
+				return;
+			}
+			if (relation.isIsAbstract()) {
+				overridden(relation, sourceDomains, roots);
+				return;
+			}
+		}
+
 		// 3. Match source domains, once per when binding
 		if (sourceDomains.isEmpty()) {
 			return;
@@ -826,8 +842,14 @@ public class QvtrEvaluator {
 			if (!whenConditionHolds(relation, sourceBinding)) {
 				continue;
 			}
-			if (applicableOverride(relation, others, sourceBinding) != null) {
-				continue; // the overriding relation is checked in its place
+			// The overriding relation is checked in its place: a top-level one in its own run,
+			// any other one here, for this binding and in this direction (#356)
+			Relation overriding = applicableOverride(relation, others, sourceBinding);
+			if (overriding != null) {
+				if (!overriding.isIsTopLevel()) {
+					checkOverriding(relation, overriding, direction, sourceBinding);
+				}
+				continue;
 			}
 			queryEvaluator.preComputeWhereBindings(relation, sourceBinding);
 			Map<String, Object> holding = null;
@@ -888,19 +910,40 @@ public class QvtrEvaluator {
 				preBindings.put(rootVarNames.get(i), value);
 			}
 		}
+		return holds(called, preBindings);
+	}
+
+	/**
+	 * Whether a relation holds for the given roots: some joint binding of its domains extends
+	 * them and satisfies its when and where conditions. A binding an overriding relation applies
+	 * to holds if that relation holds for it, and an abstract relation never holds directly
+	 * (§7.11.1.4, #356).
+	 */
+	private boolean holds(Relation relation, Map<String, Object> preBindings) {
 		if (relationCallDepth >= config.maxRelationDepth()) {
 			throw new QvtdExecutionException("Relation call depth limit exceeded (%d) in relation '%s'"
-					.formatted(config.maxRelationDepth(), called.getName()));
+					.formatted(config.maxRelationDepth(), relation.getName()));
 		}
 		relationCallDepth++;
 		try {
-			List<RelationDomain> domains = modelDomains(called);
-			for (Map<String, Object> whenBinding : evaluateWhenPreBindings(called,
-					initializedBindings(called, preBindings))) {
+			// An overriding relation is tried on the roots themselves: its own when clause and
+			// patterns are its condition, whatever the overridden relation's patterns say
+			for (Relation overriding : overriders.getOrDefault(relation, List.of())) {
+				if (holds(overriding, overrideBindings(relation, overriding, preBindings))) {
+					return true;
+				}
+			}
+			if (relation.isIsAbstract()) {
+				return false;
+			}
+			List<RelationDomain> domains = modelDomains(relation);
+			for (Map<String, Object> whenBinding : evaluateWhenPreBindings(relation,
+					initializedBindings(relation, preBindings))) {
 				for (Map<String, Object> match : matchSourceDomains(domains, whenBinding)) {
 					Map<String, Object> binding = new HashMap<>(match);
-					if (whenConditionHolds(called, binding) && whereHolds(called, binding)) {
-						recordTrace(called, binding);
+					if (whenConditionHolds(relation, binding) && applicableOverride(relation, domains, binding) == null
+							&& whereHolds(relation, binding)) {
+						recordTrace(relation, binding);
 						return true;
 					}
 				}
@@ -1197,6 +1240,20 @@ public class QvtrEvaluator {
 			return true;
 		}
 		return false;
+	}
+
+	/** Checks an overriding relation for one binding of the relation it overrides, in the same direction. */
+	private void checkOverriding(Relation relation, Relation overriding, RelationDomain direction,
+			Map<String, Object> binding) {
+		List<RelationDomain> overridingDomains = modelDomains(overriding);
+		int index = modelDomains(relation).indexOf(direction);
+		if (index < 0 || index >= overridingDomains.size()) {
+			return;
+		}
+		RelationDomain overridingDirection = overridingDomains.get(index);
+		Map<String, Object> pre = initializedBindings(overriding, overrideBindings(relation, overriding, binding));
+		checkDirection(overriding, without(overridingDomains, overridingDirection), overridingDirection,
+				evaluateWhenPreBindings(overriding, pre));
 	}
 
 	/** The first overriding relation whose when clause and source patterns match the binding. */
