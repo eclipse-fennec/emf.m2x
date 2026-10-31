@@ -96,4 +96,16 @@ class M2tCallScopeTest {
 				+ "[template public t(k : EClass, y : String)][k.name/] [y/][/template]\n");
 		assertEquals("TestClass L", out);
 	}
+
+	@Test
+	void aForVariable_shadowsAPropertyOfSelf() throws M2tParseException {
+		assertEquals("ab", run("[module m(Ecore)/]\n"
+				+ "[template public main(c : EClass)][file ('o', false)][for (name : String | Sequence{'a','b'})][name/][/for][/file][/template]\n"));
+	}
+
+	@Test
+	void aLetVariable_shadowsAPropertyOfSelf() throws M2tParseException {
+		assertEquals("L", run("[module m(Ecore)/]\n"
+				+ "[template public main(c : EClass)][file ('o', false)][let name : String = 'L'][name/][/let][/file][/template]\n"));
+	}
 }
