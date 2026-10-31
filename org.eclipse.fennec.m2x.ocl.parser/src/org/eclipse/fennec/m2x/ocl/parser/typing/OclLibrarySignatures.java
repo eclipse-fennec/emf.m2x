@@ -48,7 +48,8 @@ import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
  * {@code Set(P)}, {@code OrderedSet(P)}, {@code Bag(P)}, {@code Sequence(P)}, {@code Collection(P)},
  * or {@code SelfKind(P)} for the receiver's kind; {@code Common(P, Q)} the common supertype;
  * {@code Flat(P)} the element type of a nested collection, flattened; {@code Dict(P, Q)};
- * {@code Tuple(a : P, b : Q)}.
+ * {@code Tuple(a : P, b : Q)}; {@code Unknown} for a result the signature cannot say anything
+ * about — an object's container, say — which is then as unknown as a value of a dynamic model.
  *
  * <p>An operation is looked up along the receiver's chain: a collection's own kind, then
  * {@code Collection}, then {@code OclAny}; {@code UnlimitedNatural}, {@code Integer},
@@ -210,7 +211,9 @@ public final class OclLibrarySignatures {
 					continue;
 				}
 				EClassifier type = OclTypeRules.normalize(evaluate(signature.result(), null, arguments));
-				if (type == null || type instanceof CollectionType || (common != null && common != type)) {
+				// one answer, also a collection: the same type written by every signature
+				if (type == null || (common != null && !OclTypeRules.nameOf(common).equals(OclTypeRules.nameOf(type)))
+						|| type instanceof CollectionType c && c.getElementType() == null) {
 					return Resolution.UNKNOWN;
 				}
 				common = type;
@@ -358,6 +361,8 @@ public final class OclLibrarySignatures {
 			switch (name) {
 				case "Self":
 					return receiver;
+				case "Unknown":
+					return null;
 				case "T":
 					if (receiver instanceof CollectionType c) {
 						return c.getElementType();
@@ -444,8 +449,8 @@ public final class OclLibrarySignatures {
 				.op("OclAny", "oclType", "OclAny")
 				.op("OclAny", "oclAsSet", "Set(Self)")
 				.op("OclAny", "toString", "String")
-				.op("OclAny", "oclContainer", "OclAny")
-				.op("OclAny", "oclContents", "Set(OclAny)");
+				.op("OclAny", "oclContainer", "Unknown")
+				.op("OclAny", "oclContents", "Set(Unknown)");
 
 		// §11.5.1 Real
 		b.op("Real", "+", "Real", "Real")

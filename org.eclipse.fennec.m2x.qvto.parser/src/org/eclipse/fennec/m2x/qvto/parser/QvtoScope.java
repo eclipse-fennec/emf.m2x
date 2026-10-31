@@ -23,11 +23,12 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.qvtoperational.Module;
+import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
 
 /**
  * What a unit knows while it is being built, shared with its expression builder.
  *
- * <p>All four are mutable and deliberately so: the unit builder fills them as it descends —
+ * <p>All of them are mutable and deliberately so: the unit builder fills them as it descends —
  * a {@code typedef} adds a local type, a {@code modeltype} adds a package — and the
  * expression builder reads them while it builds the expressions of that same unit. It is also
  * why they must be shared rather than copied: the expression builder is rebuilt whenever the
@@ -41,6 +42,8 @@ import org.eclipse.fennec.m2x.model.qvtoperational.Module;
  * @param localTypes module-local type names ({@code typedef})
  * @param diagnostics where both builders report what they could not resolve
  * @param declaredPackages the metamodels this unit declared, in declaration order
+ * @param definitions the signatures of the unit's helpers and queries, collected before any
+ *        body is built, so that a call is typed and checked wherever it stands (#378)
  * @author Data In Motion Consulting
  * @since 1.0
  */
@@ -48,12 +51,14 @@ record QvtoScope(
 		Map<String, Module> importedModuleStubs,
 		Map<String, EClassifier> localTypes,
 		List<Resource.Diagnostic> diagnostics,
-		Set<EPackage> declaredPackages) {
+		Set<EPackage> declaredPackages,
+		List<AbstractExpressionBuilder.Definition> definitions) {
 
 	QvtoScope {
 		Objects.requireNonNull(importedModuleStubs, "importedModuleStubs must not be null");
 		Objects.requireNonNull(localTypes, "localTypes must not be null");
 		Objects.requireNonNull(diagnostics, "diagnostics must not be null");
 		Objects.requireNonNull(declaredPackages, "declaredPackages must not be null");
+		Objects.requireNonNull(definitions, "definitions must not be null");
 	}
 }

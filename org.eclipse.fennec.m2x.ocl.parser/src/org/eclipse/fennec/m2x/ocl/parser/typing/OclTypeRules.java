@@ -35,6 +35,7 @@ import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.InvalidType;
 import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.model.ocl.TuplePart;
 import org.eclipse.fennec.m2x.model.ocl.TupleType;
@@ -78,7 +79,8 @@ public final class OclTypeRules {
 	 * the library's primitive type; everything else is itself.
 	 *
 	 * @param type the type, may be {@code null}
-	 * @return the normalized type, {@code null} for {@code null}
+	 * @return the normalized type, {@code null} for {@code null} and for a type that says nothing
+	 *         about its values ({@code EJavaObject})
 	 */
 	public static EClassifier normalize(EClassifier type) {
 		if (type instanceof EDataType dataType && !(type instanceof EEnum) && !(type instanceof PrimitiveType)
@@ -89,8 +91,19 @@ public final class OclTypeRules {
 				return LIBRARY.primitive(name).orElseThrow();
 			}
 		}
-		if (type == EcorePackage.Literals.EJAVA_OBJECT) {
-			return LIBRARY.oclAny();
+		if (type instanceof EDataType dataType && !(type instanceof EEnum) && !(type instanceof OclType)
+				&& dataType.getEPackage() == null && dataType.getInstanceClass() == null && type.getName() != null) {
+			// a data type standing for a library type by name, as QVT-O stores the primitive
+			// context and parameter types of its operations (§8.2.1.10)
+			EClassifier named = LIBRARY.type(type.getName()).orElse(null);
+			if (named != null) {
+				return named;
+			}
+		}
+		if (type == EcorePackage.Literals.EJAVA_OBJECT || type == EcorePackage.Literals.EJAVA_CLASS) {
+			// "any Java object" says nothing about the value: unknown, not OclAny, which would make
+			// every use of it an error
+			return null;
 		}
 		return type;
 	}

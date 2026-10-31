@@ -31,11 +31,11 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.imperativeocl.AltExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.AssertExp;
@@ -102,6 +102,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
 
 /**
  * Visitor that transforms ANTLR4 parse tree nodes into EMF OCL + Imperative OCL AST nodes.
@@ -144,6 +145,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoEnvironment environment;
 
 	/**
+	 * The shared OCL builder (#378): operation calls are resolved and typed through it, and every
+	 * OCL node this builder makes is typed by its rules — what QVT-R and MTL use for all their
+	 * OCL nodes. Its errors go to this unit's diagnostics.
+	 */
+	private final AbstractExpressionBuilder support;
+
+	/**
 	 * Keeps the diagnostic position with the descent — see {@link ParseDiagnostics}. One override
 	 * covers the visitor, because every step into the tree goes through here.
 	 */
@@ -157,6 +165,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 */
 	void positionAt(int line, int column) {
 		positions.positionAt(line, column);
+		support.positionAt(line, column);
 	}
 
 	@Override
@@ -167,7 +176,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		int line = context.getStart().getLine();
 		int column = context.getStart().getCharPositionInLine();
 		positions.positionAt(line, column);
+		support.positionAt(line, column);
 		Object built = super.visit(tree);
+		if (built instanceof OclExpression expression) {
+			// the node's parts are built and typed; what it is itself follows from them
+			support.positionAt(line, column);
+			support.typeNode(expression);
+		}
 		// The same step that keeps the parse-time cursor also learns which node came out of this
 		// piece of text — the one place where both are in hand (#116).
 		if (built instanceof EObject node) {
@@ -203,6 +218,15 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = Objects.requireNonNull(environment,
 				"environment must not be null");
 		this.packageRegistry = packageRegistry;
+		this.support = new AbstractExpressionBuilder(EcorePackage.Literals.EOBJECT, packageRegistry);
+		support.setDiagnosticSink(diagnostics::add);
+		support.setVariableLookup(name -> this.environment.lookup(name).isPresent());
+		// §8.4.5(2): an element or a collection may stand as a condition
+		support.setImplicitConditions(true);
+		support.useSignatures(QvtoLibrarySignatures.QVTO);
+		support.declareDefinitions(scope.definitions());
+		// helpers of an imported unit are not known here: one may share a library name (#378)
+		support.setOpenOperationScope(!scope.importedModuleStubs().isEmpty());
 	}
 
 	// ==================== OCL Literals ====================
@@ -1957,26 +1981,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void resolveOperation(OperationCallExp exp, String opName) {
-		exp.setName(opName);
-		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());
-		if (sourceType instanceof EClass eClass) {
-			int argCount = exp.getOwnedArguments().size();
-			EOperation bestMatch = null;
-			for (EOperation op : eClass.getEAllOperations()) {
-				if (opName.equals(op.getName())) {
-					if (op.getEParameters().size() == argCount) {
-						bestMatch = op;
-						break;
-					}
-					if (bestMatch == null) {
-						bestMatch = op;
-					}
-				}
-			}
-			if (bestMatch != null) {
-				exp.setReferredOperation(bestMatch);
-			}
-		}
+		// resolved and typed by the shared rules: a metamodel operation by its declaration, a
+		// library operation by its signature (#378)
+		support.resolveOperation(exp, opName);
 	}
 
 	private EClassifier getSourceClassifier(OclExpression source) {

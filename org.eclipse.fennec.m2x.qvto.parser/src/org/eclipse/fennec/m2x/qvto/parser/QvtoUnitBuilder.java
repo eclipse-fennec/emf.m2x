@@ -77,6 +77,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
 
 /**
  * Visitor that transforms module-level ANTLR4 parse tree nodes into QVT-O EMF AST nodes.
@@ -138,6 +139,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
 	/** The positions the builders of earlier operations recorded (#116). */
 	private final Map<EObject, SourcePosition> earlierPositions = new IdentityHashMap<>();
+	/** The signatures of the unit's helpers and queries, known before any body is built (#378). */
+	private final List<AbstractExpressionBuilder.Definition> definitions = new ArrayList<>();
 	/** What this unit knows so far, shared with every expression builder it creates. */
 	private final QvtoScope scope;
 	private String intermediatePackageUri;
@@ -146,7 +149,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
-		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, declaredPackages);
+		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, declaredPackages, definitions);
 		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry, scope);
 	}
 
@@ -262,6 +265,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				}
 			}
 			preCreateIntermediateClassShells(topLevelElements, transformation);
+			collectOperationSignatures(topLevelElements);
 		}
 
 		// Second pass: imports and top-level module elements
@@ -343,6 +347,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// §8.2.1.3: Pre-pass — create IC shells so forward-references resolve
 		preCreateIntermediateClassShells(ctx.moduleElement(), transformation);
 		preRegisterTypedefs(ctx.moduleElement());
+		collectOperationSignatures(ctx.moduleElement());
 
 		// Module elements
 		for (QvtOParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
@@ -373,6 +378,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// §8.2.1.3: Pre-pass — create IC shells so forward-references resolve
 		preCreateIntermediateClassShells(ctx.moduleElement(), library);
+		collectOperationSignatures(ctx.moduleElement());
 
 		// Module elements
 		for (QvtOParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
@@ -2194,6 +2200,63 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 * {@code String} is Ecore's {@code EString}, and a variable declared with the alias
 	 * has to end up with a usable type either way.
 	 */
+	/**
+	 * Collects the signatures of the helpers and queries before any body is built, so that a call
+	 * of one — also one further down — has the declared result type and its arguments are checked
+	 * against the parameters (§8.2.1.12, #345, #378). The types are resolved again when the
+	 * operation is built; what that reports is reported there, once.
+	 */
+	private void collectOperationSignatures(List<QvtOParser.ModuleElementContext> elements) {
+		updateExpressionBuilder();
+		int reported = diagnostics.size();
+		for (QvtOParser.ModuleElementContext element : elements) {
+			QvtOParser.ScopedNameContext name;
+			QvtOParser.SimpleSignatureContext signature;
+			QvtOParser.ResultListContext results;
+			if (element.helperDef() != null) {
+				name = element.helperDef().scopedName();
+				signature = element.helperDef().simpleSignature();
+				results = element.helperDef().resultList();
+			} else if (element.queryDef() != null) {
+				name = element.queryDef().scopedName();
+				signature = element.queryDef().simpleSignature();
+				results = element.queryDef().resultList();
+			} else {
+				continue;
+			}
+			String fullName = expressionBuilder.scopedNameText(name);
+			int colon = fullName.lastIndexOf("::");
+			EClassifier owner = colon >= 0 ? expressionBuilder.resolveContextType(name) : null;
+			if (colon >= 0 && owner == null) {
+				continue; // a context that does not resolve: nothing to check calls against
+			}
+			List<String> parameterNames = new ArrayList<>();
+			List<EClassifier> parameterTypes = new ArrayList<>();
+			int required = 0;
+			if (signature != null && signature.paramList() != null) {
+				for (QvtOParser.ParamContext param : signature.paramList().param()) {
+					parameterNames.add(paramName(param, parameterNames.size()));
+					parameterTypes.add(expressionBuilder.resolveTypeExpression(param.typeSpec().typeExpression()));
+					if (param.defaultValue == null) {
+						required = parameterNames.size();
+					}
+				}
+			}
+			EClassifier type = null;
+			if (results != null && results.resultParam().size() == 1) {
+				QvtOParser.ResultParamContext result = results.resultParam().get(0);
+				QvtOParser.TypeSpecContext typeSpec = result instanceof QvtOParser.NamedResultContext named
+						? named.typeSpec() : ((QvtOParser.UnnamedResultContext) result).typeSpec();
+				type = expressionBuilder.resolveTypeExpression(typeSpec.typeExpression());
+			}
+			definitions.add(new AbstractExpressionBuilder.Definition(owner,
+					colon >= 0 ? fullName.substring(colon + 2) : fullName, parameterNames, parameterTypes, required, type));
+		}
+		// reported again where each operation is built
+		diagnostics.subList(reported, diagnostics.size()).clear();
+		updateExpressionBuilder();
+	}
+
 	private void preRegisterTypedefs(List<QvtOParser.ModuleElementContext> elements) {
 		for (QvtOParser.ModuleElementContext elemCtx : elements) {
 			if (elemCtx.typedefDecl() == null) {
