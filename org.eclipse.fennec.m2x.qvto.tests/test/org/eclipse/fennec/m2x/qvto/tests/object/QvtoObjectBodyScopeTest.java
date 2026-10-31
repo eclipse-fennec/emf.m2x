@@ -201,6 +201,64 @@ class QvtoObjectBodyScopeTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "label=a,b");
 	}
 
+	@Test
+	void aCallersVariable_isNotVisibleInTheCalledMapping() throws Exception {
+		// emf.matter: concrete->forEach(c) { … c.map toPackage(); } — inside the mapping, c is the
+		// caller's variable and must not be seen (§8.2.1.15: a mapping's scope is its own)
+		QvtoExecutionResult result = run("""
+				    query SourceElement::names() : Sequence(String) = Sequence{'x', 'y'};
+				    mapping SourceElement::toT() : TargetContainer {
+				        name := self.name;
+				        elements += self.names()->collect(n | object c : TargetElement {
+				            c.name := n + '-made';
+				        });
+				        elements += self.names()->collect(n | object TargetElement {
+				            name := n + '-anon';
+				        });
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->sortedBy(value)->forEach(c) {
+				            var r := c.map toT();
+				            log('children=' + r.elements->collect(x | x.name)->joinfields(',', '', '') + ' name=' + r.name);
+				        };
+				    }
+				""");
+		assertSuccess(result);
+		assertLogged(result, "children=x-made,y-made,x-anon,y-anon name=a");
+	}
+
+	@Test
+	void aHelper_seesNoLocalOfItsCaller_butModulePropertiesAndModels() throws Exception {
+		// §8.2.1.17: "contained in the scope of the operation definition" — lexical scoping
+		QvtoExecutionResult result = run("""
+				    property shared : String = 'module';
+				    helper peek() : String { return secret.oclIsUndefined().repr() + ' ' + shared + ' ' + s.rootObjects()->size().repr(); }
+				    main() {
+				        var secret := 'caller-local';
+				        log('peek=' + peek());
+				    }
+				""");
+		assertLogged(result, "peek=true module 2");
+	}
+
+	@Test
+	void aMappingCalledInACallersObjectBody_hasItsOwnImplicitTarget() throws Exception {
+		// The caller's object expression is not the implicit target inside the called mapping
+		QvtoExecutionResult result = run("""
+				    mapping SourceElement::toT() : TargetElement { name := 'mapped-' + self.name; }
+				    main() {
+				        var e := s.objectsOfType(SourceElement)->sortedBy(value)->first();
+				        var holder := object TargetContainer@t {
+				            name := 'holder';
+				            elements += e.map toT();
+				        };
+				        log('holder=' + holder.name + ' child=' + holder.elements->first().name);
+				    }
+				""");
+		assertSuccess(result);
+		assertLogged(result, "holder=holder child=mapped-a");
+	}
+
 	private static void assertSuccess(QvtoExecutionResult result) {
 		assertNotNull(result);
 		assertTrue(result.isSuccess(), () -> "Diagnostics: " + result.diagnostics());

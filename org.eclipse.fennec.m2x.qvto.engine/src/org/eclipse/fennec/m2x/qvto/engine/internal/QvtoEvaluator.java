@@ -850,7 +850,7 @@ public class QvtoEvaluator {
 		Helper outerQuery = runningQuery;
 		runningQuery = operation instanceof Helper helper && helper.isIsQuery() ? helper : null;
 		try {
-			env.pushScope();
+			env.pushFrame();
 			bindOperationParams(operation, self, args, false);
 
 			// Execute body
@@ -888,7 +888,7 @@ public class QvtoEvaluator {
 			// §8.2.1.12: "the final value of each out, inout and result parameter is returned
 			// to the caller" — written into the caller's argument array (#336)
 			exportOutArgs(operation, args);
-			env.popScope();
+			env.popFrame();
 			--stackDepth;
 			runningQuery = outerQuery;
 		}
@@ -1094,7 +1094,7 @@ public class QvtoEvaluator {
 		// caller holds in an out argument plays no part (#336)
 		Object[] keyArgs = traceKey(mappingOp, args);
 		try {
-			env.pushScope();
+			env.pushFrame();
 			bindOperationParams(mappingOp, self, args, false);
 
 			// when-guard: all must be true, otherwise skip. A guard that cannot be decided is an
@@ -1223,7 +1223,7 @@ public class QvtoEvaluator {
 			if (ran) {
 				exportOutArgs(mappingOp, args);
 			}
-			env.popScope();
+			env.popFrame();
 			--stackDepth;
 			runningQuery = outerQuery;
 		}
@@ -1451,7 +1451,7 @@ public class QvtoEvaluator {
 			current.add(env.lookup(callerResult.getName()));
 		}
 		List<Object> passedBack = new ArrayList<>();
-		env.pushScope();
+		env.pushFrame();
 		try {
 			bindOperationParams(reused, self, passed, true);
 			for (int i = 0; i < results.size(); i++) {
@@ -1487,7 +1487,7 @@ public class QvtoEvaluator {
 			}
 			exportOutArgs(reused, passed);
 		} finally {
-			env.popScope();
+			env.popFrame();
 		}
 		for (int i = 0; i < passedBack.size() && i < callerResults.size(); i++) {
 			env.assign(callerResults.get(i).getName(), passedBack.get(i));
@@ -2022,7 +2022,7 @@ public class QvtoEvaluator {
 			return;
 		}
 		try {
-			env.pushScope();
+			env.pushFrame();
 
 			// Bind parameters from args
 			List<?> formalParams = ctor.getEParameters();
@@ -2054,7 +2054,7 @@ public class QvtoEvaluator {
 		} catch (ReturnException e) {
 			// Constructor body may have return — ignore the value
 		} finally {
-			env.popScope();
+			env.popFrame();
 			--stackDepth;
 		}
 	}
