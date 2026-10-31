@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.ocl.parser;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -35,6 +36,7 @@ import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.ETypedElement;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
@@ -52,8 +54,10 @@ import org.eclipse.fennec.m2x.model.ocl.IntegerLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.InvalidLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.IterateExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
+import org.eclipse.fennec.m2x.model.ocl.LetExp;
 import org.eclipse.fennec.m2x.model.ocl.MapLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.MapLiteralPart;
+import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.NullLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
@@ -65,6 +69,7 @@ import org.eclipse.fennec.m2x.model.ocl.RealLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.TupleLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart;
+import org.eclipse.fennec.m2x.model.ocl.TuplePart;
 import org.eclipse.fennec.m2x.model.ocl.TupleType;
 import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
@@ -72,6 +77,8 @@ import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclLibrarySignatures;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Shared OCL expression building logic for use by both OCL and M2T parsers.
@@ -123,6 +130,15 @@ public class AbstractExpressionBuilder {
 	 */
 	private final ParseDiagnostics diagnostics = new ParseDiagnostics();
 
+	/** The library operations this language knows: OCL's, and what QVT-O or MTL add (#378). */
+	private OclLibrarySignatures signatures = OclLibrarySignatures.OCL;
+
+	/**
+	 * What the type checker found wrong, kept apart from the diagnostics while its findings are
+	 * being measured (#378): an expression whose types are known and do not fit.
+	 */
+	private final List<Resource.Diagnostic> typeFindings = new ArrayList<>();
+
 	/**
 	 * Creates a new expression builder for the given context type.
 	 *
@@ -153,6 +169,40 @@ public class AbstractExpressionBuilder {
 	 */
 	public List<Resource.Diagnostic> getDiagnostics() {
 		return diagnostics.getDiagnostics();
+	}
+
+	/**
+	 * Returns what the type checker found: expressions whose types are known and do not fit
+	 * (OCL v2.4 §8.3, GAP-3, #378).
+	 *
+	 * @return the findings, in the order they occurred, never {@code null}
+	 */
+	public List<Resource.Diagnostic> getTypeFindings() {
+		return Collections.unmodifiableList(typeFindings);
+	}
+
+	/**
+	 * Records a type finding at the current position.
+	 *
+	 * @param message the message, phrased for an expression author
+	 */
+	public void addTypeFinding(String message) {
+		typeFindings.add(diagnostics.at(message));
+	}
+
+	/**
+	 * Sets the library operations of the language being parsed — OCL's and what the language
+	 * adds to them.
+	 *
+	 * @param signatures the library, must not be {@code null}
+	 */
+	public void useSignatures(OclLibrarySignatures signatures) {
+		this.signatures = Objects.requireNonNull(signatures, "signatures must not be null");
+	}
+
+	/** @return the library operations of the language being parsed */
+	public OclLibrarySignatures signatures() {
+		return signatures;
 	}
 
 	/**
@@ -264,12 +314,14 @@ public class AbstractExpressionBuilder {
 			// toInteger(), which are unbounded (#322). Said in words, not as Java's message
 			addError("Integer literal out of range (64 bit): " + text);
 		}
+		exp.setType(LIBRARY.integer());
 		return exp;
 	}
 
 	public RealLiteralExp buildRealLiteral(String text) {
 		RealLiteralExp exp = FACTORY.createRealLiteralExp();
 		exp.setRealSymbol(Double.parseDouble(text));
+		exp.setType(LIBRARY.real());
 		return exp;
 	}
 
@@ -285,26 +337,33 @@ public class AbstractExpressionBuilder {
 			sb.append(unescapeString(text.substring(1, text.length() - 1)));
 		}
 		exp.setStringSymbol(sb.toString());
+		exp.setType(LIBRARY.string());
 		return exp;
 	}
 
 	public BooleanLiteralExp buildBooleanLiteral(boolean value) {
 		BooleanLiteralExp exp = FACTORY.createBooleanLiteralExp();
 		exp.setBooleanSymbol(value);
+		exp.setType(LIBRARY.booleanType());
 		return exp;
 	}
 
 	public NullLiteralExp buildNullLiteral() {
-		return FACTORY.createNullLiteralExp();
+		NullLiteralExp exp = FACTORY.createNullLiteralExp();
+		exp.setType(LIBRARY.oclVoid());
+		return exp;
 	}
 
 	public InvalidLiteralExp buildInvalidLiteral() {
-		return FACTORY.createInvalidLiteralExp();
+		InvalidLiteralExp exp = FACTORY.createInvalidLiteralExp();
+		exp.setType(LIBRARY.oclInvalid());
+		return exp;
 	}
 
 	public UnlimitedNaturalLiteralExp buildUnlimitedNaturalLiteral() {
 		UnlimitedNaturalLiteralExp exp = FACTORY.createUnlimitedNaturalLiteralExp();
 		exp.setUnlimitedNaturalSymbol(-1L);
+		exp.setType(LIBRARY.unlimitedNatural());
 		return exp;
 	}
 
@@ -375,7 +434,13 @@ public class AbstractExpressionBuilder {
 	public VariableExp createVariableExp(Variable variable) {
 		VariableExp exp = FACTORY.createVariableExp();
 		exp.setReferredVariable(variable);
-		exp.setType(variable.getType());
+		// A variable without a declared type is used with the type of its initial value. The
+		// variable itself keeps none: under specStrict an undeclared let type is an error (#326)
+		EClassifier type = variable.getType();
+		if (type == null && variable.getOwnedInit() != null) {
+			type = copyType(variable.getOwnedInit().getType());
+		}
+		exp.setType(type);
 		return exp;
 	}
 
@@ -506,17 +571,14 @@ public class AbstractExpressionBuilder {
 	}
 
 	private EClassifier commonPartType(List<CollectionLiteralPart> parts) {
-		EClassifier common = null;
+		List<EClassifier> types = new ArrayList<>();
 		for (CollectionLiteralPart part : parts) {
-			EClassifier partType = part instanceof CollectionItem item && item.getOwnedItem() != null
+			types.add(part instanceof CollectionItem item && item.getOwnedItem() != null
 					? item.getOwnedItem().getType()
-					: part instanceof CollectionRange ? LIBRARY.integer() : null;
-			if (partType == null || partType instanceof CollectionType || common != null && common != partType) {
-				return null;
-			}
-			common = partType;
+					: part instanceof CollectionRange ? LIBRARY.integer() : null);
 		}
-		return common;
+		// §8.3.7 CollectionLiteralExp: the element type is the common supertype of the parts
+		return copyType(OclTypeRules.commonSuperType(types));
 	}
 
 	public CollectionItem buildCollectionItem(OclExpression item) {
@@ -539,6 +601,17 @@ public class AbstractExpressionBuilder {
 		rejectDuplicateNames("tuple part", parts.stream().map(TupleLiteralPart::getName).toList());
 		TupleLiteralExp exp = FACTORY.createTupleLiteralExp();
 		exp.getOwnedParts().addAll(parts);
+		// §8.3.7 TupleLiteralExp: a tuple type of the parts' names and types
+		TupleType type = FACTORY.createTupleType();
+		for (TupleLiteralPart part : parts) {
+			TuplePart typePart = FACTORY.createTuplePart();
+			typePart.setName(part.getName());
+			EClassifier partType = part.getType() != null ? part.getType()
+					: part.getOwnedInit() != null ? part.getOwnedInit().getType() : null;
+			typePart.setType(copyType(partType));
+			type.getOwnedParts().add(typePart);
+		}
+		exp.setType(type);
 		return exp;
 	}
 
@@ -550,6 +623,8 @@ public class AbstractExpressionBuilder {
 			part.setType(type);
 			// §8.3.7 TupleLiteralPart [1]: the initial value conforms to the declared type
 			checkDeclaredType("tuple part", name, type, init);
+		} else if (init != null && init.getType() != null) {
+			part.setType(copyType(init.getType()));
 		}
 		part.setOwnedInit(init);
 		return part;
@@ -559,9 +634,19 @@ public class AbstractExpressionBuilder {
 
 	public MapLiteralExp buildMapLiteral(List<MapLiteralPart> parts) {
 		MapLiteralExp exp = FACTORY.createMapLiteralExp();
+		List<EClassifier> keyTypes = new ArrayList<>();
+		List<EClassifier> valueTypes = new ArrayList<>();
 		if (parts != null) {
 			exp.getOwnedParts().addAll(parts);
+			for (MapLiteralPart part : parts) {
+				keyTypes.add(part.getOwnedKey() != null ? part.getOwnedKey().getType() : null);
+				valueTypes.add(part.getOwnedValue() != null ? part.getOwnedValue().getType() : null);
+			}
 		}
+		MapType type = FACTORY.createMapType();
+		type.setKeyType(copyType(OclTypeRules.commonSuperType(keyTypes)));
+		type.setValueType(copyType(OclTypeRules.commonSuperType(valueTypes)));
+		exp.setType(type);
 		return exp;
 	}
 
@@ -802,6 +887,10 @@ public class AbstractExpressionBuilder {
 		exp.getOwnedIterators().add(iterVar);
 		exp.setOwnedResult(accumulator);
 		exp.setOwnedBody(body);
+		// §8.3.7 IterateExp [1]: the type of the iterate is the type of the result variable
+		if (accumulator != null && accumulator.getType() != null) {
+			exp.setType(copyType(accumulator.getType()));
+		}
 		return exp;
 	}
 
@@ -901,7 +990,44 @@ public class AbstractExpressionBuilder {
 		} else {
 			ifExp.setOwnedElse(elseExp);
 		}
+		typeIf(ifExp);
 		return ifExp;
+	}
+
+	/**
+	 * Types an {@code if} from its branches, the nested ones of an elseif chain first (§8.3.7
+	 * IfExp: the common supertype of then and else), and records a condition known not to be
+	 * a Boolean (IfExp [1]).
+	 */
+	private void typeIf(IfExp ifExp) {
+		if (ifExp.getOwnedElse() instanceof IfExp nested && nested.getType() == null) {
+			typeIf(nested);
+		}
+		EClassifier condition = ifExp.getOwnedCondition() != null ? ifExp.getOwnedCondition().getType() : null;
+		if (!OclTypeRules.conformsTo(condition, LIBRARY.booleanType())) {
+			addTypeFinding("The condition of an if is a " + OclTypeRules.nameOf(condition) + ", not a Boolean");
+		}
+		EClassifier thenType = ifExp.getOwnedThen() != null ? ifExp.getOwnedThen().getType() : null;
+		EClassifier elseType = ifExp.getOwnedElse() != null ? ifExp.getOwnedElse().getType() : null;
+		EClassifier type = OclTypeRules.commonSuperType(thenType, elseType);
+		if (type != null) {
+			ifExp.setType(copyType(type));
+		}
+	}
+
+	/**
+	 * Types a {@code let}: the type of its body (§8.3.7 LetExp). The four languages build the
+	 * expression themselves and hand it here once it is complete.
+	 *
+	 * @param letExp the let expression, the outermost of a chain of them
+	 */
+	public void typeLet(LetExp letExp) {
+		if (letExp.getOwnedIn() instanceof LetExp nested && nested.getType() == null) {
+			typeLet(nested);
+		}
+		if (letExp.getOwnedIn() != null && letExp.getOwnedIn().getType() != null) {
+			letExp.setType(copyType(letExp.getOwnedIn().getType()));
+		}
 	}
 
 	/**
@@ -936,6 +1062,11 @@ public class AbstractExpressionBuilder {
 	 */
 	public void checkDeclaredType(String what, String name, EClassifier declared, OclExpression init) {
 		String literalType = literalTypeName(init);
+		if (literalType == null && init != null && !OclTypeRules.conformsTo(init.getType(), declared)) {
+			addTypeFinding("The " + what + " '" + name + "' is declared as " + OclTypeRules.nameOf(declared)
+					+ " but initialized with a " + OclTypeRules.nameOf(init.getType()));
+			return;
+		}
 		if (literalType == null || declared == null || conformsToDeclared(literalType, declared)) {
 			return;
 		}
@@ -1258,6 +1389,51 @@ public class AbstractExpressionBuilder {
 				exp.setReferredOperation(bestMatch);
 			}
 		}
+		typeOperationCall(exp);
+	}
+
+	/**
+	 * Types an operation call: a metamodel operation by its declared type, a library operation
+	 * by its signature (§11). An arrow on a single object applies to the object as a set
+	 * (§7.5.3). A library operation whose arguments are known not to fit any signature of that
+	 * name is a finding.
+	 */
+	private void typeOperationCall(OperationCallExp exp) {
+		if (exp.getReferredOperation() != null) {
+			exp.setType(typeOf(exp.getReferredOperation()));
+			return;
+		}
+		EClassifier receiver = exp.getOwnedSource() != null ? exp.getOwnedSource().getType() : null;
+		if (exp.isIsArrow() && receiver != null && !(OclTypeRules.normalize(receiver) instanceof CollectionType)
+				&& !(OclTypeRules.normalize(receiver) instanceof MapType)) {
+			receiver = collectionType(CollectionKind.SET, copyType(receiver));
+		}
+		OclLibrarySignatures.Resolution resolution = signatures.resolve(receiver, exp.getName(),
+				exp.getOwnedArguments());
+		if (resolution.type() != null) {
+			exp.setType(copyType(resolution.type()));
+		}
+		if (resolution.problem() != null) {
+			addTypeFinding(resolution.problem());
+		}
+	}
+
+	/**
+	 * The type of a typed element of a metamodel: its type, or a collection of it where it is
+	 * many-valued — ordered and unique as declared (§8.3.7 PropertyCallExp, OperationCallExp).
+	 *
+	 * @param element the property, operation or parameter
+	 * @return the type, {@code null} where the element has none
+	 */
+	public EClassifier typeOf(ETypedElement element) {
+		EClassifier type = element.getEType();
+		if (type == null || !element.isMany()) {
+			return type;
+		}
+		CollectionKind kind = element.isOrdered()
+				? element.isUnique() ? CollectionKind.ORDERED_SET : CollectionKind.SEQUENCE
+				: element.isUnique() ? CollectionKind.SET : CollectionKind.BAG;
+		return collectionType(kind, type);
 	}
 
 	/**
@@ -1379,6 +1555,7 @@ public class AbstractExpressionBuilder {
 		}
 		EnumLiteralExp exp = FACTORY.createEnumLiteralExp();
 		exp.setReferredLiteral(literal);
+		exp.setType(literal.getEEnum());
 		return exp;
 	}
 
