@@ -123,8 +123,8 @@ class QvtdLoadValidationTest {
 	@Test
 	@DisplayName("a domain that names no typed model is rejected")
 	void aDomainWithoutATypedModel_isRejected() throws Exception {
-		// The parser binds every domain to one of the transformation's typed models, so a domain
-		// without one did not come from a parser
+		// A domain naming no typed model of the transformation is a parse error (#358), so a
+		// stored domain without one did not come from a parser
 		CompiledUnit compiled = engine.compile(TRANSFORMATION, "copy");
 		firstDomain(compiled).setTypedModel(null);
 

@@ -22,6 +22,7 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationCallExp;
 
 /**
  * The variables an expression reads from outside: those its variable expressions refer to,
@@ -53,6 +54,25 @@ final class QvtrFreeVariables {
 			used.remove(variable.getName());
 		}
 		return used;
+	}
+
+	/**
+	 * Whether the expression calls a relation anywhere — such a predicate is no filter that can
+	 * be evaluated ahead: the call is a trace lookup, an invocation or a check (#358).
+	 *
+	 * @param expression the expression
+	 * @return {@code true} if it contains a relation call
+	 */
+	static boolean callsRelation(OclExpression expression) {
+		if (expression instanceof RelationCallExp) {
+			return true;
+		}
+		for (var it = expression.eAllContents(); it.hasNext();) {
+			if (it.next() instanceof RelationCallExp) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static void visit(EObject object, Set<Variable> declared, Set<String> used) {

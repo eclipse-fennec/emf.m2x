@@ -211,6 +211,17 @@ If both are set, the explicitly configured registry wins — the more specific s
 
 Under OSGi you do not do this yourself: the DS component binds the `ResourceSet` that `emf.osgi` publishes, as a mandatory reference — see §3.4.
 
+A class in a template resolves only in the metamodels of the transformation's model types, and a domain's templates may only use classes of its own model's metamodels, subpackages included (§7.1). Before #358 the parser also searched the whole package registry, so `checkonly domain uml x : EClass {}` worked without Ecore in the header. That is now a positioned parse error, as are:
+
+- an unknown model, class or property, including `opposite(…)` and keys;
+- a `default_values` entry that assigns no variable;
+- a call of a name that is neither a relation nor a query;
+- a relation call with the wrong number or types of arguments;
+- a duplicate relation or model parameter;
+- an `extends` that names no transformation.
+
+At run time the engine does not check whether an extent's contents conform to the model type, because the spec requires no such check.
+
 Parser and engine use exactly that registry; nothing reaches for the global one on its own (D42). Under OSGi, or wherever two versions of one nsURI can coexist, this is what keeps the engine from forming its own opinion about which version an nsURI names. Model version identity stays yours; see the `emf.osgi` fingerprint guide.
 
 ### 3.4 OSGi Setup
@@ -782,6 +793,12 @@ top relation ConcreteMapping overrides BaseMapping {   -- replaces BaseMapping w
 
 The modifiers come in this order: `top`, `abstract`, `relation`. Every relation has at least one domain, abstract ones included.
 
+**One domain:** a relation with a single domain is a model predicate, for example `top relation Marked { checkonly domain uml p : Package { name = 'X' }; }`. The normative grammar allows it, §7.2 speaks of two or more domains. Its traces can be used in other relations' `when` clauses, also negated: `when { not Marked(p); }`.
+
+**Relation calls:** a relation call is a Boolean expression and may stand anywhere in `when` and `where`, as in `not R(p, s)` or `R(p, s) or …`. It may also be qualified with the transformation's own name: `T.R(p, s)`.
+
+**Anonymous roots:** a domain root without a name (`checkonly domain uml : Package {…}`) gets an implicit variable.
+
 An overriding relation replaces the overridden one only for the bindings where its `when` clause and the patterns of its non-target domains match (§7.11.1.4).
 
 For every other binding, the overridden relation runs. A call from a `where` clause reaches the overriding relation in the same way. An abstract relation never runs itself: a call to it runs the overriding relation that applies, and if none applies, the call is an ERROR naming the relation and the binding. A relation may override one it inherits through `extends`. Overriding a name that is no relation of the transformation is a parse error.
@@ -859,11 +876,15 @@ The parser performs a **static analysis** (§7.5 "Restrictions on Expressions") 
 
 For each relation, the validator checks:
 
-1. **When-clause**: All variable references (except `RelationCallExp` arguments, which are bound from trace) must be resolvable from explicit variable declarations.
+1. **When-clause**: All variable references (except `RelationCallExp` arguments, which are bound from trace) must be bound by an initialized declaration, the when clause or a domain.
 
 2. **Each domain as potential target**: Since the target domain depends on execution direction, the validator verifies that for each domain D, all non-binding variable references in D's template expressions are satisfiable from external sources (when-clause + other domains + variable declarations).
 
-3. **Where-clause**: All variable references must be bound by the when-clause, domain templates, or variable declarations.
+3. **Where-clause**: All variable references must be bound by the when clause, domain templates, initialized declarations, or a where assignment `x = expr` to a declared variable.
+
+A plain declaration (`x : String;`) binds nothing: a variable that nothing binds is an error (#359). Only a declaration with an initializer (`x : String = 'a';`) binds its variable.
+
+**Per direction** (§7.5 rule 2.1, #359): which domain is the target depends on the direction, so the parser accepts a variable that only the target domain binds. An enforce run checks its direction before anything runs. A variable that nothing but the enforced domain binds, in the target domain, the where clause or the when clause, is an ERROR naming the variable and the relation, and nothing is executed. Such a relation is executable in the other direction only.
 
 4. **Local scopes**: Variables introduced by OCL `let`, `->select()`, `->collect()`, and other iterator expressions are correctly scoped and not flagged.
 
@@ -877,7 +898,8 @@ A binding site binds a variable the relation **declares** — by a variable decl
 | Property template (simple variable) | `name = pn` | §7.5 Rule 1.1: binds `pn` |
 | Collection template members | `{ c ++ rest }` | Binds `c` and `rest` (both must be declared) |
 | Primitive domain root | `primitive domain x : String` | Framework binds `x` |
-| Variable declaration | `pn : String;` | Explicit declaration |
+| Variable declaration with initializer | `pn : String = 'X';` | Binds `pn` to the value |
+| Where assignment | `where { tn = cn.concat('_t'); }` | Binds the declared `tn` before enforcing |
 | When-clause `RelationCallExp` | `when { R(a, b); }` | `a`, `b` bound from trace (both must be declared) |
 
 ### 8.3 What Triggers an Error

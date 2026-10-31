@@ -187,7 +187,7 @@ public class QvtrEnforcer {
 		}
 		for (Predicate predicate : relation.getWhere().getPredicate()) {
 			OclExpression expr = predicate.getConditionExpression();
-			if (expr == null || expr instanceof RelationCallExp
+			if (expr == null || QvtrFreeVariables.callsRelation(expr)
 					|| !match.keySet().containsAll(QvtrFreeVariables.of(expr))) {
 				continue;
 			}
