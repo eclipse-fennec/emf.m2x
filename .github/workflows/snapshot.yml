@@ -25,10 +25,9 @@ permissions:
   id-token: write # OIDC token for the Pages deployment
   actions: read # pages-deploy restores the previous site-full artifact
 
-# Serialize Pages publishing; let an in-flight deploy finish before the next.
-concurrency:
-  group: snapshot-pages
-  cancel-in-progress: false
+# Only the publishing jobs are serialized, each by its own job-level group: a run that
+# waited as a whole had no check yet, so the commit showed only the finished license check
+# and turned green while the build had not even started. verify now starts at once.
 
 jobs:
   verify:
@@ -46,6 +45,9 @@ jobs:
 
   release:
     name: Release snapshot
+    concurrency:
+      group: snapshot-publish
+      cancel-in-progress: false
     needs: verify
     uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@5b25efac2c99c0f88252d1a45302b8a1ae5876ce # v1.4.0
     with:
@@ -58,6 +60,9 @@ jobs:
 
   p2:
     name: Publish p2 to download.eclipse.org
+    concurrency:
+      group: snapshot-p2
+      cancel-in-progress: false
     needs: release
     # Independent of the Pages deploy: `deploy` does not wait for it, so the two
     # publications never block each other.
@@ -88,6 +93,9 @@ jobs:
 
   deploy:
     name: Publish merged Pages site
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     needs: docs
     uses: ./.github/workflows/pages-deploy.yml
     with:
