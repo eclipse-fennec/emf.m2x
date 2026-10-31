@@ -119,6 +119,14 @@ class QvtdCommentTest extends AbstractQvtdEngineTest {
 		assertEquals(1, run(WHEN_GUARD.formatted("/* false; */")).size());
 	}
 
+	@Test
+	@DisplayName("A paragraph comment may contain a paragraph comment (§7.13.3)")
+	void nestedParagraphComment() throws QvtdParseException {
+		// "Paragraph comments may be nested" — the inner '*/' does not end the outer comment,
+		// so 'false;' after it is still commented out
+		assertEquals(1, run(WHEN_GUARD.formatted("/* outer /* inner */ false; */")).size());
+	}
+
 	/** Enforces rdbms from one Package("HR") and returns the rdbms extent's contents. */
 	private List<EObject> run(String source) throws QvtdParseException {
 		QvtdModelExtent rdbms = emptyExtent();
