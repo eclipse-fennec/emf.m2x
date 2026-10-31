@@ -15,10 +15,9 @@ on:
     # This snapshot build should only happen on pushes to the snapshot branch.
     branches:
       - snapshot
-  pull_request:
-    # This snapshot build should NOT happen on pull requests.
-    branches-ignore:
-      - '*'
+  # No pull_request trigger. It was there with `branches-ignore: '*'` to exclude every PR,
+  # but '*' does not match a '/': a PR whose base is a feature branch (fix/…) ran this
+  # workflow with the organisation's secrets and published (2026-10-31, PR #390).
 
 permissions:
   contents: read
