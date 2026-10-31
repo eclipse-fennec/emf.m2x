@@ -29,7 +29,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * An operational (imperative) transformation with model parameters (QVT v1.3 Section 8.2.2.11).
+ * An operational (imperative) transformation with model parameters (QVT v1.3 Section 8.2.1.1).
  * <!-- end-model-doc -->
  *
  * <p>

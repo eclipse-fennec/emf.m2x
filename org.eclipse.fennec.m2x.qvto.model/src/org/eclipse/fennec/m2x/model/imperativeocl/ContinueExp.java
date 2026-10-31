@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Continue expression to skip to the next loop iteration (QVT v1.3 Section 8.2.1.2).
+ * Continue expression to skip to the next loop iteration (QVT v1.3 Section 8.2.2.18).
  * <!-- end-model-doc -->
  *
  *

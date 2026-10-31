@@ -24,7 +24,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Assert expression: assert severity assertion with log (QVT v1.3 Section 8.2.1.3).
+ * Assert expression: assert severity assertion with log (QVT v1.3 Section 8.2.2.20).
  * <!-- end-model-doc -->
  *
  * <p>

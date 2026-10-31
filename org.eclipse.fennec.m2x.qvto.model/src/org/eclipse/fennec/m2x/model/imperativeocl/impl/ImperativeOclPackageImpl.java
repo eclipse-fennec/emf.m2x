@@ -786,6 +786,16 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 	 * @generated
 	 */
 	@Override
+	public EReference getCatchExp_ExceptionVariable() {
+		return (EReference)catchExpEClass.getEStructuralFeatures().get(2);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClass getInstantiationExp() {
 		return instantiationExpEClass;
 	}
@@ -1033,6 +1043,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 		catchExpEClass = createEClass(CATCH_EXP);
 		createEReference(catchExpEClass, CATCH_EXP__BODY);
 		createEReference(catchExpEClass, CATCH_EXP__EXCEPTION);
+		createEReference(catchExpEClass, CATCH_EXP__EXCEPTION_VARIABLE);
 
 		instantiationExpEClass = createEClass(INSTANTIATION_EXP);
 		createEReference(instantiationExpEClass, INSTANTIATION_EXP__ARGUMENT);
@@ -1181,6 +1192,7 @@ public class ImperativeOclPackageImpl extends EPackageImpl implements Imperative
 		initEClass(catchExpEClass, CatchExp.class, "CatchExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getCatchExp_Body(), theOclPackage.getOclExpression(), null, "body", null, 0, -1, CatchExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getCatchExp_Exception(), ecorePackage.getEClassifier(), null, "exception", null, 0, -1, CatchExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getCatchExp_ExceptionVariable(), theOclPackage.getVariable(), null, "exceptionVariable", null, 0, 1, CatchExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(instantiationExpEClass, InstantiationExp.class, "InstantiationExp", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getInstantiationExp_Argument(), theOclPackage.getOclExpression(), null, "argument", null, 0, -1, InstantiationExp.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

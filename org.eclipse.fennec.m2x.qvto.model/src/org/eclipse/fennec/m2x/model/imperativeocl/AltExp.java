@@ -24,7 +24,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * An alternative (case) in a switch expression with a condition and body (QVT v1.3 Section 8.2.1.6).
+ * An alternative (case) in a switch expression with a condition and body (QVT v1.3 Section 8.2.2.9).
  * <!-- end-model-doc -->
  *
  * <p>

@@ -25,7 +25,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Abstract base for imperative loop expressions (forEach, forExp) that extend OCL LoopExp with an optional condition (QVT v1.3 Section 8.2.1.5).
+ * Abstract base for imperative loop expressions (forEach, forExp) that extend OCL LoopExp with an optional condition (QVT v1.3 Section 8.2.2.5).
  * <!-- end-model-doc -->
  *
  * <p>

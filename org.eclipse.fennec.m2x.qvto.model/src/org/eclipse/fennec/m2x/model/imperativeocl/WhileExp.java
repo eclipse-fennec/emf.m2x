@@ -24,7 +24,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * While loop expression: while (condition) { body } (QVT v1.3 Section 8.2.1.4).
+ * While loop expression: while (condition) { body } (QVT v1.3 Section 8.2.2.4).
  * <!-- end-model-doc -->
  *
  * <p>

@@ -25,7 +25,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Compute expression: compute(var) { body } — evaluates body, returns var (QVT v1.3 Section 8.2.1.7).
+ * Compute expression: compute(var) { body } — evaluates body, returns var (QVT v1.3 Section 8.2.2.3).
  * <!-- end-model-doc -->
  *
  * <p>

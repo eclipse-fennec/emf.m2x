@@ -108,9 +108,25 @@ public final class OclDocumentValidator implements EValidator {
 		}
 		if (diagnostics != null) {
 			diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, DIAGNOSTIC_SOURCE, 0,
-					"The '" + name + "' constraint is violated on '" + eObject.eClass().getName() + "'",
-					new Object[] { eObject }));
+					violationMessage(invariant, name, eObject), new Object[] { eObject }));
 		}
 		return false;
+	}
+
+	/**
+	 * The message of a violated invariant: the one written in inv name('message'):, evaluated on
+	 * the object (#324), or the generic one when there is none or it does not yield a text.
+	 */
+	private String violationMessage(Constraint invariant, String name, EObject eObject) {
+		String generic = "The '" + name + "' constraint is violated on '" + eObject.eClass().getName() + "'";
+		if (invariant.getMessageExpression() == null) {
+			return generic;
+		}
+		try {
+			Object message = engine.evaluate(invariant.getMessageExpression(), OclContext.of(eObject));
+			return message instanceof String text && !text.isEmpty() ? text : generic;
+		} catch (RuntimeException failure) {
+			return generic;
+		}
 	}
 }

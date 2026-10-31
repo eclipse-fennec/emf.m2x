@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A constructor operation for object initialization (QVT v1.3 Section 8.2.2.8).
+ * A constructor operation for object initialization (QVT v1.3 Section 8.2.1.13).
  * <!-- end-model-doc -->
  *
  *

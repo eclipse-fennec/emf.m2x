@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Raise expression: raise exception with optional argument (QVT v1.3 Section 8.2.1.8).
+ * Raise expression: raise exception with optional argument (QVT v1.3 Section 8.2.2.15).
  * <!-- end-model-doc -->
  *
  * <p>

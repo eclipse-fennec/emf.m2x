@@ -28,7 +28,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A typed parameter with direction kind, used for operation context, parameters, and results (QVT v1.3 Section 8.2.2.3). Does not extend ocl::Variable directly to avoid duplicate 'name' feature (ENamedElement.name vs Variable.name); relevant Variable features (representedParameter, ownedInit) are declared locally.
+ * A typed parameter with direction kind, used for operation context, parameters, and results (QVT v1.3 Section 8.2.1.7). Does not extend ocl::Variable directly to avoid duplicate 'name' feature (ENamedElement.name vs Variable.name); relevant Variable features (representedParameter, ownedInit) are declared locally.
  * <!-- end-model-doc -->
  *
  * <p>

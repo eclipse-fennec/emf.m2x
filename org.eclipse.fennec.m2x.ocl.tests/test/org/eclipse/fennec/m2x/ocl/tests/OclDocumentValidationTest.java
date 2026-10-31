@@ -94,6 +94,32 @@ class OclDocumentValidationTest {
 	}
 
 	@Test
+	void anInvariantMessage_isTheDiagnosticOfAViolation() throws Exception {
+		// OCL v2.4 §12.2.2: inv name('message'): body — the message is evaluated on the object (#324)
+		OclEngine runtime = OclEngines.create(new OclParserSupport());
+		CompleteOclDocument document = (CompleteOclDocument) runtime.compileDocument("company.messages", """
+				package company
+				context Person
+				  inv agePositive('age is ' + self.age.toString()): self.age >= 0
+				  inv noText(42): self.age < 100
+				endpackage
+				""").getUnit();
+		runtime.registerCompleteOclDocument(document);
+		OclDocumentValidator validator = new OclDocumentValidator(runtime);
+
+		BasicDiagnostic diagnostics = new BasicDiagnostic();
+		assertFalse(validator.validate(person(-1), diagnostics, null));
+		assertEquals("age is -1", diagnostics.getChildren().get(0).getMessage());
+
+		// A message that yields no text falls back to the generic one
+		BasicDiagnostic old = new BasicDiagnostic();
+		assertFalse(validator.validate(person(120), old, null));
+		assertTrue(old.getChildren().get(0).getMessage().contains("'noText' constraint is violated"),
+				old.getChildren().get(0).getMessage());
+		runtime.unregisterCompleteOclDocument(document);
+	}
+
+	@Test
 	void aSupertypeInvariant_appliesToTheSubclass() throws Exception {
 		EPackage shapes = shapes();
 		OclEngine runtime = OclEngines.create(new OclParserSupport(registryOf(shapes)));

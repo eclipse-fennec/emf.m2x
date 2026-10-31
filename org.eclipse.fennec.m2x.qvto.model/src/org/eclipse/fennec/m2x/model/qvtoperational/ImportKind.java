@@ -28,7 +28,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * and utility methods for working with them.
  * <!-- end-user-doc -->
  * <!-- begin-model-doc -->
- * Kind of module import: extension (operations visible in context) or access (explicit qualification required) (QVT v1.3 Section 8.2.2).
+ * Kind of module import: extension (operations visible in context) or access (explicit qualification required) (QVT v1.3 Section 8.2.1.9).
  * <!-- end-model-doc -->
  * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getImportKind()
  * @model

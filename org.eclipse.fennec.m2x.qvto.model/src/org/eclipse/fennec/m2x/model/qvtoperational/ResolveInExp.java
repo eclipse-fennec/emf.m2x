@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * ResolveIn expression: resolve within a specific mapping operation (QVT v1.3 Section 8.2.2.19).
+ * ResolveIn expression: resolve within a specific mapping operation (QVT v1.3 Section 8.2.1.23).
  * <!-- end-model-doc -->
  *
  * <p>

@@ -25,7 +25,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Log expression: log(message) with optional condition (QVT v1.3 Section 8.2.1.3). Extends OperationCallExp for the message arguments.
+ * Log expression: log(message) with optional condition (QVT v1.3 Section 8.2.2.19). Extends OperationCallExp for the message arguments.
  * <!-- end-model-doc -->
  *
  * <p>

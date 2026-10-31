@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Body of a mapping operation with init, population, and end sections (QVT v1.3 Section 8.2.2.12).
+ * Body of a mapping operation with init, population, and end sections (QVT v1.3 Section 8.2.1.19).
  * <!-- end-model-doc -->
  *
  * <p>
