@@ -14,12 +14,11 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
-import org.eclipse.fennec.m2x.ocl.api.OclDelegates;
-
 import java.util.List;
 
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EModelElement;
+import org.eclipse.fennec.m2x.ocl.api.OclDelegates;
 
 /**
  * Utility for reading OCL expressions from Ecore annotations.

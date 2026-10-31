@@ -14,10 +14,10 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
-import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
+import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
