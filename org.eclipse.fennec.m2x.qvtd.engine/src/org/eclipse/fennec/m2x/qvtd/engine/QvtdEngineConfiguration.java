@@ -41,6 +41,9 @@ public @interface QvtdEngineConfiguration {
 	@AttributeDefinition(name = "Blackbox Enabled", description = "Whether transformations may call Java blackbox libraries")
 	boolean blackboxEnabled() default false;
 
+	@AttributeDefinition(name = "Implementation Providers Enabled", description = "Whether relation implementation providers bound as services serve implementedby clauses (QVT-R/QVT-O hybrid, #286)")
+	boolean implementationProvidersEnabled() default false;
+
 	@AttributeDefinition(name = "Allowed Blackbox Modules", description = "Qualified names a transformation may import as a blackbox; empty puts no restriction on the names")
 	String[] allowedBlackboxModules() default {};
 

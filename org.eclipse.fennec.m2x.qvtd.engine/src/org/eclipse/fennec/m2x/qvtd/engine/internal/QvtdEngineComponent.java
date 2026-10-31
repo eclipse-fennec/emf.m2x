@@ -14,7 +14,10 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
@@ -22,9 +25,11 @@ import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdConfigurationHelper;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngineConfiguration;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
+import org.osgi.framework.Constants;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
@@ -99,6 +104,11 @@ import org.osgi.service.metatype.annotations.Designate;
  * them. Binding grants nothing by itself: libraries are consulted only with
  * {@code qvtd.blackboxEnabled}, and only for the modules the allow-list permits.
  *
+ * <p>Relation implementation providers — the QVT-O side of a hybrid transformation — are bound
+ * the same way (#286): {@code implementationProviders}, a dynamic {@code 0..n} reference ordered
+ * by {@code service.ranking} and narrowed by {@code implementationProviders.target}. They serve
+ * {@code implementedby} clauses only when {@code qvtd.implementationProvidersEnabled} is on.
+ *
  * @since 1.0
  */
 @Designate(ocd = QvtdEngineConfiguration.class)
@@ -106,6 +116,17 @@ import org.osgi.service.metatype.annotations.Designate;
 public class QvtdEngineComponent extends QvtdEngineImpl {
 
 	private final QvtdServiceBlackboxRegistry blackboxes;
+	private final boolean implementationProvidersEnabled;
+	private final CopyOnWriteArrayList<RankedProvider> implementationProviders = new CopyOnWriteArrayList<>();
+
+	/** A bound provider with what orders it: its ranking, then its registration. */
+	private record RankedProvider(RelationImplementationProvider provider, int ranking, long id) {
+	}
+
+	/** Highest ranking first; among equals, the one registered first. */
+	private static final Comparator<RankedProvider> ORDER = Comparator
+			.comparingInt(RankedProvider::ranking).reversed()
+			.thenComparingLong(RankedProvider::id);
 
 	@Activate
 	public QvtdEngineComponent(
@@ -126,6 +147,7 @@ public class QvtdEngineComponent extends QvtdEngineImpl {
 		super(QvtdConfigurationHelper.from(config, oclEngine, unitDiscovery, resourceSet, blackboxes),
 				new UnitPackager(fingerprints));
 		this.blackboxes = blackboxes;
+		this.implementationProvidersEnabled = config.implementationProvidersEnabled();
 	}
 
 	/**
@@ -148,5 +170,45 @@ public class QvtdEngineComponent extends QvtdEngineImpl {
 	 */
 	void removeBlackbox(QvtdBlackboxLibrary library) {
 		blackboxes.remove(library);
+	}
+
+	/**
+	 * Binds a relation implementation provider service — the QVT-O side of a hybrid
+	 * transformation (§7.11.3.6, #286). Used only when {@code qvtd.implementationProvidersEnabled}
+	 * is on; narrowed by {@code implementationProviders.target}, ordered by
+	 * {@code service.ranking}.
+	 *
+	 * @param provider   the provider
+	 * @param properties its service properties, for its ranking
+	 */
+	@Reference(name = "implementationProviders", service = RelationImplementationProvider.class,
+			cardinality = ReferenceCardinality.MULTIPLE, policy = ReferencePolicy.DYNAMIC,
+			unbind = "removeImplementationProvider")
+	void addImplementationProvider(RelationImplementationProvider provider, Map<String, Object> properties) {
+		int ranking = properties.get(Constants.SERVICE_RANKING) instanceof Integer i ? i : 0;
+		long id = properties.get(Constants.SERVICE_ID) instanceof Long l ? l : Long.MAX_VALUE;
+		implementationProviders.add(new RankedProvider(provider, ranking, id));
+	}
+
+	/**
+	 * Unbinds a relation implementation provider service.
+	 *
+	 * @param provider the provider
+	 */
+	void removeImplementationProvider(RelationImplementationProvider provider) {
+		implementationProviders.removeIf(entry -> entry.provider() == provider);
+	}
+
+	@Override
+	protected List<RelationImplementationProvider> serviceImplementationProviders() {
+		if (!implementationProvidersEnabled) {
+			return List.of();
+		}
+		return implementationProviders.stream().sorted(ORDER).map(RankedProvider::provider).toList();
+	}
+
+	@Override
+	protected int ignoredServiceImplementationProviders() {
+		return implementationProvidersEnabled ? 0 : implementationProviders.size();
 	}
 }

@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -29,6 +30,7 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
@@ -281,12 +283,53 @@ public class QvtdEngineImpl implements QvtdEngine {
 			}
 		}
 		QvtrEvalEnvironment env = new QvtrEvalEnvironment();
+		List<RelationImplementationProvider> providers = new ArrayList<>(implementationProviders);
+		providers.addAll(serviceImplementationProviders());
 		QvtrRun run = QvtrRun.of(transformation, context, config)
-				.withImplementationProviders(List.copyOf(implementationProviders))
+				.withImplementationProviders(providers)
 				.withPositionLookup(parserSupport::positionOf);
 		QvtrEvaluator evaluator = new QvtrEvaluator(oclEngine, env, run);
-		List<Diagnostic> diagnostics = evaluator.execute();
+		List<Diagnostic> diagnostics = withIgnoredProviderHint(transformation, evaluator.execute());
 		return new QvtdExecutionResult(diagnostics, !context.checkOnly(), evaluator.modelChanged());
+	}
+
+	/**
+	 * The relation implementation providers bound as services, in ranking order — none in plain
+	 * Java; the OSGi component answers with what it bound, when that is enabled (#286).
+	 *
+	 * @return the providers, never {@code null}
+	 */
+	protected List<RelationImplementationProvider> serviceImplementationProviders() {
+		return List.of();
+	}
+
+	/**
+	 * How many relation implementation providers are bound as services but not used, because
+	 * using them is not enabled (#286).
+	 *
+	 * @return the number, zero in plain Java
+	 */
+	protected int ignoredServiceImplementationProviders() {
+		return 0;
+	}
+
+	/**
+	 * Says why a bound provider was not asked, where the transformation has an
+	 * {@code implementedby} clause one could have served — otherwise the run reports an
+	 * operation nobody serves, while the provider for it is right there (#286).
+	 */
+	private List<Diagnostic> withIgnoredProviderHint(RelationalTransformation transformation, List<Diagnostic> diagnostics) {
+		int ignored = ignoredServiceImplementationProviders();
+		boolean implementedBy = transformation.getRule().stream()
+				.anyMatch(rule -> rule instanceof Relation relation && !relation.getOperationalImpl().isEmpty());
+		if (ignored == 0 || !implementedBy) {
+			return diagnostics;
+		}
+		List<Diagnostic> all = new ArrayList<>(diagnostics);
+		all.add(new BasicDiagnostic(Diagnostic.WARNING, QvtdExecutionResult.SOURCE, 0, ignored
+				+ " relation implementation provider service(s) are bound but not used:"
+				+ " qvtd.implementationProvidersEnabled is off", null));
+		return all;
 	}
 
 	@Override

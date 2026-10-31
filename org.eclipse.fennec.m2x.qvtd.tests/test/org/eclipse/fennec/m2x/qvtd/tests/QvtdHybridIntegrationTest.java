@@ -483,6 +483,81 @@ class QvtdHybridIntegrationTest extends AbstractQvtdEngineTest {
 	 * engine created by {@code QvtoEngines} carries both.
 	 */
 	@Nested
+	@DisplayName("§8.2.1.1: refines decides which relational transformation a QVT-O unit serves (#286)")
+	class RefinesSelectsTheRelationalTransformation {
+
+		private static final String QVTR = """
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					top relation ClassToTable {
+						cn : String;
+						checkonly domain uml c : Class { name = cn };
+						enforce domain rdbms t : Table { name = cn }
+							implementedby classToTableOp(c);
+					}
+				}
+				""";
+
+		private static String qvto(String refines) {
+			return """
+					modeltype SRC uses 'http://test/simpleuml/1.0';
+					modeltype TGT uses 'http://test/simplerdbms/1.0';
+					transformation QvtoImpl(in uml : SRC, out rdbms : TGT)%s;
+					mapping Class::classToTableOp() : Table {
+						name := self.name;
+						type := 'QVTO';
+					}
+					""".formatted(refines);
+		}
+
+		private QvtoEngine provider(String refines) throws QvtoParseException {
+			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
+			QvtoEngine qvtoEngine = QvtoEngines.create(QvtoConfiguration.builder(oclConfig).build());
+			qvtoEngine.loadTransformation(qvtoEngine.parse(qvto(refines), "QvtoImpl"));
+			return qvtoEngine;
+		}
+
+		private QvtdExecutionResult run(QvtoEngine provider, QvtdModelExtent rdbms) throws QvtdParseException {
+			QvtdEngine qvtdEngine = QvtdEngines.create(
+					QvtdConfiguration.builder(OclConfiguration.builder(new OclParserSupport()).build()).build());
+			qvtdEngine.registerImplementationProvider(provider);
+			RelationalTransformation rt = qvtdEngine.parse(QVTR, "test");
+			return qvtdEngine.execute(rt, QvtdExecutionContext.enforce("rdbms",
+					Map.of("uml", QvtdModelExtent.of(createClass("Employee", null)), "rdbms", rdbms)));
+		}
+
+		@Test
+		@DisplayName("a unit that refines the running transformation serves it")
+		void refinesTheRunningTransformation() throws Exception {
+			QvtoEngine provider = provider(" refines T");
+			assertTrue(provider.canProvide("T", "classToTableOp"));
+			QvtdModelExtent rdbms = emptyExtent();
+			QvtdExecutionResult result = run(provider, rdbms);
+			assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+			assertEquals("QVTO", rdbms.getContents().get(0).eGet(
+					rdbms.getContents().get(0).eClass().getEStructuralFeature("type")));
+		}
+
+		@Test
+		@DisplayName("a unit that refines another transformation does not serve this one")
+		void refinesAnotherTransformation() throws Exception {
+			QvtoEngine provider = provider(" refines Other");
+			assertFalse(provider.canProvide("T", "classToTableOp"));
+			assertTrue(provider.canProvide("Other", "classToTableOp"));
+			QvtdExecutionResult result = run(provider, emptyExtent());
+			assertFalse(result.isSuccess());
+			assertTrue(result.diagnostics().toString().contains("'classToTableOp'"), () -> "diagnostics: " + result.diagnostics());
+		}
+
+		@Test
+		@DisplayName("a unit without refines serves any transformation")
+		void noRefines() throws Exception {
+			QvtoEngine provider = provider("");
+			assertTrue(provider.canProvide("T", "classToTableOp"));
+			assertTrue(provider.canProvide("Other", "classToTableOp"));
+		}
+	}
+
+	@Nested
 	@DisplayName("#187: an engine serving two runs")
 	class SharedProvider {
 

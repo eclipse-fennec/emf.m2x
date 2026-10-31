@@ -393,22 +393,35 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices {
 
 	@Override
 	public boolean canProvide(String operationName) {
-		return providerFor(operationName) != null;
+		return providerFor(null, operationName) != null;
+	}
+
+	@Override
+	public boolean canProvide(String transformationName, String operationName) {
+		return providerFor(transformationName, operationName) != null;
 	}
 
 	/**
-	 * The loaded transformation that has a mapping of this name, in load order.
+	 * The loaded transformation that has a mapping of this name, in load order — of those that
+	 * refine the given relational transformation or say nothing about whom they refine
+	 * (§8.2.1.1, #286).
 	 *
+	 * @param transformationName the running relational transformation, or {@code null} for any
 	 * @param operationName the operation a QVT-R {@code implementedby} clause names
 	 * @return the transformation, or {@code null} if none of them has it
 	 */
-	private OperationalTransformation providerFor(String operationName) {
+	private OperationalTransformation providerFor(String transformationName, String operationName) {
 		for (OperationalTransformation candidate : loadedTransformations) {
-			if (findMappingByName(candidate, operationName) != null) {
+			if (refines(candidate, transformationName) && findMappingByName(candidate, operationName) != null) {
 				return candidate;
 			}
 		}
 		return null;
+	}
+
+	private static boolean refines(OperationalTransformation candidate, String transformationName) {
+		return transformationName == null || candidate.getRefined() == null
+				|| transformationName.equals(candidate.getRefined().getName());
 	}
 
 	/**
@@ -424,10 +437,16 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices {
 	@Override
 	public RelationImplementationResult invoke(String operationName, List<Object> arguments,
 			QvtdExecutionContext qvtdContext) {
+		return invoke(null, operationName, arguments, qvtdContext);
+	}
+
+	@Override
+	public RelationImplementationResult invoke(String transformationName, String operationName,
+			List<Object> arguments, QvtdExecutionContext qvtdContext) {
 		Objects.requireNonNull(operationName, "operationName must not be null");
 		Objects.requireNonNull(arguments, "arguments must not be null");
 		Objects.requireNonNull(qvtdContext, "qvtdContext must not be null");
-		OperationalTransformation ot = providerFor(operationName);
+		OperationalTransformation ot = providerFor(transformationName, operationName);
 		if (ot == null) {
 			return failed("No loaded QVT-O transformation has a mapping '" + operationName + "'");
 		}
