@@ -183,8 +183,19 @@ public class QvtoExtentManager {
 	 * @return the name of the transformation
 	 */
 	Optional<String> borrowerOf(EObject object) {
-		QvtoModelExtent extent = object == null ? null : extentOf(object);
-		return extent == null ? Optional.empty() : borrowerOf(extent);
+		// Asked on every assignment: only the lent models are searched, and none when nothing is
+		// lent — extentOf would search the contents of every model, the growing out model
+		// included, which made an assignment cost as much as the model was large
+		if (object == null || lendings.isEmpty()) {
+			return Optional.empty();
+		}
+		EObject root = EcoreUtil.getRootContainer(object);
+		for (QvtoModelExtent extent : List.copyOf(lendings.keySet())) {
+			if (extent.getContents().contains(root) || extent.getContents().contains(object)) {
+				return borrowerOf(extent);
+			}
+		}
+		return Optional.empty();
 	}
 
 	/**

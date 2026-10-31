@@ -201,6 +201,8 @@ public class QvtoEvaluator {
 
 	// Late resolve support (§8.2.1.22, §8.2.2.11)
 	private final List<DeferredAssignment> deferredAssignments = new ArrayList<>();
+	/** Whether an assignment involves a late resolve, per assignment node (§8.2.2.11). */
+	private final Map<AssignExp, Boolean> lateResolveAssignments = new IdentityHashMap<>();
 	private boolean isDeferredExecution;
 	// While a deferred assignment runs: the late resolves' sources captured when it was reached
 	private Map<ResolveExp, Object> deferredResolveSources = Map.of();
@@ -2188,7 +2190,9 @@ public class QvtoEvaluator {
 
 	/**
 	 * §8.2.2.11: whether the assignment is a deferred one — its right-hand side involves a
-	 * late resolve.
+	 * late resolve. A property of the AST, so asked once per assignment node and remembered in
+	 * {@link #lateResolveAssignments}: walking the right-hand side at every execution of every
+	 * assignment cost a mapping-heavy transformation a fifth of its run time.
 	 */
 	private static boolean involvesLateResolve(AssignExp exp) {
 		List<OclExpression> parts = new ArrayList<>(exp.getValue());
@@ -2481,7 +2485,8 @@ public class QvtoEvaluator {
 
 			// §8.2.2.11: an assignment involving a late resolve is deferred as a whole — wherever
 			// it stands, in a block or an if as much as at the top of a mapping body (#297)
-			if (!isDeferredExecution && involvesLateResolve(exp) && deferAssignment(exp)) {
+			if (!isDeferredExecution && lateResolveAssignments.computeIfAbsent(exp, QvtoEvaluator::involvesLateResolve)
+					&& deferAssignment(exp)) {
 				// "This assignment is not executed at the time the assignment is reached ...
 				// A null value is returned instead." (§8.2.1.22)
 				return WRAPPED_NULL;
