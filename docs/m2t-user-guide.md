@@ -1,6 +1,6 @@
 # M2T Engine User Guide
 
-Fennec M2T is a lightweight, spec-compliant MOFM2T v1.0 (Model to Text) engine that works as a standalone Java library — no Eclipse platform required. Compatible with Acceleo 3.7 templates.
+Fennec M2T is a lightweight MOFM2T v1.0 (Model to Text) engine that works as a standalone Java library — no Eclipse platform required. It follows the specification, with the deviations listed in [§18](#18-deviations-from-mofm2t-10), and reads the Acceleo 3.7 forms most templates use (the `[comment … /]` and `[comment]…[/comment]` comments, `protected` visibility, `post`, same-named templates); it is not Acceleo, and Acceleo's AQL is not supported.
 
 ## Table of Contents
 
@@ -21,6 +21,7 @@ Fennec M2T is a lightweight, spec-compliant MOFM2T v1.0 (Model to Text) engine t
 15. [M2tGenerationStrategy](#15-m2tgenerationstrategy)
 16. [Whitespace Handling](#16-whitespace-handling)
 17. [Generating from a bnd Build](#17-generating-from-a-bnd-build)
+18. [Deviations from MOFM2T 1.0](#18-deviations-from-mofm2t-10)
 
 ---
 
@@ -1745,3 +1746,25 @@ run templates as a build step instead of from Java — configured entirely throu
 That has its own guide: **[M2T bnd Generator Guide](m2t-generator-guide.md)** — dependencies,
 the instruction and its attributes, how metamodels are registered under their namespace URI,
 and how the models are bound to `main`.
+
+---
+
+## 18. Deviations from MOFM2T 1.0
+
+Where the engine does something other than, or more than, the specification says — each a decision, made in the spec audit of 2026-10 (#363–#376):
+
+| Topic | Specification | Fennec M2T |
+|-------|---------------|------------|
+| Escape direction (§7.1, §8.2) | text-explicit and code-explicit mode | text-explicit only; `@code-explicit` is a parse error (§4.12) |
+| Trace block (§7.2, §8.1.18) | text is traced to model elements and templates | the body is written and the model element evaluated; no trace records (§4.11) |
+| Unique names (§8.1.2) | a module element has a unique name | same-named templates with different parameter types are kept and dispatched by argument type, as in Acceleo (§5.5) |
+| Visibility (§8.2) | `public` or `private`, required | also `protected` (Acceleo, §7 prose); a missing one is public with a WARNING (§4.2) |
+| Entry point (§7) | no main template; any public template is started by name | `execute(module, name, context)`, and `execute(module, context)` for `@main`/`main` (§8.5.1) |
+| Comments (§7.4, §8.2) | `[comment()]…[/comment]` | also `[comment]…[/comment]` and `[comment … /]` (Acceleo); `//` is text in text-explicit mode (§4.10) |
+| Keywords (§8.2) | `guard`, `init`, `each`, `mode` | `? (…)`, `{ … }`, `separator (…)`; no `mode` (§16) |
+| `post` | — | Acceleo extension (§9.4) |
+| `[file]` charset | — | optional fourth argument (§4.7) |
+| Protected-area delimiters (§7.2) | left to the tool | per file extension, configurable (§10.1) |
+| `substitute` (§8.3.1) | "substring r" | the first occurrence; `substituteAll` for all (§11) |
+| `strcmp` sign (§8.3.1) | the sentence reads s1 < self ⇒ negative | the sign of C's `strcmp(self, s1)`, as Acceleo (§11) |
+| Whitespace (§8.4) | the newline after a single-line stand-alone block is output | kept when the block wrote text, dropped when it wrote nothing (§16.2.2); ACCELEO mode passes `^` through |
