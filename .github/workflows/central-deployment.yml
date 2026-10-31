@@ -1,0 +1,89 @@
+name: Central Portal deployment
+
+# Reads the state of a Sonatype Central Portal deployment and, on request, drops it. Built after
+# PR #390 (2026-10-31) ran release.yml by accident and uploaded deployment
+# e5936235-27dc-4d11-b4eb-5a81741cef09 in AUTOMATIC mode: the credentials exist only as
+# organisation secrets, so only a workflow can ask the Portal about it.
+#
+# Publisher API: POST /api/v1/publisher/status?id=<id> reports the state; DELETE
+# /api/v1/publisher/deployment/<id> drops a deployment that is FAILED or VALIDATED. A PUBLISHED
+# deployment cannot be dropped — Maven Central keeps what it published.
+on:
+  workflow_dispatch:
+    inputs:
+      deployment-id:
+        description: "Deployment ID (UUID) the release log printed"
+        required: true
+        type: string
+      action:
+        description: "status: only report the state; drop: delete the deployment if it is FAILED or VALIDATED"
+        required: true
+        type: choice
+        options:
+          - status
+          - drop
+        default: status
+
+permissions:
+  contents: read
+
+jobs:
+  deployment:
+    name: Deployment ${{ inputs.action }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # Inputs reach the script through the environment only, never by interpolation
+      DEPLOYMENT_ID: ${{ inputs.deployment-id }}
+      ACTION: ${{ inputs.action }}
+      CS_USERNAME: ${{ secrets.CS_USERNAME }}
+      CS_PASSWORD: ${{ secrets.CS_PASSWORD }}
+    steps:
+      - name: Query and, on request, drop the deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${DEPLOYMENT_ID}" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "::error::Not a deployment ID: ${DEPLOYMENT_ID}"
+            exit 1
+          fi
+          : "${CS_USERNAME:?the CS_USERNAME secret is not available}"
+          : "${CS_PASSWORD:?the CS_PASSWORD secret is not available}"
+          BEARER=$(printf '%s:%s' "${CS_USERNAME}" "${CS_PASSWORD}" | base64 -w0)
+          API=https://central.sonatype.com/api/v1/publisher
+
+          state() {
+            curl -sS -X POST -H "Authorization: Bearer ${BEARER}" "${API}/status?id=${DEPLOYMENT_ID}"
+          }
+
+          RESPONSE=$(state)
+          echo "Status: ${RESPONSE}"
+          STATE=$(echo "${RESPONSE}" | sed -n 's/.*"deploymentState"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
+          echo "Deployment state: ${STATE:-UNKNOWN}"
+          echo "### Deployment ${DEPLOYMENT_ID}: ${STATE:-UNKNOWN}" >> "${GITHUB_STEP_SUMMARY}"
+
+          if [[ "${ACTION}" != "drop" ]]; then
+            exit 0
+          fi
+          case "${STATE}" in
+            FAILED|VALIDATED)
+              CODE=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE \
+                -H "Authorization: Bearer ${BEARER}" "${API}/deployment/${DEPLOYMENT_ID}")
+              echo "DELETE answered HTTP ${CODE}"
+              echo "Drop: HTTP ${CODE}" >> "${GITHUB_STEP_SUMMARY}"
+              [[ "${CODE}" == 2* ]] || { echo "::error::The Portal refused to drop the deployment"; exit 1; }
+              echo "Status afterwards: $(state)"
+              ;;
+            PENDING|VALIDATING|PUBLISHING)
+              echo "::error::Deployment is still ${STATE}; run again once it is FAILED or VALIDATED"
+              exit 1
+              ;;
+            PUBLISHED)
+              echo "::error::Deployment is PUBLISHED; Maven Central keeps it, it cannot be dropped"
+              exit 1
+              ;;
+            *)
+              echo "::error::Unknown state, nothing dropped"
+              exit 1
+              ;;
+          esac
