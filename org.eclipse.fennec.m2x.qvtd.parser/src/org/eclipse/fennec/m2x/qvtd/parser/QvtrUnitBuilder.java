@@ -547,7 +547,9 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 				var.setType(type);
 			}
 			if (initExp != null) {
-				var.setOwnedInit(initExp);
+				// One initializer per variable: a single expression set as the containment init
+				// of each moved to the last one (#357)
+				var.setOwnedInit(vars.isEmpty() ? initExp : EcoreUtil.copy(initExp));
 			}
 			vars.add(var);
 		}
@@ -604,6 +606,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 				pattern.getEAnnotations().add(ann);
 			}
 
+			bindTemplateVariables(pattern, templateExp);
 			domain.getPattern().add(pattern);
 		}
 
@@ -728,12 +731,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 		// Optional variable binding
 		if (ctx.identifier() != null) {
-			Variable bindVar = OCL.createVariable();
-			bindVar.setName(identifierText(ctx.identifier()));
-			if (cls != null) {
-				bindVar.setType(cls);
-			}
-			ote.setBindsTo(bindVar);
+			ote.setBindsTo(templateVariable(identifierText(ctx.identifier()), cls, ctx));
 		}
 
 		// [?] optional multiplicity (Eclipse extension): store temporarily
@@ -803,12 +801,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 		// Optional variable binding
 		if (ctx.identifier() != null) {
-			Variable bindVar = OCL.createVariable();
-			bindVar.setName(identifierText(ctx.identifier()));
-			if (collType != null) {
-				bindVar.setType(collType);
-			}
-			cte.setBindsTo(bindVar);
+			cte.setBindsTo(templateVariable(identifierText(ctx.identifier()),
+					collType != null ? getClassifierForType(collType) : null, ctx));
 		}
 
 		// Member selection
@@ -840,9 +834,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 			// Rest variable (after '++')
 			if (selCtx.identifier() != null) {
-				Variable restVar = OCL.createVariable();
-				restVar.setName(identifierText(selCtx.identifier()));
-				recordPosition(restVar, selCtx.identifier());
+				// The declared variable of that name, as for members (§7.13.7 restCS, #357)
+				Variable restVar = relationVariable(identifierText(selCtx.identifier()));
+				if (restVar.eContainer() == null) {
+					recordPosition(restVar, selCtx.identifier());
+				}
 				cte.setRest(restVar);
 			} else if (selCtx.UNDERSCORE() != null) {
 				Variable restVar = OCL.createVariable();
@@ -864,6 +860,15 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			OclExpression condExpr = buildExpressionOrRelationCall(exprCtx);
 			predicate.setConditionExpression(condExpr);
 			pattern.getPredicate().add(predicate);
+			// §7.11.1.8 bindsTo: a relation call binds the variables it is called with (#357)
+			if (condExpr instanceof RelationCallExp call) {
+				for (OclExpression argument : call.getArgument()) {
+					if (argument instanceof VariableExp ve && ve.getReferredVariable() != null
+							&& !pattern.getBindsTo().contains(ve.getReferredVariable())) {
+						pattern.getBindsTo().add(ve.getReferredVariable());
+					}
+				}
+			}
 		}
 		return pattern;
 	}
@@ -1121,6 +1126,73 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		Variable variable = OCL.createVariable();
 		variable.setName(name);
 		return variable;
+	}
+
+	/**
+	 * The variable a template binds: the relation's variable of that name if there is one — one
+	 * name, one Variable (§7.13.7 objectTemplateCS) — or else a new one the relation now holds
+	 * (§7.11.3.2 "This set includes all the variables occurring in its domains"). A declared type
+	 * the template's type cannot be is an error (#357).
+	 */
+	private Variable templateVariable(String name, EClassifier type, ParserRuleContext ctx) {
+		if (currentRelation != null) {
+			for (Variable declared : currentRelation.getVariable()) {
+				if (name.equals(declared.getName())) {
+					EClassifier declaredType = declared.getType();
+					if (declaredType == null) {
+						declared.setType(type);
+					} else if (type instanceof EClass templateClass && declaredType instanceof EClass declaredClass
+							&& !declaredClass.isSuperTypeOf(templateClass) && !templateClass.isSuperTypeOf(declaredClass)) {
+						positions.positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+						diagnostics.add(positions.at("Variable '" + name + "' is declared as " + declaredClass.getName()
+								+ ", but the template binds it to a " + templateClass.getName()));
+					}
+					return declared;
+				}
+			}
+		}
+		Variable variable = OCL.createVariable();
+		variable.setName(name);
+		if (type != null) {
+			variable.setType(type);
+		}
+		if (currentRelation != null) {
+			currentRelation.getVariable().add(variable);
+		}
+		return variable;
+	}
+
+	/**
+	 * Fills a domain pattern's bindsTo with the variables its templates bind: "The set of
+	 * variables that are to be bound when the pattern is evaluated" (§7.11.1.8, #357) — template
+	 * variables, variables a property is matched to, collection members and rest.
+	 */
+	private static void bindTemplateVariables(Pattern pattern, TemplateExp root) {
+		if (root == null) {
+			return;
+		}
+		List<EObject> nodes = new ArrayList<>();
+		nodes.add(root);
+		root.eAllContents().forEachRemaining(nodes::add);
+		for (EObject node : nodes) {
+			Variable bound = null;
+			if (node instanceof TemplateExp template) {
+				bound = template.getBindsTo();
+				if (template instanceof CollectionTemplateExp collection && collection.getRest() != null) {
+					addBound(pattern, collection.getRest());
+				}
+			} else if (node instanceof VariableExp ve && (ve.eContainer() instanceof PropertyTemplateItem
+					|| ve.eContainer() instanceof CollectionTemplateExp)) {
+				bound = ve.getReferredVariable();
+			}
+			addBound(pattern, bound);
+		}
+	}
+
+	private static void addBound(Pattern pattern, Variable variable) {
+		if (variable != null && !"_".equals(variable.getName()) && !pattern.getBindsTo().contains(variable)) {
+			pattern.getBindsTo().add(variable);
+		}
 	}
 
 	/**

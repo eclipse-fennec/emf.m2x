@@ -652,6 +652,10 @@ relation AttributeToColumn {
 }
 ```
 
+- **Initializer:** a variable may have one, as in `n : String = 'X';`. It is a fixed value that constrains the match: `checkonly domain uml p : Package { name = n }` then only matches the package `X`. In `a, b : String = 'x';` every variable gets the value.
+- **Several templates in one domain:** `checkonly domain uml p : Package {…}, c : Class {…};` binds both roots jointly, giving one binding per combination.
+- **Template variables:** a template variable is the relation's variable of that name. `p : Package;` and a nested `owningPackage = p : Package {}` are the same variable. A declared type that the template's class cannot be is a parse error.
+
 ### 7.3 When and Where Clauses
 
 ```qvtr
@@ -816,6 +820,8 @@ checkonly domain uml a : Attribute {
     opposite(Class::ownedAttribute) = c
 };
 ```
+
+`opposite()` also works for a property without an eOpposite, the case §7.3 introduces it for. The owner is then the object of class `Class` in the same model whose `ownedAttribute` holds the attribute. Enforcing adds the attribute to the owner's property.
 
 ### 7.13 Optional Root Variable `[?]`
 

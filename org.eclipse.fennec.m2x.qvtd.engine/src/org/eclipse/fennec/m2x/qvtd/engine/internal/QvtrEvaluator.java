@@ -316,7 +316,8 @@ public class QvtrEvaluator {
 		// 1. The when clause's relation calls: one binding per trace that matches (§7.2.1,
 		// §7.3) — the remaining predicates are evaluated per candidate binding below, because
 		// they may read what the domains bind (§7.10.2, #145)
-		List<Map<String, Object>> whenBindings = evaluateWhenPreBindings(relation, preBindings);
+		List<Map<String, Object>> whenBindings = evaluateWhenPreBindings(relation,
+				initializedBindings(relation, preBindings));
 		if (whenBindings.isEmpty()) {
 			return; // A relation call in the when clause found nothing (§7.2.1)
 		}
@@ -423,6 +424,21 @@ public class QvtrEvaluator {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * The bindings a relation starts from: what it is called with, and each variable with an
+	 * initializer bound to its value — a fixed value that constrains the matching (decided in
+	 * #357), evaluated in declaration order so that one initializer may read an earlier one.
+	 */
+	private Map<String, Object> initializedBindings(Relation relation, Map<String, Object> preBindings) {
+		Map<String, Object> bindings = new HashMap<>(preBindings);
+		for (Variable variable : relation.getVariable()) {
+			if (variable.getOwnedInit() != null && !bindings.containsKey(variable.getName())) {
+				bindings.put(variable.getName(), evaluateOcl(variable.getOwnedInit(), bindings));
+			}
+		}
+		return bindings;
 	}
 
 	/** Enforces the target domain for a binding; whether it holds afterwards, without error. */
@@ -683,7 +699,8 @@ public class QvtrEvaluator {
 				}
 				List<String> variables = templateVariables(domain);
 				List<QvtrTraceManager.TraceRecord> traces = traceManager.lookup(relation, List.of());
-				for (Map<String, Object> binding : patternMatcher.matchDomain(domain, new HashMap<>())) {
+				for (Map<String, Object> binding : patternMatcher.matchDomain(domain,
+						initializedBindings(relation, Map.of()))) {
 					if (traces.stream().anyMatch(trace -> holdsFor(trace, binding, variables))) {
 						continue;
 					}
@@ -877,7 +894,8 @@ public class QvtrEvaluator {
 		relationCallDepth++;
 		try {
 			List<RelationDomain> domains = modelDomains(called);
-			for (Map<String, Object> whenBinding : evaluateWhenPreBindings(called, preBindings)) {
+			for (Map<String, Object> whenBinding : evaluateWhenPreBindings(called,
+					initializedBindings(called, preBindings))) {
 				for (Map<String, Object> match : matchSourceDomains(domains, whenBinding)) {
 					Map<String, Object> binding = new HashMap<>(match);
 					if (whenConditionHolds(called, binding) && whereHolds(called, binding)) {

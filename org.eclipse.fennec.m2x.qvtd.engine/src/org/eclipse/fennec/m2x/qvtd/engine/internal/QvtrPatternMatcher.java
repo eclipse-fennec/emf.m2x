@@ -98,54 +98,75 @@ public class QvtrPatternMatcher {
 			return results;
 		}
 
+		// A binding of the domain binds all its root variables at once (§7.11.3.3): the templates
+		// of a domain are matched as a cross product, each pattern extending the bindings of the
+		// ones before it — not as a union, which left each binding with one pattern's variables
+		// (#355)
+		List<Map<String, Object>> current = List.of(preBindings);
 		for (DomainPattern pattern : domain.getPattern()) {
-			TemplateExp templateExp = pattern.getTemplateExpression();
-			if (!(templateExp instanceof ObjectTemplateExp objectTemplate)) {
-				continue; // CollectionTemplateExp deferred
+			List<Map<String, Object>> next = new ArrayList<>();
+			for (Map<String, Object> bindings : current) {
+				next.addAll(matchPattern(domain, pattern, bindings));
+				checkBindingLimit(next);
 			}
-
-			Variable rootVar = objectTemplate.getBindsTo();
-			EClass rootType = objectTemplate.getReferredClass();
-
-			if (rootVar == null || rootType == null) {
-				continue;
-			}
-
-			// [?] optional multiplicity (Eclipse extension): stored on DomainPattern
-			boolean isOptional = pattern.getEAnnotation("qvtr.optional") != null;
-
-			// If root variable is already pre-bound, check that single candidate
-			Object preBound = preBindings.get(rootVar.getName());
-			if (preBound instanceof EObject preBoundObj) {
-				if (rootType.isInstance(preBoundObj)) {
-					Map<String, Object> bindings = new HashMap<>(preBindings);
-					results.addAll(matchObjectTemplateAll(objectTemplate, preBoundObj, bindings));
-				}
-			} else if (preBound == null && preBindings.containsKey(rootVar.getName())) {
-				// Pre-bound to null (from optional [?] relation call) → null-to-null match
-				if (isOptional) {
-					results.add(new HashMap<>(preBindings));
-				}
-			} else {
-				// Collect all instances from the extent
-				TypedModel typedModel = domain.getTypedModel();
-				List<EObject> candidates = extentManager.allInstances(typedModel, rootType);
-
-				for (EObject candidate : candidates) {
-					Map<String, Object> bindings = new HashMap<>(preBindings);
-					bindings.put(rootVar.getName(), candidate);
-					results.addAll(matchObjectTemplateAll(objectTemplate, candidate, bindings));
-				}
-
-				// [?] optional: if no matches found, bind root variable to null
-				if (results.isEmpty() && isOptional) {
-					Map<String, Object> nullBindings = new HashMap<>(preBindings);
-					nullBindings.put(rootVar.getName(), null);
-					results.add(nullBindings);
-				}
+			current = next;
+			if (current.isEmpty()) {
+				break;
 			}
 		}
+		results.addAll(current);
+		return results;
+	}
 
+	/** Matches one domain pattern, extending the given bindings. */
+	private List<Map<String, Object>> matchPattern(RelationDomain domain, DomainPattern pattern,
+			Map<String, Object> preBindings) {
+		List<Map<String, Object>> results = new ArrayList<>();
+		TemplateExp templateExp = pattern.getTemplateExpression();
+		if (!(templateExp instanceof ObjectTemplateExp objectTemplate)) {
+			return results; // CollectionTemplateExp deferred
+		}
+
+		Variable rootVar = objectTemplate.getBindsTo();
+		EClass rootType = objectTemplate.getReferredClass();
+
+		if (rootVar == null || rootType == null) {
+			return results;
+		}
+
+		// [?] optional multiplicity (Eclipse extension): stored on DomainPattern
+		boolean isOptional = pattern.getEAnnotation("qvtr.optional") != null;
+
+		// If root variable is already pre-bound, check that single candidate
+		Object preBound = preBindings.get(rootVar.getName());
+		if (preBound instanceof EObject preBoundObj) {
+			if (rootType.isInstance(preBoundObj)) {
+				Map<String, Object> bindings = new HashMap<>(preBindings);
+				results.addAll(matchObjectTemplateAll(objectTemplate, preBoundObj, bindings));
+			}
+		} else if (preBound == null && preBindings.containsKey(rootVar.getName())) {
+			// Pre-bound to null (from optional [?] relation call) → null-to-null match
+			if (isOptional) {
+				results.add(new HashMap<>(preBindings));
+			}
+		} else {
+			// Collect all instances from the extent
+			TypedModel typedModel = domain.getTypedModel();
+			List<EObject> candidates = extentManager.allInstances(typedModel, rootType);
+
+			for (EObject candidate : candidates) {
+				Map<String, Object> bindings = new HashMap<>(preBindings);
+				bindings.put(rootVar.getName(), candidate);
+				results.addAll(matchObjectTemplateAll(objectTemplate, candidate, bindings));
+			}
+
+			// [?] optional: if no matches found, bind root variable to null
+			if (results.isEmpty() && isOptional) {
+				Map<String, Object> nullBindings = new HashMap<>(preBindings);
+				nullBindings.put(rootVar.getName(), null);
+				results.add(nullBindings);
+			}
+		}
 		return results;
 	}
 
@@ -179,8 +200,8 @@ public class QvtrPatternMatcher {
 		Variable bindVar = template.getBindsTo();
 		if (bindVar != null) {
 			String varName = bindVar.getName();
-			Object existing = initialBindings.get(varName);
-			if (existing != null && existing != object) {
+			// A variable bound to null is bound: null is a value, and it is not this object (#355)
+			if (initialBindings.containsKey(varName) && initialBindings.get(varName) != object) {
 				return List.of(); // Binding conflict
 			}
 			initialBindings.put(varName, object);
@@ -222,16 +243,31 @@ public class QvtrPatternMatcher {
 	private List<Map<String, Object>> matchPropertyItemAll(PropertyTemplateItem item,
 			EObject object, Map<String, Object> bindings) {
 		EStructuralFeature feature = resolveFeature(item, object);
-		if (feature == null) {
+		Object actualValue;
+		if (feature != null) {
+			actualValue = object.eGet(feature);
+		} else if (item.isIsOpposite() && item.getReferredProperty() != null
+				&& item.getReferredProperty().getEContainingClass() != null) {
+			// A non-navigable opposite role — the case §7.3 introduces opposite() for: the
+			// objects of the class whose property holds this object (#355)
+			List<EObject> owners = ownersOf(object, item.getReferredProperty());
+			if (owners.isEmpty()) {
+				return List.of();
+			}
+			actualValue = owners.size() == 1 ? owners.get(0) : owners;
+		} else {
 			return List.of();
 		}
-
-		Object actualValue = object.eGet(feature);
 		OclExpression valueExpr = item.getValue();
 
 		// Nested ObjectTemplateExp → recursive match
 		if (valueExpr instanceof ObjectTemplateExp nestedTemplate) {
 			if (actualValue instanceof EObject actualObj) {
+				// "o2 is of type <classname2> or one of its subtypes" (§7.10.3.2, #355)
+				if (nestedTemplate.getReferredClass() != null
+						&& !nestedTemplate.getReferredClass().isInstance(actualObj)) {
+					return List.of();
+				}
 				Map<String, Object> copy = new HashMap<>(bindings);
 				List<Map<String, Object>> nested = matchObjectTemplateAll(
 						nestedTemplate, actualObj, copy);
@@ -257,9 +293,8 @@ public class QvtrPatternMatcher {
 				&& ve.getReferredVariable() != null) {
 			String varName = ve.getReferredVariable().getName();
 			if (varName != null) {
-				Object existing = bindings.get(varName);
-				if (existing != null) {
-					return valuesEqual(existing, actualValue)
+				if (bindings.containsKey(varName)) {
+					return valuesEqual(bindings.get(varName), actualValue)
 							? List.of(bindings) : List.of();
 				}
 				bindings.put(varName, actualValue);
@@ -301,6 +336,26 @@ public class QvtrPatternMatcher {
 		}
 		// Otherwise resolve by name (parser placeholder)
 		return objectClass.getEStructuralFeature(feature.getName());
+	}
+
+	/**
+	 * The objects whose property holds the object: {@code opposite(C::p)} without an eOpposite,
+	 * "equivalent to … {c.attribute.includes(a)}" (§7.3). Looked for in the object's own model.
+	 */
+	@SuppressWarnings("unchecked")
+	private List<EObject> ownersOf(EObject object, EStructuralFeature property) {
+		List<EObject> owners = new ArrayList<>();
+		for (EObject candidate : extentManager.instancesBeside(object, property.getEContainingClass())) {
+			EStructuralFeature feature = candidate.eClass().getEStructuralFeature(property.getName());
+			if (feature == null) {
+				continue;
+			}
+			Object held = candidate.eGet(feature);
+			if (feature.isMany() ? ((List<Object>) held).contains(object) : held == object) {
+				owners.add(candidate);
+			}
+		}
+		return owners;
 	}
 
 	/**
