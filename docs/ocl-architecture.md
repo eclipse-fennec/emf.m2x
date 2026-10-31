@@ -507,6 +507,44 @@ representations in `oclEquals` and in `lookupKey`, so a literal and its constant
 same bucket of a unique collection. A path-qualified literal (`pkg::Enum::LITERAL`, OCL v2.4 §7.5.3)
 resolves; a literal the enumeration does not have is a parse error naming it.
 
+### 5.10 Static typing (GAP-3, #378)
+
+Every expression the builder creates gets its type while it is built — the builder needs them
+there, because the implicit collect (§7.6.2) and the type of an iterator variable are decided
+during construction. The rules live in the exported package `org.eclipse.fennec.m2x.ocl.parser.typing`,
+shared by the expression builders of OCL, QVT-R and MTL (and QVT-O in stage B):
+
+| Class | Role |
+|---|---|
+| `OclTypeRules` | Conformance (§8.2.1, §11.2–§11.7), common supertype, normalization of Ecore data types (`EString` is `String`, `EInt`/`ELong`/… `Integer`, `EDouble`/`EFloat` `Real`, `EBoolean` `Boolean`) |
+| `OclLibrarySignatures` | The library operations (§11) in a generic notation — `T` element type, `Self` receiver, `SelfKind(P)`, `Common(P, Q)`, `Flat(P)`, `ArgN`, `ArgElemN`, `TypeArgN`, `Tuple(a : P)` — so that the result type follows from the signature, as in Eclipse Pivot's `oclstdlib`, not from code per operation as in Eclipse OCL classic. Looked up along the receiver's chain (`Set` → `Collection` → `OclAny`, `UnlimitedNatural` → `Integer` → `Real` → `OclAny`); the first signature whose parameters the arguments conform to wins. `extend(...)` adds a language's operations. Beyond §11 it holds OCL 2.5's generalized `union`/`intersection` and what the evaluator implements beyond that (`Set - Bag`, `Bag - Bag`, …), marked as such |
+| `OclTypeChecker` | The same rules over a finished AST, for `OclEngine.validate` (`OclParserSupport.validate`) |
+
+**Gradual.** `null` is an unknown type and conforms to everything: an external variable, a
+blackbox result, a value of a dynamic model is never an error. On a source of unknown type an
+operation is still typed where every signature of that name and arity answers the same fixed type
+(`v.size()` is an `Integer`).
+
+**What is a parse error** (§8.3.7): a library operation none of whose signatures takes the
+arguments (`1 + 'a'`, `'abc'.substring()`), an argument of a metamodel operation or of a `def:`
+operation that does not conform to its parameter, a declared type its initial value does not
+conform to, an `if` condition and the body of `select`/`reject`/`forAll`/`exists`/`any`/`one`
+that are known not to be Boolean, a known non-type as the argument of `oclIsKindOf`/`oclAsType`.
+`AbstractExpressionBuilder.getTypeFindings()` lists them apart from the other diagnostics. The
+evaluator keeps its run-time checks: they are what a value of unknown type meets.
+
+**Declared and inferred.** A variable keeps the type it was declared with; a `let` without one is
+used with its initial value's type, but its `Variable.type` stays empty, so `specStrict` still
+reports the missing declaration (#326).
+
+**`def:`** A Complete OCL document collects the signatures of its defs before it builds an
+expression (`OclDocumentBuilder.collectDefinitions`), so a call of a defined operation — also one
+above its def — has the declared result type and its arguments are checked (#324).
+
+Measured on all suites before the switch (#378): untyped nodes went from 69.5 % to 2.8 % of the
+OCL expressions; the only type errors were in tests that check run-time behaviour of ill-typed
+expressions on purpose, and in four test expressions that were ill-typed by the spec.
+
 ## 6. Engine Architecture (`ocl.engine`)
 
 **Bundle:** `org.eclipse.fennec.m2x.ocl.engine`
@@ -1432,7 +1470,6 @@ Results documented but not gating — the goal is awareness, not hard thresholds
 **Accepted gaps (not requiring tests):**
 - `OclEngineComponent` (0%) — OSGi DS adapter, requires itest bundle
 - `dispatchBoolean` (0%) — dead path; all booleans route through `evaluateThreeValuedBoolean`
-- `validate()` (0%) — not implemented; the method refuses with `UnsupportedOperationException` (#186) rather than returning silently
 
 **Gaps to close:**
 - `@pre` postcondition integration (45% → target 85%)
@@ -1518,10 +1555,10 @@ offer the text behind `specStrict`; where Fennec deliberately differs from Eclip
 | Navigation kind | A navigation yields the feature's collection kind, as a copy implementing `OclFeatureValue` | #319 |
 | Implicit collect of operations | A dot on a collection is an implicit collect for operations too, OclAny operations included (as Eclipse Pivot); the collection itself needs `->` | #320 |
 | Named iterators as implicit sources | §9.3.25 [A]: `self.employees->collect(p \| name)` reads `p.name`. **Deliberately differs from Eclipse.** Parameters therefore must be declared at parse time: `OclEngine.parse(expression, contextType, variables)` | #320, #324 |
-| Iterator result types | §11.9: `select`/`reject` keep the source's collection type, `sortedBy`/`closure` are ordered or unique according to the source, `collect` is a Sequence or Bag of the flattened body type, `any` is the element type, and the quantifiers are Boolean. Collection literals are typed by their kind, with an element type only where all parts share one. A dot after `select` therefore collects. Where the source's type is unknown nothing is set; that is GAP-3 (#378) | #378 |
+| Iterator result types | §11.9: `select`/`reject` keep the source's collection type, `sortedBy`/`closure` are ordered or unique according to the source, `collect` is a Sequence or Bag of the flattened body type, `any` is the element type, and the quantifiers are Boolean. Collection literals are typed with the common supertype of their parts. A dot after `select` therefore collects; with every operation typed (§5.10) a dot after any operation answering a collection does too | #378 |
 | Implicit operation source | An unqualified `op()` goes to the innermost implicit source whose type has it; OclAny operations to the innermost one; else `self`. All implicit sources are consulted, innermost first | #320 |
 | Shadowing | A `let`, iterator or accumulator variable that hides a variable in scope is a parse error (§9.3.41 [1]). **Deliberately stricter than Eclipse** | #326 |
-| Static well-formedness | `Collection{…}` literal, duplicate tuple parts and literal initial values that do not conform to the declared type are parse errors; full checking remains GAP-3 | #326 |
+| Static well-formedness | `Collection{…}` literal, duplicate tuple parts and initial values that do not conform to the declared type are parse errors; so is every other expression whose types are known and do not fit (§5.10) | #326, #378 |
 | Type operations | `oclIsKindOf`/`oclIsTypeOf` with collection types check kind and element type; `5.oclAsType(Real) = 5.0`; `5.oclIsKindOf(UnlimitedNatural) = false`, but `oclAsType(UnlimitedNatural)` accepts values `>= 0` (Eclipse); `invalid.toString()` is `invalid`; `oclIsInState` reports that it is unsupported | #321 |
 | Unknown property | ERROR + `invalid` instead of an exception out of `evaluate()` | #327 |
 | `allInstances()` | Enumerations, `Boolean`, `OclVoid` need no extent; `OclInvalid.allInstances()` is `invalid` | #328 |
@@ -1553,9 +1590,12 @@ Infrastructure already prepared: `OclConfiguration`, instance-based `PropertyAcc
 Optional `org.eclipse.fennec.m2x.ocl.uml` providing UML-specific OCL operations
 (`oclIsInState`, stereotype access) via `OclOperationProvider`.
 
-### 14.4 `validate()` Implementation
+### 14.4 Static typing in the other languages
 
-Static well-formedness checking visitor over entire AST.
+Stage A of GAP-3 (#378) types OCL and the OCL parts of QVT-R and MTL. QVT-O builds its expressions
+with its own builder; typing it, and the QVT-O checks of #378 (helper argument types, assignments,
+overrides, model types), is stage B. The constructs of QVT-R and MTL themselves (templates, text
+and file blocks) carry no type yet.
 
 ### 14.5 Known Implementation Gaps
 
@@ -1563,7 +1603,7 @@ Static well-formedness checking visitor over entire AST.
 |---|-----|----------|--------|
 | GAP-1 | Complete OCL document parsing | Critical | Done |
 | GAP-2 | `@pre` parsed but never evaluated | Critical | **Done** ✅ (PreStateSnapshot) |
-| GAP-3 | `validate()` not implemented — refuses loudly since #186 | Critical | Open (= S-10 in spec-compliance). The parser enforces the static rules it can check without a type checker (#326, #314, #325, §13.8) |
+| GAP-3 | Static type checker | Critical | OCL done (stage A, #378, §5.10); QVT-O open (stage B) |
 | GAP-6 | MessageExp has no evaluator case | Medium | Deferred (Eclipse also doesn't implement) |
 | GAP-7 | `oclIsNew` absent | Medium | **Done** ✅ (compares against PreStateSnapshot) |
 
