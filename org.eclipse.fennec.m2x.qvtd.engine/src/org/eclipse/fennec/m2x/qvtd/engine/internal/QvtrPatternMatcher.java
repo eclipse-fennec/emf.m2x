@@ -86,7 +86,7 @@ public class QvtrPatternMatcher {
 
 		List<Map<String, Object>> results = new ArrayList<>();
 
-		// Primitive domain (§7.11.3.10): no patterns, root variable already
+		// Primitive domain (§7.13.4 primitive domain): no patterns, root variable already
 		// bound from relation call arguments. Just pass through with bindings.
 		if (domain.getPattern().isEmpty()) {
 			if (!domain.getRootVariable().isEmpty()) {

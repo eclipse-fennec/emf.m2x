@@ -555,6 +555,9 @@ if (result.isConsistent()) {
 }
 ```
 
+> **Known gap (#348):** `isConsistent()` is currently an alias of `isSuccess()`. A violated
+> relation is reported as a WARNING but leaves `isConsistent()` true.
+
 ### 6.3 Bidirectional Execution
 
 The same transformation can be executed in either direction. The **target model name** determines the enforcement direction:
@@ -573,17 +576,23 @@ Domains marked `enforce` in the QVT-R source become target domains when their ty
 
 ### 6.4 In-Place Transformations
 
-When the same typed model appears in both source and target domains, the transformation modifies elements in place:
+When the same typed model appears in both source and target domains, the transformation modifies elements in place. A key identifies the object to update. Without a key, nothing identifies it, and the enforced domain describes a new object (§7.4):
 
 ```qvtr
-transformation Refactor(m : MyModel) {
-    top relation RenameClass {
-        oldName : String;
-        checkonly domain m c1 : Class { name = oldName };
-        enforce domain m c2 : Class { name = oldName.concat('_v2') };
+transformation MarkPersistent(m : MyModel) {
+    key Class { name };
+    top relation MarkPersistent {
+        cn : String;
+        checkonly domain m c1 : Class { name = cn };
+        enforce domain m c2 : Class { name = cn, kind = 'Persistent' };
     }
 }
 ```
+
+The relation is idempotent: a second run changes nothing. A relation that derives a new name from the old one (`name = oldName.concat('_v2')`) would grow the model on every run, because each run matches its own output again.
+
+> **Known gap (#353):** §7.7 requires an in-place run to work on a copy of the old state. The
+> engine does not make one yet, so a run can see objects it has just created or changed.
 
 ```java
 QvtdModelExtent extent = QvtdModelExtent.of(myModelRoot);
@@ -681,9 +690,11 @@ Collection templates match and create collection-valued properties:
 ```qvtr
 -- c : Class; rest : Set(Class); declared in the relation
 checkonly domain uml p : Package {
-    ownedClass = cs : Set(Class) { c ++ rest }  -- c = one member, rest = the others
+    ownedClass = cs : Set(Class) { c ++ rest }  -- c = one member, rest = the remaining members
 };
 ```
+
+> **Known gap (#354):** the engine currently leaves `c` in `rest`.
 
 The variable before the `:` binds the whole collection and may be omitted (`ownedClass = : Set(Class) { … }`); members and the rest must be declared variables or `_`.
 
@@ -720,7 +731,7 @@ top abstract relation BaseMapping {          -- abstract: not executed directly
     enforce domain rdbms s : Schema { name = pn };
 }
 
-top relation ConcreteMapping overrides BaseMapping {   -- replaces BaseMapping in execution
+top relation ConcreteMapping overrides BaseMapping {   -- replaces BaseMapping where it applies
     pn : String;
     checkonly domain uml p : Package { name = pn };
     enforce domain rdbms s : Schema { name = pn.toUpper() };
@@ -728,6 +739,10 @@ top relation ConcreteMapping overrides BaseMapping {   -- replaces BaseMapping i
 ```
 
 The modifiers come in this order: `top`, `abstract`, `relation`. Every relation has at least one domain, abstract ones included.
+
+An overriding relation replaces the overridden one only for the bindings where its `when` clause and the patterns of its non-target domains match (§7.11.1.4).
+
+> **Known gap (#356):** the engine currently replaces the overridden relation unconditionally.
 
 ### 7.9 Transformation Extends
 
@@ -758,12 +773,14 @@ top relation WithPrefix {
 
 ### 7.11 Default Values
 
-Default value assignments set properties when the target domain is enforced:
+Default value assignments give a *variable* of the relation a value when nothing else binds it while the target domain is enforced (§7.11.3.7, `RelationDomainAssignment.variable`). They do not assign properties:
 
 ```qvtr
-enforce domain rdbms t : Table { name = cn }
+tt : String;
+...
+enforce domain rdbms t : Table { name = cn, type = tt }
     default_values {
-        isTemporary = false;
+        tt = 'TABLE';
     };
 ```
 
@@ -1175,7 +1192,9 @@ The engine maintains implicit trace records (§7.2.1) for each executed relation
 ### 12.1 How Traces Work
 
 - Each successful relation execution records a `TraceRecord(relation, bindings)`
-- `RelationCallExp` in **when-clauses** looks up existing trace records — the arguments are bound from matching traces
+- `RelationCallExp` in **when-clauses** looks up existing trace records. Per §7.2.3 every matching trace gives a binding of the arguments.
+
+> **Known gap (#349):** the engine currently binds only the first matching trace, and it runs top relations in declaration order.
 - `RelationCallExp` in **where-clauses** invokes non-top relations with the given arguments as pre-bindings
 
 ### 12.2 Trace-Driven When-Clauses
@@ -1211,23 +1230,23 @@ The trace is **implicit and internal** — there is no public API to read trace 
 
 | Feature | Spec Reference | Status |
 |---------|---------------|--------|
-| Top relations | §7.10.1 | Fully implemented |
+| Top relations | §7.10.1 | Implemented — declaration order instead of dependency order (#349) |
 | Non-top relations | §7.10.2 | Fully implemented |
-| When/where clauses | §7.2.1 | Fully implemented |
-| Checkonly domains | §7.10 | Fully implemented |
-| Enforce domains | §7.10.2 | Fully implemented |
-| Binding validation | §7.5 | Fully implemented (static analysis) |
-| Key-based identity | §7.4, §7.13.4 | Fully implemented |
+| When/where clauses | §7.2.1 | Implemented — a when call binds only the first trace (#349) |
+| Checkonly domains | §7.10 | Partly — a violation does not make `isConsistent()` false (#348) |
+| Enforce domains | §7.10.2 | Partly — no deletion (#352), no clash detection (#351) |
+| Binding validation | §7.5 | Implemented (static analysis) — every declared variable counts as bound (#359) |
+| Key-based identity | §7.4, §7.13.4 | Partly — template and opposite key parts, superclass keys (#350) |
 | Object templates | §7.11.2 | Fully implemented |
-| Collection templates | §7.11.2 | Fully implemented |
-| Primitive domains | §7.11.3.10 | Fully implemented |
-| Abstract relations | §7.11.3.2 | Fully implemented |
+| Collection templates | §7.11.2 | Partly — the member stays in the rest, kind rules (#354) |
+| Primitive domains | §7.13.4 | Fully implemented |
+| Abstract relations | §7.11.1.4 | Partly — the override replaces the base unconditionally (#356) |
 | Transformation extends | §7.11.1.1 | Fully implemented |
 | Blackbox / implementedby | §7.8 | Fully implemented |
-| In-place transforms | §7.7 | Fully implemented |
+| In-place transforms | §7.7 | Partly — no copy of the old state (#353) |
 | Optional `[?]` | Eclipse ext. | Fully implemented |
-| Default values | §7.11.3 | Fully implemented |
+| Default values | §7.11.3.7 | Fully implemented |
 | Opposite properties | §7.11.2 | Fully implemented |
 | Standard Library | §7.12 | Fully implemented (= OCL stdlib) |
-| Multi-file import | §7.3 | Implemented — `import` resolves through the configured unit resolvers (§3.4.2) |
+| Multi-file import | §7.13.1 | Implemented — `import` resolves through the configured unit resolvers (§3.4.2); it also merges the imported unit's relations, which the spec does not (#360) |
 | Change propagation | §7.6 | Deferred (GAP-13 → Phase 5) |

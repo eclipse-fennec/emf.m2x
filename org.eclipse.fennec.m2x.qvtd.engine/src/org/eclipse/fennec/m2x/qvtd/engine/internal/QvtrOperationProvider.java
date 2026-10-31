@@ -39,7 +39,7 @@ import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
- * Hands the OCL engine what a QVT-R transformation defines: its queries (§7.11.4) and, where a
+ * Hands the OCL engine what a QVT-R transformation defines: its queries (§7.11.1.5) and, where a
  * query has no body, the blackbox implementations behind them (§7.8).
  *
  * <p>Without this, OCL cannot resolve a query it meets <em>inside</em> an expression — the

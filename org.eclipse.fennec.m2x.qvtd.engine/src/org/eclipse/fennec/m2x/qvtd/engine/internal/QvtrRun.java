@@ -38,7 +38,7 @@ import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
  * @param transformation the transformation to run
  * @param context the direction, the extents and whether this is a check
  * @param config the engine configuration, and with it every limit of the run
- * @param implementationProviders the providers for {@code implementedby} relations (§7.11.4)
+ * @param implementationProviders the providers for {@code implementedby} relations (§7.11.3.6)
  * @param positionLookup where a node stood in its source, for runtime diagnostics (#116)
  * @author Data In Motion Consulting
  * @since 1.0
