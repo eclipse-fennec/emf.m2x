@@ -14,7 +14,9 @@
  */
 package org.eclipse.fennec.m2x.qvto.parser;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -38,12 +40,23 @@ class QvtoEnvironment {
 	private final QvtoEnvironment parent;
 	private final Map<String, Variable> variables;
 	private final Variable implicitIterator;
+	/**
+	 * The named iterator variables of this scope, which are implicit sources of an unqualified
+	 * name too (OCL v2.4 §9.3.25 [A], as the OCL parser has done since #320).
+	 */
+	private final List<Variable> namedSources;
 
 	private QvtoEnvironment(QvtoEnvironment parent, Map<String, Variable> variables,
 			Variable implicitIterator) {
+		this(parent, variables, implicitIterator, List.of());
+	}
+
+	private QvtoEnvironment(QvtoEnvironment parent, Map<String, Variable> variables,
+			Variable implicitIterator, List<Variable> namedSources) {
 		this.parent = parent;
 		this.variables = Map.copyOf(variables);
 		this.implicitIterator = implicitIterator;
+		this.namedSources = List.copyOf(namedSources);
 	}
 
 	/**
@@ -93,6 +106,40 @@ class QvtoEnvironment {
 	QvtoEnvironment nestedImplicit(Variable iterator) {
 		Objects.requireNonNull(iterator, "iterator must not be null");
 		return new QvtoEnvironment(this, Map.of(), iterator);
+	}
+
+	/**
+	 * Creates a child environment with the variables of an iterator, which may serve as the
+	 * implicit source of an unqualified name — {@code ->collect(p | name)} is p's name.
+	 *
+	 * @param iteratorVariables the iterator (and accumulator) variables
+	 * @return a new child environment
+	 */
+	QvtoEnvironment nestedIterators(Iterable<Variable> iteratorVariables) {
+		Map<String, Variable> vars = new LinkedHashMap<>();
+		List<Variable> sources = new ArrayList<>();
+		for (Variable v : iteratorVariables) {
+			vars.put(v.getName(), v);
+			sources.add(v);
+		}
+		return new QvtoEnvironment(this, vars, null, sources);
+	}
+
+	/**
+	 * Every implicit source, innermost scope first: an iterator without a name, and the named
+	 * iterator variables (OCL v2.4 §9.4.1 [10], §7.8 "the most inner scope").
+	 *
+	 * @return the sources, innermost first
+	 */
+	List<Variable> lookupImplicitSources() {
+		List<Variable> sources = new ArrayList<>();
+		for (QvtoEnvironment scope = this; scope != null; scope = scope.parent) {
+			if (scope.implicitIterator != null) {
+				sources.add(scope.implicitIterator);
+			}
+			sources.addAll(scope.namedSources);
+		}
+		return sources;
 	}
 
 	/**
