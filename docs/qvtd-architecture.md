@@ -257,8 +257,12 @@ Extracted into `QvtrQueryEvaluator` for testability.
 ### 5.5 Pattern Matching
 
 `QvtrPatternMatcher.matchDomain()`:
-- Iterates `DomainPattern.templateExpression`
+- Iterates `DomainPattern.templateExpression`. Several templates of one domain are matched jointly, as the cross product of their roots: each pattern extends the bindings of the ones before it (§7.11.3.3, #355)
 - For `ObjectTemplateExp`: bind root variable, match `PropertyTemplateItem` values
+- A variable bound to `null` counts as bound: `name = n, kind = n` does not match a null name with a kind (#355)
+- A nested template on a single-valued reference matches only an object of its class or a subclass (§7.10.3.2)
+- `opposite(C::p)` for a `p` without an eOpposite: the owners are the instances of `C` in the object's model whose `p` holds it (§7.3). Enforcing adds the object to the owner's `p` (#355)
+- Variables with an initializer are bound to its value before matching — a fixed value that constrains the match (decided in #357)
 - For `CollectionTemplateExp`: match collection members with `++` rest-variable
 - **Optional `[?]`** (GAP-5): if no instances match, bind root to `null` (vacuous match)
 - Returns `List<Map<String, Object>>` — all valid binding combinations

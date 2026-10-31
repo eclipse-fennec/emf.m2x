@@ -285,6 +285,7 @@ public class QvtrEnforcer {
 		for (PropertyTemplateItem item : template.getPart()) {
 			EStructuralFeature feature = resolveFeature(item, target);
 			if (feature == null) {
+				enforceNonNavigableOpposite(item, target, bindings, targetModel);
 				continue;
 			}
 
@@ -329,6 +330,37 @@ public class QvtrEnforcer {
 					assign(target, feature, value);
 				}
 			}
+		}
+	}
+
+	/**
+	 * {@code opposite(C::p) = owner} where {@code p} has no eOpposite (§7.3): the owner's
+	 * {@code p} holds the target afterwards (#355).
+	 */
+	@SuppressWarnings("unchecked")
+	private void enforceNonNavigableOpposite(PropertyTemplateItem item, EObject target,
+			Map<String, Object> bindings, TypedModel targetModel) {
+		EStructuralFeature property = item.getReferredProperty();
+		if (!item.isIsOpposite() || property == null) {
+			return;
+		}
+		Object owner = item.getValue() instanceof ObjectTemplateExp nested
+				? enforceObjectTemplate(nested, bindings, targetModel)
+				: evaluatePropertyValue(item, bindings);
+		if (!(owner instanceof EObject ownerObject)) {
+			return;
+		}
+		EStructuralFeature feature = ownerObject.eClass().getEStructuralFeature(property.getName());
+		if (feature == null) {
+			return;
+		}
+		if (feature.isMany()) {
+			List<Object> held = (List<Object>) ownerObject.eGet(feature);
+			if (!held.contains(target)) {
+				held.add(target);
+			}
+		} else {
+			assign(ownerObject, feature, target);
 		}
 	}
 

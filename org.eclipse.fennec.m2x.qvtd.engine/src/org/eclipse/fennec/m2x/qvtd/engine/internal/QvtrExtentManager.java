@@ -22,6 +22,7 @@ import java.util.Objects;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
@@ -99,6 +100,26 @@ public class QvtrExtentManager {
 		QvtdModelExtent extent = getExtent(typedModel);
 		List<EObject> result = new ArrayList<>();
 		collectInstances(extent.getContents(), eClass, result);
+		return result;
+	}
+
+	/**
+	 * The instances of a class in the model the object belongs to — where the owner of a
+	 * non-navigable opposite role is looked for (§7.3, #355).
+	 *
+	 * @param object the object whose model is searched
+	 * @param eClass the type to match
+	 * @return the instances, never {@code null}
+	 */
+	public List<EObject> instancesBeside(EObject object, EClass eClass) {
+		EObject root = EcoreUtil.getRootContainer(object);
+		List<EObject> result = new ArrayList<>();
+		for (QvtdModelExtent extent : extentsByName.values()) {
+			if (extent.getContents().contains(root)) {
+				collectInstances(extent.getContents(), eClass, result);
+				return result;
+			}
+		}
 		return result;
 	}
 
