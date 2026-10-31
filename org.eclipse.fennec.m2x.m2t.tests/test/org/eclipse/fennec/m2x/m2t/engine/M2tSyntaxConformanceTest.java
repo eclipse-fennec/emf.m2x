@@ -292,7 +292,14 @@ class M2tSyntaxConformanceTest {
 		@Test
 		@DisplayName("a macro calling itself ends at the template depth limit")
 		void macroDepthLimit() throws M2tParseException {
-			M2tResult result = run("[macro loop(c : EClass)][loop(c)/][/macro]\n", "[loop(c)/]");
+			// A small limit: at the default of 1000 a CI runner's stack may run out first, which
+			// is reported too but does not show that macros count towards the depth
+			M2tEngine engine = M2tEngines.create(M2tConfiguration.builder(
+					OclConfiguration.builder(new OclParserSupport()).build()).maxTemplateDepth(20).build());
+			Module module = engine.parse(HEADER + "[macro loop(c : EClass)][loop(c)/][/macro]\n"
+					+ "[template public main(c : EClass)][file ('out.txt', false)][loop(c)/][/file][/template]\n", "doc");
+			engine.link(module);
+			M2tResult result = engine.execute(module, M2tContext.of(employee()));
 			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("Maximum template depth exceeded")
 					&& d.getMessage().contains("macro 'loop'")), () -> "" + result.diagnostics());
 		}
