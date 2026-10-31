@@ -608,8 +608,16 @@ transformation MarkPersistent(m : MyModel) {
 
 The relation is idempotent: a second run changes nothing. A relation that derives a new name from the old one (`name = oldName.concat('_v2')`) would grow the model on every run, because each run matches its own output again.
 
-> **Known gap (#353):** §7.7 requires an in-place run to work on a copy of the old state. The
-> engine does not make one yet, so a run can see objects it has just created or changed.
+An in-place run works as if source and target were distinct models (§7.7). Source domains match a copy of the model as it was before the run, and enforcing changes the model itself. A relation therefore never matches objects that the same run created or changed.
+
+`QvtdExecutionResult.modelChanged()` reports whether a run created, modified or deleted anything in the target model. This lets you repeat a transformation until it reaches a fixpoint:
+
+```java
+QvtdExecutionResult result;
+do {
+    result = engine.execute(trafo, ctx);
+} while (result.isSuccess() && result.modelChanged());
+```
 
 ```java
 QvtdModelExtent extent = QvtdModelExtent.of(myModelRoot);
@@ -1283,7 +1291,7 @@ The trace is **implicit and internal** — there is no public API to read trace 
 | Abstract relations | §7.11.1.4 | Fully implemented — conditional overrides, also for where calls |
 | Transformation extends | §7.11.1.1 | Fully implemented |
 | Blackbox / implementedby | §7.8 | Fully implemented |
-| In-place transforms | §7.7 | Partly — no copy of the old state (#353) |
+| In-place transforms | §7.7 | Fully implemented, with the `modelChanged()` status |
 | Optional `[?]` | Eclipse ext. | Fully implemented |
 | Default values | §7.11.3.7 | Fully implemented |
 | Opposite properties | §7.11.2 | Fully implemented |

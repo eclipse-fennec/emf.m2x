@@ -29,11 +29,13 @@ import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.stream.Collectors;
 
+import org.eclipse.emf.common.notify.Notification;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.util.EContentAdapter;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
@@ -42,6 +44,7 @@ import org.eclipse.fennec.m2x.model.qvtbase.Domain;
 import org.eclipse.fennec.m2x.model.qvtbase.Pattern;
 import org.eclipse.fennec.m2x.model.qvtbase.Predicate;
 import org.eclipse.fennec.m2x.model.qvtbase.Rule;
+import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.DomainPattern;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationCallExp;
@@ -125,6 +128,10 @@ public class QvtrEvaluator {
 	 * of an enforce run (#348).
 	 */
 	private boolean checking;
+	/** Whether the run changed the target model (§7.7, #353). */
+	private boolean modelChanged;
+	/** In-place: the objects of the source snapshot, each with the original it copies (#353). */
+	private Map<EObject, EObject> originals;
 	/** The relations overriding each relation (§7.11.1.4). */
 	private final Map<Relation, List<Relation>> overriders = new IdentityHashMap<>();
 	private long deadlineNanos;
@@ -216,9 +223,20 @@ public class QvtrEvaluator {
 		}
 
 		checking = context.checkOnly();
-		runAll(topRelations);
-		if (!checking && config.deleteUnmatched()) {
-			deleteUnmatched();
+		Runnable stopWatching = checking ? () -> { } : watchTargetModel();
+		try {
+			if (!checking) {
+				snapshotInPlaceSources();
+			}
+			runAll(topRelations);
+			if (!checking && config.deleteUnmatched()) {
+				deleteUnmatched();
+			}
+		} finally {
+			stopWatching.run();
+			// The run is complete: a post-check checks the models as they are now
+			extentManager.dropSnapshots();
+			originals = null;
 		}
 		// An enforce run checks only the target model's checked domains, unless asked to check
 		// every direction once it is done (#348)
@@ -247,6 +265,95 @@ public class QvtrEvaluator {
 				component.forEach(this::runTopRelation);
 			} while (traceManager.size() > traced);
 		}
+	}
+
+	/**
+	 * Whether the run created, modified or deleted anything in the target model (§7.7).
+	 *
+	 * @return {@code true} if the target model changed
+	 */
+	boolean modelChanged() {
+		return modelChanged;
+	}
+
+	/**
+	 * Watches the target model for changes: an adapter on its roots notes every change in an
+	 * existing tree, and a comparison of the roots before and after notes roots added or removed
+	 * (§7.7 "a Boolean status to indicate whether any changes were made to target models", #353).
+	 *
+	 * @return what stops watching and settles the status
+	 */
+	private Runnable watchTargetModel() {
+		TypedModel target = targetModel();
+		if (target == null) {
+			return () -> { };
+		}
+		QvtdModelExtent extent = extentManager.getExtent(target);
+		List<EObject> rootsBefore = List.copyOf(extent.getContents());
+		EContentAdapter watcher = new EContentAdapter() {
+			@Override
+			public void notifyChanged(Notification notification) {
+				super.notifyChanged(notification);
+				if (!notification.isTouch() && notification.getEventType() != Notification.REMOVING_ADAPTER) {
+					modelChanged = true;
+				}
+			}
+		};
+		rootsBefore.forEach(root -> root.eAdapters().add(watcher));
+		return () -> {
+			rootsBefore.forEach(root -> root.eAdapters().remove(watcher));
+			if (!rootsBefore.equals(extent.getContents())) {
+				modelChanged = true;
+			}
+		};
+	}
+
+	/**
+	 * In-place (§7.7): "Execution proceeds as if the source and target models are distinct with
+	 * an atomic update of non-distinct models occurring on completion of the transformation.
+	 * This implies that an implementation that operates in-place must take copies of the old
+	 * state". Where a relation has two domains on the target model, its source domains match a
+	 * copy of the state before the run, and enforcing writes the model itself — a run no longer
+	 * sees its own output as source (#353).
+	 */
+	private void snapshotInPlaceSources() {
+		TypedModel target = targetModel();
+		if (target == null || !inPlace(target)) {
+			return;
+		}
+		EcoreUtil.Copier copier = new EcoreUtil.Copier();
+		List<EObject> copies = new ArrayList<>(copier.copyAll(extentManager.getExtent(target).getContents()));
+		copier.copyReferences();
+		originals = new IdentityHashMap<>();
+		copier.forEach((original, copy) -> originals.put(copy, original));
+		extentManager.snapshotForSources(target, QvtdModelExtent.of(copies));
+	}
+
+	private boolean inPlace(TypedModel target) {
+		for (Rule rule : transformation.getRule()) {
+			if (rule instanceof Relation relation
+					&& modelDomains(relation).stream().filter(d -> d.getTypedModel() == target).count() > 1) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private TypedModel targetModel() {
+		for (TypedModel model : transformation.getModelParameter()) {
+			if (extentManager.isTargetModel(model)) {
+				return model;
+			}
+		}
+		return null;
+	}
+
+	/** In-place: the binding with every object of the source snapshot replaced by its original. */
+	private Map<String, Object> toOriginals(Map<String, Object> binding) {
+		Map<String, Object> translated = new HashMap<>(binding);
+		translated.replaceAll((name, value) -> value instanceof EObject eo && originals.containsKey(eo)
+				? originals.get(eo) : value);
+		return translated;
 	}
 
 	private void runTopRelation(Relation relation) {
@@ -404,7 +511,7 @@ public class QvtrEvaluator {
 
 			// A binding the target could not be enforced for does not hold, so no when clause
 			// may count on it (#349)
-			if (targetDomain != null && !enforce(relation, targetDomain, sourceBinding)) {
+			if (targetDomain != null && !enforceOnTarget(relation, targetDomain, sourceBinding)) {
 				continue;
 			}
 			recordTrace(relation, sourceBinding);
@@ -454,6 +561,20 @@ public class QvtrEvaluator {
 			}
 		}
 		return bindings;
+	}
+
+	/**
+	 * Enforces the target domain; in-place on the originals of what the source snapshot bound,
+	 * with what enforcing binds added to the binding (#353).
+	 */
+	private boolean enforceOnTarget(Relation relation, RelationDomain targetDomain, Map<String, Object> binding) {
+		if (originals == null) {
+			return enforce(relation, targetDomain, binding);
+		}
+		Map<String, Object> onTarget = toOriginals(binding);
+		boolean holds = enforce(relation, targetDomain, onTarget);
+		onTarget.forEach(binding::putIfAbsent);
+		return holds;
 	}
 
 	/** Enforces the target domain for a binding; whether it holds afterwards, without error. */
@@ -652,6 +773,16 @@ public class QvtrEvaluator {
 	 * to the next (shared variables across domains).
 	 */
 	private List<Map<String, Object>> matchSourceDomains(List<RelationDomain> sourceDomains,
+			Map<String, Object> initialBindings) {
+		boolean previous = extentManager.matchingSources(true);
+		try {
+			return matchSourceDomainsOnSources(sourceDomains, initialBindings);
+		} finally {
+			extentManager.matchingSources(previous);
+		}
+	}
+
+	private List<Map<String, Object>> matchSourceDomainsOnSources(List<RelationDomain> sourceDomains,
 			Map<String, Object> initialBindings) {
 		List<Map<String, Object>> currentBindings = List.of(initialBindings);
 		int maxBindings = config.maxBindings();

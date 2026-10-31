@@ -42,6 +42,12 @@ public class QvtrExtentManager {
 
 	private final Map<String, QvtdModelExtent> extentsByName;
 	private final String targetModelName;
+	/**
+	 * The copies of models that are source and target at once: matching a source domain reads
+	 * the state before the run, enforcing writes the model itself (§7.7, #353).
+	 */
+	private final Map<String, QvtdModelExtent> sourceSnapshots = new HashMap<>();
+	private boolean matchingSources;
 
 	/**
 	 * Creates the extent manager by binding transformation TypedModel names
@@ -97,7 +103,8 @@ public class QvtrExtentManager {
 	 */
 	public List<EObject> allInstances(TypedModel typedModel, EClass eClass) {
 		Objects.requireNonNull(eClass, "eClass must not be null");
-		QvtdModelExtent extent = getExtent(typedModel);
+		QvtdModelExtent snapshot = matchingSources ? sourceSnapshots.get(typedModel.getName()) : null;
+		QvtdModelExtent extent = snapshot != null ? snapshot : getExtent(typedModel);
 		List<EObject> result = new ArrayList<>();
 		collectInstances(extent.getContents(), eClass, result);
 		return result;
@@ -114,13 +121,43 @@ public class QvtrExtentManager {
 	public List<EObject> instancesBeside(EObject object, EClass eClass) {
 		EObject root = EcoreUtil.getRootContainer(object);
 		List<EObject> result = new ArrayList<>();
-		for (QvtdModelExtent extent : extentsByName.values()) {
+		List<QvtdModelExtent> extents = new ArrayList<>(extentsByName.values());
+		extents.addAll(sourceSnapshots.values());
+		for (QvtdModelExtent extent : extents) {
 			if (extent.getContents().contains(root)) {
 				collectInstances(extent.getContents(), eClass, result);
 				return result;
 			}
 		}
 		return result;
+	}
+
+	/**
+	 * Lets source domains of the typed model match the given copy of its state before the run
+	 * (§7.7, #353).
+	 *
+	 * @param typedModel the model that is source and target at once
+	 * @param snapshot the copy of its contents
+	 */
+	public void snapshotForSources(TypedModel typedModel, QvtdModelExtent snapshot) {
+		sourceSnapshots.put(typedModel.getName(), snapshot);
+	}
+
+	/** Drops the snapshots: what is matched from now on is the models as they are. */
+	public void dropSnapshots() {
+		sourceSnapshots.clear();
+	}
+
+	/**
+	 * Switches between matching source domains (which read the snapshots) and anything else.
+	 *
+	 * @param sources {@code true} while source domains are matched
+	 * @return the previous setting
+	 */
+	public boolean matchingSources(boolean sources) {
+		boolean previous = matchingSources;
+		matchingSources = sources;
+		return previous;
 	}
 
 	private void collectInstances(List<EObject> objects, EClass eClass, List<EObject> result) {

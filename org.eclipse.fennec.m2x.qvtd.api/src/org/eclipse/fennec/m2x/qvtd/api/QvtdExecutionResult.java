@@ -30,12 +30,16 @@ import org.eclipse.emf.common.util.Diagnostic;
  *
  * @param diagnostics collected diagnostics during execution, never {@code null}
  * @param enforced {@code true} if enforce was executed, {@code false} for check-only
+ * @param modelChanged whether the run created, modified or deleted anything in the target model —
+ *        "Execution of a transformation should return a Boolean status to indicate whether any
+ *        changes were made to target models" (§7.7, #353); always {@code false} for check-only
  * @author Data In Motion Consulting
  * @since 1.0
  */
 public record QvtdExecutionResult(
 		List<Diagnostic> diagnostics,
-		boolean enforced) {
+		boolean enforced,
+		boolean modelChanged) {
 
 	/**
 	 * The diagnostic code of a relation that does not hold (§7.10.1): a WARNING naming the
@@ -47,6 +51,16 @@ public record QvtdExecutionResult(
 
 	/** The diagnostic source of the QVT-R engine. */
 	public static final String SOURCE = "org.eclipse.fennec.m2x.qvtd.engine";
+
+	/**
+	 * A result that reports no change of the target model.
+	 *
+	 * @param diagnostics collected diagnostics during execution
+	 * @param enforced {@code true} if enforce was executed
+	 */
+	public QvtdExecutionResult(List<Diagnostic> diagnostics, boolean enforced) {
+		this(diagnostics, enforced, false);
+	}
 
 	/**
 	 * Compact constructor: validates and makes diagnostics unmodifiable.

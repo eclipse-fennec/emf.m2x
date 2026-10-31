@@ -185,6 +185,10 @@ enforce run:
 
 For **in-place** transformations (GAP-7): the same TypedModel can appear in both source and target. If an `enforce` domain is in the target model, a `checkonly` domain of the same model stays a source domain.
 
+§7.7: "Execution proceeds as if the source and target models are distinct". When a relation has two domains on the target model, the evaluator copies the target model before the run (`EcoreUtil.Copier`). Source domains match the copy (`QvtrExtentManager.matchingSources`), and enforcing writes the model itself; before enforcing, objects of the copy in a binding are replaced by their originals. A run therefore never sees its own output as source (#353). The copy is dropped once the run is done, so a post-check sees the model as it is.
+
+**Changed status** (§7.7, #353): `QvtdExecutionResult.modelChanged()`. An `EContentAdapter` on the roots of the target model notes every change in an existing tree, and a comparison of the roots before and after notes roots that were added or removed.
+
 ### 5.3.1 Checking (§7.9, §7.10.1, #348)
 
 `checkDirection` checks one direction k. For every binding of the when clause and the other domains
@@ -307,7 +311,7 @@ Extracted into `QvtrQueryEvaluator` for testability.
 | Blackbox queries | §7.11.3.6 | `QvtdBlackboxRegistry` |
 | Transformation extends | §7.11.1.1 | Rule merging with copy |
 | `implementedby` | §7.11.3.6 | `RelationImplementation` + blackbox |
-| In-place transforms | §7.7 | `isEnforceable()` + variable lookup — no copy of the old state, a run sees its own output (#353) |
+| In-place transforms | §7.7 | Source domains match a copy of the state before the run; `modelChanged()` status |
 | Optional `[?]` | Eclipse ext. | `DomainPattern` EAnnotation, null binding |
 | Default values | §7.11.3 | `default_values { ... }` assignment |
 | Opposite properties | §7.11.2 | `opposite(T::prop)` in templates |
@@ -338,7 +342,6 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | Gap | Feature | Reason | Target |
 |-----|---------|--------|--------|
 | GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution, which deletes what no binding requires; incremental execution is an optimisation | Phase 5 |
-| #353 | In-place | No copy of the old state | — |
 | GAP-6 | QVT-O `refined` — stub resolution | Parser + Provider-Brücke ✅ (Phase 4b). Runtime Stub-Auflösung (`OT.refined` → echte RT) + Trace-Semantik ausstehend | Phase 5 |
 
 ## 8. Design Decisions

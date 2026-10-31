@@ -258,8 +258,9 @@ public class QvtdEngineImpl implements QvtdEngine {
 		QvtrRun run = QvtrRun.of(transformation, context, config)
 				.withImplementationProviders(List.copyOf(implementationProviders))
 				.withPositionLookup(parserSupport::positionOf);
-		List<Diagnostic> diagnostics = new QvtrEvaluator(oclEngine, env, run).execute();
-		return new QvtdExecutionResult(diagnostics, !context.checkOnly());
+		QvtrEvaluator evaluator = new QvtrEvaluator(oclEngine, env, run);
+		List<Diagnostic> diagnostics = evaluator.execute();
+		return new QvtdExecutionResult(diagnostics, !context.checkOnly(), evaluator.modelChanged());
 	}
 
 	@Override
