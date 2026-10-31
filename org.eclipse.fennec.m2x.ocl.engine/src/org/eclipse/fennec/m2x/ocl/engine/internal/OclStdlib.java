@@ -1343,16 +1343,17 @@ class OclStdlib {
 					yield OclInvalid.INSTANCE;
 				}
 			}
-			// QVT-O §8.3.16.17: find — the 1-based position in code points (#344), -1 if not found
-			// (the spec does not say; Eclipse answers 0)
+			// QVT-O §8.3.16.17: find — the 1-based position in code points (#344), 0 if not found:
+			// the spec does not say; positions start at 1, indexOf answers 0 (OCL v2.4 §11.4.3) and
+			// so does Eclipse — decided with the user (#344)
 			case "find" -> {
 				int idx = source.indexOf(asString(args[0]));
-				yield (long) (idx < 0 ? -1 : source.codePointCount(0, idx) + 1);
+				yield (long) (idx < 0 ? 0 : source.codePointCount(0, idx) + 1);
 			}
-			// QVT-O §8.3.16.18: rfind — the position of the last occurrence, -1 if not found
+			// QVT-O §8.3.16.18: rfind — the position of the last occurrence, 0 if not found
 			case "rfind" -> {
 				int idx = source.lastIndexOf(asString(args[0]));
-				yield (long) (idx < 0 ? -1 : source.codePointCount(0, idx) + 1);
+				yield (long) (idx < 0 ? 0 : source.codePointCount(0, idx) + 1);
 			}
 			// QVT-O §8.3.16.19: isQuoted
 			case "isQuoted" -> {

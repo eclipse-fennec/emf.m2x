@@ -196,16 +196,18 @@ class QvtoE2eStringExtTest extends AbstractQvtoEngineTest {
 
 	@Test
 	void string_findNotFound() throws Exception {
-		// §8.3.16.17: returns -1 if not found
+		// §8.3.16.17 does not say what find answers without a match. Positions start at 1, so 0 is
+		// no position — as indexOf answers (OCL v2.4 §11.4.3) and Eclipse does; decided with the
+		// user in #344 (this test asserted -1 before)
 		QvtoExecutionResult result = execute("""
 				transformation test() {
 				    main() {
-				        log('abc'.find('xyz').repr());
+				        log('find=' + 'abc'.find('xyz').repr() + ' rfind=' + 'abc'.rfind('xyz').repr());
 				    }
 				}
 				""");
 		assertSuccess(result);
-		assertLogged(result, "-1");
+		assertLogged(result, "find=0 rfind=0");
 	}
 
 	// ---- §8.3.16.18: rfind(match) : Integer (1-indexed, from right) ----
