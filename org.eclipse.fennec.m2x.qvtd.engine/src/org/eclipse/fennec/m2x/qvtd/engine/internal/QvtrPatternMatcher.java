@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,6 +26,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
@@ -35,8 +38,8 @@ import org.eclipse.fennec.m2x.model.qvttemplate.CollectionTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 
 /**
@@ -280,12 +283,13 @@ public class QvtrPatternMatcher {
 			return List.of();
 		}
 
-		// CollectionTemplateExp → match collection pattern (§7.11.2.3)
+		// CollectionTemplateExp → match collection pattern (§7.11.2.3); "If the value expression
+		// is a collection template expression and the referred property is single-valued, then
+		// the property value is treated as a singleton collection" (§7.11.2.4, #354)
 		if (valueExpr instanceof CollectionTemplateExp collTemplate) {
-			if (actualValue instanceof Collection<?> collection) {
-				return matchCollectionTemplate(collTemplate, collection, bindings);
-			}
-			return List.of();
+			Collection<?> collection = actualValue instanceof Collection<?> values ? values
+					: actualValue == null ? List.of() : List.of(actualValue);
+			return matchCollectionTemplate(collTemplate, collection, bindings);
 		}
 
 		// VariableExp → bind or compare
@@ -407,131 +411,134 @@ public class QvtrPatternMatcher {
 	}
 
 	/**
-	 * Matches a CollectionTemplateExp against a collection value (§7.11.2.3).
-	 *
-	 * <p>Each member expression must match at least one element in the collection.
-	 * For ObjectTemplateExp members, each matching element produces a separate
-	 * binding set (like nested template matching). The rest variable captures
-	 * remaining elements. {@code _} wildcards match any element.
+	 * Matches a collection template against the values of a property (§7.11.2.3): the members
+	 * match distinct elements — each one, a variable, an object template or {@code _}, consumes
+	 * an element — and the rest the elements left over; without a rest nothing may be left. For
+	 * a Sequence or OrderedSet "the matching member elements must be present at the head of the
+	 * sequence in the order specified by the member expressions", and for a Set or OrderedSet "a
+	 * valid match requires that each value of the property be unique" (§7.11.2.4). The template's
+	 * where condition filters the bindings (§7.11.2.1). Before #354 the members could bind the
+	 * same element, variable members stayed in the rest, and kind and where were ignored.
 	 */
 	private List<Map<String, Object>> matchCollectionTemplate(CollectionTemplateExp template,
 			Collection<?> collection, Map<String, Object> bindings) {
-		// Bind the template's variable to the collection itself
+		CollectionKind kind = template.getReferredCollectionType() instanceof CollectionType type
+				? type.getKind() : CollectionKind.SET;
+		List<Object> elements = new ArrayList<>(collection);
+		boolean unique = kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET;
+		if (unique && new HashSet<>(elements).size() != elements.size()) {
+			return List.of();
+		}
+		boolean ordered = kind == CollectionKind.SEQUENCE || kind == CollectionKind.ORDERED_SET;
+
+		Map<String, Object> start = new HashMap<>(bindings);
 		Variable bindVar = template.getBindsTo();
 		if (bindVar != null && !"_".equals(bindVar.getName())) {
-			bindings.put(bindVar.getName(), new ArrayList<>(collection));
+			if (start.containsKey(bindVar.getName())
+					&& !sameElements(start.get(bindVar.getName()), elements, ordered)) {
+				return List.of();
+			}
+			start.put(bindVar.getName(), new ArrayList<>(elements));
 		}
 
+		List<Map<String, Object>> results = new ArrayList<>();
+		matchMembers(template, elements, ordered, 0, new boolean[elements.size()], start, results);
+
+		OclExpression where = template.getWhere();
+		if (where != null) {
+			results.removeIf(bs -> !Boolean.TRUE.equals(evaluateOcl(where, null, bs)));
+		}
+		return results;
+	}
+
+	/** Assigns the members from {@code index} on to unconsumed elements, then binds the rest. */
+	private void matchMembers(CollectionTemplateExp template, List<Object> elements, boolean ordered,
+			int index, boolean[] consumed, Map<String, Object> bindings, List<Map<String, Object>> results) {
 		List<OclExpression> members = template.getMember();
-
-		if (members.isEmpty()) {
-			// No members → match depends on rest variable
-			Variable rest = template.getRest();
-			if (rest == null) {
-				// No rest, no members → must be empty collection
-				return collection.isEmpty() ? List.of(bindings) : List.of();
-			}
-			// Has rest → bind rest to entire collection
-			if (!"_".equals(rest.getName())) {
-				bindings.put(rest.getName(), new ArrayList<>(collection));
-			}
-			return List.of(bindings);
+		if (index == members.size()) {
+			bindRest(template, elements, consumed, ordered, bindings, results);
+			return;
 		}
-
-		// Match each member expression against collection elements.
-		// Each member must find at least one match. ObjectTemplateExp members
-		// produce one binding set per matching element (cross-product).
-		List<Map<String, Object>> currentSets = new ArrayList<>();
-		currentSets.add(bindings);
-
-		for (OclExpression memberExpr : members) {
-			List<Map<String, Object>> nextSets = new ArrayList<>();
-
-			if (memberExpr instanceof ObjectTemplateExp memberTemplate) {
-				// Match member template against each collection element
-				for (Map<String, Object> bs : currentSets) {
-					for (Object element : collection) {
-						if (element instanceof EObject eo) {
-							EClass referredClass = memberTemplate.getReferredClass();
-							if (referredClass != null && referredClass.isInstance(eo)) {
-								Map<String, Object> copy = new HashMap<>(bs);
-								List<Map<String, Object>> nested = matchObjectTemplateAll(
-										memberTemplate, eo, copy);
-								nextSets.addAll(nested);
-							}
-						}
-					}
-				}
-			} else if (memberExpr instanceof VariableExp memberVe
-					&& memberVe.getReferredVariable() != null) {
-				String varName = memberVe.getReferredVariable().getName();
-				if ("_".equals(varName)) {
-					// Wildcard: matches any single element — require non-empty collection
-					if (!collection.isEmpty()) {
-						nextSets.addAll(currentSets);
-					}
-				} else if (varName != null) {
-					// Named variable: bind to each element or compare
-					for (Map<String, Object> bs : currentSets) {
-						for (Object element : collection) {
-							Object existing = bs.get(varName);
-							if (existing != null) {
-								if (valuesEqual(existing, element)) {
-									nextSets.add(bs);
-								}
-							} else {
-								Map<String, Object> copy = new HashMap<>(bs);
-								copy.put(varName, element);
-								nextSets.add(copy);
-							}
-						}
-					}
-				}
-			} else {
-				// OCL expression: evaluate and check containment
-				for (Map<String, Object> bs : currentSets) {
-					Object expectedValue = evaluateOcl(memberExpr, null, bs);
-					if (collection.contains(expectedValue)) {
-						nextSets.add(bs);
-					}
-				}
+		OclExpression member = members.get(index);
+		for (int i = 0; i < elements.size(); i++) {
+			// In a Sequence or OrderedSet the i-th member is the i-th element
+			if (consumed[i] || (ordered && i != index)) {
+				continue;
 			}
-
-			checkBindingLimit(nextSets);
-			currentSets = nextSets;
-			if (currentSets.isEmpty()) {
-				return List.of();
+			for (Map<String, Object> extended : matchMember(member, elements.get(i), bindings)) {
+				consumed[i] = true;
+				matchMembers(template, elements, ordered, index + 1, consumed, extended, results);
+				consumed[i] = false;
 			}
 		}
+	}
 
-		// Bind rest variable to remaining elements (§7.11.2.3)
+	private void bindRest(CollectionTemplateExp template, List<Object> elements, boolean[] consumed,
+			boolean ordered, Map<String, Object> bindings, List<Map<String, Object>> results) {
+		List<Object> remaining = new ArrayList<>();
+		for (int i = 0; i < elements.size(); i++) {
+			if (!consumed[i]) {
+				remaining.add(elements.get(i));
+			}
+		}
 		Variable rest = template.getRest();
-		if (rest != null && !"_".equals(rest.getName())) {
-			for (Map<String, Object> bs : currentSets) {
-				// Compute remaining: collection minus matched member elements
-				List<Object> remaining = new ArrayList<>(collection);
-				for (OclExpression memberExpr : members) {
-					if (memberExpr instanceof ObjectTemplateExp memberTemplate) {
-						Variable memberVar = memberTemplate.getBindsTo();
-						if (memberVar != null) {
-							Object matched = bs.get(memberVar.getName());
-							if (matched != null) {
-								remaining.remove(matched);
-							}
-						}
-					}
-				}
-				bs.put(rest.getName(), remaining);
+		if (rest == null) {
+			// "The variable may be omitted to restrict a match to a collection with no elements
+			// other than those matched by the member expressions"
+			if (remaining.isEmpty()) {
+				results.add(bindings);
 			}
-		} else if (rest == null) {
-			// No rest variable → only exact matches (members account for all elements)
-			int memberCount = members.size();
-			if (collection.size() != memberCount) {
-				return List.of();
+		} else if ("_".equals(rest.getName())) {
+			results.add(bindings);
+		} else if (bindings.containsKey(rest.getName())) {
+			if (sameElements(bindings.get(rest.getName()), remaining, ordered)) {
+				results.add(bindings);
 			}
+		} else {
+			Map<String, Object> withRest = new HashMap<>(bindings);
+			withRest.put(rest.getName(), remaining);
+			results.add(withRest);
 		}
+		checkBindingLimit(results);
+	}
 
-		return currentSets;
+	/** The bindings under which a member matches one element. */
+	private List<Map<String, Object>> matchMember(OclExpression member, Object element,
+			Map<String, Object> bindings) {
+		if (member instanceof ObjectTemplateExp memberTemplate) {
+			EClass referredClass = memberTemplate.getReferredClass();
+			if (element instanceof EObject eo && (referredClass == null || referredClass.isInstance(eo))) {
+				return matchObjectTemplateAll(memberTemplate, eo, new HashMap<>(bindings));
+			}
+			return List.of();
+		}
+		if (member instanceof VariableExp memberVe && memberVe.getReferredVariable() != null) {
+			String varName = memberVe.getReferredVariable().getName();
+			if ("_".equals(varName)) {
+				return List.of(bindings);
+			}
+			if (bindings.containsKey(varName)) {
+				return valuesEqual(bindings.get(varName), element) ? List.of(bindings) : List.of();
+			}
+			Map<String, Object> copy = new HashMap<>(bindings);
+			copy.put(varName, element);
+			return List.of(copy);
+		}
+		return valuesEqual(evaluateOcl(member, null, bindings), element) ? List.of(bindings) : List.of();
+	}
+
+	/** Whether a bound collection holds the same elements — in the same order for an ordered kind. */
+	private static boolean sameElements(Object bound, List<Object> elements, boolean ordered) {
+		if (!(bound instanceof Collection<?> collection)) {
+			return false;
+		}
+		if (ordered) {
+			return new ArrayList<>(collection).equals(elements);
+		}
+		Map<Object, Integer> counts = new HashMap<>();
+		collection.forEach(e -> counts.merge(e, 1, Integer::sum));
+		elements.forEach(e -> counts.merge(e, -1, Integer::sum));
+		return counts.values().stream().allMatch(c -> c == 0);
 	}
 
 	/**

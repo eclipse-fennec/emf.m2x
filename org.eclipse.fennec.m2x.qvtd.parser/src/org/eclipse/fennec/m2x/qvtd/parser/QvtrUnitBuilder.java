@@ -36,6 +36,8 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
@@ -585,6 +587,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		// Process templates → DomainPattern(s)
 		for (QvtRParser.TemplateContext tmplCtx : ctx.template()) {
 			TemplateExp templateExp = visitTemplate(tmplCtx);
+			if (templateExp instanceof CollectionTemplateExp) {
+				// Decided in #354: the root of a domain is an object template
+				keyError(tmplCtx, "A collection template cannot be the root of a domain; use an object template");
+			}
 			DomainPattern pattern = REL.createDomainPattern();
 			pattern.setTemplateExpression(templateExp);
 
@@ -746,6 +752,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 					ctx.propertyTemplateList().propertyTemplate()) {
 				PropertyTemplateItem item = visitPropertyTemplate(propCtx);
 				resolveTemplateProperty(item, cls, propCtx);
+				checkCollectionKind(item, propCtx);
 				ote.getPart().add(item);
 			}
 		}
@@ -797,12 +804,12 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		String collKind = ctx.collectionKind().getText();
 		EClassifier elementType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 		OclType collType = expressionBuilder.support.buildCollectionType(collKind, elementType);
-		cte.setReferredCollectionType(getClassifierForType(collType));
+		// The collection type itself, kind and element type — EObject lost the kind (#354)
+		cte.setReferredCollectionType(collType);
 
 		// Optional variable binding
 		if (ctx.identifier() != null) {
-			cte.setBindsTo(templateVariable(identifierText(ctx.identifier()),
-					collType != null ? getClassifierForType(collType) : null, ctx));
+			cte.setBindsTo(templateVariable(identifierText(ctx.identifier()), collType, ctx));
 		}
 
 		// Member selection
@@ -952,7 +959,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 				EClassifier paramType =
 						expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
 				if (paramType != null) {
-					param.setEType(getClassifierForType(paramType));
+					param.setEType(paramType); // its collection type too, not EObject (#354)
 				}
 				function.getEParameters().add(param);
 			}
@@ -961,7 +968,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		// Return type
 		EClassifier returnType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
 		if (returnType != null) {
-			function.setEType(getClassifierForType(returnType));
+			function.setEType(returnType);
 		}
 
 		// Query body expression (if not abstract/blackbox)
@@ -1129,6 +1136,39 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	}
 
 	/**
+	 * The collection kinds a template may have for a multi-valued property (§7.11.2.4): "If the
+	 * property value is a set, then the collection type of the collection template expression
+	 * must be a set. If the property value is an ordered set [or a sequence], then [it] can be one
+	 * of set, sequence, or ordered set." Any other is a parse error (decided in #354). A
+	 * single-valued property is a singleton collection that any kind may match.
+	 */
+	private void checkCollectionKind(PropertyTemplateItem item, ParserRuleContext ctx) {
+		EStructuralFeature feature = item.getReferredProperty();
+		if (!(item.getValue() instanceof CollectionTemplateExp template) || item.isIsOpposite()
+				|| feature == null || !feature.isMany()
+				|| !(template.getReferredCollectionType() instanceof CollectionType type)) {
+			return;
+		}
+		String propertyKind;
+		boolean allowed;
+		CollectionKind kind = type.getKind();
+		if (feature.isUnique() && !feature.isOrdered()) {
+			propertyKind = "Set";
+			allowed = kind == CollectionKind.SET;
+		} else if (feature.isUnique() || feature.isOrdered()) {
+			propertyKind = feature.isUnique() ? "OrderedSet" : "Sequence";
+			allowed = kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET
+					|| kind == CollectionKind.SEQUENCE;
+		} else {
+			return; // a Bag: §7.11.2.4 has no rule for it
+		}
+		if (!allowed) {
+			keyError(ctx, "A " + kind.getLiteral() + " template cannot match '" + feature.getName()
+					+ "', which is a " + propertyKind + " (§7.11.2.4)");
+		}
+	}
+
+	/**
 	 * The variable a template binds: the relation's variable of that name if there is one — one
 	 * name, one Variable (§7.13.7 objectTemplateCS) — or else a new one the relation now holds
 	 * (§7.11.3.2 "This set includes all the variables occurring in its domains"). A declared type
@@ -1204,17 +1244,6 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			templatePositions.put(node, new SourcePosition(ctx.getStart().getLine(),
 					ctx.getStart().getCharPositionInLine()));
 		}
-	}
-
-	/**
-	 * The classifier for an EMF structural feature: the type itself if it is a metamodel
-	 * classifier (#156), EObject for a collection, map or tuple type.
-	 */
-	private EClassifier getClassifierForType(EClassifier type) {
-		if (type != null && !(type instanceof OclType)) {
-			return type;
-		}
-		return EcorePackage.Literals.EOBJECT;
 	}
 
 	// ==================== Identifier Utility ====================
