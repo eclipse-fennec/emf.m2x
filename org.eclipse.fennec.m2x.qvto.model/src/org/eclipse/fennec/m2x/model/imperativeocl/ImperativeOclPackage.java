@@ -45,7 +45,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = ImperativeOclPackage.eNS_URI, fingerprint = "fp1:dd9be81c4db626c5f2f59318f1de34fd90b5260d2b7def8dd94878fab6bf5261", genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/imperativeocl.ecore", ecoreSourceLocations = "/model/imperativeocl.ecore")
+@EPackage(uri = ImperativeOclPackage.eNS_URI, fingerprint = "fp1:ad4ab32cef78a60eb99fd05bb560e8746e571a7d3ac055745ba62139d4ef84b0", genModel = "/model/qvto.genmodel", genModelSourceLocations = {"model/qvto.genmodel","org.eclipse.fennec.m2x.qvto.model/model/qvto.genmodel"}, ecore = "/model/imperativeocl.ecore", ecoreSourceLocations = "/model/imperativeocl.ecore")
 public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -1241,13 +1241,22 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	int CATCH_EXP__EXCEPTION = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 1;
 
 	/**
+	 * The feature id for the '<em><b>Exception Variable</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int CATCH_EXP__EXCEPTION_VARIABLE = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 2;
+
+	/**
 	 * The number of structural features of the '<em>Catch Exp</em>' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int CATCH_EXP_FEATURE_COUNT = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 2;
+	int CATCH_EXP_FEATURE_COUNT = IMPERATIVE_EXPRESSION_FEATURE_COUNT + 3;
 
 	/**
 	 * The number of operations of the '<em>Catch Exp</em>' class.
@@ -2395,6 +2404,17 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getCatchExp_Exception();
 
 	/**
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.imperativeocl.CatchExp#getExceptionVariable <em>Exception Variable</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the containment reference '<em>Exception Variable</em>'.
+	 * @see org.eclipse.fennec.m2x.model.imperativeocl.CatchExp#getExceptionVariable()
+	 * @see #getCatchExp()
+	 * @generated
+	 */
+	EReference getCatchExp_ExceptionVariable();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.imperativeocl.InstantiationExp <em>Instantiation Exp</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2998,6 +3018,14 @@ public interface ImperativeOclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference CATCH_EXP__EXCEPTION = eINSTANCE.getCatchExp_Exception();
+
+		/**
+		 * The meta object literal for the '<em><b>Exception Variable</b></em>' containment reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference CATCH_EXP__EXCEPTION_VARIABLE = eINSTANCE.getCatchExp_ExceptionVariable();
 
 		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.InstantiationExpImpl <em>Instantiation Exp</em>}' class.

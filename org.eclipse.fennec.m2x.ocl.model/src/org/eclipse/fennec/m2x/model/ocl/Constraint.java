@@ -37,6 +37,7 @@ import org.osgi.annotation.versioning.ProviderType;
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getName <em>Name</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getKind <em>Kind</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getSpecification <em>Specification</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getMessageExpression <em>Message Expression</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getContextClassifier <em>Context Classifier</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getContextOperation <em>Context Operation</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getContextProperty <em>Context Property</em>}</li>
@@ -120,6 +121,31 @@ public interface Constraint extends EObject {
 	 * @generated
 	 */
 	void setSpecification(OclExpression value);
+
+	/**
+	 * Returns the value of the '<em><b>Message Expression</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * The message of an invariant written inv name('message'): (OCL v2.4 Section 12.2.2), reported when the invariant does not hold.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Message Expression</em>' containment reference.
+	 * @see #setMessageExpression(OclExpression)
+	 * @see org.eclipse.fennec.m2x.model.ocl.OclPackage#getConstraint_MessageExpression()
+	 * @model containment="true"
+	 * @generated
+	 */
+	OclExpression getMessageExpression();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getMessageExpression <em>Message Expression</em>}' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Message Expression</em>' containment reference.
+	 * @see #getMessageExpression()
+	 * @generated
+	 */
+	void setMessageExpression(OclExpression value);
 
 	/**
 	 * Returns the value of the '<em><b>Context Classifier</b></em>' reference.

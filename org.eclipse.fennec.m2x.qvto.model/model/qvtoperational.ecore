@@ -14,7 +14,7 @@
   </eAnnotations>
   <eClassifiers xsi:type="ecore:EEnum" name="DirectionKind">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Direction of a parameter or model extent: in, inout, or out (QVT v1.3 Section 8.2.2)."/>
+      <details key="documentation" value="Direction of a parameter or model extent: in, inout, or out (QVT v1.3 Section 8.2.1.8)."/>
     </eAnnotations>
     <eLiterals name="in"/>
     <eLiterals name="inout" value="1"/>
@@ -22,14 +22,14 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EEnum" name="ImportKind">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Kind of module import: extension (operations visible in context) or access (explicit qualification required) (QVT v1.3 Section 8.2.2)."/>
+      <details key="documentation" value="Kind of module import: extension (operations visible in context) or access (explicit qualification required) (QVT v1.3 Section 8.2.1.9)."/>
     </eAnnotations>
     <eLiterals name="extension"/>
     <eLiterals name="access" value="1"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="OperationBody" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EModelElement">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Body of an imperative operation containing expressions and local variables (QVT v1.3 Section 8.2.2.1)."/>
+      <details key="documentation" value="Body of an imperative operation containing expressions and local variables (QVT v1.3 Section 8.2.1.17)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="content" upperBound="-1"
         eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
@@ -42,7 +42,7 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="MappingBody" eSuperTypes="#//OperationBody">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Body of a mapping operation with init, population, and end sections (QVT v1.3 Section 8.2.2.12)."/>
+      <details key="documentation" value="Body of a mapping operation with init, population, and end sections (QVT v1.3 Section 8.2.1.19)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="initSection" upperBound="-1"
         eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
@@ -53,12 +53,12 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ConstructorBody" eSuperTypes="#//OperationBody">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Body of a constructor operation (QVT v1.3 Section 8.2.2.8)."/>
+      <details key="documentation" value="Body of a constructor operation (QVT v1.3 Section 8.2.1.18)."/>
     </eAnnotations>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="VarParameter" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EParameter">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A typed parameter with direction kind, used for operation context, parameters, and results (QVT v1.3 Section 8.2.2.3). Does not extend ocl::Variable directly to avoid duplicate 'name' feature (ENamedElement.name vs Variable.name); relevant Variable features (representedParameter, ownedInit) are declared locally."/>
+      <details key="documentation" value="A typed parameter with direction kind, used for operation context, parameters, and results (QVT v1.3 Section 8.2.1.7). Does not extend ocl::Variable directly to avoid duplicate 'name' feature (ENamedElement.name vs Variable.name); relevant Variable features (representedParameter, ownedInit) are declared locally."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="kind" eType="#//DirectionKind"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="representedParameter" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//Variable">
@@ -79,20 +79,20 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="MappingParameter" eSuperTypes="#//VarParameter">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A mapping operation parameter with optional extent binding (QVT v1.3 Section 8.2.2.12)."/>
+      <details key="documentation" value="A mapping operation parameter with optional extent binding (QVT v1.3 Section 8.2.1.16)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="extent" eType="#//ModelParameter"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ModelParameter" eSuperTypes="#//VarParameter">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A model parameter representing a model extent of the transformation (QVT v1.3 Section 8.2.2.4). When collectionKind is set, this parameter accepts a collection of model extents (§8.1.1, §8.2.1.5)."/>
+      <details key="documentation" value="A model parameter representing a model extent of the transformation (QVT v1.3 Section 8.2.1.5). When collectionKind is set, this parameter accepts a collection of model extents (§8.1.1, §8.2.1.5)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="collectionKind" unsettable="true"
         eType="ecore:EEnum http://www.eclipse.org/fennec/m2x/ocl/1.0#//CollectionKind"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ImperativeOperation" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EOperation">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="An imperative operation with body, context, and result parameters (QVT v1.3 Section 8.2.2.5)."/>
+      <details key="documentation" value="An imperative operation with body, context, and result parameters (QVT v1.3 Section 8.2.1.10)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="isBlackbox" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="body" eType="#//OperationBody"
@@ -105,13 +105,13 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Helper" eSuperTypes="#//ImperativeOperation">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A helper operation, optionally marked as a query (side-effect free) (QVT v1.3 Section 8.2.2.6)."/>
+      <details key="documentation" value="A helper operation, optionally marked as a query (side-effect free) (QVT v1.3 Section 8.2.1.12)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="isQuery" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="MappingOperation" eSuperTypes="#//ImperativeOperation">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A mapping operation with when/where guards and disjunct/inherited/merged clauses (QVT v1.3 Section 8.2.2.12)."/>
+      <details key="documentation" value="A mapping operation with when/where guards and disjunct/inherited/merged clauses (QVT v1.3 Section 8.2.1.15)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="when" upperBound="-1" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
@@ -132,17 +132,17 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Constructor" eSuperTypes="#//ImperativeOperation">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A constructor operation for object initialization (QVT v1.3 Section 8.2.2.8)."/>
+      <details key="documentation" value="A constructor operation for object initialization (QVT v1.3 Section 8.2.1.13)."/>
     </eAnnotations>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="EntryOperation" eSuperTypes="#//ImperativeOperation">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="The entry point operation (main) of a transformation (QVT v1.3 Section 8.2.2.9)."/>
+      <details key="documentation" value="The entry point operation (main) of a transformation (QVT v1.3 Section 8.2.1.11)."/>
     </eAnnotations>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Module" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EPackage">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A QVT-O module: base class for transformations and libraries (QVT v1.3 Section 8.2.2.10). Extends EPackage (not EClass+EPackage) to avoid EMF codegen raw-type issues with dual Ecore metaclass inheritance. The module's owned types live as EClassifiers in the EPackage."/>
+      <details key="documentation" value="A QVT-O module: base class for transformations and libraries (QVT v1.3 Section 8.2.1.3). Extends EPackage (not EClass+EPackage) to avoid EMF codegen raw-type issues with dual Ecore metaclass inheritance. The module's owned types live as EClassifiers in the EPackage."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="isBlackbox" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="moduleImport" upperBound="-1"
@@ -160,7 +160,7 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="OperationalTransformation" eSuperTypes="#//Module">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="An operational (imperative) transformation with model parameters (QVT v1.3 Section 8.2.2.11)."/>
+      <details key="documentation" value="An operational (imperative) transformation with model parameters (QVT v1.3 Section 8.2.1.1)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="modelParameter" upperBound="-1"
         eType="#//ModelParameter" containment="true"/>
@@ -177,12 +177,12 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Library" eSuperTypes="#//Module">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A library module providing reusable helpers and operations (QVT v1.3 Section 8.2.2.13)."/>
+      <details key="documentation" value="A library module providing reusable helpers and operations (QVT v1.3 Section 8.2.1.2)."/>
     </eAnnotations>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ModelType" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EClass">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A model type declaration binding a name to one or more metamodel packages (QVT v1.3 Section 8.2.2.14)."/>
+      <details key="documentation" value="A model type declaration binding a name to one or more metamodel packages (QVT v1.3 Section 8.2.1.6)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="conformanceKind" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EString"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="additionalCondition" upperBound="-1"
@@ -193,9 +193,14 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ModuleImport" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EModelElement">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="An import declaration referencing another module with extension or access semantics (QVT v1.3 Section 8.2.2.15)."/>
+      <details key="documentation" value="An import declaration referencing another module with extension or access semantics (QVT v1.3 Section 8.2.1.4)."/>
     </eAnnotations>
-    <eStructuralFeatures xsi:type="ecore:EAttribute" name="kind" eType="#//ImportKind"/>
+    <eStructuralFeatures xsi:type="ecore:EAttribute" name="kind" eType="#//ImportKind"
+        defaultValueLiteral="access">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="Extension or access; access is the default (QVT v1.3 Section 8.2.1.4)."/>
+      </eAnnotations>
+    </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EReference" name="importedModule" lowerBound="1"
         eType="#//Module"/>
     <eStructuralFeatures xsi:type="ecore:EReference" name="module" eType="#//Module"
@@ -228,7 +233,7 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ContextualProperty" eSuperTypes="http://www.eclipse.org/emf/2002/Ecore#//EStructuralFeature">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="An intermediate or contextual property attached to a class at transformation time (QVT v1.3 Section 8.2.2.16)."/>
+      <details key="documentation" value="An intermediate or contextual property attached to a class at transformation time (QVT v1.3 Section 8.2.1.14)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="initExpression" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
@@ -249,20 +254,20 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ImperativeCallExp" eSuperTypes="http://www.eclipse.org/fennec/m2x/ocl/1.0#//OperationCallExp imperativeocl.ecore#//ImperativeExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A call to an imperative operation (helper or mapping) (QVT v1.3 Section 8.2.2.17)."/>
+      <details key="documentation" value="A call to an imperative operation (helper or mapping) (QVT v1.3 Section 8.2.1.20)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="isVirtual" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"
         defaultValueLiteral="true"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="MappingCallExp" eSuperTypes="#//ImperativeCallExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="A call to a mapping operation, with optional strict mode (QVT v1.3 Section 8.2.2.17)."/>
+      <details key="documentation" value="A call to a mapping operation, with optional strict mode (QVT v1.3 Section 8.2.1.21)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="isStrict" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ObjectExp" eSuperTypes="imperativeocl.ecore#//InstantiationExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Object expression for inline object creation in mapping bodies (QVT v1.3 Section 8.2.2.18)."/>
+      <details key="documentation" value="Object expression for inline object creation in mapping bodies (QVT v1.3 Section 8.2.1.24)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="body" eType="#//ConstructorBody"
         containment="true"/>
@@ -271,7 +276,7 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ResolveExp" eSuperTypes="http://www.eclipse.org/fennec/m2x/ocl/1.0#//CallExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Resolve expression to find previously created trace records (QVT v1.3 Section 8.2.2.19)."/>
+      <details key="documentation" value="Resolve expression to find previously created trace records (QVT v1.3 Section 8.2.1.22)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="isDeferred" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="isInverse" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean"/>
@@ -283,7 +288,7 @@
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="ResolveInExp" eSuperTypes="#//ResolveExp">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="ResolveIn expression: resolve within a specific mapping operation (QVT v1.3 Section 8.2.2.19)."/>
+      <details key="documentation" value="ResolveIn expression: resolve within a specific mapping operation (QVT v1.3 Section 8.2.1.23)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="inMapping" eType="#//MappingOperation"/>
   </eClassifiers>

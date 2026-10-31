@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A helper operation, optionally marked as a query (side-effect free) (QVT v1.3 Section 8.2.2.6).
+ * A helper operation, optionally marked as a query (side-effect free) (QVT v1.3 Section 8.2.1.12).
  * <!-- end-model-doc -->
  *
  * <p>

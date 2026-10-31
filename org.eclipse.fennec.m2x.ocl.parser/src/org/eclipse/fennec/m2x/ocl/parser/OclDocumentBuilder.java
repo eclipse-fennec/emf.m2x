@@ -293,13 +293,15 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
 
-		// The body expression is the last expression in the rule
-		// Grammar: 'inv' (identifier ('(' expression ')')?)? ':' expression
-		// If there's a guard expression in parens, it's expression(0), body is expression(1)
-		// If no guard, body is expression(0)
+		// Grammar: 'inv' (identifier ('(' expression ')')?)? ':' expression. With the parenthesised
+		// expression, inv name('message'): body, it is the message reported when the invariant does
+		// not hold (OCL v2.4 §12.2.2); it was parsed and dropped before #324
 		OclParser.ExpressionContext bodyExpr = ctx.expression().size() > 1
 				? ctx.expression(1)
 				: ctx.expression(0);
+		if (ctx.expression().size() > 1) {
+			constraint.setMessageExpression(buildExpression(ctx.expression(0), classifier, selfAlias));
+		}
 		constraint.setSpecification(buildExpression(bodyExpr, classifier, selfAlias));
 		constraints.add(constraint);
 	}

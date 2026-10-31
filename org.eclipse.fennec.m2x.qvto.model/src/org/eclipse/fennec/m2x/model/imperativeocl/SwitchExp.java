@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Switch expression with alternative parts and optional else (QVT v1.3 Section 8.2.1.6).
+ * Switch expression with alternative parts and optional else (QVT v1.3 Section 8.2.2.8).
  * <!-- end-model-doc -->
  *
  * <p>

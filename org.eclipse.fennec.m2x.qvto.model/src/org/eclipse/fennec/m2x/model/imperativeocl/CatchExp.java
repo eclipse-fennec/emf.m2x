@@ -19,6 +19,7 @@ import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClassifier;
 
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
 
 import org.osgi.annotation.versioning.ProviderType;
 
@@ -28,7 +29,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Catch clause in a try expression, catching specific exception types (QVT v1.3 Section 8.2.1.8).
+ * Catch clause in a try expression, catching specific exception types (QVT v1.3 Section 8.2.2.14).
  * <!-- end-model-doc -->
  *
  * <p>
@@ -37,6 +38,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <ul>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.CatchExp#getBody <em>Body</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.CatchExp#getException <em>Exception</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.CatchExp#getExceptionVariable <em>Exception Variable</em>}</li>
  * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclPackage#getCatchExp()
@@ -68,5 +70,30 @@ public interface CatchExp extends ImperativeExpression {
 	 * @generated
 	 */
 	EList<EClassifier> getException();
+
+	/**
+	 * Returns the value of the '<em><b>Exception Variable</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * The variable through which the caught exception may be accessed: except (e : T) (QVT v1.3 Section 8.2.2.14).
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Exception Variable</em>' containment reference.
+	 * @see #setExceptionVariable(Variable)
+	 * @see org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclPackage#getCatchExp_ExceptionVariable()
+	 * @model containment="true"
+	 * @generated
+	 */
+	Variable getExceptionVariable();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.imperativeocl.CatchExp#getExceptionVariable <em>Exception Variable</em>}' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Exception Variable</em>' containment reference.
+	 * @see #getExceptionVariable()
+	 * @generated
+	 */
+	void setExceptionVariable(Variable value);
 
 } // CatchExp

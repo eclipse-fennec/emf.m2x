@@ -29,7 +29,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Object instantiation expression: new Class(args) (QVT v1.3 Section 8.2.1.9).
+ * Object instantiation expression: new Class(args) (QVT v1.3 Section 8.2.2.22).
  * <!-- end-model-doc -->
  *
  * <p>
