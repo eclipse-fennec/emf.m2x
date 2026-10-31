@@ -22,7 +22,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
@@ -499,7 +498,25 @@ public class AbstractExpressionBuilder {
 		if (parts != null) {
 			exp.getOwnedParts().addAll(parts);
 		}
+		// Typed by its kind, so that an iterator over it has a result type too (#378); the
+		// element type where every part has the same one, unknown otherwise (no common
+		// supertype computation here — that is the type checker's, GAP-3)
+		exp.setType(collectionType(exp.getKind(), commonPartType(exp.getOwnedParts())));
 		return exp;
+	}
+
+	private EClassifier commonPartType(List<CollectionLiteralPart> parts) {
+		EClassifier common = null;
+		for (CollectionLiteralPart part : parts) {
+			EClassifier partType = part instanceof CollectionItem item && item.getOwnedItem() != null
+					? item.getOwnedItem().getType()
+					: part instanceof CollectionRange ? LIBRARY.integer() : null;
+			if (partType == null || partType instanceof CollectionType || common != null && common != partType) {
+				return null;
+			}
+			common = partType;
+		}
+		return common;
 	}
 
 	public CollectionItem buildCollectionItem(OclExpression item) {
@@ -695,17 +712,64 @@ public class AbstractExpressionBuilder {
 		exp.getOwnedIterators().addAll(iterVars);
 		exp.setOwnedBody(body);
 
-		EClassifier elementType = inferElementType(source);
-		if (elementType != null) {
-			switch (iterName) {
-				case "select", "reject", "sortedBy", "closure":
-					exp.setType(elementType);
-					break;
-				default:
-					break;
-			}
+		EClassifier resultType = iteratorResultType(iterName, source, body);
+		if (resultType != null) {
+			exp.setType(resultType);
 		}
 		return exp;
+	}
+
+	/**
+	 * The type of a predefined iterator's result, OCL v2.4 §11.9: {@code select}/{@code reject}
+	 * keep the source's collection kind; {@code sortedBy} and {@code closure} answer an ordered
+	 * collection for an ordered source and a unique one for a unique source; {@code collect} a
+	 * Bag of the flattened body type (a Sequence for an ordered source), {@code collectNested}
+	 * the same without flattening; {@code any} the element type; the quantifiers Boolean. Before,
+	 * the selecting iterators were typed with the source's element type and the collecting ones
+	 * not at all, so a dot after them navigated the element instead of collecting (#320, #378).
+	 *
+	 * @return the result type, or {@code null} where the source's collection type is unknown
+	 */
+	private EClassifier iteratorResultType(String iterName, OclExpression source, OclExpression body) {
+		switch (iterName) {
+			case "forAll", "exists", "one", "isUnique":
+				return LIBRARY.booleanType();
+			case "any":
+				return inferElementType(source);
+			default:
+				break;
+		}
+		if (!(source.getType() instanceof CollectionType sourceType)) {
+			return null;
+		}
+		CollectionKind kind = sourceType.getKind();
+		boolean ordered = kind == CollectionKind.SEQUENCE || kind == CollectionKind.ORDERED_SET;
+		boolean unique = kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET;
+		EClassifier element = inferElementType(source);
+		EClassifier bodyType = body != null ? body.getType() : null;
+		return switch (iterName) {
+			case "select", "reject" -> collectionType(kind, element);
+			case "sortedBy" -> collectionType(unique ? CollectionKind.ORDERED_SET : CollectionKind.SEQUENCE, element);
+			case "closure" -> collectionType(ordered ? CollectionKind.ORDERED_SET : CollectionKind.SET, element);
+			case "collect" -> collectionType(ordered ? CollectionKind.SEQUENCE : CollectionKind.BAG,
+					bodyType instanceof CollectionType nested ? copyType(nested.getElementType()) : copyType(bodyType));
+			case "collectNested" -> collectionType(ordered ? CollectionKind.SEQUENCE : CollectionKind.BAG,
+					copyType(bodyType));
+			default -> null;
+		};
+	}
+
+	private CollectionType collectionType(CollectionKind kind, EClassifier elementType) {
+		CollectionType type = switch (kind) {
+			case SET -> FACTORY.createSetType();
+			case ORDERED_SET -> FACTORY.createOrderedSetType();
+			case BAG -> FACTORY.createBagType();
+			case SEQUENCE -> FACTORY.createSequenceType();
+			default -> FACTORY.createCollectionType();
+		};
+		type.setKind(kind);
+		type.setElementType(elementType);
+		return type;
 	}
 
 	/**
@@ -785,14 +849,9 @@ public class AbstractExpressionBuilder {
 		exp.getOwnedIterators().add(iterVar);
 		exp.setOwnedBody(body);
 
-		if (elementType != null) {
-			switch (iterName) {
-				case "select", "reject", "sortedBy", "closure":
-					exp.setType(elementType);
-					break;
-				default:
-					break;
-			}
+		EClassifier resultType = iteratorResultType(iterName, source, body);
+		if (resultType != null) {
+			exp.setType(resultType);
 		}
 		return exp;
 	}
@@ -1354,8 +1413,11 @@ public class AbstractExpressionBuilder {
 			return null;
 		}
 		EClassifier type = source.getType();
-		if (type instanceof CollectionType colType && colType.getElementType() != null) {
-			return copyType(colType.getElementType());
+		if (type instanceof CollectionType colType) {
+			// A collection whose element type is unknown has elements of unknown type — not
+			// elements of its own collection type, which turned an iterator over tuples into a
+			// collection and t.year into an implicit collect over a tuple (#378)
+			return colType.getElementType() != null ? copyType(colType.getElementType()) : null;
 		}
 		return type;
 	}
