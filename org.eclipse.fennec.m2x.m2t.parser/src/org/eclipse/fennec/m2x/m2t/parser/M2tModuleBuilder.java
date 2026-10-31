@@ -257,14 +257,14 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			template.setGuard(exprBuilder.buildExpression(sig.guard().expression()));
 		}
 
+		// Init section — its variables are in scope for the body and the post expression (#384)
+		if (sig.initSection() != null) {
+			template.setInit(buildInitSection(sig.initSection()));
+		}
+
 		// Post
 		if (sig.postDecl() != null) {
 			template.setPost(exprBuilder.buildExpression(sig.postDecl().expression()));
-		}
-
-		// Init section
-		if (sig.initSection() != null) {
-			template.setInit(buildInitSection(sig.initSection()));
 		}
 
 		// Body
@@ -456,30 +456,33 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		// Iterator set (collection expression)
 		forBlock.setIterSet(exprBuilder.buildExpression(ctx.expression()));
 
-		// Before/separator/after
+		// Before/after are written once, outside the iterations
 		if (ctx.beforeClause() != null) {
 			forBlock.setBefore(exprBuilder.buildExpression(ctx.beforeClause().expression()));
-		}
-		if (ctx.separatorClause() != null) {
-			forBlock.setEach(exprBuilder.buildExpression(ctx.separatorClause().expression()));
 		}
 		if (ctx.afterClause() != null) {
 			forBlock.setAfter(exprBuilder.buildExpression(ctx.afterClause().expression()));
 		}
 
-		// Guard
-		if (ctx.guard() != null) {
-			forBlock.setGuard(exprBuilder.buildExpression(ctx.guard().expression()));
-		}
-
-		// Init section
-		if (ctx.initSection() != null) {
-			forBlock.setInit(buildInitSection(ctx.initSection()));
-		}
-
-		// Body
-		for (TemplateExpression bodyExpr : buildBody(ctx.body())) {
-			forBlock.getBody().add(bodyExpr);
+		// The loop variable is in scope for the separator, the guard, the init section and the
+		// body — a reference to it is a reference to its declaration (#384)
+		OclEnvironment outerScope = exprBuilder.env();
+		exprBuilder.setEnv(outerScope.nested(loopVar));
+		try {
+			if (ctx.separatorClause() != null) {
+				forBlock.setEach(exprBuilder.buildExpression(ctx.separatorClause().expression()));
+			}
+			if (ctx.guard() != null) {
+				forBlock.setGuard(exprBuilder.buildExpression(ctx.guard().expression()));
+			}
+			if (ctx.initSection() != null) {
+				forBlock.setInit(buildInitSection(ctx.initSection()));
+			}
+			for (TemplateExpression bodyExpr : buildBody(ctx.body())) {
+				forBlock.getBody().add(bodyExpr);
+			}
+		} finally {
+			exprBuilder.setEnv(outerScope);
 		}
 
 		return forBlock;
@@ -532,10 +535,8 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		Variable letVar = buildVariableDeclaration(varDecl);
 		letBlock.setLetVariable(letVar);
 
-		// Body
-		for (TemplateExpression bodyExpr : buildBody(ctx.body())) {
-			letBlock.getBody().add(bodyExpr);
-		}
+		// Body, with the let variable in scope (#384)
+		letBlock.getBody().addAll(buildBodyWith(letVar, ctx.body()));
 
 		// ElseLet chain
 		if (ctx.elseLetBlock() != null) {
@@ -543,9 +544,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 				LetBlock elseLetBlock = FACTORY.createLetBlock();
 				Variable elseLetVar = buildVariableDeclaration(elseLetCtx.variableDeclaration());
 				elseLetBlock.setLetVariable(elseLetVar);
-				for (TemplateExpression bodyExpr : buildBody(elseLetCtx.body())) {
-					elseLetBlock.getBody().add(bodyExpr);
-				}
+				elseLetBlock.getBody().addAll(buildBodyWith(elseLetVar, elseLetCtx.body()));
 				letBlock.getElseLet().add(elseLetBlock);
 			}
 		}
@@ -676,12 +675,29 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		return exprBuilder.support.createVariable(name, type, init);
 	}
 
+	/**
+	 * Builds an init section and leaves its variables in scope, each one from the declaration
+	 * after it on, as the evaluator defines them in order (#384). The caller restores the scope.
+	 */
 	private InitSection buildInitSection(M2tParser.InitSectionContext ctx) {
 		InitSection initSection = FACTORY.createInitSection();
 		for (M2tParser.VariableDeclarationContext varDecl : ctx.variableDeclaration()) {
-			initSection.getVariable().add(buildVariableDeclaration(varDecl));
+			Variable variable = buildVariableDeclaration(varDecl);
+			initSection.getVariable().add(variable);
+			exprBuilder.setEnv(exprBuilder.env().nested(variable));
 		}
 		return initSection;
+	}
+
+	/** Builds a body with one more variable in scope. */
+	private List<TemplateExpression> buildBodyWith(Variable variable, M2tParser.BodyContext ctx) {
+		OclEnvironment outerScope = exprBuilder.env();
+		exprBuilder.setEnv(outerScope.nested(variable));
+		try {
+			return buildBody(ctx);
+		} finally {
+			exprBuilder.setEnv(outerScope);
+		}
 	}
 
 	/**

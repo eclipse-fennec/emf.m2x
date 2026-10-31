@@ -1161,6 +1161,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		QvtOParser.ForVarListContext varList = ctx.forVarList();
 		QvtOParser.IteratorVariablesContext iterVars = varList.iteratorVariables();
 
+		// The compute variable is declared before the body that refers to it (#384)
+		Variable computeVar = computeShorthandVariable(varList);
+		if (computeVar != null) {
+			this.environment = this.environment.nested(computeVar);
+		}
+
 		for (int i = 0; i < iterVars.qvtoIdentifier().size(); i++) {
 			Variable iterVar = OCL.createVariable();
 			iterVar.setName(qvtoIdentifierText(iterVars.qvtoIdentifier(i)));
@@ -1180,7 +1186,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = savedEnv;
 
 		// §8.2.2.6: compute shorthand — forEach(i;x:X=init|cond) ≡ compute(x:X=init) forEach(i|cond)
-		return wrapInComputeIfShorthand(forExp, varList, savedEnv);
+		return wrapInComputeIfShorthand(forExp, computeVar);
 	}
 
 	@Override
@@ -1192,6 +1198,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		QvtOParser.ForVarListContext varList = ctx.forVarList();
 		QvtOParser.IteratorVariablesContext iterVars = varList.iteratorVariables();
+
+		// The compute variable is declared before the body that refers to it (#384)
+		Variable computeVar = computeShorthandVariable(varList);
+		if (computeVar != null) {
+			this.environment = this.environment.nested(computeVar);
+		}
 
 		for (int i = 0; i < iterVars.qvtoIdentifier().size(); i++) {
 			Variable iterVar = OCL.createVariable();
@@ -1213,22 +1225,19 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = savedEnv;
 
 		// §8.2.2.6: compute shorthand — forEach(i;x:X=init|cond) ≡ compute(x:X=init) forEach(i|cond)
-		return wrapInComputeIfShorthand(forExp, varList, savedEnv);
+		return wrapInComputeIfShorthand(forExp, computeVar);
 	}
 
 	/**
-	 * §8.2.2.6: If forVarList has a compute shorthand (name:Type=init after ';'),
-	 * wraps the ForExp in a ComputeExp. Otherwise returns the ForExp unchanged.
-	 * Detects compute shorthand by the presence of qvtoIdentifier (the variable name).
+	 * §8.2.2.6: the variable of a compute shorthand ({@code name:Type=init} after ';'), or
+	 * {@code null} when the forVarList has none. Its init is built in the scope around the loop.
 	 */
-	private OclExpression wrapInComputeIfShorthand(ForExp forExp,
-			QvtOParser.ForVarListContext varList, QvtoEnvironment savedEnv) {
+	private Variable computeShorthandVariable(QvtOParser.ForVarListContext varList) {
 		// Compute shorthand: forVarList matched alternative 1 (i;x:Type=init)
 		// Detected by qvtoIdentifier being present (the compute variable name)
 		if (varList.qvtoIdentifier() == null) {
-			return forExp;
+			return null;
 		}
-		ComputeExp computeExp = IMP.createComputeExp();
 		Variable computeVar = OCL.createVariable();
 		computeVar.setName(qvtoIdentifierText(varList.qvtoIdentifier()));
 		if (varList.typeExpression() != null) {
@@ -1237,6 +1246,18 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (varList.expression() != null) {
 			computeVar.setOwnedInit((OclExpression) visit(varList.expression()));
 		}
+		return computeVar;
+	}
+
+	/**
+	 * §8.2.2.6: wraps the ForExp in a ComputeExp when it has a compute shorthand variable.
+	 * Otherwise returns the ForExp unchanged.
+	 */
+	private OclExpression wrapInComputeIfShorthand(ForExp forExp, Variable computeVar) {
+		if (computeVar == null) {
+			return forExp;
+		}
+		ComputeExp computeExp = IMP.createComputeExp();
 		computeExp.setReturnedElement(computeVar);
 		computeExp.setBody(forExp);
 		return computeExp;
@@ -1244,8 +1265,17 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public OclExpression visitSwitchExp(QvtOParser.SwitchExpContext ctx) {
+		return buildSwitchExp(ctx, ctx.switchIterator());
+	}
+
+	/**
+	 * Builds a switch. The arrow form {@code coll->switch(x) {…}} has bound its iterator already
+	 * and passes {@code null}, so the cases refer to that iterator, not to a second variable of
+	 * the same name (#384).
+	 */
+	private OclExpression buildSwitchExp(QvtOParser.SwitchExpContext ctx,
+			QvtOParser.SwitchIteratorContext iterCtx) {
 		// §8.4.7: switch ('(' <iter_declarator> ')')? <switch_body>
-		QvtOParser.SwitchIteratorContext iterCtx = ctx.switchIterator();
 
 		QvtoEnvironment savedEnv = null;
 		VariableInitExp varInitExp = null;
@@ -1274,6 +1304,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				varInitExp = IMP.createVariableInitExp();
 				varInitExp.setReferredVariable(initVar);
 				varInitExp.setWithResult(true); // ::= semantics — block returns switch result, not void
+				// The cases refer to the variable the block declares, not to a second one (#384)
+				iterVar = initVar;
 			}
 
 			savedEnv = this.environment;
@@ -1330,12 +1362,14 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	public ObjectExp visitObjectExp(QvtOParser.ObjectExpContext ctx) {
 		ObjectExp objectExp = QVTO.createObjectExp();
 
-		// optional variable name: object (varName :) Type { ... }
-		Variable refVar = OCL.createVariable();
-		if (ctx.varName != null) {
-			refVar.setName(qvtoIdentifierText(ctx.varName));
-		} else {
-			refVar.setName("result");
+		// optional variable name: object (varName :) Type { ... } — a variable already in scope is
+		// the one the object expression refers to (§8.2.2.24), not a second one of its name (#384)
+		Variable existing = ctx.varName != null
+				? this.environment.lookup(qvtoIdentifierText(ctx.varName)).orElse(null)
+				: null;
+		Variable refVar = existing != null ? existing : OCL.createVariable();
+		if (existing == null) {
+			refVar.setName(ctx.varName != null ? qvtoIdentifierText(ctx.varName) : "result");
 		}
 		objectExp.setReferredObject(refVar);
 
@@ -1345,7 +1379,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			if (type instanceof EClass ec) {
 				objectExp.setInstantiatedClass(ec);
 				objectExp.setType(type);
-				refVar.setType(type);
+				if (existing == null) {
+					refVar.setType(type);
+				}
 			}
 		}
 
@@ -2302,7 +2338,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		// Build body: the SwitchExp (visited with the iterator variable in scope)
 		QvtoEnvironment savedEnv = this.environment;
 		this.environment = this.environment.nested(iterVar);
-		OclExpression switchBody = visitSwitchExp(switchCtx);
+		OclExpression switchBody = buildSwitchExp(switchCtx, null);
 		this.environment = savedEnv;
 
 		xcollectExp.setOwnedBody(switchBody);
@@ -2754,7 +2790,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			exp.setTarget(target);
 		}
 		if (ctx.expression() != null) {
-			exp.setCondition((OclExpression) visit(ctx.expression()));
+			// The condition refers to the target variable it declares (#384)
+			QvtoEnvironment savedEnv = this.environment;
+			if (exp.getTarget() != null) {
+				this.environment = this.environment.nested(exp.getTarget());
+			}
+			try {
+				exp.setCondition((OclExpression) visit(ctx.expression()));
+			} finally {
+				this.environment = savedEnv;
+			}
 		}
 	}
 
