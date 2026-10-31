@@ -38,6 +38,17 @@ public record QvtdExecutionResult(
 		boolean enforced) {
 
 	/**
+	 * The diagnostic code of a relation that does not hold (§7.10.1): a WARNING naming the
+	 * relation, the direction and the binding it found no match for. It does not fail the
+	 * execution — {@link #isSuccess()} stays {@code true} — but the models are not consistent
+	 * (#348).
+	 */
+	public static final int INCONSISTENCY = 1;
+
+	/** The diagnostic source of the QVT-R engine. */
+	public static final String SOURCE = "org.eclipse.fennec.m2x.qvtd.engine";
+
+	/**
 	 * Compact constructor: validates and makes diagnostics unmodifiable.
 	 */
 	public QvtdExecutionResult {
@@ -54,13 +65,16 @@ public record QvtdExecutionResult(
 	}
 
 	/**
-	 * Returns {@code true} if all relations hold across the models.
+	 * Returns {@code true} if the execution succeeded and found no relation that does not hold.
 	 *
-	 * <p>In check-only mode this indicates full consistency. In enforce mode
-	 * this indicates the transformation completed without consistency violations.
+	 * <p>In check-only mode every relation is checked in every direction (§7.9, §7.10.1). In
+	 * enforce mode the domains of the target model that are only checked are (§7.2.3) — and, with
+	 * {@link QvtdExecutionContext#withPostCheck()}, every direction once enforcing is done.
+	 * An inconsistency is a WARNING with the code {@link #INCONSISTENCY} (#348).
 	 */
 	public boolean isConsistent() {
-		return isSuccess();
+		return isSuccess() && diagnostics.stream()
+				.noneMatch(d -> d.getCode() == INCONSISTENCY && SOURCE.equals(d.getSource()));
 	}
 
 	/**

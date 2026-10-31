@@ -53,7 +53,7 @@ holds the element class instead of a `CollectionType`, so the collection kind is
 |-----------------|---------|
 | `QvtdEngine` | Main engine interface: `parse()`, `execute()` |
 | `QvtdConfiguration` | Engine config: OCL config, blackbox registry, package registry (D42 — the single place applying the `EPackage.Registry.INSTANCE` fallback) |
-| `QvtdExecutionContext` | Execution mode (enforce/checkOnly), model extents, target model |
+| `QvtdExecutionContext` | Execution mode (enforce/checkOnly), model extents, target model, `withPostCheck()` |
 | `QvtdExecutionResult` | Diagnostics, success flag |
 | `QvtdModelExtent` | Wraps `Resource` contents for a typed model |
 | `QvtdBlackboxRegistry` | Registry for blackbox libraries (GAP-9, GAP-12) |
@@ -173,13 +173,29 @@ the style of the spec's own `UmlToRdb` example.
 ### 5.3 Domain Classification (§7.10)
 
 ```
-if (!checkOnly && rd.isIsEnforceable() && isTargetModel(rd.getTypedModel()))
-    → targetDomain
-else
-    → sourceDomain
+check-only run (or post-check)  → every model domain in turn is direction k, the others are sources
+enforce run:
+  enforce domain of the target model        → targetDomain (enforced)
+  else a domain of the target model         → checked direction k (§7.2.3, reported, not enforced)
+  every other model domain                  → sourceDomain
 ```
 
-For **in-place** transformations (GAP-7): same TypedModel can appear in both source and target. `isIsEnforceable()` distinguishes `enforce` from `checkonly` domains.
+For **in-place** transformations (GAP-7): the same TypedModel can appear in both source and target. If an `enforce` domain is in the target model, a `checkonly` domain of the same model stays a source domain.
+
+### 5.3.1 Checking (§7.9, §7.10.1, #348)
+
+`checkDirection` checks one direction k. For every binding of the when clause and the other domains
+that satisfies the when condition, there must be a match of domain k for which the where
+condition holds. In checking, relation calls in `where` are evaluated as checks by `relationHolds`:
+the called relation holds if some joint binding of its domains extends the arguments. A binding
+without such a match is reported as a WARNING with code `QvtdExecutionResult.INCONSISTENCY`, naming
+relation, direction and binding. `isSuccess()` stays true and `isConsistent()` becomes false.
+A binding that holds is traced, so relations whose when clause depends on it are checked as well.
+Empty models hold vacuously and report nothing.
+
+An enforce run checks only the domains of the target model that are not enforced (§7.2.3).
+`QvtdExecutionContext.withPostCheck()` adds a check of every relation in every direction once
+enforcing is done.
 
 ### 5.4 Enforcement (§7.10.2)
 
@@ -258,7 +274,7 @@ Extracted into `QvtrQueryEvaluator` for testability.
 | Non-top relations | §7.10.2 | Via where-clause `RelationCallExp` |
 | When-clause | §7.2.1 | Predicate eval + trace lookup, one binding per matching trace |
 | Where-clause | §7.2.1 | Predicate eval + relation invocation |
-| Checkonly domains | §7.10 | Match-only, no enforcement — a violation does not yet make `isConsistent()` false (#348) |
+| Checkonly domains | §7.9, §7.10.1, §7.2.3 | Every direction checked; violations are `INCONSISTENCY` warnings, `isConsistent()` false |
 | Enforce domains | §7.10.2 | Find-or-create via templates — no deletion (#352), no clash detection (#351) |
 | Key-based identity | §7.4, §7.13.4 | `enforceObjectTemplate()` key lookup — template and opposite key parts, keys on superclasses (#350) |
 | Object templates | §7.11.2 | Full property matching + binding |
@@ -299,7 +315,6 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | Gap | Feature | Reason | Target |
 |-----|---------|--------|--------|
 | GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution — which needs the deletion of #352 to be equal | Phase 5 |
-| #348 | Checkonly verdict | `isConsistent()` is an alias of `isSuccess()` | — |
 | #350 | Keys | `findByBoundVariables` heuristic; template/opposite key parts | — |
 | #351 | Clash detection | Clashing values are overwritten silently | — |
 | #352 | Deletion | Target objects without a valid binding stay | — |
@@ -341,4 +356,4 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | `QvtdCommentTest` | §7.13.3: comments, nested paragraph comments | 4 |
 
 **Total (2026-10-31): 320 tests, 0 failures, 9 @Disabled** — each disabled test names the issue
-that will enable it (#348, #352, #354, #356, #360, #361).
+that will enable it (#352, #354, #356, #360, #361).

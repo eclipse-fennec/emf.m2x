@@ -27,7 +27,6 @@ import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -128,7 +127,6 @@ class QvtdEngineBasicTest extends AbstractQvtdEngineTest {
 		}
 
 		@Test
-		@Disabled("#348: a relation without bindings reports a WARNING in check-only mode")
 		@DisplayName("Check-only: empty models — vacuously consistent, nothing reported")
 		void checkOnlyEmptyModels() throws QvtdParseException {
 			String source = """
