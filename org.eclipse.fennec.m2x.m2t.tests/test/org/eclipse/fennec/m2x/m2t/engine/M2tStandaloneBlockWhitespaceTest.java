@@ -179,13 +179,25 @@ class M2tStandaloneBlockWhitespaceTest {
 	}
 
 	@Test
-	@DisplayName("a single-line standalone block takes its line's newline with it")
-	void singleLineBlockConsumesItsNewline() throws M2tParseException {
-		// §8.4's other body rule, and Acceleo's testingIf: nothing of that line survives
-		// but the text the block itself produced.
-		assertEquals("A\nIN-LINEZ", generate("""
+	@DisplayName("a single-line standalone block that writes text keeps its line's newline")
+	void singleLineBlockKeepsItsNewline() throws M2tParseException {
+		// §8.4: the newline after the tail is a whitespace element of the enclosing body,
+		// "output as is". Only the line of a block that wrote nothing goes (#374, see
+		// singleLineBlockWithoutTextDropsItsLine).
+		assertEquals("A\nIN-LINE\nZ", generate("""
 				A
 				[if (c.name = 'Employee')]IN-LINE[/if]
+				Z
+				"""));
+	}
+
+	@Test
+	@DisplayName("a single-line standalone block that writes nothing leaves no empty line")
+	void singleLineBlockWithoutTextDropsItsLine() throws M2tParseException {
+		// Acceleo's testingIf: the line of a block that produced nothing is gone (#374)
+		assertEquals("A\nZ", generate("""
+				A
+				[if (c.name = 'Nobody')]IN-LINE[/if]
 				Z
 				"""));
 	}
@@ -210,9 +222,9 @@ class M2tStandaloneBlockWhitespaceTest {
 		// The default separator is a rule for the multi-line shape only. The single-line
 		// body "starts after the closing bracket of the block head and ends before the
 		// starting bracket of the block tail", and the iterations run together — Acceleo's
-		// testForI reference is "123". The tag line takes its newline with it, as any
-		// single-line standalone block does.
-		assertEquals("A\nnamesalaryZ", generate("""
+		// testForI reference is "123". The newline after the tail stays, as the block wrote
+		// text (#374).
+		assertEquals("A\nnamesalary\nZ", generate("""
 				A
 				[for (a : EAttribute | c.eAttributes)][a.name/][/for]
 				Z

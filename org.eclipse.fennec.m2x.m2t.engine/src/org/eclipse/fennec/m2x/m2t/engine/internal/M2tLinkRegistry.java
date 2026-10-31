@@ -30,6 +30,7 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
 import org.eclipse.fennec.m2x.m2t.parser.M2tWhitespaceNormalizer;
+import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
@@ -92,6 +93,10 @@ final class M2tLinkRegistry {
 	/** Indentation of standalone template invocations (MOFM2T §8.4). */
 	private final Map<TemplateInvocation, String> indentation =
 			Collections.synchronizedMap(new WeakHashMap<>());
+
+	/** Single-line stand-alone blocks whose line break depends on their output (MOFM2T §8.4, #374). */
+	private final Set<Block> conditionalNewlines =
+			Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap<>()));
 
 	/**
 	 * Remembers a parse result: on the module itself, and the module for lookup by name.
@@ -183,6 +188,7 @@ final class M2tLinkRegistry {
 	void normalizeOnce(Module module, M2tWhitespaceNormalizer normalizer) {
 		if (normalizedModules.add(module)) {
 			indentation.putAll(normalizer.normalize(module));
+			conditionalNewlines.addAll(normalizer.getConditionalNewlines());
 		}
 	}
 
@@ -211,7 +217,7 @@ final class M2tLinkRegistry {
 			queue.addAll(current.getExtends());
 			queue.addAll(current.getImports());
 		}
-		return new M2tLinkSet(all, indentation, positions);
+		return new M2tLinkSet(all, indentation, positions, conditionalNewlines);
 	}
 
 	/**
@@ -233,6 +239,9 @@ final class M2tLinkRegistry {
 		synchronized (positions) {
 			positions.keySet().removeIf(node -> EcoreUtil.isAncestor(module, node));
 		}
+		synchronized (conditionalNewlines) {
+			conditionalNewlines.removeIf(block -> EcoreUtil.isAncestor(module, block));
+		}
 	}
 
 	/** Forgets everything about every module. */
@@ -247,5 +256,6 @@ final class M2tLinkRegistry {
 		normalizedModules.clear();
 		indentation.clear();
 		positions.clear();
+		conditionalNewlines.clear();
 	}
 }

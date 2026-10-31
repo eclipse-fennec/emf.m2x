@@ -17,9 +17,12 @@ package org.eclipse.fennec.m2x.m2t.engine.internal;
 import java.nio.charset.Charset;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
 
@@ -45,6 +48,7 @@ public class M2tWriterStack {
 	private final Map<String, String> fileUniqueIds = new LinkedHashMap<>();
 	private final Map<String, OpenModeKind> fileOpenModes = new LinkedHashMap<>();
 	private final Map<String, Charset> fileCharsets = new LinkedHashMap<>();
+	private final Map<String, Set<String>> protectedAreaIds = new HashMap<>();
 	private final long maxOutputSize;
 	private long totalOutputSize;
 	private boolean outputLimitExceeded;
@@ -57,7 +61,7 @@ public class M2tWriterStack {
 	 */
 	public M2tWriterStack(long maxOutputSize) {
 		this.maxOutputSize = maxOutputSize;
-		stack.push(new WriterEntry(null, new StringBuilder()));
+		stack.push(new WriterEntry(null, new StringBuilder(), false));
 	}
 
 	/**
@@ -71,7 +75,16 @@ public class M2tWriterStack {
 	 * Pushes a new string writer for in-memory output.
 	 */
 	public void pushStringWriter() {
-		stack.push(new WriterEntry(null, new StringBuilder()));
+		stack.push(new WriterEntry(null, new StringBuilder(), false));
+	}
+
+	/**
+	 * Pushes a writer for the standard output (MOFM2T §7.3: "The uri 'stdout' denotes the stdout
+	 * output stream"). When it is popped, its content goes to the standard-output writer below
+	 * it, if there is one — the entry template's — so that the text keeps its order (#368).
+	 */
+	public void pushStdoutWriter() {
+		stack.push(new WriterEntry(null, new StringBuilder(), true));
 	}
 
 	/**
@@ -87,13 +100,20 @@ public class M2tWriterStack {
 		if (mode == OpenModeKind.APPEND && generatedFiles.containsKey(filePath)) {
 			sb.append(generatedFiles.get(filePath));
 		}
-		// Only the first block for a path decides how the file is opened and encoded;
-		// further APPEND blocks for the same path are concatenated in memory above.
-		fileOpenModes.putIfAbsent(filePath, mode == null ? OpenModeKind.OVERWRITE : mode);
+		if (mode == OpenModeKind.APPEND) {
+			// Further APPEND blocks for the same path are concatenated in memory above; the
+			// first block decides whether the file on disk is extended
+			fileOpenModes.putIfAbsent(filePath, OpenModeKind.APPEND);
+		} else {
+			// An OVERWRITE block replaces what the run wrote before, and what is on disk: the
+			// file then is opened as overwritten, whatever an earlier block said (#368)
+			fileOpenModes.put(filePath, OpenModeKind.OVERWRITE);
+			protectedAreaIds.remove(filePath);
+		}
 		if (charset != null) {
 			fileCharsets.putIfAbsent(filePath, charset);
 		}
-		stack.push(new WriterEntry(filePath, sb));
+		stack.push(new WriterEntry(filePath, sb, false));
 	}
 
 	/**
@@ -109,7 +129,14 @@ public class M2tWriterStack {
 		}
 		WriterEntry entry = stack.pop();
 		String content = entry.buffer.toString();
-		if (entry.filePath != null) {
+		if (entry.stdout) {
+			for (WriterEntry below : stack) {
+				if (below.stdout) {
+					below.buffer.append(content);
+					break;
+				}
+			}
+		} else if (entry.filePath != null) {
 			generatedFiles.put(entry.filePath, content);
 		}
 		return content;
@@ -141,21 +168,43 @@ public class M2tWriterStack {
 	}
 
 	/**
+	 * The length of what the current writer holds — to tell whether an element wrote anything.
+	 *
+	 * @return the number of characters in the topmost writer
+	 */
+	public int currentLength() {
+		return stack.peek().buffer.length();
+	}
+
+	/**
+	 * The whitespace the current line of the current writer holds so far — the indentation of
+	 * a block written next — or the empty string when the line has text.
+	 *
+	 * @return the current line's indentation
+	 */
+	public String currentLineIndentation() {
+		StringBuilder buffer = stack.peek().buffer;
+		int start = buffer.lastIndexOf("\n") + 1;
+		String line = buffer.substring(start);
+		return line.isBlank() ? line : "";
+	}
+
+	/**
+	 * Claims a protected-area id for the file being written (MOFM2T §7.2: a protected text
+	 * part has "a unique identification").
+	 *
+	 * @param id the id
+	 * @return {@code false} if the file already has an area of that id
+	 */
+	public boolean claimProtectedAreaId(String id) {
+		return protectedAreaIds.computeIfAbsent(String.valueOf(currentTargetName()), key -> new HashSet<>()).add(id);
+	}
+
+	/**
 	 * Returns {@code true} if the output size limit has been exceeded.
 	 */
 	public boolean isOutputLimitExceeded() {
 		return outputLimitExceeded;
-	}
-
-	/**
-	 * Returns the content of the default (stdout) writer.
-	 *
-	 * @return the stdout content
-	 */
-	public String getStdout() {
-		// The bottom of the stack is the default writer
-		WriterEntry[] entries = stack.toArray(WriterEntry[]::new);
-		return entries[entries.length - 1].buffer.toString();
 	}
 
 	/**
@@ -232,6 +281,9 @@ public class M2tWriterStack {
 	 */
 	public String currentTargetName() {
 		for (WriterEntry entry : stack) {
+			if (entry.stdout()) {
+				return null;
+			}
 			if (entry.filePath() != null) {
 				return entry.filePath();
 			}
@@ -239,6 +291,6 @@ public class M2tWriterStack {
 		return null;
 	}
 
-	private record WriterEntry(String filePath, StringBuilder buffer) {
+	private record WriterEntry(String filePath, StringBuilder buffer, boolean stdout) {
 	}
 }

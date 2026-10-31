@@ -131,7 +131,8 @@ class M2tCompiledUnitTest {
 		CompiledUnit compiled = engine.compile(MODULE, "m");
 		Module module = (Module) compiled.getUnit();
 		assertSame(compiled, module.eContainer());
-		assertEquals("hireEMPLOYEE", generate(module));
+		// a single-line stand-alone block that writes text keeps its line break (#374)
+		assertEquals("hire\nEMPLOYEE", generate(module));
 	}
 
 	// ==== One Variable per declaration (#154) ====

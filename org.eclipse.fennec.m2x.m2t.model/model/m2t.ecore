@@ -186,6 +186,12 @@
         containment="true"/>
     <eStructuralFeatures xsi:type="ecore:EAttribute" name="openMode" eType="#//OpenModeKind"
         defaultValueLiteral="overwrite"/>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="appendExpr" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
+        containment="true">
+      <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+        <details key="documentation" value="The append flag when it is not the literal true or false (MOFM2T 1.0 Section 8.2 allows an OclExpressionCS): evaluated at runtime, true opens the file in append mode. When set, openMode is not used."/>
+      </eAnnotations>
+    </eStructuralFeatures>
     <eStructuralFeatures xsi:type="ecore:EReference" name="uniqId" eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true">
       <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">

@@ -14,9 +14,11 @@
  */
 package org.eclipse.fennec.m2x.m2t.parser;
 
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
@@ -27,6 +29,7 @@ import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
+import org.eclipse.fennec.m2x.model.m2t.ProtectedAreaBlock;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.m2t.TemplateExpression;
 import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
@@ -60,6 +63,12 @@ import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 public class M2tWhitespaceNormalizer {
 
 	private final Map<TemplateInvocation, String> indentationMap = new IdentityHashMap<>();
+
+	/**
+	 * Single-line stand-alone blocks: the newline ending their line goes only when the block
+	 * produces no text, which the evaluator decides (#374).
+	 */
+	private final Set<Block> conditionalNewlines = Collections.newSetFromMap(new IdentityHashMap<>());
 
 	/**
 	 * Which blocks are multi-line, i.e. have their head and their tail on different lines.
@@ -256,8 +265,11 @@ public class M2tWhitespaceNormalizer {
 		}
 
 		// Strip the whitespace in front of the head — §8.4's one rule for a standalone
-		// block.
-		stripLeadingWhitespace(body, index);
+		// block. A protected area keeps it: its markers are written in its place, and they are
+		// indented like the tag, the end marker as well (#367).
+		if (!(block instanceof ProtectedAreaBlock)) {
+			stripLeadingWhitespace(body, index);
+		}
 
 		// What happens to the newline that ends the tail line follows the two body rules
 		// §8.4 gives the two block shapes (#122). A multi-line block has already spent a
@@ -269,11 +281,13 @@ public class M2tWhitespaceNormalizer {
 		// bracket of the block head" — so its line ends where the tag line ends and the
 		// newline goes with it.
 		//
-		// Acceleo 3.7 draws the same line: in the engine tests, template_if's testingElseif
-		// keeps a newline after each multi-line branch, while testingIf's single-line
-		// [if …][/if] runs the next iteration onto the same line.
+		// That newline is a whitespace element of the enclosing body, which §8.4 outputs "as
+		// is" — so it stays when the block produced text: `[if (true)]X[/if]` on its own line
+		// is `X` and a line break, not `X` glued to the next line. The line of a block that
+		// produced nothing (`[if (false)]`) goes, as Acceleo 3.7's testingIf drops it. Which
+		// of the two is known only when the block has run, so the evaluator decides (#374).
 		if (!Boolean.TRUE.equals(multiLineBlocks.get(block))) {
-			stripTrailingNewline(body, index);
+			conditionalNewlines.add(block);
 		}
 
 		// Inject the default "\n" separator for a standalone for-block without an explicit
@@ -350,19 +364,14 @@ public class M2tWhitespaceNormalizer {
 		}
 	}
 
-	private void stripTrailingNewline(EList<TemplateExpression> body, int index) {
-		if (index >= body.size() - 1) {
-			return;
-		}
-		if (body.get(index + 1) instanceof TextExpression next) {
-			String value = next.getValue();
-			int nlIdx = value.indexOf('\n');
-			if (nlIdx >= 0) {
-				next.setValue(value.substring(nlIdx + 1));
-			} else if (value.isBlank()) {
-				next.setValue("");
-			}
-		}
+	/**
+	 * The single-line stand-alone blocks of the modules normalized so far: the newline after
+	 * such a block is written only when the block produces text (#374).
+	 *
+	 * @return the blocks, compared by identity
+	 */
+	public Set<Block> getConditionalNewlines() {
+		return Collections.unmodifiableSet(conditionalNewlines);
 	}
 
 	// --- BOL Indicator (§8.4 Rule 5) ---

@@ -18,7 +18,6 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
-import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -38,10 +37,11 @@ import java.util.regex.Matcher;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
-import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
+import org.eclipse.fennec.m2x.m2t.parser.M2tParserSupport;
 import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
@@ -70,8 +70,8 @@ import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
-import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
@@ -138,6 +138,7 @@ public class M2tEvaluator {
 
 	/** Maps standalone template invocations to their indentation string (§8.4). */
 	private final Map<TemplateInvocation, String> indentationMap;
+	private final Set<Block> conditionalNewlines;
 
 	/**
 	 * Where each expression node stood in its template. The OCL engine says which node a
@@ -179,6 +180,7 @@ public class M2tEvaluator {
 						oclEngine.getDefaultOptions(), module, this::invokeQueryValue, this::invokeTemplateValue));
 		this.writers = Objects.requireNonNull(writers, "writers must not be null");
 		this.indentationMap = linkSet.indentation();
+		this.conditionalNewlines = linkSet.conditionalNewlines();
 		this.positions = linkSet.positions();
 		this.limits = Objects.requireNonNull(limits, "limits must not be null");
 		buildOverrideIndex(linkSet.modules());
@@ -246,6 +248,7 @@ public class M2tEvaluator {
 		if (pastDeadline()) {
 			return "";
 		}
+		boolean entry = templateDepth == 0;
 		templateDepth++;
 		Template enclosing = executing;
 		executing = template;
@@ -265,8 +268,13 @@ public class M2tEvaluator {
 				return "";
 			}
 
-			// Execute body, after the init section
-			writers.pushStringWriter();
+			// Execute body, after the init section. What the entry template writes outside a file
+			// block is the standard output, with the [file (stdout)] blocks in their place (#368)
+			if (entry) {
+				writers.pushStdoutWriter();
+			} else {
+				writers.pushStringWriter();
+			}
 			executeBody(template);
 			String result = writers.popWriter();
 
@@ -443,20 +451,41 @@ public class M2tEvaluator {
 						positionOf(block.getFileUrl()));
 				return WRAPPED_NULL;
 			}
+			if (M2tParserSupport.STDOUT.equals(filePath)) {
+				// §7.3: "The uri 'stdout' denotes the stdout output stream" (#368)
+				writers.pushStdoutWriter();
+				executeBody(block);
+				writers.popWriter();
+				return WRAPPED_NULL;
+			}
 			OpenModeKind mode = block.getOpenMode();
-			Charset charset = StandardCharsets.UTF_8;
+			if (block.getAppendExpr() != null) {
+				// §8.2: the append flag is an expression (#368)
+				Boolean append = condition(block.getAppendExpr(), "append flag of [file] '" + filePath + "'");
+				if (append == null) {
+					return WRAPPED_NULL;
+				}
+				mode = append ? OpenModeKind.APPEND : OpenModeKind.OVERWRITE;
+			}
+			// No charset of its own: the configured default applies when the file is written
+			Charset charset = null;
 			if (block.getCharset() != null) {
 				String charsetName = render(block.getCharset());
 				try {
 					charset = Charset.forName(charsetName);
 				} catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
-					addWarning("Unknown charset '" + charsetName + "', using UTF-8");
+					addWarning("Unknown charset '" + charsetName + "', using the default charset");
 				}
 			}
 
 			// §8.1.17: Evaluate optional uniqId for file-rename tracking
 			if (block.getUniqId() != null) {
 				String uniqId = render(block.getUniqId());
+				if (isCharsetName(uniqId)) {
+					addDiagnostic(Diagnostic.WARNING, "The third argument of [file] is the uniqId (MOFM2T §7.3); '"
+							+ uniqId + "' looks like a charset, which is the fourth argument",
+							positionOf(block.getUniqId()));
+				}
 				writers.setFileUniqueId(filePath, uniqId);
 			}
 
@@ -475,17 +504,41 @@ public class M2tEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			String markerId = render(block.getMarker());
+			// §7.2: a protected text part has "a unique identification" — an area without a usable
+			// id, or with one the file already has, could never be merged back, so it is not
+			// written at all (#367)
+			OclResult idResult = evaluate(block.getMarker());
+			Object idValue = idResult == null ? null : idResult.value();
+			String markerId = idValue == null || idValue == OclInvalid.INSTANCE ? "" : asString(idValue);
+			if (markerId.isEmpty() || markerId.contains("\n") || markerId.contains("\r")) {
+				addDiagnostic(Diagnostic.ERROR, "The id of a protected area is "
+						+ (idValue == OclInvalid.INSTANCE ? "invalid" : markerId.isEmpty() ? "empty" : "more than one line")
+						+ " — the area is not written (MOFM2T §7.2)", positionOf(block.getMarker()));
+				return WRAPPED_NULL;
+			}
+			if (!writers.claimProtectedAreaId(markerId)) {
+				addDiagnostic(Diagnostic.ERROR, "Protected area id '" + markerId + "' is used twice in '"
+						+ writers.currentTargetName() + "' — the second area is not written (MOFM2T §7.2)",
+						positionOf(block.getMarker()));
+				return WRAPPED_NULL;
+			}
 
 			// Execute body first to capture default content and compute hash (D31)
 			writers.pushStringWriter();
 			executeBody(block);
 			String defaultContent = writers.popWriter();
 
-			writers.append(M2tProtectedAreaMerger.startMarker(markerId, defaultContent));
+			// Both markers on lines of their own, indented like the tag; the hash covers exactly
+			// what stands between them, so a regeneration recognises it untouched (#367)
+			String indentation = writers.currentLineIndentation();
+			String body = defaultContent + (defaultContent.isEmpty() || defaultContent.endsWith("\n") ? "" : "\n")
+					+ indentation;
+			M2tProtectedAreaMerger markers = new M2tProtectedAreaMerger(
+					M2tConfiguration.delimiterFor(limits.protectedAreaDelimiters(), writers.currentTargetName()));
+			writers.append(markers.startMarkerFor(markerId, body));
 			writers.append("\n");
-			writers.append(defaultContent);
-			writers.append(M2tProtectedAreaMerger.endMarker());
+			writers.append(body);
+			writers.append(markers.endMarkerLine());
 
 			return WRAPPED_NULL;
 		}
@@ -676,6 +729,15 @@ public class M2tEvaluator {
 
 	// --- Helpers ---
 
+	/** The text after the end of its first line, or nothing when the text is only whitespace. */
+	private static String withoutFirstLineBreak(String text) {
+		int newline = text.indexOf('\n');
+		if (newline >= 0 && text.substring(0, newline).isBlank()) {
+			return text.substring(newline + 1);
+		}
+		return text.isBlank() ? "" : text;
+	}
+
 	/**
 	 * Executes a block: its init section, then its body (§8.1.4). The init variables go into the
 	 * current scope — a template's stay visible to its post expression, a for block's are
@@ -687,8 +749,20 @@ public class M2tEvaluator {
 				env.define(v.getName(), v.getOwnedInit() != null ? evaluateOcl(v.getOwnedInit()) : null);
 			}
 		}
+		boolean dropNewline = false;
 		for (TemplateExpression expr : block.getBody()) {
-			templateSwitch.doSwitch(expr);
+			if (dropNewline && expr instanceof TextExpression text) {
+				writers.append(withoutFirstLineBreak(text.getValue()));
+			} else {
+				int before = writers.currentLength();
+				templateSwitch.doSwitch(expr);
+				// §8.4: the line of a single-line stand-alone block goes when the block wrote
+				// nothing; when it wrote text, the line break after it is output as is (#374)
+				dropNewline = expr instanceof Block nested && conditionalNewlines.contains(nested)
+						&& writers.currentLength() == before;
+				continue;
+			}
+			dropNewline = false;
 		}
 	}
 
@@ -1379,6 +1453,14 @@ public class M2tEvaluator {
 		return null;
 	}
 
+	private static boolean isCharsetName(String name) {
+		try {
+			return Charset.isSupported(name);
+		} catch (IllegalCharsetNameException e) {
+			return false;
+		}
+	}
+
 	/** The name of a value's type, for a message. */
 	private static String typeName(Object value) {
 		EClassifier type = runtimeType(value);
@@ -1462,6 +1544,17 @@ public class M2tEvaluator {
 		addError("The stack ran out while evaluating; the template depth limit of "
 				+ limits.maxTemplateDepth() + " was not reached first. "
 				+ "A recursion without a base case, or a limit above what this stack can take.");
+	}
+
+	/**
+	 * Reports what happened while the files were merged and written: a protected area that
+	 * could not be merged or lost its place, a file found under its unique id.
+	 *
+	 * @param severity the severity
+	 * @param message the message
+	 */
+	public void addOutputDiagnostic(int severity, String message) {
+		addDiagnostic(severity, message);
 	}
 
 	public void addOutputLimitError(long maxOutputSize) {

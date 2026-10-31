@@ -235,8 +235,11 @@ elseLetBlock
 // ==================== File Block ====================
 
 // [file (urlExpr, appendExpr?, idExpr?)]...body...[/file]
+// MOFM2T §8.2 <filecmd>: url or 'stdout', append flag, uniqId; the charset is a fourth
+// argument (Acceleo puts it third, where the spec has the uniqId, #368)
 fileBlock
-    : BLOCK_OPEN KW_FILE LPAREN expression (COMMA expression (COMMA expression)?)? RPAREN CLOSE
+    : BLOCK_OPEN KW_FILE LPAREN (stdout=KW_STDOUT | url=expression)
+      (COMMA appendFlag=expression (COMMA uniqId=expression (COMMA charset=expression)?)?)? RPAREN CLOSE
       body
       BLOCK_OPEN SLASH KW_FILE CLOSE
     ;

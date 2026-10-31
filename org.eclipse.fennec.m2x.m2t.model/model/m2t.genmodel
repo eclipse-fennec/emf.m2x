@@ -75,6 +75,7 @@
     <genClasses ecoreClass="m2t.ecore#//FileBlock">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//FileBlock/fileUrl"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute m2t.ecore#//FileBlock/openMode"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//FileBlock/appendExpr"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//FileBlock/uniqId"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//FileBlock/charset"/>
     </genClasses>
