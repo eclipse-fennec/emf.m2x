@@ -241,7 +241,7 @@ public class QvtrEvaluator {
 			for (Domain domain : relation.getDomain()) {
 				if (domain instanceof RelationDomain rd) {
 					if (isPrimitiveDomain(rd)) {
-						continue; // §7.11.3.10
+						continue; // §7.13.4 primitive domain
 					}
 					if (!context.checkOnly() && rd.isIsEnforceable()
 								&& extentManager.isTargetModel(rd.getTypedModel())) {
@@ -674,7 +674,7 @@ public class QvtrEvaluator {
 	}
 
 	/**
-	 * Checks if a domain is a primitive domain (§7.11.3.10).
+	 * Checks if a domain is a primitive domain (§7.13.4 primitive domain).
 	 */
 	private boolean isPrimitiveDomain(RelationDomain domain) {
 		return domain.getTypedModel() == null && domain.getPattern().isEmpty();

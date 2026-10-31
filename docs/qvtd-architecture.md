@@ -15,7 +15,7 @@ Direct QVT-R interpretation engine (D33 — no QVT-C lowering). Implements QVT v
 | `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces |
 | `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser, CST→AST |
 | `org.eclipse.fennec.m2x.qvtd.engine` | Direct interpretation engine |
-| `org.eclipse.fennec.m2x.qvtd.tests` | Spec-conformance tests (160 tests) |
+| `org.eclipse.fennec.m2x.qvtd.tests` | Spec-conformance tests (§9) |
 
 ## 2. Metamodel (D34)
 
@@ -23,8 +23,8 @@ Three EPackages following the spec structure:
 
 | EPackage | Classifiers | Key Types |
 |----------|-------------|-----------|
-| `qvtbase` | 7 | `Transformation`, `TypedModel`, `Domain`, `Pattern`, `Predicate`, `Rule`, `Function` |
-| `qvtrelation` | 8 | `RelationalTransformation`, `Relation`, `RelationDomain`, `DomainPattern`, `RelationCallExp`, `RelationImplementation`, `Key`, `OppositePropertyCallExp` |
+| `qvtbase` | 9 | `Transformation`, `TypedModel`, `Domain`, `Pattern`, `Predicate`, `Rule`, `Function`, `FunctionParameter`, `Tag` |
+| `qvtrelation` | 8 | `RelationalTransformation`, `Relation`, `RelationDomain`, `DomainPattern`, `RelationCallExp`, `RelationImplementation`, `RelationDomainAssignment`, `Key` |
 | `qvttemplate` | 3 | `TemplateExp`, `ObjectTemplateExp` (+`PropertyTemplateItem`), `CollectionTemplateExp` |
 
 **Key relationships:**
@@ -33,6 +33,19 @@ Three EPackages following the spec structure:
 - `RelationDomain` extends `Domain`, has `pattern : DomainPattern`, references `TypedModel`
 - `DomainPattern` extends `Pattern`, has `templateExpression : TemplateExp`
 - `ObjectTemplateExp` has `bindsTo : Variable`, `referredClass : EClass`, `part : PropertyTemplateItem[*]`
+
+**Deliberate deviations from the spec metamodel** (Ecore has no multiple inheritance from the
+MOF classes the spec names):
+- `Transformation` extends only `EPackage`, not `Class`. Its queries (`Function`) live in a
+  synthetic `EClass` named `_queries` inside the transformation (DR-D22).
+- `FunctionParameter` extends only `EParameter`, not `Variable`.
+- `RelationImplementation.impl` is a synthetic `EOperation` that the transformation does not
+  contain. The engine resolves it at run time to the operation that the `implementedby` clause
+  names (D39, #282).
+
+**Known AST gaps** (`QvtdAbstractSyntaxMappingTest`): `Rule.overrides` is never set, and the
+overriding relation is linked only by name (#356). `CollectionTemplateExp.referredCollectionType`
+holds the element class instead of a `CollectionType`, so the collection kind is lost (#354).
 
 ## 3. API
 
@@ -118,7 +131,7 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 | `QvtrEvaluator` | Core evaluator: relation execution, domain classification, when/where-clauses |
 | `QvtrEnforcer` | Target domain enforcement (§7.10.2), key-based identity (§7.4), property enforcement |
 | `QvtrBlackboxBridge` | Blackbox library invocation (§7.8), `implementedby` delegation (§7.11.3.6), M-R5 security |
-| `QvtrQueryEvaluator` | Query resolution (§7.11.4), where-clause variable pre-computation |
+| `QvtrQueryEvaluator` | Query resolution (§7.11.1.5 Function), where-clause variable pre-computation |
 | `QvtrOclCallback` | Functional interface: breaks circular deps between helpers and evaluator |
 | `QvtrPatternMatcher` | Pattern matching: object/collection templates, variable binding |
 | `QvtrEvalEnvironment` | Variable scope stack (push/pop) |
@@ -128,7 +141,7 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 ### 5.2 Execution Flow
 
 1. **`execute(transformation, context)`** → `QvtrEvaluator.execute()`
-2. For each **top relation** (skip abstract, skip overridden):
+2. For each **top relation** (skip abstract, skip overridden — unconditionally for now, #356):
    a. Evaluate the when-clause's **relation calls** → pre-bindings (RelationCallExp → trace lookup)
    b. **Classify domains**: source vs. target (based on `isEnforceable()` + target model)
    c. **Match source domains** → list of binding maps
@@ -174,9 +187,15 @@ Extracted into `QvtrEnforcer` for testability and separation of concerns.
 4. If no match → **create** via `ObjectTemplateExp`:
    a. Check already-bound variable (e.g. from when-clause or shared variable)
    b. Look up by **Key** (`key T { prop1, prop2 }`) — identity-based find-or-create (§7.4)
-   c. Look up by **bound variables** (`findByBoundVariables()`) — for in-place (§7.7)
+   c. Look up by **bound variables** (`findByBoundVariables()`). This is a heuristic with no basis
+      in the spec, and it is to be removed (#350): object identity comes only from keys (§7.4),
+      and without a key a new object is created.
    d. **Instantiate** (`EcoreUtil.create()`) + set features from template
 5. For `CollectionTemplateExp` (GAP-1): create collection members
+
+**Not yet implemented** (§7.10.2): enforcement never deletes target objects that no longer have
+a valid binding (#352), and a value that clashes with an existing one is overwritten without a
+report (#351).
 
 ### 5.4.1 Blackbox Bridge (§7.8)
 
@@ -190,7 +209,7 @@ Extracted into `QvtrBlackboxBridge` for testability and security centralization 
 - All blackbox access gated by `config.blackboxEnabled()` (disabled by default)
 - Under OSGi the libraries come from `DefaultQvtdEngine`'s dynamic `0..n` reference `blackboxes` (bind and unbind methods, #269): no restart when a library comes or goes, each run reads what is bound, the higher `service.ranking` wins a name; `blackboxes.target` and `blackboxes.cardinality.minimum` narrow the set and make the engine wait for it. A whiteboard on purpose — the engine selects libraries by operation name, so it has to know them all
 
-### 5.4.2 Query Evaluation (§7.11.4)
+### 5.4.2 Query Evaluation (§7.11.1.5)
 
 Extracted into `QvtrQueryEvaluator` for testability.
 
@@ -211,7 +230,9 @@ Extracted into `QvtrQueryEvaluator` for testability.
 ### 5.6 Traces (§7.2.1)
 
 - `QvtrTraceManager` stores `TraceRecord(relation, Map<String, Object>)` per execution
-- `RelationCallExp` in **when-clause** → trace lookup (the called relation must have matching trace)
+- `RelationCallExp` in **when-clause** → trace lookup (the called relation must have a matching
+  trace). Per §7.2.3 every matching trace gives a binding. The engine currently binds only the
+  first one, and runs top relations in declaration order instead of dependency order (#349).
 - `RelationCallExp` in **where-clause** → invokes non-top relation with pre-bindings
 
 ### 5.7 OCL Integration (D36)
@@ -224,25 +245,25 @@ Extracted into `QvtrQueryEvaluator` for testability.
 
 | Feature | Spec Reference | Implementation |
 |---------|---------------|----------------|
-| Top relations | §7.10.1 | Iterate + execute |
+| Top relations | §7.10.1 | Iterate + execute — declaration order, not dependency order (#349) |
 | Non-top relations | §7.10.2 | Via where-clause `RelationCallExp` |
-| When-clause | §7.2.1 | Predicate eval + trace lookup |
+| When-clause | §7.2.1 | Predicate eval + trace lookup — first trace only (#349) |
 | Where-clause | §7.2.1 | Predicate eval + relation invocation |
-| Checkonly domains | §7.10 | Match-only, no enforcement |
-| Enforce domains | §7.10.2 | Find-or-create via templates |
-| Key-based identity | §7.4, §7.13.4 | `enforceObjectTemplate()` key lookup |
+| Checkonly domains | §7.10 | Match-only, no enforcement — a violation does not yet make `isConsistent()` false (#348) |
+| Enforce domains | §7.10.2 | Find-or-create via templates — no deletion (#352), no clash detection (#351) |
+| Key-based identity | §7.4, §7.13.4 | `enforceObjectTemplate()` key lookup — template and opposite key parts, keys on superclasses (#350) |
 | Object templates | §7.11.2 | Full property matching + binding |
-| Collection templates | §7.11.2 | Member matching with `++` rest |
-| Primitive domains | §7.11.3.10 | Variable binding only |
-| Abstract relations | §7.11.3.2 | `isAbstract` skip + `overrides` |
+| Collection templates | §7.11.2 | Member matching with `++` rest — the member stays in the rest, collection kind lost in the AST (#354) |
+| Primitive domains | §7.13.4 | Variable binding only |
+| Abstract relations | §7.11.1.4 | `isAbstract` skip + `overrides` — the override replaces the base unconditionally, not only where it applies (#356) |
 | Blackbox queries | §7.11.3.6 | `QvtdBlackboxRegistry` |
 | Transformation extends | §7.11.1.1 | Rule merging with copy |
 | `implementedby` | §7.11.3.6 | `RelationImplementation` + blackbox |
-| In-place transforms | §7.7 | `isEnforceable()` + variable lookup |
+| In-place transforms | §7.7 | `isEnforceable()` + variable lookup — no copy of the old state, a run sees its own output (#353) |
 | Optional `[?]` | Eclipse ext. | `DomainPattern` EAnnotation, null binding |
 | Default values | §7.11.3 | `default_values { ... }` assignment |
 | Opposite properties | §7.11.2 | `opposite(T::prop)` in templates |
-| Binding validation | §7.5 | `QvtrBindingValidator` — post-parse static analysis |
+| Binding validation | §7.5 | `QvtrBindingValidator` — post-parse static analysis; counts every declared variable as bound (#359) |
 | Standard Library | §7.12 | OCL standard library (spec: "no additional operation") |
 
 ### 6.1 Binding Validation (§7.5)
@@ -268,7 +289,15 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 
 | Gap | Feature | Reason | Target |
 |-----|---------|--------|--------|
-| GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution | Phase 5 |
+| GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution — which needs the deletion of #352 to be equal | Phase 5 |
+| #348 | Checkonly verdict | `isConsistent()` is an alias of `isSuccess()` | — |
+| #349 | Relation order, when traces | Declaration order; only the first trace is bound | — |
+| #350 | Keys | `findByBoundVariables` heuristic; template/opposite key parts | — |
+| #351 | Clash detection | Clashing values are overwritten silently | — |
+| #352 | Deletion | Target objects without a valid binding stay | — |
+| #353 | In-place | No copy of the old state | — |
+| #354 | Collection templates | Member stays in the rest; kind rules; kind lost in the AST | — |
+| #356 | Overrides | Unconditional replacement; `Rule.overrides` not set | — |
 | GAP-6 | QVT-O `refined` — stub resolution | Parser + Provider-Brücke ✅ (Phase 4b). Runtime Stub-Auflösung (`OT.refined` → echte RT) + Trace-Semantik ausstehend | Phase 5 |
 
 ## 8. Design Decisions
@@ -299,5 +328,9 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | `QvtrEnforcerTest` | Unit tests: enforcement, key lookup, feature resolution | 12 |
 | `QvtrQueryEvaluatorTest` | Unit tests: query resolution, body/blackbox evaluation | 8 |
 | `QvtrBlackboxBridgeTest` | Unit tests: allow-list, blackbox delegation | 6 |
+| `QvtdConcreteSyntaxTest` | §7.13.2/§7.13.4: one accepted and one rejected form per production | 41 |
+| `QvtdAbstractSyntaxMappingTest` | §7.13.7: the AST each construct maps to | 11 |
+| `QvtdCommentTest` | §7.13.3: comments, nested paragraph comments | 4 |
 
-**Total: 160 tests, 0 failures, 2 @Disabled**
+**Total (2026-10-31): 320 tests, 0 failures, 9 @Disabled** — each disabled test names the issue
+that will enable it (#348, #349, #352, #354, #356, #360, #361).
