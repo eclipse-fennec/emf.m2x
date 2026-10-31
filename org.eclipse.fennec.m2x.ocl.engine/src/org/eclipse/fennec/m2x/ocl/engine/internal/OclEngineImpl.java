@@ -763,7 +763,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 				config.customOperationsEnabled(),
 				List.of(),
 				config.useEMFTypes(),
-				config.specStrict());
+				config.specStrict(),
+				false);
 	}
 
 	/**

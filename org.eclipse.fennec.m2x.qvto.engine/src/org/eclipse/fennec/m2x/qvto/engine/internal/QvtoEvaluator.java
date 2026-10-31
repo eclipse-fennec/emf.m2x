@@ -1699,9 +1699,12 @@ public class QvtoEvaluator {
 			OclEvaluationOptions base = options.oclOptions() != null
 					? options.oclOptions()
 					: oclEngine.getDefaultOptions();
-			oclOptions = base
-					.withNullHandling(OclEvaluationOptions.NullHandling.LENIENT)
-					.withAdditionalProviders(additionalProviders());
+			// QVT-O's standard library where it differs from OCL's: Dict::keys() is a List (#343)
+			oclOptions = base.toBuilder()
+					.nullHandling(OclEvaluationOptions.NullHandling.LENIENT)
+					.additionalProviders(additionalProviders())
+					.qvtCollections(true)
+					.build();
 		}
 		return oclOptions;
 	}

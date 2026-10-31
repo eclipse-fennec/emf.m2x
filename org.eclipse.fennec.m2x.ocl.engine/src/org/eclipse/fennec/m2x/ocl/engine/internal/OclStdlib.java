@@ -267,7 +267,7 @@ class OclStdlib {
 			return dispatchString(name, s, args, options, locale);
 		}
 		if (source instanceof Map<?, ?> m) {
-			return dispatchMap(name, m, args);
+			return dispatchMap(name, m, args, options);
 		}
 		if (source instanceof Collection<?> c) {
 			// Ordered collections: Sequence (plain List), OrderedSet — NOT Bag
@@ -1890,7 +1890,7 @@ class OclStdlib {
 
 	// --- Map (OCL v2.5) ---
 
-	private static Object dispatchMap(String name, Map<?, ?> source, Object[] args) {
+	private static Object dispatchMap(String name, Map<?, ?> source, Object[] args, OclEvaluationOptions options) {
 		return switch (name) {
 			case "size" -> (long) source.size();
 			case "isEmpty" -> source.isEmpty();
@@ -1904,9 +1904,9 @@ class OclStdlib {
 				Object key = dictKey(source, args[0]);
 				yield key == NOT_FOUND ? null : source.get(key);
 			}
-			// OCL v2.5 Map::keys() : Set(K). QVT v1.3 §8.3.8.8 has Dict::keys() : List(KeyT), but a
-			// Dict is OCL's Map (D26) and this library is OCL's: QVT-O writes ->asSequence() (#343)
-			case "keys" -> new OclSet<>(source.keySet());
+			// OCL v2.5 Map::keys() : Set(K); QVT v1.3 §8.3.8.8 Dict::keys() : List(KeyT) "Returns a
+			// new list of keys" — a Dict is OCL's Map (D26), so the QVT-O engine says which (#343)
+			case "keys" -> options.qvtCollections() ? new ArrayList<>(source.keySet()) : new OclSet<>(source.keySet());
 			case "values" -> new ArrayList<>(source.values());
 			case "including" -> {
 				Map<Object, Object> result = new LinkedHashMap<>(source);

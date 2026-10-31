@@ -42,7 +42,8 @@ public record OclEvaluationOptions(
 		boolean customOperationsEnabled,
 		List<OclOperationProvider> additionalProviders,
 		boolean useEMFTypes,
-		boolean specStrict) {
+		boolean specStrict,
+		boolean qvtCollections) {
 
 	/**
 	 * Controls how {@code null} values are handled during navigation.
@@ -100,6 +101,8 @@ public record OclEvaluationOptions(
 	 * @param specStrict when {@code true}, the few places where the OCL v2.4 text and the
 	 *        Eclipse OCL default disagree follow the specification text; see
 	 *        {@link #withSpecStrict(boolean)}
+	 * @param qvtCollections when {@code true}, the operations QVT-O's standard library defines
+	 *        differently from OCL's answer as QVT-O does; see {@link #withQvtCollections(boolean)}
 	 */
 	public OclEvaluationOptions {
 		Objects.requireNonNull(nullHandling, "nullHandling must not be null");
@@ -133,7 +136,7 @@ public record OclEvaluationOptions(
 		return new OclEvaluationOptions(NullHandling.STRICT, ErrorRecovery.FAIL_FAST,
 				DEFAULT_MAX_DEPTH, null,
 				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
-				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false, false);
+				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false, false, false);
 	}
 
 	/**
@@ -146,7 +149,7 @@ public record OclEvaluationOptions(
 		return new OclEvaluationOptions(NullHandling.LENIENT, ErrorRecovery.COLLECT_ERRORS,
 				DEFAULT_MAX_DEPTH, null,
 				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
-				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false, false);
+				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false, false, false);
 	}
 
 	/**
@@ -291,6 +294,23 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withSpecStrict(boolean specStrict) {
 		return toBuilder().specStrict(specStrict).build();
 	}
+
+	/**
+	 * Returns a copy with the given {@code qvtCollections} flag.
+	 *
+	 * <p>QVT-O's {@code Dict} is OCL's {@code Map} and its {@code List} OCL's {@code Sequence}
+	 * (D26), and both languages evaluate with this library. Where QVT v1.3 §8.3 defines an
+	 * operation differently from OCL, the QVT-O engine sets this flag (#343):
+	 * <ul>
+	 *   <li>{@code keys()}: {@code Set(K)} in OCL v2.5, {@code List(KeyT)} in QVT-O (§8.3.8.8).</li>
+	 * </ul>
+	 *
+	 * @param qvtCollections whether QVT-O's definitions apply
+	 * @return new options with the given flag
+	 */
+	public OclEvaluationOptions withQvtCollections(boolean qvtCollections) {
+		return toBuilder().qvtCollections(qvtCollections).build();
+	}
 	/**
 	 * Returns a builder holding these options, for a copy that changes more than one of them.
 	 *
@@ -322,6 +342,7 @@ public record OclEvaluationOptions(
 		private List<OclOperationProvider> additionalProviders;
 		private boolean useEMFTypes;
 		private boolean specStrict;
+		private boolean qvtCollections;
 
 		private Builder(OclEvaluationOptions options) {
 			this.nullHandling = options.nullHandling();
@@ -336,6 +357,7 @@ public record OclEvaluationOptions(
 			this.additionalProviders = options.additionalProviders();
 			this.useEMFTypes = options.useEMFTypes();
 			this.specStrict = options.specStrict();
+			this.qvtCollections = options.qvtCollections();
 		}
 
 		/**
@@ -449,12 +471,21 @@ public record OclEvaluationOptions(
 		}
 
 		/**
+		 * @param qvtCollections whether QVT-O's definitions of the collection operations apply
+		 * @return this builder
+		 */
+		public Builder qvtCollections(boolean qvtCollections) {
+			this.qvtCollections = qvtCollections;
+			return this;
+		}
+
+		/**
 		 * @return the options
 		 */
 		public OclEvaluationOptions build() {
 			return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 					maxCollectionSize, maxClosureIterations, maxRegexLength, maxStringLength,
-					customOperationsEnabled, additionalProviders, useEMFTypes, specStrict);
+					customOperationsEnabled, additionalProviders, useEMFTypes, specStrict, qvtCollections);
 		}
 	}
 }
