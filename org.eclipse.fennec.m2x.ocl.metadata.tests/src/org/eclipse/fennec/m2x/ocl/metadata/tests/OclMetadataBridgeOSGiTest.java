@@ -86,12 +86,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
 @WithFactoryConfiguration(factoryPid = "EObjectRegistryMetadataBridge", location = "?", name = "ocl", properties = {
 		@Property(key = "emf.eobject.registry.name", value = "ocl-compiled"),
 		@Property(key = "aspect.type.id", value = "ocl.compiled"),
-		@Property(key = "anchorResolver.target", value = "(anchor.resolver.name=ocl)"),
-		// The bridge's anchorResolver is an optional static constructor reference: activated before
-		// the OCL resolver is up, the bridge never binds it and anchors every entry on the
-		// expression instead of its class. That race failed this test now and then in CI;
-		// a minimum cardinality makes the bridge wait for the resolver
-		@Property(key = "anchorResolver.cardinality.minimum", value = "1")
+		@Property(key = "anchorResolver.target", value = "(anchor.resolver.name=ocl)")
 })
 @WithConfiguration(pid = "OclConstraintPrecompiler", location = "?", properties = {
 		@Property(key = "cache.target", value = "(cache.name=metadata)"),
@@ -196,7 +191,6 @@ class OclMetadataBridgeOSGiTest {
 		properties.put("emf.eobject.registry.name", "ocl-compiled");
 		properties.put("aspect.type.id", LATE_ASPECT_TYPE_ID);
 		properties.put("anchorResolver.target", "(anchor.resolver.name=ocl)");
-		properties.put("anchorResolver.cardinality.minimum", 1);
 		late.update(properties);
 
 		await(() -> metadata.getClassAspect(bookOf(ePackage), LATE_ASPECT_TYPE_ID).isPresent(),
