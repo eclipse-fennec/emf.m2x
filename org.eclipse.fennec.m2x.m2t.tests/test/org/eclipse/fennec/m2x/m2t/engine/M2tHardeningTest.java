@@ -104,7 +104,7 @@ class M2tHardeningTest {
 		@Test
 		@DisplayName("execute — null context throws NPE")
 		void executeNullContext() throws M2tParseException {
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(e : EClass)]\n"
 					+ "hello\n"
 					+ "[/template]\n";
@@ -264,7 +264,7 @@ class M2tHardeningTest {
 		@Test
 		@DisplayName("OCL evaluation error produces ERROR diagnostic, not exception")
 		void oclErrorProducesErrorDiagnostic() throws M2tParseException {
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[c.nonExistentProperty/]\n"
 					+ "[/template]\n";
@@ -289,7 +289,7 @@ class M2tHardeningTest {
 		@Test
 		@DisplayName("SOURCE_ID is 'm2t.engine' on all diagnostics")
 		void diagnosticsHaveSourceId() throws M2tParseException {
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[c.nonExistentProperty/]\n"
 					+ "[/template]\n";
@@ -310,7 +310,7 @@ class M2tHardeningTest {
 			M2tEngine limitedEngine = M2tEngines.create(limitConfig);
 
 			// Template with many errors — each OCL expression fails
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[c.a/][c.b/][c.c/][c.d/][c.e/]\n"
 					+ "[/template]\n";

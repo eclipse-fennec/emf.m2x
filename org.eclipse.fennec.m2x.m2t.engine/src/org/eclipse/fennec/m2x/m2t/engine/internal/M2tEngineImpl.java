@@ -407,6 +407,19 @@ public class M2tEngineImpl implements M2tEngine {
 	public M2tResult execute(Module module, M2tContext context) {
 		Objects.requireNonNull(module, "module must not be null");
 		Objects.requireNonNull(context, "context must not be null");
+		return run(module, null, context);
+	}
+
+	@Override
+	public M2tResult execute(Module module, String templateName, M2tContext context) {
+		Objects.requireNonNull(module, "module must not be null");
+		Objects.requireNonNull(templateName, "templateName must not be null");
+		Objects.requireNonNull(context, "context must not be null");
+		return run(module, templateName, context);
+	}
+
+	/** Runs a module from the named public template, or from its main one for {@code null}. */
+	private M2tResult run(Module module, String templateName, M2tContext context) {
 
 		// Linking and normalizing rewrite the module; both happen once, under one lock
 		M2tResult refused = registry.underAstLock(() -> {
@@ -442,13 +455,13 @@ public class M2tEngineImpl implements M2tEngine {
 				registry.linkSetFor(module),
 				M2tLimits.of(config));
 
-		Template main = findMainTemplate(module);
-		if (main == null) {
-			throw new IllegalStateException("Module '" + module.getName()
-					+ "' has no [template public main(...)] entry point");
-		}
-
 		List<EObject> inputElements = context.inputElements();
+		M2tEntryPoint entry = M2tEntryPoint.find(module, templateName, inputElements);
+		if (entry.template() == null) {
+			return new M2tResult(withParseWarnings(module, List.of(new BasicDiagnostic(Diagnostic.ERROR,
+					UNRESOLVED_SOURCE_ID, 0, entry.problem(), null))), Map.of(), Map.of());
+		}
+		Template main = entry.template();
 		try {
 			evaluator.execute(main, inputElements);
 		} catch (StackOverflowError stackRanOut) {
@@ -563,29 +576,6 @@ public class M2tEngineImpl implements M2tEngine {
 		registry.clear();
 	}
 
-
-	/**
-	 * Finds the main template in the module (marked with {@code isMain = true}).
-	 * Falls back to searching for a template named "main" if no explicit main exists.
-	 *
-	 * @param module the module to search
-	 * @return the main template, or {@code null} if none found
-	 */
-	private Template findMainTemplate(Module module) {
-		// First: look for explicitly marked main template
-		for (ModuleElement element : module.getOwnedModuleElement()) {
-			if (element instanceof Template t && t.isMain()) {
-				return t;
-			}
-		}
-		// Fallback: template named "main"
-		for (ModuleElement element : module.getOwnedModuleElement()) {
-			if (element instanceof Template t && "main".equals(t.getName())) {
-				return t;
-			}
-		}
-		return null;
-	}
 
 	/**
 	 * Returns the OCL engine this engine evaluates with — the one it was given, one built

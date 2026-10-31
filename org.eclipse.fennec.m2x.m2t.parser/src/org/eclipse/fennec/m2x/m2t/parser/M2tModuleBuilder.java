@@ -196,6 +196,26 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 				+ ": text outside a template is not generated: '" + abbreviate(content) + "' (MOFM2T §8.2)");
 	}
 
+	/**
+	 * The declared visibility. §8.2 requires one ({@code <visibility> ::= 'public' | 'private'});
+	 * a declaration without is taken as public and warned about (#369). {@code protected} is the
+	 * Acceleo extension the §7 prose relies on.
+	 */
+	private VisibilityKind visibility(M2tParser.VisibilityContext ctx, String kind, String name, Token at) {
+		if (ctx == null) {
+			warn(kind + " '" + name + "' has no visibility, public is assumed — missing visibility (MOFM2T §8.2)", at);
+			return VisibilityKind.PUBLIC;
+		}
+		if (ctx.KW_PRIVATE() != null) {
+			return VisibilityKind.PRIVATE;
+		}
+		return ctx.KW_PROTECTED() != null ? VisibilityKind.PROTECTED : VisibilityKind.PUBLIC;
+	}
+
+	private void warn(String message, Token at) {
+		warnings.add(new SourcePosition(unitName, at.getLine(), at.getCharPositionInLine()) + ": " + message);
+	}
+
 	private static String abbreviate(String text) {
 		String line = text.lines().findFirst().orElse("");
 		return line.length() > 40 ? line.substring(0, 40) + "…" : line;
@@ -228,6 +248,12 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 				// escaped identifier, _'http://…' — or by package name. The module header is the
 				// declaration; looking a declared name up is what the registry is for (#158).
 				EPackage pkg = resolveDeclaredMetamodel(metamodelUri);
+				if (pkg == null && packageRegistry != null) {
+					// §8.1.1, §8.1.11: the module transforms models of these packages — one that is
+					// not there is a mistake, not a module without input (#369)
+					addError("Unknown metamodel '" + metamodelUri + "': the package registry has no package of"
+							+ " that nsURI or name (MOFM2T §8.1.1)", metamodelPath.getStart());
+				}
 				if (pkg != null) {
 					module.getInput().add(pkg);
 					// What the module declares is what its expressions may name (#158)
@@ -238,7 +264,12 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 		// Extends declarations — collect names for linking
 		if (ctx.extendsDecl() != null) {
-			for (M2tParser.PathNameContext pathCtx : ctx.extendsDecl().pathName()) {
+			List<M2tParser.PathNameContext> extended = ctx.extendsDecl().pathName();
+			if (extended.size() > 1) {
+				addError("Module '" + module.getName() + "' extends " + extended.size()
+						+ " modules: only single inheritance is supported (MOFM2T §7)", extended.get(1).getStart());
+			}
+			for (M2tParser.PathNameContext pathCtx : extended) {
 				List<String> segments = M2tExpressionBuilder.pathNameSegments(pathCtx);
 				String name = String.join("::", segments);
 				pendingExtends.add(name);
@@ -298,16 +329,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		List<String> nameSegments = M2tExpressionBuilder.pathNameSegments(sig.pathName());
 		template.setName(String.join("::", nameSegments));
 
-		// Visibility
-		if (sig.visibility() != null) {
-			if (sig.visibility().KW_PRIVATE() != null) {
-				template.setVisibility(VisibilityKind.PRIVATE);
-			} else if (sig.visibility().KW_PROTECTED() != null) {
-				template.setVisibility(VisibilityKind.PROTECTED);
-			} else {
-				template.setVisibility(VisibilityKind.PUBLIC);
-			}
-		}
+		template.setVisibility(visibility(sig.visibility(), "template", template.getName(), sig.pathName().getStart()));
 
 		// Parameters
 		if (sig.argList() != null) {
@@ -379,16 +401,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		List<String> nameSegments = M2tExpressionBuilder.pathNameSegments(ctx.pathName());
 		query.setName(String.join("::", nameSegments));
 
-		// Visibility
-		if (ctx.visibility() != null) {
-			if (ctx.visibility().KW_PRIVATE() != null) {
-				query.setVisibility(VisibilityKind.PRIVATE);
-			} else if (ctx.visibility().KW_PROTECTED() != null) {
-				query.setVisibility(VisibilityKind.PROTECTED);
-			} else {
-				query.setVisibility(VisibilityKind.PUBLIC);
-			}
-		}
+		query.setVisibility(visibility(ctx.visibility(), "query", query.getName(), ctx.pathName().getStart()));
 
 		// Parameters
 		if (ctx.argList() != null) {
@@ -828,9 +841,18 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 	private Variable buildVariableDeclaration(M2tParser.VariableDeclarationContext ctx) {
 		String name = M2tExpressionBuilder.identifierText(ctx.identifier());
-		EClassifier type = exprBuilder.resolveTypeExpression(ctx.typeExpression());
 		OclExpression init = ctx.expression() != null
 				? exprBuilder.buildExpression(ctx.expression()) : null;
+		EClassifier type;
+		if (ctx.typeExpression() != null) {
+			type = exprBuilder.resolveTypeExpression(ctx.typeExpression());
+		} else if (init != null) {
+			// Without a type the variable takes the type of its value (OCL v2.4 §9.3.37)
+			type = init.getType();
+		} else {
+			addError("Variable '" + name + "' needs a type or an initial value (OCL v2.4 §9.3.37)", ctx.getStart());
+			type = null;
+		}
 		return exprBuilder.support.createVariable(name, type, init);
 	}
 

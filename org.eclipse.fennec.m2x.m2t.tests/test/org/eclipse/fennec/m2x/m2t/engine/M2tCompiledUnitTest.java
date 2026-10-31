@@ -71,7 +71,7 @@ import org.junit.jupiter.api.Test;
 class M2tCompiledUnitTest {
 
 	private static final String MODULE = """
-			[module m(Ecore)/]
+			[module m(ecore)/]
 			[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 			[template public main(c : EClass) ? (c.hasOps())]
 			[file ('out', false)]

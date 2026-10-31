@@ -89,8 +89,10 @@ class M2tCycleTest {
 
 	@Test
 	@Timeout(value = 15, unit = TimeUnit.SECONDS)
-	@DisplayName("a template that overrides itself still runs")
+	@DisplayName("a hand-built AST in which a template overrides itself still runs")
 	void selfOverridingTemplateTerminates() throws M2tParseException {
+		// Written in a template, a self-override is a link error (#365, see
+		// M2tSemanticsConformanceTest); an AST built or stored elsewhere can still carry one.
 		// overrideFamily walks up the chain and then down over every override; both directions
 		// keep a visited set, and a template pointing at itself exercises both
 		M2tEngine engine = engine();

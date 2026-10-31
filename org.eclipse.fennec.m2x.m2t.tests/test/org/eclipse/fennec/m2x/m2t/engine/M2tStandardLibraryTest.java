@@ -89,7 +89,7 @@ class M2tStandardLibraryTest {
 		// Parse the OCL expression and wrap in an inline let block
 		try {
 			@SuppressWarnings("unused")
-			OclExpression expr = engine.parse("[module m(UML)/]\n[template public main(c : EClass)]\n[file ('out.txt', false, 'UTF-8')]\n[" + oclExpr + "/]\n[/file]\n[/template]\n", "test")
+			OclExpression expr = engine.parse("[module m(ecore)/]\n[template public main(c : EClass)]\n[file ('out.txt', false, 'UTF-8')]\n[" + oclExpr + "/]\n[/file]\n[/template]\n", "test")
 					.getOwnedModuleElement().stream()
 					.filter(e -> e instanceof Template)
 					.map(e -> (Template) e)
@@ -104,7 +104,7 @@ class M2tStandardLibraryTest {
 		// Simpler approach: use the parser to build the full module
 		try {
 			Module m = engine.parse(
-					"[module m(UML)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file ('out.txt', false, 'UTF-8')]\n" +
 					"[" + oclExpr + "/]\n" +

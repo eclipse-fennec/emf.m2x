@@ -59,7 +59,7 @@ class M2tCallScopeTest {
 
 	@Test
 	void aCallersLetVariable_isNotVisibleInTheCalledTemplate() throws M2tParseException {
-		String out = run("[module m(Ecore)/]\n"
+		String out = run("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][file ('o', false)][let x : String = 'CALLER'][t(c)/][/let][/file][/template]\n"
 				+ "[template public t(c : EClass)][if (x.oclIsUndefined())]none[else][x/][/if][/template]\n");
 		assertEquals("none", out);
@@ -67,7 +67,7 @@ class M2tCallScopeTest {
 
 	@Test
 	void aCallersForIterator_isNotVisibleInTheCalledQuery() throws M2tParseException {
-		String out = run("[module m(Ecore)/]\n"
+		String out = run("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][file ('o', false)][for (s : String | Sequence{'it'})][q(c)/][/for][/file][/template]\n"
 				+ "[query public q(c : EClass) : String = if s.oclIsUndefined() then 'none' else s endif/]\n");
 		assertEquals("none", out);
@@ -75,7 +75,7 @@ class M2tCallScopeTest {
 
 	@Test
 	void theReceiverOfATemplateCall_isItsFirstArgument() throws M2tParseException {
-		String out = run("[module m(Ecore)/]\n"
+		String out = run("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][file ('o', false)][c.t()/][/file][/template]\n"
 				+ "[template public t(k : EClass)][k.name/][/template]\n");
 		assertEquals("TestClass", out);
@@ -83,7 +83,7 @@ class M2tCallScopeTest {
 
 	@Test
 	void theReceiverOfAQueryCall_isItsFirstArgument() throws M2tParseException {
-		String out = run("[module m(Ecore)/]\n"
+		String out = run("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][file ('o', false)][c.q()/][/file][/template]\n"
 				+ "[query public q(k : EClass) : String = k.name/]\n");
 		assertEquals("TestClass", out);
@@ -91,7 +91,7 @@ class M2tCallScopeTest {
 
 	@Test
 	void aCallersLocal_reachesTheCalleeAsAnArgument() throws M2tParseException {
-		String out = run("[module m(Ecore)/]\n"
+		String out = run("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][file ('o', false)][let x : String = 'L'][t(c, x)/][/let][/file][/template]\n"
 				+ "[template public t(k : EClass, y : String)][k.name/] [y/][/template]\n");
 		assertEquals("TestClass L", out);
@@ -99,13 +99,13 @@ class M2tCallScopeTest {
 
 	@Test
 	void aForVariable_shadowsAPropertyOfSelf() throws M2tParseException {
-		assertEquals("ab", run("[module m(Ecore)/]\n"
+		assertEquals("ab", run("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][file ('o', false)][for (name : String | Sequence{'a','b'})][name/][/for][/file][/template]\n"));
 	}
 
 	@Test
 	void aLetVariable_shadowsAPropertyOfSelf() throws M2tParseException {
-		assertEquals("L", run("[module m(Ecore)/]\n"
+		assertEquals("L", run("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][file ('o', false)][let name : String = 'L'][name/][/let][/file][/template]\n"));
 	}
 }

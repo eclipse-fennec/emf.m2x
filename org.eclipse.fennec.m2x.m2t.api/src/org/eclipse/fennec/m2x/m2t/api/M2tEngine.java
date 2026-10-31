@@ -147,14 +147,35 @@ public interface M2tEngine {
 	 * Executes a module with the given context.
 	 *
 	 * <p>The module's main template is located and invoked with the input
-	 * model elements. Generated text is directed to the configured
-	 * {@link M2tGenerationStrategy}.
+	 * model elements: the public template marked {@code [comment @main/]}, else the one named
+	 * {@code main}, of the module or a module it extends. Generated text is directed to the
+	 * configured {@link M2tGenerationStrategy}. A module without one, or inputs that do not fit
+	 * its parameters, are an ERROR in the result.
 	 *
 	 * @param module the parsed module
 	 * @param context the execution context with input model(s)
 	 * @return the execution result with diagnostics and generated files
 	 */
 	M2tResult execute(Module module, M2tContext context);
+
+	/**
+	 * Executes a module from a public template named by the caller.
+	 *
+	 * <p>MOFM2T §7: "A transformation (template) can be started by directly invoking a public
+	 * template with the correct parameters. There is no explicit notion of a main template." The
+	 * template is looked up in the module and the modules it extends; of same-named ones, the one
+	 * whose parameters the input elements fit. Inputs that do not fit — too few, too many, of
+	 * another type — are an ERROR in the result, and nothing is generated.
+	 * {@link #execute(Module, M2tContext)} starts from the template marked {@code @main}, or
+	 * named {@code main}, under the same rules.
+	 *
+	 * @param module the parsed module
+	 * @param templateName the name of the public template to start from
+	 * @param context the execution context with input model(s), one per parameter
+	 * @return the execution result with diagnostics and generated files
+	 * @since 1.0
+	 */
+	M2tResult execute(Module module, String templateName, M2tContext context);
 
 	/**
 	 * Generates from a prepared unit — the Execute phase proper: nothing is linked, no resolver is

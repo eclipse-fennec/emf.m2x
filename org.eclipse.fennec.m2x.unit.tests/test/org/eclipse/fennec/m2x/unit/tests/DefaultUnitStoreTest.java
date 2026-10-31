@@ -209,7 +209,7 @@ class DefaultUnitStoreTest {
 
 	@Test
 	void sourceAndCompiledUnit_ofOneName_coexistAndAreToldApartByKind() throws Exception {
-		UnitKey sourceKey = store.put("m2t", source("gen.Books", "[module Books(Ecore)/]"));
+		UnitKey sourceKey = store.put("m2t", source("gen.Books", "[module Books(ecore)/]"));
 		UnitKey compiledKey = store.put(compiledTemplate("gen.Books"));
 
 		assertEquals(List.of(sourceKey), store.versions("m2t", "gen.Books", UnitKind.SOURCE));
