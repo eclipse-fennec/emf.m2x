@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.eclipse.emf.ecore.EAnnotation;
@@ -189,7 +191,7 @@ public class AbstractExpressionBuilder {
 	 */
 	public void addTypeFinding(String message) {
 		typeFindings.add(diagnostics.at(message));
-		diagnostics.addError(message);
+		addError(message);
 	}
 
 	/**
@@ -203,24 +205,48 @@ public class AbstractExpressionBuilder {
 	}
 
 	/**
-	 * A feature a Complete OCL {@code def:} adds to a classifier (OCL v2.4 §12.5).
+	 * A feature declared in the unit being parsed: what a Complete OCL {@code def:} adds to a
+	 * classifier (OCL v2.4 §12.5), a QVT-O helper or query (§8.2.1.12).
 	 *
-	 * @param owner the context classifier of the definition
+	 * @param owner the classifier the feature belongs to; {@code null} for an operation of the
+	 *            unit itself, which an implicit call reaches from anywhere in it
 	 * @param name the feature name
 	 * @param parameterNames the parameter names of an operation, {@code null} for an attribute
 	 * @param parameterTypes the parameter types of an operation, {@code null} for an attribute
+	 * @param minArguments how many arguments a call needs at least — fewer than the parameters
+	 *            where some have a default value
 	 * @param type the declared type
 	 */
 	public record Definition(EClassifier owner, String name, List<String> parameterNames,
-			List<EClassifier> parameterTypes, EClassifier type) {
+			List<EClassifier> parameterTypes, int minArguments, EClassifier type) {
+
+		/**
+		 * A definition every parameter of which has to be passed.
+		 *
+		 * @param owner the classifier the feature belongs to
+		 * @param name the feature name
+		 * @param parameterNames the parameter names, {@code null} for an attribute
+		 * @param parameterTypes the parameter types, {@code null} for an attribute
+		 * @param type the declared type
+		 */
+		public Definition(EClassifier owner, String name, List<String> parameterNames,
+				List<EClassifier> parameterTypes, EClassifier type) {
+			this(owner, name, parameterNames, parameterTypes, parameterTypes == null ? 0 : parameterTypes.size(),
+					type);
+		}
 
 		boolean isOperation() {
 			return parameterTypes != null;
 		}
 
 		boolean appliesTo(EClassifier receiver) {
-			return receiver == owner
-					|| receiver instanceof EClass r && owner instanceof EClass o && o.isSuperTypeOf(r);
+			EClassifier o = OclTypeRules.normalize(owner);
+			EClassifier r = OclTypeRules.normalize(receiver);
+			return r == o || r instanceof EClass rc && o instanceof EClass oc && oc.isSuperTypeOf(rc);
+		}
+
+		boolean takes(int arguments) {
+			return arguments >= minArguments && arguments <= parameterTypes.size();
 		}
 	}
 
@@ -265,7 +291,48 @@ public class AbstractExpressionBuilder {
 	 * @param message the message, phrased for a template or expression author
 	 */
 	public void addError(String message) {
-		diagnostics.addError(message);
+		if (diagnosticSink != null) {
+			diagnosticSink.accept(diagnostics.at(message));
+		} else {
+			diagnostics.addError(message);
+		}
+	}
+
+	/** Where errors go instead of this builder's own list, if a host collects them itself. */
+	private Consumer<Resource.Diagnostic> diagnosticSink;
+
+	/**
+	 * Hands every error this builder finds to the host's own collection instead of keeping it —
+	 * for a host that builds its expressions itself and uses this builder for the shared OCL
+	 * nodes, as QVT-O does (#378).
+	 *
+	 * @param sink receives each error, positioned at this builder's cursor
+	 */
+	public void setDiagnosticSink(Consumer<Resource.Diagnostic> sink) {
+		this.diagnosticSink = Objects.requireNonNull(sink, "sink must not be null");
+	}
+
+	/**
+	 * Tells this builder where the host is, by line and column.
+	 *
+	 * @param line 1-based line
+	 * @param column 0-based column
+	 */
+	public void positionAt(int line, int column) {
+		diagnostics.positionAt(line, column);
+	}
+
+	/** Whether a name is a variable in scope, for a host that keeps its own variables. */
+	private Predicate<String> variableInScope;
+
+	/**
+	 * Lets a host that keeps its own variables say which names are in scope — a name in a type
+	 * position that is a variable of the host is left to evaluation (#378).
+	 *
+	 * @param inScope answers whether a name is a variable in scope
+	 */
+	public void setVariableLookup(Predicate<String> inScope) {
+		this.variableInScope = Objects.requireNonNull(inScope, "inScope must not be null");
 	}
 
 	// ==================== State Accessors ====================
@@ -639,7 +706,12 @@ public class AbstractExpressionBuilder {
 		rejectDuplicateNames("tuple part", parts.stream().map(TupleLiteralPart::getName).toList());
 		TupleLiteralExp exp = FACTORY.createTupleLiteralExp();
 		exp.getOwnedParts().addAll(parts);
-		// §8.3.7 TupleLiteralExp: a tuple type of the parts' names and types
+		exp.setType(tupleType(parts));
+		return exp;
+	}
+
+	/** §8.3.7 TupleLiteralExp: a tuple type of the parts' names and types. */
+	private TupleType tupleType(List<TupleLiteralPart> parts) {
 		TupleType type = FACTORY.createTupleType();
 		for (TupleLiteralPart part : parts) {
 			TuplePart typePart = FACTORY.createTuplePart();
@@ -649,8 +721,7 @@ public class AbstractExpressionBuilder {
 			typePart.setType(copyType(partType));
 			type.getOwnedParts().add(typePart);
 		}
-		exp.setType(type);
-		return exp;
+		return type;
 	}
 
 	public TupleLiteralPart buildTupleLiteralPart(String name, EClassifier type,
@@ -672,20 +743,25 @@ public class AbstractExpressionBuilder {
 
 	public MapLiteralExp buildMapLiteral(List<MapLiteralPart> parts) {
 		MapLiteralExp exp = FACTORY.createMapLiteralExp();
-		List<EClassifier> keyTypes = new ArrayList<>();
-		List<EClassifier> valueTypes = new ArrayList<>();
 		if (parts != null) {
 			exp.getOwnedParts().addAll(parts);
-			for (MapLiteralPart part : parts) {
-				keyTypes.add(part.getOwnedKey() != null ? part.getOwnedKey().getType() : null);
-				valueTypes.add(part.getOwnedValue() != null ? part.getOwnedValue().getType() : null);
-			}
+		}
+		exp.setType(mapType(exp.getOwnedParts()));
+		return exp;
+	}
+
+	/** A map type of the common supertypes of the keys and of the values. */
+	private MapType mapType(List<MapLiteralPart> parts) {
+		List<EClassifier> keyTypes = new ArrayList<>();
+		List<EClassifier> valueTypes = new ArrayList<>();
+		for (MapLiteralPart part : parts) {
+			keyTypes.add(part.getOwnedKey() != null ? part.getOwnedKey().getType() : null);
+			valueTypes.add(part.getOwnedValue() != null ? part.getOwnedValue().getType() : null);
 		}
 		MapType type = FACTORY.createMapType();
 		type.setKeyType(copyType(OclTypeRules.commonSuperType(keyTypes)));
 		type.setValueType(copyType(OclTypeRules.commonSuperType(valueTypes)));
-		exp.setType(type);
-		return exp;
+		return type;
 	}
 
 	public MapLiteralPart buildMapLiteralPart(OclExpression key, OclExpression value) {
@@ -1056,7 +1132,7 @@ public class AbstractExpressionBuilder {
 			typeIf(nested);
 		}
 		EClassifier condition = ifExp.getOwnedCondition() != null ? ifExp.getOwnedCondition().getType() : null;
-		if (!OclTypeRules.conformsTo(condition, LIBRARY.booleanType())) {
+		if (!isCondition(condition)) {
 			addTypeFinding("The condition of an if is a " + OclTypeRules.nameOf(condition) + ", not a Boolean");
 		}
 		EClassifier thenType = ifExp.getOwnedThen() != null ? ifExp.getOwnedThen().getType() : null;
@@ -1065,6 +1141,91 @@ public class AbstractExpressionBuilder {
 		if (type != null) {
 			ifExp.setType(copyType(type));
 		}
+	}
+
+	/**
+	 * Types an OCL node a host built itself, by the rules the {@code build…} methods of this class
+	 * apply, and reports what is known not to fit (#378). For a host such as QVT-O that constructs
+	 * the shared OCL nodes on its own; a node that already has a type keeps it.
+	 *
+	 * @param node the node, its parts already typed
+	 */
+	public void typeNode(OclExpression node) {
+		switch (node) {
+			case IntegerLiteralExp literal -> setIfUntyped(literal, LIBRARY.integer());
+			case RealLiteralExp literal -> setIfUntyped(literal, LIBRARY.real());
+			case StringLiteralExp literal -> setIfUntyped(literal, LIBRARY.string());
+			case BooleanLiteralExp literal -> setIfUntyped(literal, LIBRARY.booleanType());
+			case UnlimitedNaturalLiteralExp literal -> setIfUntyped(literal, LIBRARY.unlimitedNatural());
+			case NullLiteralExp literal -> setIfUntyped(literal, LIBRARY.oclVoid());
+			case InvalidLiteralExp literal -> setIfUntyped(literal, LIBRARY.oclInvalid());
+			case EnumLiteralExp literal -> setIfUntyped(literal,
+					literal.getReferredLiteral() != null ? literal.getReferredLiteral().getEEnum() : null);
+			case IfExp ifExp -> typeIf(ifExp);
+			case LetExp letExp -> typeLet(letExp);
+			case IterateExp iterate -> {
+				if (iterate.getOwnedResult() != null) {
+					setIfUntyped(iterate, copyType(iterate.getOwnedResult().getType()));
+				}
+			}
+			case IteratorExp iterator -> {
+				setIfUntyped(iterator, iteratorResultType(iterator.getName(), iterator.getOwnedSource(),
+						iterator.getOwnedBody()));
+				checkConditionBody(iterator.getName(), iterator.getOwnedBody());
+			}
+			case CollectionLiteralExp literal -> setIfUntyped(literal,
+					collectionType(literal.getKind(), commonPartType(literal.getOwnedParts())));
+			case TupleLiteralExp literal -> setIfUntyped(literal, tupleType(literal.getOwnedParts()));
+			case MapLiteralExp literal -> setIfUntyped(literal, mapType(literal.getOwnedParts()));
+			default -> {
+				// what this builder does not build, the host types itself
+			}
+		}
+	}
+
+	private void setIfUntyped(OclExpression node, EClassifier type) {
+		if (node.getType() == null && type != null) {
+			node.setType(type);
+		}
+	}
+
+	/**
+	 * Whether a value of this type may stand as a condition: a Boolean, and where the language
+	 * allows implicit conditions also an element or a collection (QVT-O §8.4.5(2)).
+	 */
+	private boolean isCondition(EClassifier type) {
+		if (OclTypeRules.conformsTo(type, LIBRARY.booleanType())) {
+			return true;
+		}
+		EClassifier normalized = OclTypeRules.normalize(type);
+		return implicitConditions && (normalized instanceof EClass || normalized instanceof CollectionType);
+	}
+
+	/** Whether an operation of a model class may come from a unit this one imports. */
+	private boolean openOperationScope;
+
+	/**
+	 * Says that the unit imports others, whose operations on model classes this builder does not
+	 * know: a call on a model class that matches no library signature is then left to the
+	 * evaluator instead of being an error (#378).
+	 *
+	 * @param open whether operations of imported units may be called
+	 */
+	public void setOpenOperationScope(boolean open) {
+		this.openOperationScope = open;
+	}
+
+	/** Whether an element or a collection may stand as a condition (QVT-O §8.4.5(2)). */
+	private boolean implicitConditions;
+
+	/**
+	 * Allows an element or a collection as a condition — QVT-O compares an element with
+	 * {@code null} and a collection by its size (§8.4.5(2), #378).
+	 *
+	 * @param allowed whether such conditions are allowed
+	 */
+	public void setImplicitConditions(boolean allowed) {
+		this.implicitConditions = allowed;
 	}
 
 	/**
@@ -1486,7 +1647,8 @@ public class AbstractExpressionBuilder {
 		if (resolution.type() != null) {
 			exp.setType(copyType(resolution.type()));
 		}
-		if (resolution.problem() != null) {
+		boolean mayBeImported = openOperationScope && OclTypeRules.normalize(receiver) instanceof EClass;
+		if (resolution.problem() != null && !mayBeImported) {
 			addTypeFinding(resolution.problem());
 		}
 	}
@@ -1498,16 +1660,22 @@ public class AbstractExpressionBuilder {
 	 * @return whether a definition of that name and arity applies
 	 */
 	private boolean typeDefinedOperationCall(OperationCallExp exp, EClassifier receiver) {
-		if (receiver == null) {
-			return false;
-		}
+		boolean unitLevel = exp.isIsImplicit() || exp.getOwnedSource() == null;
+		boolean named = false;
 		for (Definition definition : definitions) {
-			if (!definition.isOperation() || !definition.name().equals(exp.getName())
-					|| definition.parameterTypes().size() != exp.getOwnedArguments().size()
-					|| !definition.appliesTo(OclTypeRules.normalize(receiver))) {
+			if (!definition.isOperation() || !definition.name().equals(exp.getName())) {
 				continue;
 			}
-			for (int i = 0; i < definition.parameterTypes().size(); i++) {
+			boolean applies = definition.owner() == null ? unitLevel
+					: receiver != null && definition.appliesTo(receiver);
+			if (!applies) {
+				continue;
+			}
+			named = true;
+			if (!definition.takes(exp.getOwnedArguments().size())) {
+				continue;
+			}
+			for (int i = 0; i < exp.getOwnedArguments().size(); i++) {
 				EClassifier argument = exp.getOwnedArguments().get(i).getType();
 				EClassifier parameter = definition.parameterTypes().get(i);
 				if (!OclTypeRules.conformsTo(argument, parameter)) {
@@ -1521,7 +1689,9 @@ public class AbstractExpressionBuilder {
 			}
 			return true;
 		}
-		return false;
+		// a feature of the unit of that name, only not of this arity: whether an overload with
+		// defaults or of an imported unit takes the call is the evaluator's to find out
+		return named;
 	}
 
 	/**
@@ -1571,7 +1741,8 @@ public class AbstractExpressionBuilder {
 		}
 		Variable referred = varExp.getReferredVariable();
 		String name = referred == null ? null : referred.getName();
-		if (name != null && environment.lookup(name).isEmpty()) {
+		if (name != null && environment.lookup(name).isEmpty()
+				&& (variableInScope == null || !variableInScope.test(name))) {
 			addError("Unknown type (" + name + ")");
 		}
 	}
