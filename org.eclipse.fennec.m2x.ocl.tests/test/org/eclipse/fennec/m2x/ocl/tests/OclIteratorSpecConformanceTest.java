@@ -20,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EObject;
@@ -90,12 +91,22 @@ class OclIteratorSpecConformanceTest extends AbstractOclTest {
 		}
 
 		@Test
-		void if_withNonBooleanCondition_isInvalidWithError() throws OclParseException {
-			// §8.3.7 IfExp [1] / §10.3.2 IfExpEval [1]
+		void if_withNonBooleanCondition_isATypeError() {
+			// §8.3.7 IfExp [1]: the condition is a Boolean — known not to be one, a parse error (#378)
+			assertTypeError("if 1 then 1 else 2 endif", self, "The condition of an if is a Integer, not a Boolean");
+			assertTypeError("if 'x' then 1 else 2 endif", self, "The condition of an if is a String, not a Boolean");
+		}
+
+		@Test
+		void if_withNonBooleanCondition_atEvaluation_isInvalidWithError() throws OclParseException {
+			// §10.3.2 IfExpEval [1]: null conforms to Boolean, and a value of unknown type is only
+			// known at evaluation
 			assertInvalid("if null then 1 else 2 endif", self);
-			assertInvalid("if 1 then 1 else 2 endif", self);
-			assertInvalid("if 'x' then 1 else 2 endif", self);
-			assertHasError("if 1 then 1 else 2 endif", self, "must be Boolean");
+			assertSame(OclInvalid.INSTANCE, evalWith("if v then 1 else 2 endif", self, Map.of("v", 1L)));
+			assertSame(OclInvalid.INSTANCE, evalWith("if v then 1 else 2 endif", self, Map.of("v", "x")));
+			OclResult result = evalWithDiagnosticsWith("if v then 1 else 2 endif", self, Map.of("v", 1L));
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("must be Boolean")),
+					() -> "" + result.diagnostics());
 		}
 	}
 

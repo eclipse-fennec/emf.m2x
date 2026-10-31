@@ -21,11 +21,13 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.TupleType;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -79,11 +81,24 @@ class OclIteratorResultTypeTest extends AbstractOclTest {
 
 	@Test
 	void anIteratorOverElementsOfUnknownType_isUntyped() throws Exception {
-		// A tuple literal is untyped, so collect answers Sequence(?) — its iterator is no collection
-		OclExpression ast = engine.parse("self.employees->collect(p | Tuple{n = p.name})->select(t | t.n <> '')", companyClass);
+		// v is bound only at evaluation, so collect answers Sequence(?) — its iterator is no collection
+		OclExpression ast = engine.parse("self.employees->collect(p | v)->select(t | t <> '')", companyClass);
 		CollectionType type = assertInstanceOf(CollectionType.class, ast.getType());
 		assertNull(type.getElementType());
 		EObject company = createCompany("C", createPerson("Ann", 40, 1.0, false));
-		assertEquals(1L, ((Number) eval("self.employees->collect(p | Tuple{n = p.name})->select(t | t.n <> '')->size()", company)).longValue());
+		assertEquals(1L, ((Number) evalWith("self.employees->collect(p | v)->select(t | t <> '')->size()", company,
+				Map.of("v", "x"))).longValue());
+	}
+
+	@Test
+	void anIteratorOverTuples_isTypedWithTheTupleType() throws Exception {
+		// A tuple literal has the tuple type of its parts (§8.3.7 TupleLiteralExp, #378)
+		CollectionType type = collectionTypeOf("self.employees->collect(p | Tuple{n = p.name})->select(t | t.n <> '')");
+		TupleType tuple = assertInstanceOf(TupleType.class, type.getElementType());
+		assertEquals("n", tuple.getOwnedParts().get(0).getName());
+		assertEquals("EString", tuple.getOwnedParts().get(0).getType().getName());
+		EObject company = createCompany("C", createPerson("Ann", 40, 1.0, false));
+		assertEquals(1L, ((Number) eval("self.employees->collect(p | Tuple{n = p.name})->select(t | t.n <> '')->size()",
+				company)).longValue());
 	}
 }

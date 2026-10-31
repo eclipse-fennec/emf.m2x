@@ -94,7 +94,16 @@ class OclInvalidPropagationTest extends AbstractOclTest {
 
 	@Test
 	void invalidInLetInit() throws OclParseException {
-		assertInvalid("let x: Integer = 1 / 0 in x + 1", self);
+		// '/' is a Real (§11.5.2); div is the Integer division, and by zero just as invalid
+		assertInvalid("let x: Integer = 1.div(0) in x + 1", self);
+		assertInvalid("let x: Real = 1 / 0 in x + 1", self);
+	}
+
+	@Test
+	void anIntegerLetInitializedWithADivision_isATypeError() {
+		// 1 / 0 is a Real, which does not conform to Integer (§8.3.7 Variable [1], #378)
+		assertTypeError("let x: Integer = 1 / 0 in x + 1", self,
+				"The let variable 'x' is declared as Integer but initialized with a Real");
 	}
 
 	// --- oclIsInvalid detects invalid ---

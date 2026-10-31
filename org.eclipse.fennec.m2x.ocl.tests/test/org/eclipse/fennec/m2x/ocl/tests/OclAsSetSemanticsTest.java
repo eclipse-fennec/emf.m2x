@@ -64,7 +64,15 @@ class OclAsSetSemanticsTest extends AbstractOclTest {
 
 		@Test
 		void invalid_oclAsSet_oclIsInvalid() throws OclParseException {
-			assertEquals(true, eval("invalid.oclAsSet().oclIsInvalid()", self));
+			// The arrow applies oclIsInvalid to the set itself, which is invalid
+			assertEquals(true, eval("invalid.oclAsSet()->oclIsInvalid()", self));
+		}
+
+		@Test
+		void invalid_oclAsSet_dotOclIsInvalid_collects() throws OclParseException {
+			// oclAsSet() is a Set (§11.2.5), and a dot on a collection is an implicit collect
+			// (§7.6.2, #320): the source is invalid, so the collect is too (#378)
+			assertInvalid("invalid.oclAsSet().oclIsInvalid()", self);
 		}
 	}
 
