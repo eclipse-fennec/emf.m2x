@@ -715,9 +715,16 @@ checkonly domain uml p : Package {
 };
 ```
 
-> **Known gap (#354):** the engine currently leaves `c` in `rest`.
-
 The variable before the `:` binds the whole collection and may be omitted (`ownedClass = : Set(Class) { … }`); members and the rest must be declared variables or `_`.
+
+- **Distinct elements:** the members match distinct elements, so `{ c1, c2 ++ _ }` needs two. Each `_` member also takes an element.
+- **No rest:** `{ c1, c2 }` matches only a collection of exactly two elements.
+- **Sequence and OrderedSet:** for a `Sequence(…)` or `OrderedSet(…)` template, the members are the head of the sequence, in order.
+- **Set and OrderedSet:** for a `Set(…)` or `OrderedSet(…)` template, the property's values must be unique.
+- **Template condition:** `{ c ++ _ } { cs->size() > 1 }` matches only when the condition holds.
+- **Single-valued properties:** a collection template on a single-valued property matches the value as a one-element collection, and an unset property as an empty one.
+- **Allowed kinds (§7.11.2.4):** a set property allows only a `Set` template, and an ordered set or a sequence allows `Set`, `Sequence` or `OrderedSet`. Any other kind is a parse error.
+- **Not a root:** a collection template cannot be the root of a domain; that is a parse error.
 
 ### 7.6 Keys
 
@@ -1271,7 +1278,7 @@ The trace is **implicit and internal** — there is no public API to read trace 
 | Binding validation | §7.5 | Implemented (static analysis) — every declared variable counts as bound (#359) |
 | Key-based identity | §7.4, §7.13.4 | Fully implemented |
 | Object templates | §7.11.2 | Fully implemented |
-| Collection templates | §7.11.2 | Partly — the member stays in the rest, kind rules (#354) |
+| Collection templates | §7.11.2.3, §7.11.2.4 | Fully implemented (as domain root: parse error) |
 | Primitive domains | §7.13.4 | Fully implemented |
 | Abstract relations | §7.11.1.4 | Partly — the override replaces the base unconditionally (#356) |
 | Transformation extends | §7.11.1.1 | Fully implemented |

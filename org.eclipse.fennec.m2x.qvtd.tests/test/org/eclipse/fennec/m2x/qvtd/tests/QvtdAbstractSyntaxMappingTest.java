@@ -307,11 +307,12 @@ class QvtdAbstractSyntaxMappingTest extends AbstractQvtdEngineTest {
 	}
 
 	@Test
-	@Disabled("#354: referredCollectionType holds the element class, the collection kind is lost")
 	@DisplayName("collectionTemplateCS: referredCollectionType is the collection type of each kind")
 	void collectionTemplateType() throws QvtdParseException {
+		// Not Bag: ownedClass is an ordered set, which §7.11.2.4 lets a Set, Sequence or
+		// OrderedSet template match — a Bag template is a parse error (QvtdCollectionTemplateTest)
 		for (CollectionKind kind : List.of(CollectionKind.SET, CollectionKind.SEQUENCE,
-				CollectionKind.ORDERED_SET, CollectionKind.BAG)) {
+				CollectionKind.ORDERED_SET)) {
 			CollectionType type = assertInstanceOf(CollectionType.class,
 					collectionTemplate(kind.getLiteral()).getReferredCollectionType(), kind + ": referredCollectionType");
 			assertEquals(kind, type.getKind(), kind + ": the collection kind");

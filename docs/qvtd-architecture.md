@@ -43,9 +43,12 @@ MOF classes the spec names):
   contain. The engine resolves it at run time to the operation that the `implementedby` clause
   names (D39, #282).
 
-**Known AST gaps** (`QvtdAbstractSyntaxMappingTest`): `Rule.overrides` is never set, and the
-overriding relation is linked only by name (#356). `CollectionTemplateExp.referredCollectionType`
-holds the element class instead of a `CollectionType`, so the collection kind is lost (#354).
+**Known AST gap** (`QvtdAbstractSyntaxMappingTest`): `Rule.overrides` is never set, and the
+overriding relation is linked only by name (#356).
+
+`CollectionTemplateExp.referredCollectionType` and the parameter and result types of a query are
+the OCL `CollectionType` itself, kind and element type included (#354). The compiled unit carries
+it as a satellite.
 
 ## 3. API
 
@@ -263,7 +266,7 @@ Extracted into `QvtrQueryEvaluator` for testability.
 - A nested template on a single-valued reference matches only an object of its class or a subclass (§7.10.3.2)
 - `opposite(C::p)` for a `p` without an eOpposite: the owners are the instances of `C` in the object's model whose `p` holds it (§7.3). Enforcing adds the object to the owner's `p` (#355)
 - Variables with an initializer are bound to its value before matching — a fixed value that constrains the match (decided in #357)
-- For `CollectionTemplateExp`: match collection members with `++` rest-variable
+- For `CollectionTemplateExp` (§7.11.2.3, #354): the members match distinct elements — a variable, an object template or `_` each consumes one — and the rest is bound to the elements they leave. Without a rest, nothing may be left. For a Sequence or OrderedSet, the members are the head of the sequence, in order. For a Set or OrderedSet, the values must be unique. The template's `where` filters the bindings, and a single-valued property is a singleton collection (§7.11.2.4)
 - **Optional `[?]`** (GAP-5): if no instances match, bind root to `null` (vacuous match)
 - Returns `List<Map<String, Object>>` — all valid binding combinations
 
@@ -298,7 +301,7 @@ Extracted into `QvtrQueryEvaluator` for testability.
 | Enforce domains | §7.10.2 | Find-or-create via templates, clash detection, deletion of what no binding requires |
 | Key-based identity | §7.4, §7.13.4 | `findByKey()`: all keys of the class and its superclasses, template and opposite parts |
 | Object templates | §7.11.2 | Full property matching + binding |
-| Collection templates | §7.11.2 | Member matching with `++` rest — the member stays in the rest, collection kind lost in the AST (#354) |
+| Collection templates | §7.11.2.3, §7.11.2.4 | Disjoint members, rest, Sequence head, uniqueness, where, singleton for single-valued properties; kind rules checked by the parser |
 | Primitive domains | §7.13.4 | Variable binding only |
 | Abstract relations | §7.11.1.4 | `isAbstract` skip + `overrides` — the override replaces the base unconditionally, not only where it applies (#356) |
 | Blackbox queries | §7.11.3.6 | `QvtdBlackboxRegistry` |
@@ -336,7 +339,6 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 |-----|---------|--------|--------|
 | GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution, which deletes what no binding requires; incremental execution is an optimisation | Phase 5 |
 | #353 | In-place | No copy of the old state | — |
-| #354 | Collection templates | Member stays in the rest; kind rules; kind lost in the AST | — |
 | #356 | Overrides | Unconditional replacement; `Rule.overrides` not set | — |
 | GAP-6 | QVT-O `refined` — stub resolution | Parser + Provider-Brücke ✅ (Phase 4b). Runtime Stub-Auflösung (`OT.refined` → echte RT) + Trace-Semantik ausstehend | Phase 5 |
 
@@ -373,4 +375,4 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | `QvtdCommentTest` | §7.13.3: comments, nested paragraph comments | 4 |
 
 **Total (2026-10-31): 320 tests, 0 failures, 9 @Disabled** — each disabled test names the issue
-that will enable it (#354, #356, #360, #361).
+that will enable it (#356, #360, #361).
