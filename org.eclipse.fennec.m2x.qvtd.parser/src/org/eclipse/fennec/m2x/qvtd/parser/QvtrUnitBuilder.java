@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvtd.parser;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -113,6 +114,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private final Map<String, TypedModel> typedModelMap = new HashMap<>();
 	/** Map of relation name → Relation object for RelationCallExp resolution. */
 	private final Map<String, Relation> relationMap = new HashMap<>();
+	/** The relations with an overrides clause, and the name they override. */
+	private final Map<Relation, PendingOverride> pendingOverrides = new LinkedHashMap<>();
+
+	private record PendingOverride(String name, int line, int column) {
+	}
 	/** Where each import was written, keyed by the annotation detail that carries it (#264). */
 	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
 	/**
@@ -189,12 +195,44 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			}
 		}
 
+		resolveOverrides(transformations.values());
+
 		// Return the last transformation (typically the extending one)
 		RelationalTransformation last = null;
 		for (RelationalTransformation t : transformations.values()) {
 			last = t;
 		}
 		return last;
+	}
+
+	/**
+	 * Sets {@code Rule.overrides} (§7.13.7 relationCS): the rule of that name in the relation's
+	 * transformation, its inherited rules included. A name that names no rule is a positioned
+	 * error — before #356 the reference was set only by the evaluator, at run time, into the
+	 * caller's AST, and an unknown name was ignored.
+	 */
+	private void resolveOverrides(Collection<RelationalTransformation> transformations) {
+		for (RelationalTransformation t : transformations) {
+			for (Rule rule : t.getRule()) {
+				EAnnotation ann = rule.getEAnnotation("qvtr.overrides");
+				String name = ann != null ? ann.getDetails().get("name") : null;
+				if (name == null) {
+					continue;
+				}
+				for (Rule candidate : t.getRule()) {
+					if (candidate != rule && name.equals(candidate.getName())) {
+						rule.setOverrides(candidate);
+					}
+				}
+				PendingOverride pending = pendingOverrides.get(rule);
+				if (rule.getOverrides() == null && pending != null) {
+					positions.positionAt(pending.line(), pending.column());
+					diagnostics.add(positions.at("Relation '" + rule.getName() + "' overrides '" + name
+							+ "', which is no relation of its transformation"));
+				}
+			}
+		}
+		pendingOverrides.clear();
 	}
 
 	/**
@@ -487,15 +525,18 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			relation.setIsAbstract(true);
 		}
 
-		// Handle overrides
+		// Handle overrides: resolved once every transformation and its inherited rules are known
+		// (§7.13.7 relationCS: "currTrans.extends.rule->any(r | r.name = …)", #356)
 		if (ctx.OVERRIDES() != null && ctx.identifier().size() > 1) {
 			String overridesName = identifierText(ctx.identifier(1));
-			// Deferred: setOverrides needs the referenced relation object
-			EAnnotation ann =
-					EcoreFactory.eINSTANCE.createEAnnotation();
+			// The name travels with the relation, into the copies an extending transformation
+			// inherits too
+			EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
 			ann.setSource("qvtr.overrides");
 			ann.getDetails().put("name", overridesName);
 			relation.getEAnnotations().add(ann);
+			pendingOverrides.put(relation, new PendingOverride(overridesName,
+					ctx.identifier(1).getStart().getLine(), ctx.identifier(1).getStart().getCharPositionInLine()));
 		}
 
 		// Process variable declarations

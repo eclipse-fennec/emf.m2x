@@ -41,7 +41,6 @@ import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -149,7 +148,6 @@ class QvtdAbstractSyntaxMappingTest extends AbstractQvtdEngineTest {
 	}
 
 	@Test
-	@Disabled("#356: Rule.overrides is not set — the overriding relation is linked by name only")
 	@DisplayName("relationCS: overrides refers to the overridden relation")
 	void overrides() throws QvtdParseException {
 		RelationalTransformation t = parse("""

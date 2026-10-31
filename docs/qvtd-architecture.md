@@ -43,8 +43,8 @@ MOF classes the spec names):
   contain. The engine resolves it at run time to the operation that the `implementedby` clause
   names (D39, #282).
 
-**Known AST gap** (`QvtdAbstractSyntaxMappingTest`): `Rule.overrides` is never set, and the
-overriding relation is linked only by name (#356).
+`Rule.overrides` is set by the parser, after the rules an extending transformation inherits are
+merged. An overrides clause naming no rule of the transformation is a positioned parse error (#356).
 
 `CollectionTemplateExp.referredCollectionType` and the parameter and result types of a query are
 the OCL `CollectionType` itself, kind and element type included (#354). The compiled unit carries
@@ -148,7 +148,7 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
    when clause calls. A when call to a non-top relation depends on the top relations whose where
    clauses invoke it. Relations that depend on each other form a component, which runs until it
    adds no trace record. The result does not depend on the order of declaration (§7.2.2).
-3. For each **top relation** (skip abstract, skip overridden — unconditionally for now, #356):
+3. For each **top relation** (skip abstract — §7.11.1.4 "never matched directly"). An overridden relation runs, but a binding that an overriding relation applies to is left to it: its when clause and the patterns of its non-target domains match the binding's roots (decided in #356). A top-level overriding relation covers the binding in its own run. Any other one, and every one reached through a where call, is invoked with the roots. An abstract relation reached for a binding no override applies to is an ERROR:
    a. Evaluate the when-clause's **relation calls** → one pre-binding per matching trace (RelationCallExp → trace lookup)
    b. **Classify domains**: source vs. target (based on `isEnforceable()` + target model)
    c. **Match source domains** → list of binding maps
@@ -303,7 +303,7 @@ Extracted into `QvtrQueryEvaluator` for testability.
 | Object templates | §7.11.2 | Full property matching + binding |
 | Collection templates | §7.11.2.3, §7.11.2.4 | Disjoint members, rest, Sequence head, uniqueness, where, singleton for single-valued properties; kind rules checked by the parser |
 | Primitive domains | §7.13.4 | Variable binding only |
-| Abstract relations | §7.11.1.4 | `isAbstract` skip + `overrides` — the override replaces the base unconditionally, not only where it applies (#356) |
+| Abstract relations | §7.11.1.4 | `isAbstract` skip; `overrides` replaces the base per binding where the overriding conditions hold, also for where calls |
 | Blackbox queries | §7.11.3.6 | `QvtdBlackboxRegistry` |
 | Transformation extends | §7.11.1.1 | Rule merging with copy |
 | `implementedby` | §7.11.3.6 | `RelationImplementation` + blackbox |
@@ -339,7 +339,6 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 |-----|---------|--------|--------|
 | GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution, which deletes what no binding requires; incremental execution is an optimisation | Phase 5 |
 | #353 | In-place | No copy of the old state | — |
-| #356 | Overrides | Unconditional replacement; `Rule.overrides` not set | — |
 | GAP-6 | QVT-O `refined` — stub resolution | Parser + Provider-Brücke ✅ (Phase 4b). Runtime Stub-Auflösung (`OT.refined` → echte RT) + Trace-Semantik ausstehend | Phase 5 |
 
 ## 8. Design Decisions
@@ -375,4 +374,4 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | `QvtdCommentTest` | §7.13.3: comments, nested paragraph comments | 4 |
 
 **Total (2026-10-31): 320 tests, 0 failures, 9 @Disabled** — each disabled test names the issue
-that will enable it (#356, #360, #361).
+that will enable it (#360, #361).
