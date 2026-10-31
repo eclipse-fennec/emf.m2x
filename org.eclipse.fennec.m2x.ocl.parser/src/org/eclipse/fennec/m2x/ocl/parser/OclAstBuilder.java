@@ -90,10 +90,14 @@ class OclAstBuilder extends OclBaseVisitor<Object> {
 	 */
 	@Override
 	public Object visit(ParseTree tree) {
-		if (tree instanceof ParserRuleContext context) {
-			support.positionAt(context);
+		if (!(tree instanceof ParserRuleContext context)) {
+			return super.visit(tree);
 		}
-		return super.visit(tree);
+		support.positionAt(context);
+		Object built = super.visit(tree);
+		// where the node begins, so a type error about it is reported there (#378)
+		support.recordNode(built, context);
+		return built;
 	}
 
 	/**

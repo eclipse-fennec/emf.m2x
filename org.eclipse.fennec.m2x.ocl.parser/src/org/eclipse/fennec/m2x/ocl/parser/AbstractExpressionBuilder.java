@@ -20,6 +20,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,6 +35,7 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EParameter;
@@ -79,6 +81,7 @@ import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.fennec.m2x.ocl.parser.typing.OclLibrarySignatures;
 import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
@@ -192,6 +195,59 @@ public class AbstractExpressionBuilder {
 	public void addTypeFinding(String message) {
 		typeFindings.add(diagnostics.at(message));
 		addError(message);
+	}
+
+	/**
+	 * Records a type error at the node it is about — the condition that is no Boolean, the
+	 * argument that does not fit — rather than at the cursor, which by the time a node is typed
+	 * stands on the last of its parts. Falls back to the cursor for a node this builder was not
+	 * told the position of.
+	 *
+	 * @param message the message, phrased for an expression author
+	 * @param at the node the error is about, may be {@code null}
+	 */
+	public void addTypeFinding(String message, EObject at) {
+		int[] start = at != null ? nodeStarts.get(at) : null;
+		if (start == null) {
+			addTypeFinding(message);
+			return;
+		}
+		ParseDiagnostic diagnostic = new ParseDiagnostic(message, start[0], start[1]);
+		typeFindings.add(diagnostic);
+		if (diagnosticSink != null) {
+			diagnosticSink.accept(diagnostic);
+		} else {
+			diagnostics.addError(message, start[0], start[1]);
+		}
+	}
+
+	/** Where each node the host built begins, line and column, for placing a type error (#378). */
+	private final Map<EObject, int[]> nodeStarts = new IdentityHashMap<>();
+
+	/**
+	 * Tells this builder where a node the host just built begins — the host's {@code visit} is
+	 * the one place where the parse tree and the node are both in hand.
+	 *
+	 * @param node what the visit built; anything but an {@code EObject} is ignored
+	 * @param line 1-based line
+	 * @param column 0-based column
+	 */
+	public void recordNode(Object node, int line, int column) {
+		if (node instanceof EObject eObject) {
+			nodeStarts.putIfAbsent(eObject, new int[] { line, column });
+		}
+	}
+
+	/**
+	 * Tells this builder where a node the host just built begins.
+	 *
+	 * @param node what the visit built
+	 * @param context the parse tree it was built from
+	 */
+	public void recordNode(Object node, ParserRuleContext context) {
+		if (context != null && context.getStart() != null) {
+			recordNode(node, context.getStart().getLine(), context.getStart().getCharPositionInLine());
+		}
 	}
 
 	/**
@@ -927,7 +983,7 @@ public class AbstractExpressionBuilder {
 	private void checkConditionBody(String iterName, OclExpression body) {
 		EClassifier bodyType = body != null ? body.getType() : null;
 		if (BOOLEAN_BODY_ITERATORS.contains(iterName) && !OclTypeRules.conformsTo(bodyType, LIBRARY.booleanType())) {
-			addTypeFinding("The body of " + iterName + " is a " + OclTypeRules.nameOf(bodyType) + ", not a Boolean");
+			addTypeFinding("The body of " + iterName + " is a " + OclTypeRules.nameOf(bodyType) + ", not a Boolean", body);
 		}
 	}
 
@@ -1133,7 +1189,8 @@ public class AbstractExpressionBuilder {
 		}
 		EClassifier condition = ifExp.getOwnedCondition() != null ? ifExp.getOwnedCondition().getType() : null;
 		if (!isCondition(condition)) {
-			addTypeFinding("The condition of an if is a " + OclTypeRules.nameOf(condition) + ", not a Boolean");
+			addTypeFinding("The condition of an if is a " + OclTypeRules.nameOf(condition) + ", not a Boolean",
+					ifExp.getOwnedCondition());
 		}
 		EClassifier thenType = ifExp.getOwnedThen() != null ? ifExp.getOwnedThen().getType() : null;
 		EClassifier elseType = ifExp.getOwnedElse() != null ? ifExp.getOwnedElse().getType() : null;
@@ -1277,7 +1334,7 @@ public class AbstractExpressionBuilder {
 		String literalType = literalTypeName(init);
 		if (literalType == null && init != null && !OclTypeRules.conformsTo(init.getType(), declared)) {
 			addTypeFinding("The " + what + " '" + name + "' is declared as " + OclTypeRules.nameOf(declared)
-					+ " but initialized with a " + OclTypeRules.nameOf(init.getType()));
+					+ " but initialized with a " + OclTypeRules.nameOf(init.getType()), init);
 			return;
 		}
 		if (literalType == null || declared == null || conformsToDeclared(literalType, declared)) {
@@ -1628,7 +1685,7 @@ public class AbstractExpressionBuilder {
 				if (!OclTypeRules.conformsTo(argument, typeOf(parameter))) {
 					addTypeFinding("Argument " + (i + 1) + " of " + operation.getName() + " is a "
 							+ OclTypeRules.nameOf(argument) + ", but the parameter '" + parameter.getName() + "' is a "
-							+ OclTypeRules.nameOf(typeOf(parameter)));
+							+ OclTypeRules.nameOf(typeOf(parameter)), exp.getOwnedArguments().get(i));
 				}
 			}
 			exp.setType(typeOf(operation));
@@ -1649,7 +1706,9 @@ public class AbstractExpressionBuilder {
 		}
 		boolean mayBeImported = openOperationScope && OclTypeRules.normalize(receiver) instanceof EClass;
 		if (resolution.problem() != null && !mayBeImported) {
-			addTypeFinding(resolution.problem());
+			// at the first argument that does not fit; a wrong number of them is the call's
+			int argument = resolution.argument();
+			addTypeFinding(resolution.problem(), argument >= 0 ? exp.getOwnedArguments().get(argument) : null);
 		}
 	}
 
@@ -1688,7 +1747,7 @@ public class AbstractExpressionBuilder {
 				if (!OclTypeRules.conformsTo(argument, parameter)) {
 					addTypeFinding("Argument " + (i + 1) + " of " + definition.name() + " is a "
 							+ OclTypeRules.nameOf(argument) + ", but the parameter '" + definition.parameterNames().get(i - offset)
-							+ "' is a " + OclTypeRules.nameOf(parameter));
+							+ "' is a " + OclTypeRules.nameOf(parameter), exp.getOwnedArguments().get(i));
 				}
 			}
 			if (definition.type() != null) {

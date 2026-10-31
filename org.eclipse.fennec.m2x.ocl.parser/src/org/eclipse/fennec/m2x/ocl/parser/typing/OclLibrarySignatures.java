@@ -81,10 +81,12 @@ public final class OclLibrarySignatures {
 	 * @param signature the signature that matched, {@code null} if none did
 	 * @param problem why no signature matched although the receiver is known and has operations
 	 *            of that name, {@code null} otherwise
+	 * @param argument the index of the first argument that does not fit the closest signature,
+	 *            {@code -1} where the problem is the number of arguments or there is none
 	 */
-	public record Resolution(EClassifier type, Signature signature, String problem) {
+	public record Resolution(EClassifier type, Signature signature, String problem, int argument) {
 
-		static final Resolution UNKNOWN = new Resolution(null, null, null);
+		static final Resolution UNKNOWN = new Resolution(null, null, null, -1);
 	}
 
 	private static final OclStandardLibrary LIBRARY = OclStandardLibrary.INSTANCE;
@@ -178,7 +180,7 @@ public final class OclLibrarySignatures {
 				}
 				sameArity.add(signature);
 				if (accepts(signature, receiver, arguments)) {
-					return new Resolution(evaluate(signature.result(), receiver, arguments), signature, null);
+					return new Resolution(evaluate(signature.result(), receiver, arguments), signature, null, -1);
 				}
 			}
 		}
@@ -192,7 +194,21 @@ public final class OclLibrarySignatures {
 						+ "); expected " + sameArity.get(0).parameters().stream()
 								.map(p -> p.equals("Type") ? "a type" : OclTypeRules.nameOf(evaluate(p, receiver, arguments)))
 								.toList();
-		return new Resolution(null, null, problem);
+		return new Resolution(null, null, problem, sameArity.isEmpty() ? -1 : firstMismatch(sameArity.get(0), receiver, arguments));
+	}
+
+	/** The first argument the signature does not take, {@code -1} if it takes them all. */
+	private static int firstMismatch(Signature signature, EClassifier receiver, List<OclExpression> arguments) {
+		for (int i = 0; i < arguments.size(); i++) {
+			String parameter = signature.parameters().get(i);
+			boolean fits = parameter.equals("Type")
+					? arguments.get(i) instanceof TypeExp || arguments.get(i).getType() == null
+					: OclTypeRules.conformsTo(arguments.get(i).getType(), evaluate(parameter, receiver, arguments));
+			if (!fits) {
+				return i;
+			}
+		}
+		return -1;
 	}
 
 	/**
@@ -219,7 +235,7 @@ public final class OclLibrarySignatures {
 				common = type;
 			}
 		}
-		return common == null ? Resolution.UNKNOWN : new Resolution(common, null, null);
+		return common == null ? Resolution.UNKNOWN : new Resolution(common, null, null, -1);
 	}
 
 	private static String argumentNames(List<OclExpression> arguments) {

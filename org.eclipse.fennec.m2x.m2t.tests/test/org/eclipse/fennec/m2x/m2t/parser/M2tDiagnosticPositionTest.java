@@ -76,6 +76,22 @@ class M2tDiagnosticPositionTest {
 				OclConfiguration.builder(new OclParserSupport()).build()).build());
 	}
 
+	@Test
+	@DisplayName("a type error inside a template expression is reported at the argument that does not fit (#378)")
+	void aTypeErrorCarriesThePositionOfWhatDoesNotFit() {
+		M2tParseException failure = assertThrows(M2tParseException.class,
+				() -> engine().parse("""
+						[module doc(_'http://www.eclipse.org/emf/2002/Ecore')/]
+						[template public main(c : EClass)]
+						[c.name/]
+						[c.name.substring('a', 1)/]
+						[/template]
+						""", "doc"));
+
+		assertTrue(failure.getErrors().stream().anyMatch(d -> d.getMessage().contains("No operation String::substring(String, Integer)")
+				&& d.getLine() == 4 && d.getColumn() == 18), () -> "expected 4:18, the 'a': " + describe(failure));
+	}
+
 	private static String describe(M2tParseException failure) {
 		return failure.getErrors().stream()
 				.map(d -> d.getLine() + ":" + d.getColumn() + " " + d.getMessage())

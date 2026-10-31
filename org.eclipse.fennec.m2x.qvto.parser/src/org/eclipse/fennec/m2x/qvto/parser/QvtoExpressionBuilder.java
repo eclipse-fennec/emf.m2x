@@ -185,6 +185,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		positions.positionAt(line, column);
 		support.positionAt(line, column);
 		Object built = super.visit(tree);
+		// where the node begins, so a type error about it is reported there (#378)
+		support.recordNode(built, line, column);
 		if (built instanceof OclExpression expression) {
 			// the node's parts are built and typed; what it is itself follows from them
 			support.positionAt(line, column);
@@ -1883,6 +1885,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (built != null && ctx.getStart() != null) {
 			nodePositions.putIfAbsent(built, new SourcePosition(ctx.getStart().getLine(),
 					ctx.getStart().getCharPositionInLine()));
+			support.recordNode(built, ctx);
 			// typed here for the same reason: a declaration does not pass through visit (#378)
 			positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
 			typeImperative(built);

@@ -115,6 +115,8 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 		}
 		support.positionAt(context);
 		Object built = super.visit(tree);
+		// where the node begins, so a type error about it is reported there (#378)
+		support.recordNode(built, context);
 		if (built instanceof EObject node) {
 			nodePositions.putIfAbsent(node, new SourcePosition(context.getStart().getLine(),
 					context.getStart().getCharPositionInLine()));

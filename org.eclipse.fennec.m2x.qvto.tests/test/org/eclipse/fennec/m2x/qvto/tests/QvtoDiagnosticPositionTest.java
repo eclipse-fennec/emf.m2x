@@ -81,6 +81,34 @@ class QvtoDiagnosticPositionTest extends AbstractQvtoParserTest {
 				() -> "and not at the start of the line: " + describe(failure));
 	}
 
+	@Test
+	@DisplayName("type errors are reported where they stand: the declared variable, the assignment, the argument (#378)")
+	void typeErrorsCarryTheirPositions() {
+		QvtoParseException failure = assertThrows(QvtoParseException.class,
+				() -> parse("""
+						transformation T();
+						query twice(i : Integer) : Integer = i * 2;
+						main() {
+						    var x : String := 5;
+						    var y : String := '';
+						    y := 6;
+						    var z := twice('a');
+						    var w := 'abc'.substring('a', 2);
+						}
+						"""));
+
+		assertAt(failure, "The variable 'x' is declared as String but initialized with a Integer", 4, 8);
+		assertAt(failure, "A Integer cannot be assigned to a String", 6, 4);
+		assertAt(failure, "Argument 1 of twice is a String", 7, 19);
+		assertAt(failure, "No operation String::substring(String, Integer)", 8, 29);
+	}
+
+	private static void assertAt(QvtoParseException failure, String message, int line, int column) {
+		assertTrue(failure.getErrors().stream().anyMatch(d -> d.getMessage().contains(message)
+				&& d.getLine() == line && d.getColumn() == column),
+				() -> "expected '" + message + "' at " + line + ":" + column + ": " + describe(failure));
+	}
+
 	private static String describe(QvtoParseException failure) {
 		return failure.getErrors().stream()
 				.map(d -> d.getLine() + ":" + d.getColumn() + " " + d.getMessage())

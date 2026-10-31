@@ -530,7 +530,11 @@ arguments (`1 + 'a'`, `'abc'.substring()`), an argument of a metamodel operation
 operation that does not conform to its parameter, a declared type its initial value does not
 conform to, an `if` condition and the body of `select`/`reject`/`forAll`/`exists`/`any`/`one`
 that are known not to be Boolean, a known non-type as the argument of `oclIsKindOf`/`oclAsType`.
-`AbstractExpressionBuilder.getTypeFindings()` lists them apart from the other diagnostics. The
+`AbstractExpressionBuilder.getTypeFindings()` lists them apart from the other diagnostics. Each is
+placed at the part that does not fit — the condition, the argument, the body, the initial value —
+not at the cursor, which by the time a node is typed stands on its last part: the hosts tell the
+builder where each node they built begins (`recordNode`, from their `visit`), and a wrong number of
+arguments stays at the call. The
 evaluator keeps its run-time checks: they are what a value of unknown type meets.
 
 **Declared and inferred.** A variable keeps the type it was declared with; a `let` without one is

@@ -203,6 +203,51 @@ class OclStaticTypingTest extends AbstractOclTest {
 	}
 
 	@Nested
+	@DisplayName("a type error is reported where what does not fit stands")
+	class Positions {
+
+		private void assertAt(String expression, String message, int line, int column) {
+			OclParseException failure = assertThrows(OclParseException.class, () -> engine.parse(expression, personClass));
+			assertTrue(failure.getErrors().stream().anyMatch(d -> d.getMessage().contains(message)
+					&& d.getLine() == line && d.getColumn() == column),
+					() -> "expected '" + message + "' at " + line + ":" + column + ": "
+							+ failure.getErrors().stream().map(d -> d.getLine() + ":" + d.getColumn() + " " + d.getMessage()).toList());
+		}
+
+		@Test
+		@DisplayName("the condition, the argument, the body, the initial value — not the last part built")
+		void atTheOffendingPart() {
+			assertAt("if 1 then 2 else 3 endif", "The condition of an if is a Integer", 1, 3);
+			assertAt("self.transfer('x', 1.0)", "Argument 1 of transfer is a String", 1, 14);
+			assertAt("'abc'.substring('a', 2)", "No operation String::substring(String, Integer)", 1, 16);
+			assertAt("Set{1}->select(i | i + 1)", "The body of select is a Integer", 1, 19);
+			assertAt("let x : String = self.age in x", "The let variable 'x' is declared as String", 1, 17);
+		}
+
+		@Test
+		@DisplayName("on the line it stands on; a wrong number of arguments at the call")
+		void linesAndCalls() {
+			assertAt("let y : Integer = 1 in\n  y + 'b'", "No operation Integer::+(String)", 2, 6);
+			assertAt("'abc'.substring()", "Operation String::substring does not take 0 argument(s)", 1, 0);
+		}
+
+		@Test
+		@DisplayName("in a Complete OCL document, at the line of the constraint")
+		void inADocument() {
+			OclParseException failure = assertThrows(OclParseException.class, () -> engine.parseDocument("""
+					package company
+					context Person
+					def: twice(i : Integer) : Integer = i * 2
+					inv: self.twice('x') > 0
+					endpackage
+					"""));
+			assertTrue(failure.getErrors().stream().anyMatch(d -> d.getMessage().contains("Argument 1 of twice")
+					&& d.getLine() == 4 && d.getColumn() == 16), () -> failure.getErrors().stream()
+							.map(d -> d.getLine() + ":" + d.getColumn() + " " + d.getMessage()).toList().toString());
+		}
+	}
+
+	@Nested
 	@DisplayName("def: the parameter and result types a Complete OCL document declares (#324)")
 	class Definitions {
 
