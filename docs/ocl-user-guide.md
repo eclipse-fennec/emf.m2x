@@ -1578,9 +1578,10 @@ Set{1}->oclAsType(Set(Real))       -- the cast of the set
 
 Operations on the collection itself — including `oclAsType`, `oclIsKindOf`, `oclType` — need
 `->`. This matches Eclipse Pivot. The implicit collect is built where the parser knows the source
-is a collection (a collection literal, a typed navigation); a source whose static type the parser
-does not know, such as the result of a `select`, is not rewritten — write `->collect(…)` there
-explicitly until the type checker (GAP-3) exists.
+is a collection; since every expression is typed (§14.6), that is the case after a navigation, a
+collection literal and every operation or iterator answering a collection — `invalid.oclAsSet().oclIsInvalid()`
+collects, `invalid.oclAsSet()->oclIsInvalid()` asks the set. A source whose type is not known
+(a variable bound only at evaluation) is not rewritten; write `->collect(…)` there.
 
 **Implicit sources.** A name without a source is looked up in the implicit sources, innermost
 first, then on `self` (§7.8, §9.4.1 [10]). Implicit sources are the implicit iterators of
@@ -1606,8 +1607,8 @@ its iterator variable, which is then implicit: `Sequence{1,2,3}->iterate(acc : I
 - **Shadowing is an error** (§9.3.41 [1]): a `let`, iterator or accumulator variable may not
   have the name of a variable in scope. `let x = 1 in let x = 2 in x` is the parse error
   `Variable name already used: 'x'`. Eclipse allows it; Fennec follows the spec (#326).
-- A literal initial value must conform to the declared type: `let x : Integer = 'abc' in x` is
-  a parse error. Other initial values are checked once the type checker exists (GAP-3).
+- An initial value must conform to the declared type: `let x : Integer = 'abc' in x` and
+  `let x : Integer = 1 / 0 in x` (`/` is a `Real`) are parse errors (§14.6).
 - `Collection{1, 2}` is a parse error — `Collection` is abstract; `Collection(Integer)` as a type
   stays valid. Duplicate tuple part names (`Tuple{a = 1, a = 2}`) are a parse error.
 - An untyped `let` or accumulator is accepted, with the type inferred; under `specStrict` it is an
@@ -1616,8 +1617,9 @@ its iterator variable, which is then implicit: `Sequence{1,2,3}->iterate(acc : I
 ### 14.5 Operation Calls
 
 - Arguments are checked, not coerced (§7.4.5, #314): `1 + 'motorcycle'`, `'a' + 1`,
-  `23 * false` and `1.mod(2.5)` are `invalid` with an ERROR. A model operation called with an
-  arity none of its overloads has is a parse error.
+  `23 * false` and `1.mod(2.5)` are parse errors (§14.6). Where an argument's type is only known
+  at evaluation, the same call is `invalid` with an ERROR. A model operation called with an arity
+  none of its overloads has, or with an argument that does not conform, is a parse error.
 - An unknown property is `invalid` with the ERROR `Unknown property 'x' on Person`; it used to
   throw out of `evaluate()` (#327).
 - `5.oclAsType(Real)` is `5.0`. `5.oclIsKindOf(UnlimitedNatural)` is `false`
@@ -1639,6 +1641,39 @@ its iterator variable, which is then implicit: `Sequence{1,2,3}->iterate(acc : I
   operations (#325).
 
 ---
+
+
+### 14.6 Static Type Checking (#378)
+
+Every expression has a static type, and one whose types are known and do not fit is a parse
+error (OCL v2.4 §8.3.7) — reported with its line and column, like an unknown name:
+
+```
+1 + 'a'                                   -- No operation Integer::+(String); expected [Integer]
+'abc'.substring()                         -- Operation String::substring does not take 0 argument(s)
+if 1 then 'a' else 'b' endif              -- The condition of an if is a Integer, not a Boolean
+self.employees->select(e | e.age)         -- The body of select is a Integer, not a Boolean
+let m : Sequence(Person) = self.employees->select(e | e.isMarried) in m
+                                          -- … declared as Sequence(Person) but initialized with a OrderedSet(Person)
+self.transfer('x', 1.0)                   -- Argument 1 of transfer is a String, but the parameter 'target' is a Person
+```
+
+What conforms passes: `Integer` to `Real`, `UnlimitedNatural` to `Integer`, a subclass to its
+class, `null` to every type, any type to `OclAny`, `Set(T)` to `Collection(T)`; an Ecore data type
+is the OCL type it stands for (`EInt` is `Integer`).
+
+**Unknown types are never an error.** A variable bound only at evaluation (§4.5), a value of a
+dynamic model, a blackbox result: the parser does not know their types and checks nothing about
+them. The evaluator keeps its own checks for exactly those values — `1 + v` with `v = 'a'` is
+`invalid` with an ERROR, as before.
+
+A `def:` of a Complete OCL document declares its parameter and result types for the whole
+document: a call of a defined operation has the declared type and its arguments are checked, also
+where the call stands above the def.
+
+`OclEngine.validate(expression, contextType)` applies the same rules to an expression that did not
+come from the parser — built by hand, loaded from a stored unit — and returns one ERROR diagnostic
+per problem. An expression `parse` returned is valid.
 
 ## 15. Security Hardening
 
