@@ -185,7 +185,7 @@ public final class OclLibrarySignatures {
 			return Resolution.UNKNOWN;
 		}
 		String problem = sameArity.isEmpty()
-				? "Operation " + OclTypeRules.nameOf(receiver) + "::" + name + " takes no " + arguments.size()
+				? "Operation " + OclTypeRules.nameOf(receiver) + "::" + name + " does not take " + arguments.size()
 						+ " argument(s)"
 				: "No operation " + OclTypeRules.nameOf(receiver) + "::" + name + "(" + argumentNames(arguments)
 						+ "); expected " + sameArity.get(0).parameters().stream()
@@ -570,7 +570,7 @@ public final class OclLibrarySignatures {
 				.op("OrderedSet", "reverse", "OrderedSet(T)")
 				.op("OrderedSet", "union", "OrderedSet(Common(T, ArgElem0))", "OrderedSet(OclAny)")
 				.op("OrderedSet", "union", "Set(Common(T, ArgElem0))", "Set(OclAny)")
-				.op("OrderedSet", "intersection", "Set(T)", "Collection(OclAny)")
+				.op("OrderedSet", "intersection", "OrderedSet(T)", "Collection(OclAny)")
 				.op("OrderedSet", "-", "OrderedSet(T)", "Collection(OclAny)");
 
 		// §11.7.4 Bag
@@ -589,5 +589,23 @@ public final class OclLibrarySignatures {
 				.op("Sequence", "first", "T")
 				.op("Sequence", "last", "T")
 				.op("Sequence", "reverse", "Sequence(T)");
+
+		// Beyond §11, as the evaluator implements them (OCL 2.5 generalizes union and
+		// intersection to every collection): the kind of the result follows the source — a Set
+		// stays a Set, a Bag a Bag, a Sequence a Sequence — and a Bag intersected with a unique
+		// collection is a Set
+		b.op("Set", "union", "Set(Common(T, ArgElem0))", "Collection(OclAny)")
+				.op("Set", "intersection", "Set(T)", "Collection(OclAny)")
+				.op("Set", "-", "Set(T)", "Collection(OclAny)")
+				.op("Bag", "intersection", "Set(T)", "OrderedSet(OclAny)")
+				.op("Bag", "intersection", "Bag(T)", "Collection(OclAny)")
+				.op("Bag", "-", "Bag(T)", "Collection(OclAny)")
+				.op("Sequence", "union", "Sequence(Common(T, ArgElem0))", "Collection(OclAny)")
+				.op("Sequence", "intersection", "Sequence(T)", "Collection(OclAny)")
+				.op("Sequence", "-", "Sequence(T)", "Collection(OclAny)")
+				.op("OrderedSet", "union", "OrderedSet(Common(T, ArgElem0))", "Collection(OclAny)")
+				.op("Collection", "symmetricDifference", "Set(Common(T, ArgElem0))", "Collection(OclAny)")
+				.op("OrderedSet", "subSequence", "OrderedSet(T)", "Integer", "Integer")
+				.op("Sequence", "subOrderedSet", "Sequence(T)", "Integer", "Integer");
 	}
 }

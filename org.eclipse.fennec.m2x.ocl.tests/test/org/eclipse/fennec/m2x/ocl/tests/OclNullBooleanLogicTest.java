@@ -16,9 +16,15 @@ package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -199,10 +205,19 @@ class OclNullBooleanLogicTest extends AbstractOclTest {
 		}
 
 		@Test
-		void nonBooleanOperand_isInvalidWithError() throws OclParseException {
-			assertInvalid("true and 'x'", self);
+		void nonBooleanOperand_isATypeError() {
+			// §11.5.4: and takes a Boolean — known not to be one, a parse error (#378)
+			assertTypeError("true and 'x'", self, "No operation Boolean::and(String)");
+		}
+
+		@Test
+		void nonBooleanOperand_atEvaluation_isInvalidWithError() throws OclParseException {
+			// null has no Boolean operations to check against, and v is typed only at evaluation
 			assertInvalid("null or 1", self);
-			assertHasError("true and 'x'", self, "must be Boolean");
+			assertSame(OclInvalid.INSTANCE, evalWith("true and v", self, Map.of("v", "x")));
+			OclResult result = evalWithDiagnosticsWith("true and v", self, Map.of("v", "x"));
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("must be Boolean")),
+					() -> "" + result.diagnostics());
 		}
 	}
 }

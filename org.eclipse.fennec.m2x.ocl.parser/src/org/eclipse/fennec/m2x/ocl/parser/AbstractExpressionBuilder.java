@@ -134,8 +134,8 @@ public class AbstractExpressionBuilder {
 	private OclLibrarySignatures signatures = OclLibrarySignatures.OCL;
 
 	/**
-	 * What the type checker found wrong, kept apart from the diagnostics while its findings are
-	 * being measured (#378): an expression whose types are known and do not fit.
+	 * What the type checker found wrong (#378): an expression whose types are known and do not
+	 * fit. Each is a parse error as well; kept here too, so a caller can tell them apart.
 	 */
 	private final List<Resource.Diagnostic> typeFindings = new ArrayList<>();
 
@@ -182,12 +182,13 @@ public class AbstractExpressionBuilder {
 	}
 
 	/**
-	 * Records a type finding at the current position.
+	 * Records a type error at the current position: a parse error, and a type finding.
 	 *
 	 * @param message the message, phrased for an expression author
 	 */
 	public void addTypeFinding(String message) {
 		typeFindings.add(diagnostics.at(message));
+		diagnostics.addError(message);
 	}
 
 	/**
