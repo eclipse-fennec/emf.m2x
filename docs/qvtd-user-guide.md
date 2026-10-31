@@ -324,7 +324,36 @@ transformation importer(source : bookshelf, target : bookshelf) {
 }
 ```
 
-The imported unit's relations become available to the importing transformation, the way `extends` works. What the importing transformation declares itself wins, so an import cannot quietly replace a relation.
+An import makes the imported unit's names visible (§7.1.1, #360). Its relations do not run because of the import; they take part only through what the importing transformation asks for:
+
+- **`extends`** names an imported transformation: its relations, keys and queries are inherited, as with a base in the same unit (§7.9).
+- **A call** — qualified `shared.CopyTitle(b1, b2)` or unqualified `CopyTitle(b1, b2)` — runs that relation when it is called. It is copied into the importer as a non-top relation, so a `top relation` of the imported unit is not also run as a top relation of the importer.
+
+```qvtr
+import shared.Library;
+
+transformation importer(source : bookshelf, target : bookshelf) {
+    top relation Copy {
+        checkonly domain source b1 : Book {};
+        enforce domain target b2 : Book {};
+        where { shared.CopyTitle(b1, b2); }
+    }
+}
+```
+
+The parser cannot know the imported names, so with an import present it leaves an unknown call, an unknown `extends` base and an `overrides` of an inherited relation open for the link phase. Whatever is still open after linking is an error: `Unknown relation or query 'shared.Nope': neither this transformation nor an imported one declares it`.
+
+**Unquoted name or quoted URI.** An unquoted qualified name (`import shared.Library;`) names a compilation unit (§7.13.1), and the resolvers are asked for it. A quoted URI (§7.13.4) is a metamodel when the package registry knows it:
+
+```qvtr
+import UML : 'http://www.omg.org/spec/UML/20131001/UML.xmi';   -- alias, usable in model declarations
+import 'http://example.org/outer'::inner;                    -- a subpackage, under its own name
+import 'http://example.org/outer'::*;                        -- all names below the URI
+
+transformation T(uml : UML, other : inner) { ... }
+```
+
+An alias and a wildcard cannot be used together (§7.1.1); a subpackage the metamodel lacks is a positioned error. A quoted URI the registry does not know names a unit document, and the resolvers are asked for the URI as written. Loading metamodel *documents* (`.ecore`, `.emof`) from an import is not supported; register the package instead (§5.4).
 
 Where the unit comes from is the resolvers' business. Configure them with `QvtdConfiguration.Builder.addUnitResolver(...)`, or let the engine find them:
 
@@ -434,6 +463,15 @@ RelationalTransformation trafo = engine.parse(
 );
 ```
 
+A unit may declare several transformations (§7.13.7). `parse(source, unitName)` returns the one no other transformation of the unit extends — a base and its extension yield the extension. Where that leaves more than one, it throws rather than pick one; name it, or take them all (#360):
+
+```java
+RelationalTransformation u = engine.parse(source, "unit", "U");
+List<RelationalTransformation> all = engine.parseAll(source, "unit");
+```
+
+A transformation name is a path name (`transformation a::b::T(...)`, `extends a::Base`); the name is its last segment.
+
 ### 5.2 From URI
 
 ```java
@@ -525,9 +563,9 @@ PreparedContext prepared = UnitPreparer.withDefaults(store, engine.unitBinder())
 QvtdExecutionResult result = engine.execute(prepared, "T", QvtdExecutionContext.enforce("target", extents));
 ```
 
-QVT-R binds an `import` by merging the imported relations (§7.11.1.1), so under
-`DependencyMode.EMBED` that merge happens at compile time and the unit runs on an engine that knows
-no resolver at all. `QvtdStoreUnitResolver` resolves imports from a store.
+QVT-R binds an `import` by copying what the importer takes from it — an `extends` base, the called
+relations (§3.4.2) — so under `DependencyMode.EMBED` that happens at compile time and the unit runs
+on an engine that knows no resolver at all. `QvtdStoreUnitResolver` resolves imports from a store.
 
 The mechanism — the three dependency modes, the store, prepare, validation on load, fingerprints —
 is described once for all languages in the [Compiled Units Guide](compiled-units-guide.md).
@@ -708,6 +746,7 @@ Every variable a relation uses is declared — by a variable declaration, a doma
 
 - **When-clause** `RelationCallExp`: checks if a trace record exists for the called relation. The arguments are **bound from the trace**.
 - **Where-clause** `RelationCallExp`: invokes the called relation with the given arguments as pre-bindings.
+- **Template as predicate** (§7.13.5, #361): `when { c : Class { owningPackage = p }; }` holds when some object of the run's models matches the template under the current bindings. A bound root variable is the only candidate; what the template binds besides stays inside the predicate. In a where clause a template without a match makes the relation not hold, an ERROR — it is checked, nothing is created for it. Only object templates; a collection template as predicate is a parse error. Eclipse does not support this form.
 
 ### 7.4 Object Templates
 
@@ -817,6 +856,8 @@ transformation Extended(src : SRC, tgt : TGT) extends Base {
     top relation R2 { ... }
 }
 ```
+
+The base may also come from an imported unit (§3.4.2).
 
 ### 7.10 Primitive Domains
 
@@ -1224,6 +1265,10 @@ Parse errors include:
 - **Binding violations** — §7.5 / §7.13.5 variable problems (detected post-parse, §8)
 
 Unresolvable imports are not parse errors: they surface at `compile()` or `execute()` (§3.4.2).
+
+A syntax error that expects a name says `identifier`, not the list of every word that may stand as one.
+
+**Reserved words** (§7.13.2): `checkonly`, `domain`, `enforce`, `extends`, `implementedby`, `import`, `key`, `overrides`, `primitive`, `query`, `relation`, `top`, `transformation`, `when`, `where` cannot be names; `_'key'` escapes one. `abstract`, `opposite` and `default_values` are not on the list and can be names. The deprecated escape `_key` still means `key`; as the parse has no channel for warnings, a run of the transformation reports a WARNING at its place: `T:4:42: '_key' is a deprecated escape of 'key'; write _'key' (§7.13.2)`.
 
 ### 11.2 Execution Diagnostics
 

@@ -29,6 +29,12 @@ public interface QvtRVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitImportDecl(QvtRParser.ImportDeclContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtRParser#importTarget}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitImportTarget(QvtRParser.ImportTargetContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtRParser#qualifiedName}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -161,6 +167,12 @@ public interface QvtRVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitWhereClause(QvtRParser.WhereClauseContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link QvtRParser#predicate}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitPredicate(QvtRParser.PredicateContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link QvtRParser#queryDef}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -172,6 +184,24 @@ public interface QvtRVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitParamDecl(QvtRParser.ParamDeclContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtRParser#identifier}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitIdentifier(QvtRParser.IdentifierContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtRParser#qvtrDocumentKeyword}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitQvtrDocumentKeyword(QvtRParser.QvtrDocumentKeywordContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtRParser#softKeyword}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitSoftKeyword(QvtRParser.SoftKeywordContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtRParser#expressionEntry}.
 	 * @param ctx the parse tree
@@ -691,12 +721,6 @@ public interface QvtRVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitRestrictedWord(QvtRParser.RestrictedWordContext ctx);
-	/**
-	 * Visit a parse tree produced by {@link QvtRParser#identifier}.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	T visitIdentifier(QvtRParser.IdentifierContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtRParser#documentKeyword}.
 	 * @param ctx the parse tree

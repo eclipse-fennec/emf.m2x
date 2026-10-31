@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvtd.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
@@ -597,7 +598,22 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 			return AbstractExpressionBuilder.extractEscapedIdentifier(
 					ctx.ESCAPED_IDENTIFIER().getText());
 		}
-		return ctx.getText();
+		return unescapeDeprecated(ctx.getText());
+	}
+
+	/**
+	 * The reserved words of QVT-R (§7.13.2). "A simple underscore prefix may also be used but is
+	 * now deprecated": {@code _key} is the name {@code key} (#361).
+	 */
+	static final Set<String> RESERVED_WORDS = Set.of("checkonly", "domain", "enforce", "extends",
+			"implementedby", "import", "key", "overrides", "primitive", "query", "relation", "top",
+			"transformation", "when", "where");
+
+	/** The name a deprecated {@code _<reserved word>} stands for; any other text unchanged. */
+	static String unescapeDeprecated(String text) {
+		return text.length() > 1 && text.charAt(0) == '_' && RESERVED_WORDS.contains(text.substring(1))
+				? text.substring(1)
+				: text;
 	}
 
 	static List<String> pathNameSegments(QvtRParser.PathNameContext ctx) {

@@ -52,8 +52,9 @@ import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 /**
  * Compile for QVT-R: parse → resolve → package (§4 of the compiled-unit concept, #139).
  *
- * <p>QVT-R binds an import by merging the imported relations into the importing transformation
- * (§7.11.1.1) — there is no reference left to an imported unit afterwards. That shapes the
+ * <p>QVT-R binds an import by copying what the importing transformation takes from it — the
+ * base of its {@code extends} (§7.11.1.1) and the relations it calls (#360) — into the importing
+ * transformation; there is no reference left to an imported unit afterwards. That shapes the
  * modes:
  *
  * <ul>
@@ -134,6 +135,13 @@ final class QvtdUnitCompiler {
 		} finally {
 			// popped on failure too: the siblings of a failed dependency are still tried
 			path.pop();
+		}
+		if (!failures.hasErrors() && importedNames(transformation).isEmpty()) {
+			// every import embedded: what the parser left open for them must be resolved now
+			for (QvtdLinker.Unresolved missing : QvtdLinker.unresolved(transformation)) {
+				failures.add(missing.message(),
+						missing.node() == null ? null : parserSupport.positionOf(missing.node()), null);
+			}
 		}
 		if (failures.hasErrors()) {
 			throw new QvtdParseException(failures.message(), failures.cause(), failures.getDiagnostics());

@@ -174,6 +174,34 @@ public class QvtrPatternMatcher {
 	}
 
 	/**
+	 * Whether a template that stands as a when or where predicate holds: some object of any
+	 * model of the run matches it under the given bindings (§7.13.5, #361). Its root variable,
+	 * if bound, is the only candidate; what the template binds besides stays inside the
+	 * predicate.
+	 *
+	 * @param template the template
+	 * @param bindings the relation's bindings, not changed
+	 * @return {@code true} when a match exists
+	 */
+	public boolean templateHolds(ObjectTemplateExp template, Map<String, Object> bindings) {
+		EClass type = template.getReferredClass();
+		if (type == null) {
+			return false;
+		}
+		Variable root = template.getBindsTo();
+		if (root != null && bindings.containsKey(root.getName())) {
+			return bindings.get(root.getName()) instanceof EObject bound && type.isInstance(bound)
+					&& !matchObjectTemplateAll(template, bound, new HashMap<>(bindings)).isEmpty();
+		}
+		for (EObject candidate : extentManager.allInstances(type)) {
+			if (!matchObjectTemplateAll(template, candidate, new HashMap<>(bindings)).isEmpty()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Matches an ObjectTemplateExp against a concrete EObject, populating the
 	 * binding map with variable bindings from PropertyTemplateItems.
 	 *
