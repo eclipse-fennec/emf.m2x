@@ -406,11 +406,11 @@ class QvtoE2eMultiFileCompositionTest {
 	void parallelTransform_multipleWithWait() throws Exception {
 		String mainSource = """
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
-				transformation Main(inout m : ECORE)
+				transformation Main(inout a : ECORE, inout b : ECORE)
 				    access Nested, Appender {
 				    main() {
-				        var t1 := new Nested(m);
-				        var t2 := new Appender(m);
+				        var t1 := new Nested(a);
+				        var t2 := new Appender(b);
 				        var s1 := t1.parallelTransform();
 				        var s2 := t2.parallelTransform();
 				        wait(Set{s1, s2});
@@ -421,15 +421,20 @@ class QvtoE2eMultiFileCompositionTest {
 				}
 				""";
 
-		BasicQvtoModelExtent extent = new BasicQvtoModelExtent();
-		extent.add(createPackage("ParPkg"));
+		// Two models, as in the Req2Psm example of §8.1.21: a model passed to a transformation
+		// running in parallel may not be modified until it ends (§8.1.3.3, #385) — sharing one
+		// raced, and only the log was checked, not the names
+		EObject first = createPackage("ParPkg1");
+		EObject second = createPackage("ParPkg2");
 
 		OperationalTransformation t = engine.parse(mainSource, "Main");
-		QvtoExecutionResult result = engine.execute(t,
-				QvtoExecutionContext.of(extent));
+		QvtoExecutionResult result = engine.execute(t, QvtoExecutionContext.of(
+				new BasicQvtoModelExtent(first), new BasicQvtoModelExtent(second)));
 
 		assertSuccess(result);
 		assertLogged(result, "both-parallel-done");
+		assertEquals("ParPkg1-nested", first.eGet(EcorePackage.Literals.ENAMED_ELEMENT__NAME));
+		assertEquals("ParPkg2-appended", second.eGet(EcorePackage.Literals.ENAMED_ELEMENT__NAME));
 	}
 
 	// ==================== Configurable executor ====================

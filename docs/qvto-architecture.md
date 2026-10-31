@@ -1044,7 +1044,7 @@ t.transform();
 | `access` declaration | Declares a required transformation without importing its body |
 | `new T(args)` | Instantiates a transformation with bound extents |
 | `transform()` | Executes a transformation synchronously |
-| `parallelTransform()` | Executes asynchronously (future) |
+| `parallelTransform()` | Executes asynchronously (future); the models it gets are lent to it until it ends — a second parallel use that writes is refused, the caller may not modify them (§8.1.3.3, `QvtoExtentManager.lend`) |
 | `wait()` | Waits for async transformation completion |
 
 ### 9.3 Status Query
