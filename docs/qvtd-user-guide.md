@@ -187,6 +187,7 @@ QvtdEngine engine = QvtdEngines.create(config);
 | `maxBindings(int)` | 10,000 | Maximum bindings while matching a pattern |
 | `timeoutMs(long)` | 30,000 | Execution timeout in milliseconds; 0 means none (`qvtd.timeout` under OSGi) |
 | `maxTraceRecords(int)` | 1,000,000 | Maximum trace records one run may hold, across all relations; reaching it is an error |
+| `deleteUnmatched(boolean)` | `true` | Whether an enforce run deletes the target objects that no valid binding requires (§7.10.2) |
 
 A registry or resolver alone does nothing: blackboxes and unit resolvers are off until `blackboxEnabled(true)` or `unitResolverEnabled(true)` switches them on. Exceeding one of the limits ends the run with a `QvtdExecutionException` (§11.3).
 
@@ -293,6 +294,7 @@ All properties use the `qvtd.` prefix. OCL limits are **not** repeated here; the
 | `qvtd.maxBindings` | int | 10,000 | Variable bindings one relation may produce |
 | `qvtd.timeout` | long | 30,000 | Transformation timeout in ms (0 = no timeout) |
 | `qvtd.maxTraceRecords` | int | 1,000,000 | Trace records one run may hold, across all relations; reaching it is an error (`Maximum trace records exceeded: <limit>`) |
+| `qvtd.deleteUnmatched` | boolean | true | Whether an enforce run deletes the target objects that no valid binding requires (§7.10.2) |
 
 Blackboxes and unit resolvers are **off by default**: both let a transformation reach code and files outside itself, so switching them on is a decision.
 
@@ -540,6 +542,10 @@ The engine iterates all **top-level relations**:
 2. Matches the source domain patterns against the source extents
 3. For each match: checks the remaining when-predicates, enforces the target domain (find-or-create), records a trace entry, then evaluates the where-clause
 
+Enforcing makes the target model hold the relations: it creates, modifies and **deletes** (§7.1.2). After all relations ran, a target object that matches an enforced target pattern but that no source binding requires is deleted — for example, a `Schema Z` without a `Package Z` (§7.2.3), or a stale `Table` in a schema that still holds. Running the transformation again after a change in the source therefore gives what a fresh run gives (§7.6). Objects outside the target model are never deleted, and neither check-only runs nor runs towards a `checkonly` domain delete anything. `QvtdConfiguration.Builder.deleteUnmatched(false)` keeps everything the target model held, e.g. objects a user added by hand.
+
+Two relations that give the same single-valued property of the same object different values in one run clash (§7.10.2). This is an ERROR, and the first value stays. Values the object had before the run are modified, not a clash. A where predicate that reads only source variables and is false is an ERROR, and nothing is created for that binding.
+
 ### 6.2 Check-Only Mode
 
 Check-only mode verifies whether all relations hold without modifying any model:
@@ -718,7 +724,13 @@ key Schema { name };
 key Table { schema, name };
 ```
 
-When enforcing a target domain, the engine first tries to find an existing object matching the key properties. If no match is found, a new object is created.
+When enforcing a target domain, the engine first tries to find an existing object matching the key properties. If no match is found, a new object is created. Without a key, nothing identifies an existing object, and a new one is created; the old one is deleted if no binding requires it.
+
+- **Several keys:** a class may have several keys (§7.4). An object is found when one of them matches completely.
+- **Superclass keys:** a key of a superclass applies to its subclasses. The keys of the most specific class take precedence.
+- **Object values:** a key part whose value is an object template (`schema = s : Schema {}`) takes the object that template binds or enforces.
+- **Opposite parts:** `key Attribute { name, opposite(Class::ownedAttribute) }` identifies an attribute by its name and the class that holds it.
+- **Errors:** a key of an unknown class or property is a parse error.
 
 ### 7.7 Queries
 
@@ -1249,9 +1261,9 @@ The trace is **implicit and internal** — there is no public API to read trace 
 | Non-top relations | §7.10.2 | Fully implemented |
 | When/where clauses | §7.2.1 | Fully implemented |
 | Checkonly domains | §7.9, §7.10.1, §7.2.3 | Fully implemented |
-| Enforce domains | §7.10.2 | Partly — no deletion (#352), no clash detection (#351) |
+| Enforce domains | §7.10.2 | Fully implemented — create, modify, delete; clash detection |
 | Binding validation | §7.5 | Implemented (static analysis) — every declared variable counts as bound (#359) |
-| Key-based identity | §7.4, §7.13.4 | Partly — template and opposite key parts, superclass keys (#350) |
+| Key-based identity | §7.4, §7.13.4 | Fully implemented |
 | Object templates | §7.11.2 | Fully implemented |
 | Collection templates | §7.11.2 | Partly — the member stays in the rest, kind rules (#354) |
 | Primitive domains | §7.13.4 | Fully implemented |
@@ -1264,4 +1276,4 @@ The trace is **implicit and internal** — there is no public API to read trace 
 | Opposite properties | §7.11.2 | Fully implemented |
 | Standard Library | §7.12 | Fully implemented (= OCL stdlib) |
 | Multi-file import | §7.13.1 | Implemented — `import` resolves through the configured unit resolvers (§3.4.2); it also merges the imported unit's relations, which the spec does not (#360) |
-| Change propagation | §7.6 | Deferred (GAP-13 → Phase 5) |
+| Change propagation | §7.6 | Re-execution propagates changes, deletion included; incremental execution deferred (GAP-13 → Phase 5) |

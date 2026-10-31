@@ -127,7 +127,8 @@ public final class QvtdConfigurationHelper {
 				.maxRelationDepth(config.maxRelationDepth())
 				.maxBindings(config.maxBindings())
 				.timeoutMs(config.timeout())
-				.maxTraceRecords(config.maxTraceRecords());
+				.maxTraceRecords(config.maxTraceRecords())
+				.deleteUnmatched(config.deleteUnmatched());
 		if (resourceSet != null) {
 			builder.resourceSet(resourceSet);
 		}

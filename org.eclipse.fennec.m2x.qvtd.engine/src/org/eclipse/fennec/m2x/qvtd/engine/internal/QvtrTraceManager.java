@@ -212,6 +212,17 @@ public class QvtrTraceManager {
 	/**
 	 * Clears all trace records.
 	 */
+	/**
+	 * Every record of this run, in the order they were recorded.
+	 *
+	 * @return the records
+	 */
+	public List<TraceRecord> records() {
+		List<TraceRecord> all = new ArrayList<>();
+		tracesByRelation.values().forEach(all::addAll);
+		return all;
+	}
+
 	public void clear() {
 		tracesByRelation.clear();
 		known.clear();

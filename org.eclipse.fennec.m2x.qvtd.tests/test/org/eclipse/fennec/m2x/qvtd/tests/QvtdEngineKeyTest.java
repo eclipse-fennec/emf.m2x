@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EClass;
@@ -190,8 +191,10 @@ class QvtdEngineKeyTest extends AbstractQvtdEngineTest {
 					Map.of("uml", umlExtent, "rdbms", rdbmsExtent));
 
 			assertTrue(result.isSuccess(), "" + result.diagnostics());
-			assertEquals(2, rdbmsExtent.getContents().size(),
-					"New Schema 'HR' should be created alongside existing 'Finance'");
+			// No key value matches, so HR is created. Finance has no Package: "if we execute in
+			// the direction of rdbms and there is not a corresponding package with the same name
+			// in uml, then that schema will be deleted from the rdbms model" (§7.2.3, #352)
+			assertEquals(List.of("HR"), rdbmsExtent.getContents().stream().map(o -> getName(o)).toList());
 		}
 
 		@Test

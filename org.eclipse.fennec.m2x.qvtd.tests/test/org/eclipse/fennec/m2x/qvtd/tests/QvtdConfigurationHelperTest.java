@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -64,6 +65,7 @@ class QvtdConfigurationHelperTest {
 		assertEquals(built.maxBindings(), mapped.maxBindings());
 		assertEquals(built.timeoutMs(), mapped.timeoutMs());
 		assertEquals(built.maxTraceRecords(), mapped.maxTraceRecords());
+		assertEquals(built.deleteUnmatched(), mapped.deleteUnmatched());
 	}
 
 	@Test
@@ -79,7 +81,8 @@ class QvtdConfigurationHelperTest {
 				Map.entry("maxRelationDepth", 33),
 				Map.entry("maxBindings", 44),
 				Map.entry("timeout", 55L),
-				Map.entry("maxTraceRecords", 66)
+				Map.entry("maxTraceRecords", 66),
+				Map.entry("deleteUnmatched", false)
 )), OCL);
 
 		assertTrue(mapped.blackboxEnabled());
@@ -92,6 +95,7 @@ class QvtdConfigurationHelperTest {
 		assertEquals(44, mapped.maxBindings());
 		assertEquals(55L, mapped.timeoutMs());
 		assertEquals(66, mapped.maxTraceRecords());
+		assertFalse(mapped.deleteUnmatched());
 	}
 
 	@Test

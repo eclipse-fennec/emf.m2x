@@ -24,11 +24,18 @@ import java.util.Map;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -258,15 +265,36 @@ class QvtdCheckOnlyTest extends AbstractQvtdEngineTest {
 	@DisplayName("an enforce run is consistent by default; the post-check finds what does not hold")
 	void enforce_postCheck_findsWhatDoesNotHold() throws QvtdParseException {
 		// By default an enforce run checks only the target model's checked domains (decided in
-		// #348). The extra Schema X has no Package — only the post-check in every direction sees it.
+		// #348). The extra Schema X has no Package: kept with deleteUnmatched(false), only the
+		// post-check in every direction sees it.
+		QvtdEngine keeping = QvtdEngines.create(QvtdConfiguration.builder(
+				OclConfiguration.builder(new OclParserSupport()).build())
+				.packageRegistry(engineRegistry()).deleteUnmatched(false).build());
 		QvtdModelExtent uml = uml("A");
 		QvtdModelExtent rdbms = rdbms("X");
-		QvtdExecutionResult plain = engine.execute(parse(CHECK_UML_ENFORCE_RDBMS),
+		QvtdExecutionResult plain = keeping.execute(keeping.parse(CHECK_UML_ENFORCE_RDBMS, "T"),
 				QvtdExecutionContext.enforce("rdbms", Map.of("uml", uml, "rdbms", rdbms)));
 		assertTrue(plain.isConsistent(), "" + plain.diagnostics());
 
-		QvtdExecutionResult checked = engine.execute(parse(CHECK_UML_ENFORCE_RDBMS),
+		QvtdExecutionResult checked = keeping.execute(keeping.parse(CHECK_UML_ENFORCE_RDBMS, "T"),
 				QvtdExecutionContext.enforce("rdbms", Map.of("uml", uml, "rdbms", rdbms)).withPostCheck());
 		assertInconsistent(checked, "direction 'uml': no match for s = Schema 'X'");
+	}
+
+	@Test
+	@DisplayName("by default the enforce run deletes the Schema without a Package, so the post-check finds nothing")
+	void enforce_postCheck_afterDeletion_consistent() throws QvtdParseException {
+		QvtdModelExtent rdbms = rdbms("X");
+		QvtdExecutionResult result = engine.execute(parse(CHECK_UML_ENFORCE_RDBMS),
+				QvtdExecutionContext.enforce("rdbms", Map.of("uml", uml("A"), "rdbms", rdbms)).withPostCheck());
+		assertConsistent(result);
+		assertEquals(List.of("A"), rdbms.getContents().stream().map(o -> getName(o)).toList());
+	}
+
+	private static EPackage.Registry engineRegistry() {
+		EPackage.Registry registry = new EPackageRegistryImpl();
+		registry.put(umlPackage.getNsURI(), umlPackage);
+		registry.put(rdbmsPackage.getNsURI(), rdbmsPackage);
+		return registry;
 	}
 }

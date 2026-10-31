@@ -201,21 +201,37 @@ enforcing is done.
 
 Extracted into `QvtrEnforcer` for testability and separation of concerns.
 
-1. Try **match** target domain against existing elements
+1. Try **match** target domain against existing elements: the first match that also satisfies the where predicates it binds the variables of (§7.10.2, #351)
 2. Apply **default value assignments** (§7.11.3.7) for unbound variables
 3. Try **`implementedby`** (§7.11.3.6) via `QvtrBlackboxBridge` — only when the target does not match yet: invoke the named operation through a `RelationImplementationProvider` or the blackbox registry, then re-match; still no match is an error (#282)
 4. If no match → **create** via `ObjectTemplateExp`:
    a. Check already-bound variable (e.g. from when-clause or shared variable)
-   b. Look up by **Key** (`key T { prop1, prop2 }`) — identity-based find-or-create (§7.4)
-   c. Look up by **bound variables** (`findByBoundVariables()`). This is a heuristic with no basis
-      in the spec, and it is to be removed (#350): object identity comes only from keys (§7.4),
-      and without a key a new object is created.
-   d. **Instantiate** (`EcoreUtil.create()`) + set features from template
+   b. Look up by **Key** (§7.4, #350): every key of the class or a superclass (`isSuperTypeOf`; the
+      keys of the most specific class take precedence) that the template gives a value for each
+      part of. A part whose value is an object template takes the object it binds or enforces; an
+      `opposite(C::p)` part matches the candidate held by the owner's `p`. One complete key match
+      selects the object. A part whose value cannot be determined is an ERROR.
+   c. **Instantiate** (`EcoreUtil.create()`) + set features from template. Without a key nothing
+      else identifies an object — the earlier selection by bound variables took over foreign
+      objects and is gone (decided in #350).
 5. For `CollectionTemplateExp` (GAP-1): create collection members
+6. Every object created for the domain that no container holds becomes a root of the target extent —
+   also a container created by a nested template that holds the object through an opposite (#351).
 
-**Not yet implemented** (§7.10.2): enforcement never deletes target objects that no longer have
-a valid binding (#352), and a value that clashes with an existing one is overwritten without a
-report (#351).
+**Clashes** (§7.10.2, #351): a run-local register remembers which relation set a single-valued
+feature of an object. A different value for the same feature in the same run is an ERROR, and the
+first value stays. Values the object had before the run are modified, not a clash.
+
+**where** (§7.2.1, #351): a where predicate that reads only what the sources bind and is false is an
+ERROR, and nothing is created for that binding. A where predicate that is false after enforcing is an
+ERROR.
+
+**Deletion** (§7.10.2, #352): after all relations ran, each binding of an enforced target domain that
+no trace of its relation holds marks the objects bound to the domain's template variables — root and
+nested. Those that no trace of any relation holds are deleted, together with the references the target
+model holds to them. Never in a check, never towards a checkonly domain, never outside the target
+model, and not at all when the trace limit cut the trace. `QvtdConfiguration.deleteUnmatched(false)`
+switches it off.
 
 ### 5.4.1 Blackbox Bridge (§7.8)
 
@@ -275,8 +291,8 @@ Extracted into `QvtrQueryEvaluator` for testability.
 | When-clause | §7.2.1 | Predicate eval + trace lookup, one binding per matching trace |
 | Where-clause | §7.2.1 | Predicate eval + relation invocation |
 | Checkonly domains | §7.9, §7.10.1, §7.2.3 | Every direction checked; violations are `INCONSISTENCY` warnings, `isConsistent()` false |
-| Enforce domains | §7.10.2 | Find-or-create via templates — no deletion (#352), no clash detection (#351) |
-| Key-based identity | §7.4, §7.13.4 | `enforceObjectTemplate()` key lookup — template and opposite key parts, keys on superclasses (#350) |
+| Enforce domains | §7.10.2 | Find-or-create via templates, clash detection, deletion of what no binding requires |
+| Key-based identity | §7.4, §7.13.4 | `findByKey()`: all keys of the class and its superclasses, template and opposite parts |
 | Object templates | §7.11.2 | Full property matching + binding |
 | Collection templates | §7.11.2 | Member matching with `++` rest — the member stays in the rest, collection kind lost in the AST (#354) |
 | Primitive domains | §7.13.4 | Variable binding only |
@@ -314,10 +330,7 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 
 | Gap | Feature | Reason | Target |
 |-----|---------|--------|--------|
-| GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution — which needs the deletion of #352 to be equal | Phase 5 |
-| #350 | Keys | `findByBoundVariables` heuristic; template/opposite key parts | — |
-| #351 | Clash detection | Clashing values are overwritten silently | — |
-| #352 | Deletion | Target objects without a valid binding stay | — |
+| GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution, which deletes what no binding requires; incremental execution is an optimisation | Phase 5 |
 | #353 | In-place | No copy of the old state | — |
 | #354 | Collection templates | Member stays in the rest; kind rules; kind lost in the AST | — |
 | #356 | Overrides | Unconditional replacement; `Rule.overrides` not set | — |
@@ -356,4 +369,4 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | `QvtdCommentTest` | §7.13.3: comments, nested paragraph comments | 4 |
 
 **Total (2026-10-31): 320 tests, 0 failures, 9 @Disabled** — each disabled test names the issue
-that will enable it (#352, #354, #356, #360, #361).
+that will enable it (#354, #356, #360, #361).

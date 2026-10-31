@@ -417,37 +417,48 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	public Key visitKeyDecl(QvtRParser.KeyDeclContext ctx) {
 		Key key = REL.createKey();
 
-		// Resolve the class
+		// Resolve the class — a key of a class or property that does not exist identifies nothing,
+		// and dropping it in silence left the transformation creating duplicates (#350)
 		List<String> classPath = QvtrExpressionBuilder.pathNameSegments(ctx.pathName());
 		EClassifier cls = resolveClassifier(classPath);
-		if (cls instanceof EClass eClass) {
-			key.setIdentifies(eClass);
+		if (!(cls instanceof EClass eClass)) {
+			keyError(ctx, "Unknown key class (" + String.join("::", classPath) + ")");
+			return key;
+		}
+		key.setIdentifies(eClass);
 
-			// Process key properties
-			for (QvtRParser.KeyPropertyContext propCtx : ctx.keyProperty()) {
-				if (propCtx.OPPOSITE() != null) {
-					// opposite(ClassName::propName) → oppositePart
-					List<String> oppClassPath =
-							QvtrExpressionBuilder.pathNameSegments(propCtx.pathName());
-					String oppPropName = identifierText(propCtx.identifier());
-					EClassifier oppCls = resolveClassifier(oppClassPath);
-					if (oppCls instanceof EClass oppEClass) {
-						EStructuralFeature feat = oppEClass.getEStructuralFeature(oppPropName);
-						if (feat != null) {
-							key.getOppositePart().add(feat);
-						}
-					}
+		// Process key properties
+		for (QvtRParser.KeyPropertyContext propCtx : ctx.keyProperty()) {
+			if (propCtx.OPPOSITE() != null) {
+				// opposite(ClassName::propName) → oppositePart
+				List<String> oppClassPath = QvtrExpressionBuilder.pathNameSegments(propCtx.pathName());
+				String oppPropName = identifierText(propCtx.identifier());
+				EClassifier oppCls = resolveClassifier(oppClassPath);
+				EStructuralFeature feat = oppCls instanceof EClass oppEClass
+						? oppEClass.getEStructuralFeature(oppPropName) : null;
+				if (feat == null) {
+					keyError(propCtx, "Unknown key property (opposite(" + String.join("::", oppClassPath)
+							+ "::" + oppPropName + "))");
 				} else {
-					// Simple property name → part
-					String propName = identifierText(propCtx.identifier());
-					EStructuralFeature feat = eClass.getEStructuralFeature(propName);
-					if (feat != null) {
-						key.getPart().add(feat);
-					}
+					key.getOppositePart().add(feat);
+				}
+			} else {
+				// Simple property name → part
+				String propName = identifierText(propCtx.identifier());
+				EStructuralFeature feat = eClass.getEStructuralFeature(propName);
+				if (feat == null) {
+					keyError(propCtx, "Unknown key property (" + eClass.getName() + "::" + propName + ")");
+				} else {
+					key.getPart().add(feat);
 				}
 			}
 		}
 		return key;
+	}
+
+	private void keyError(ParserRuleContext context, String message) {
+		positions.positionAt(context.getStart().getLine(), context.getStart().getCharPositionInLine());
+		diagnostics.add(positions.at(message));
 	}
 
 	// ==================== Relation ====================

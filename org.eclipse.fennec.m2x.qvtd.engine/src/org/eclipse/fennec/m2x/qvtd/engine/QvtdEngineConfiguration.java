@@ -70,4 +70,7 @@ public @interface QvtdEngineConfiguration {
 
 	@AttributeDefinition(name = "Max Trace Records", description = "Maximum number of trace records one run may hold, across all relations; reaching it is an error")
 	int maxTraceRecords() default QvtdConfiguration.DEFAULT_MAX_TRACE_RECORDS;
+
+	@AttributeDefinition(name = "Delete Unmatched", description = "Whether an enforce run deletes target objects that no valid binding requires (§7.10.2)")
+	boolean deleteUnmatched() default true;
 }
