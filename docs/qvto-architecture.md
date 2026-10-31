@@ -1198,7 +1198,7 @@ At run time a WARNING reports two kinds of side effect, without stopping the ass
 | D22 | 3 EPackages in `qvto.model` | Implemented — see §3.4 |
 | D24 | Blackbox via `QvtoBlackboxLibrary` interface | Implemented — see §4.6 |
 | D25 | Hybrid evaluator (composition, not inheritance) | Implemented — see §6.2 |
-| D26 | `Dict`/`List` as aliases for OCL `Map`/`Sequence` | Implemented — parser-level mapping |
+| D26 | `Dict`/`List` as aliases for OCL `Map`/`Sequence` | Implemented — parser-level mapping. Where QVT v1.3 §8.3 defines an operation differently from OCL, the engine evaluates with `OclEvaluationOptions.qvtCollections` set: `Dict::keys()` is a List, while OCL's `Map::keys()` stays a Set (#343) |
 | D27 | Unit Resolver — ServiceLoader + Whiteboard | Implemented — see §4.6 |
 | D28 | QVT-O v1.3, Eclipse feature scope | Implemented — gaps documented in §12 |
 

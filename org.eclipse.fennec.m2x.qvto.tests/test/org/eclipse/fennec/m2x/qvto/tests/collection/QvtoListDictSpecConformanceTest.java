@@ -142,6 +142,21 @@ class QvtoListDictSpecConformanceTest extends AbstractQvtoEngineTest {
 	}
 
 	@Test
+	void dictKeys_isAList() throws Exception {
+		// §8.3.8.8: "keys() : List(KeyT) Returns a new list of keys" — OCL's Map::keys() stays a Set
+		QvtoExecutionResult result = run("""
+				var d : Dict(String, Integer) := Dict{};
+				d->put('a', 1);
+				d->put('b', 2);
+				var k := d->keys();
+				k->add('c');
+				log('first=' + k->first() + ' at2=' + k->at(2) + ' list=' + k->size().repr() + ' dict=' + d->size().repr());
+				""");
+		assertSuccess(result);
+		assertLogged(result, "first=a at2=b list=3 dict=2");
+	}
+
+	@Test
 	void joinfields_writesARealAsOclDoes() throws Exception {
 		QvtoExecutionResult result = run("""
 				log('j=' + List{1.0e10, null, 'a'}->joinfields('|', '[', ']'));
