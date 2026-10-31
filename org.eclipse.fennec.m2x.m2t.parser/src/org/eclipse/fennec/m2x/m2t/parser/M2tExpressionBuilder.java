@@ -493,6 +493,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 		current.setOwnedIn((OclExpression) visit(ctx.expression()));
 		setEnv(savedEnv);
+		support.typeLet(outermost);
 		return outermost;
 	}
 
