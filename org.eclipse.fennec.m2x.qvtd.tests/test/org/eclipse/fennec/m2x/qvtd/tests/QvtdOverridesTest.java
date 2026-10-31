@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -24,6 +25,7 @@ import java.util.Map;
 
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.qvtbase.Rule;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
@@ -134,6 +136,18 @@ class QvtdOverridesTest extends AbstractQvtdEngineTest {
 	}
 
 	@Test
+	@DisplayName("a call reaches the overriding relation even where the overridden relation's own pattern does not match")
+	void overrides_whereCall_dispatchesBeforeOwnPattern() throws QvtdParseException {
+		String sub = """
+				relation Sub {
+					checkonly domain uml p : Package { name = 'NEVER' };
+					enforce domain rdbms s : Schema { ownedTable = t : Table { name = 'base' } };
+				}
+				""";
+		assertEquals(List.of("over"), tables(called(sub, sub("", "SubOver overrides Sub", "over", "")), "HR"));
+	}
+
+	@Test
 	@DisplayName("a call of an abstract relation runs the relation overriding it")
 	void abstract_calledWithOverride_runsOverriding() throws QvtdParseException {
 		assertEquals(List.of("fromB"), tables(called(sub("abstract", "Sub", "fromAbstract", ""),
@@ -192,5 +206,86 @@ class QvtdOverridesTest extends AbstractQvtdEngineTest {
 		assertTrue(e.getMessage().contains("Relation 'R' overrides 'Nope', which is no relation of its transformation"),
 				e.getMessage());
 		assertTrue(e.getErrors().stream().anyMatch(d -> d.getLine() == 2), "" + e.getErrors());
+	}
+
+	// ── checking ──
+
+	@Test
+	@DisplayName("checking: a non-top overriding relation is checked for the bindings it applies to")
+	void checkOnly_nonTopOverriding_checked() throws QvtdParseException {
+		String source = """
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					top relation Base {
+						pn : String;
+						checkonly domain uml p : Package { name = pn };
+						checkonly domain rdbms s : Schema { name = pn };
+					}
+					relation Over overrides Base {
+						pn : String;
+						checkonly domain uml p : Package { name = pn };
+						checkonly domain rdbms s : Schema { name = 'OVER' };
+						when { pn = 'Special'; }
+					}
+				}
+				""";
+		QvtdExecutionResult result = executeCheckOnly(source, Map.of(
+				"uml", QvtdModelExtent.of(createPackage("HR"), createPackage("Special")),
+				"rdbms", QvtdModelExtent.of(schema("HR"))));
+		List<String> inconsistencies = result.diagnostics().stream()
+				.filter(d -> d.getCode() == QvtdExecutionResult.INCONSISTENCY).map(Diagnostic::getMessage).toList();
+		assertEquals(1, inconsistencies.size(), "" + result.diagnostics());
+		assertTrue(inconsistencies.get(0).contains("Relation 'Over' does not hold in direction 'rdbms': no match for p = Package 'Special'"),
+				inconsistencies.get(0));
+	}
+
+	private static String checkedCall() {
+		return """
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					top relation PackageToSchema {
+						pn : String;
+						checkonly domain uml p : Package { name = pn };
+						checkonly domain rdbms s : Schema { name = pn };
+						where { Sub(p, s); }
+					}
+					abstract relation Sub {
+						checkonly domain uml p : Package {};
+						checkonly domain rdbms s : Schema { ownedTable = t : Table { name = 'base' } };
+					}
+					relation SubOver overrides Sub {
+						checkonly domain uml p : Package {};
+						checkonly domain rdbms s : Schema { ownedTable = t : Table { name = 'over' } };
+					}
+				}
+				""";
+	}
+
+	private static QvtdExecutionResult checkWithTable(String table) throws QvtdParseException {
+		EObject schema = schema("HR");
+		EObject t = EcoreUtil.create(ecoreHelper.getEClass(rdbmsPackage, "Table"));
+		t.eSet(t.eClass().getEStructuralFeature("name"), table);
+		getTables(schema).add(t);
+		return executeCheckOnly(checkedCall(), Map.of("uml", QvtdModelExtent.of(createPackage("HR")),
+				"rdbms", QvtdModelExtent.of(schema)));
+	}
+
+	@Test
+	@DisplayName("checking: a where call holds through the overriding relation")
+	void checkOnly_whereCall_holdsThroughOverriding() throws QvtdParseException {
+		QvtdExecutionResult result = checkWithTable("over");
+		assertTrue(result.isConsistent(), "" + result.diagnostics());
+	}
+
+	@Test
+	@DisplayName("checking: an abstract relation does not hold directly")
+	void checkOnly_whereCall_abstractNeverHoldsDirectly() throws QvtdParseException {
+		QvtdExecutionResult result = checkWithTable("base");
+		assertTrue(result.isSuccess(), "" + result.diagnostics());
+		assertFalse(result.isConsistent(), "only SubOver's Table would make the call hold: " + result.diagnostics());
+	}
+
+	private static EObject schema(String name) {
+		EObject schema = EcoreUtil.create(ecoreHelper.getEClass(rdbmsPackage, "Schema"));
+		schema.eSet(schema.eClass().getEStructuralFeature("name"), name);
+		return schema;
 	}
 }
