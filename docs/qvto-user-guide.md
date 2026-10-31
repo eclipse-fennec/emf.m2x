@@ -661,6 +661,35 @@ try {
 
 **Positions are real for both kinds now** (#110). A syntax error carries what ANTLR reported; an unresolved name, unknown type or unknown metamodel carries the place it stands. `0:0` still means "position unknown", which is what a diagnostic reported without any parse context gets.
 
+### 9.1.1 Type Errors (#378)
+
+A transformation is type-checked when it is parsed, with the OCL rules (see the OCL user guide,
+§14.6) and QVT-O's own. Each of these is a parse error at its position:
+
+```
+var x : String := 5;                       -- The variable 'x' is declared as String but initialized with a Integer
+x := 5;                                    -- A Integer cannot be assigned to a String
+e.name := Sequence{'a', 'b'};              -- A Sequence(String) cannot be assigned to a single-valued String
+isElement(5)    -- query isElement(e : Element)   Argument 1 of isElement is a Integer, but the parameter 'e' is a EObject
+'abc'.substring('a', 2)                    -- No operation String::substring(String, Integer); …
+if (5) then 1 else 2 endif                 -- The condition of an if is a Integer, not a Boolean
+transformation T(in s : String);           -- Model parameter 's' has the type 'String', which is no model type …
+var x : Shared := null;  -- Shared in two model types   Type 'Shared' is ambiguous: …
+```
+
+An element or a collection is a valid condition (§8.4.5(2)). A helper or query call is checked
+against its declaration wherever it stands; parameters with a default may be left out.
+
+A disjunct candidate needs the disjunction's number of parameters and a result type that is the
+same or derived (§8.1.14.1). An operation that overrides one of an `extends`-imported module —
+same name, context and arity — needs parameter types that comply with the overridden one's
+(§8.2.1.10); that is checked when the transformation is linked, so it surfaces at `compile()` or
+`execute()`, like an unresolved import.
+
+Unknown types are never an error: a value of a dynamic model, a blackbox result, an intermediate
+class attribute (typed `EJavaObject` for now), a call into an imported unit. What the evaluator
+meets at run time is checked there, as before.
+
 ### 9.2 Execution Diagnostics
 
 `QvtoExecutionResult` contains diagnostics collected during execution:
