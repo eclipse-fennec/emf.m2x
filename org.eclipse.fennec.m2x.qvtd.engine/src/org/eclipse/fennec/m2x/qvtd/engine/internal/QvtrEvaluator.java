@@ -15,8 +15,10 @@
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,9 @@ import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
@@ -55,6 +59,7 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 
 /**
  * Core evaluator for QVT-R transformations (§7.10).
@@ -216,6 +221,9 @@ public class QvtrEvaluator {
 
 		checking = context.checkOnly();
 		runAll(topRelations);
+		if (!checking && config.deleteUnmatched()) {
+			deleteUnmatched(overriddenNames);
+		}
 		// An enforce run checks only the target model's checked domains, unless asked to check
 		// every direction once it is done (#348)
 		if (!checking && context.postCheck()) {
@@ -370,6 +378,11 @@ public class QvtrEvaluator {
 			if (!whenConditionHolds(relation, sourceBinding)) {
 				continue;
 			}
+			// A where predicate that reads only what the sources bind and is false: nothing could
+			// make the relation hold, so nothing is created (decided in #351)
+			if (!sourceWhereHolds(relation, sourceBinding)) {
+				continue;
+			}
 
 			queryEvaluator.preComputeWhereBindings(relation, sourceBinding);
 
@@ -381,6 +394,35 @@ public class QvtrEvaluator {
 			recordTrace(relation, sourceBinding);
 			evaluateWhereClause(relation, sourceBinding);
 		}
+	}
+
+	/**
+	 * Whether the where predicates that read only variables the binding already holds — the
+	 * when clause's and the source domains' — are true. A false one is an ERROR, and the binding
+	 * is not enforced (decided in #351); relation calls and predicates on target variables are
+	 * evaluated after enforcing.
+	 */
+	private boolean sourceWhereHolds(Relation relation, Map<String, Object> binding) {
+		Pattern where = relation.getWhere();
+		if (where == null) {
+			return true;
+		}
+		for (Predicate predicate : where.getPredicate()) {
+			OclExpression expr = predicate.getConditionExpression();
+			if (expr == null || expr instanceof RelationCallExp
+					|| !binding.keySet().containsAll(QvtrFreeVariables.of(expr))) {
+				continue;
+			}
+			Object result = evaluateOcl(expr, binding);
+			if (!Boolean.TRUE.equals(result)) {
+				diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0,
+						"Relation '%s' cannot hold: a where predicate on the source bindings is %s, nothing is created (§7.2.1)"
+								.formatted(relation.getName(), result),
+						null));
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/** Enforces the target domain for a binding; whether it holds afterwards, without error. */
@@ -534,9 +576,12 @@ public class QvtrEvaluator {
 
 			Object result = evaluateOcl(expr, bindings);
 			if (!Boolean.TRUE.equals(result)) {
-				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
-						"Relation '%s': where-clause predicate not satisfied"
-								.formatted(relation.getName()),
+				// "The where clause specifies the condition that must be satisfied by all model
+				// elements participating in the relation" (§7.2.1): enforced, it does not hold —
+				// a lost assertion is an ERROR (#351, #308)
+				diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0,
+						"Relation '%s' does not hold: a where predicate is %s after enforcing (§7.2.1)"
+								.formatted(relation.getName(), result),
 						null));
 			}
 		}
@@ -596,6 +641,147 @@ public class QvtrEvaluator {
 			}
 		}
 		return currentBindings;
+	}
+
+	// ── Deletion (§7.10.2) ───────────────────────────────────────────
+
+	/**
+	 * Deletes the target objects no valid binding requires: "for each valid binding of variables
+	 * of domain k pattern that satisfies domain k condition, if there does not exist a valid
+	 * binding of variables of the when clause and source domains that satisfies the when
+	 * condition, source domain patterns and where condition [...] then delete the objects bound
+	 * to the variables of domain k [...] only if it is not required to exist by any other valid
+	 * binding of the source domains" (§7.10.2).
+	 *
+	 * <p>After all relations ran: every binding of an enforced target domain that no trace of its
+	 * relation holds marks the objects bound to the domain's template variables — its root and
+	 * nested objects (decided in #352) — and those no trace of any relation holds are deleted.
+	 * Only objects of the target model; never in a check, never towards a checkonly domain.
+	 */
+	private void deleteUnmatched(Set<String> overriddenNames) {
+		if (traceLimitReported) {
+			// A cut trace misses bindings that hold: what it does not show is not unrequired
+			return;
+		}
+		Set<EObject> required = Collections.newSetFromMap(new IdentityHashMap<>());
+		for (QvtrTraceManager.TraceRecord record : traceManager.records()) {
+			for (Object value : record.bindings().values()) {
+				if (value instanceof EObject eo) {
+					required.add(eo);
+				}
+			}
+		}
+		Set<EObject> doomed = Collections.newSetFromMap(new IdentityHashMap<>());
+		for (Rule rule : transformation.getRule()) {
+			if (!(rule instanceof Relation relation) || relation.isIsAbstract()
+					|| overriddenNames.contains(relation.getName())) {
+				continue;
+			}
+			for (RelationDomain domain : modelDomains(relation)) {
+				if (!domain.isIsEnforceable() || !extentManager.isTargetModel(domain.getTypedModel())) {
+					continue;
+				}
+				List<String> variables = templateVariables(domain);
+				List<QvtrTraceManager.TraceRecord> traces = traceManager.lookup(relation, List.of());
+				for (Map<String, Object> binding : patternMatcher.matchDomain(domain, new HashMap<>())) {
+					if (traces.stream().anyMatch(trace -> holdsFor(trace, binding, variables))) {
+						continue;
+					}
+					for (String variable : variables) {
+						if (binding.get(variable) instanceof EObject eo && !required.contains(eo)
+								&& inTargetModel(eo, domain)) {
+							doomed.add(eo);
+						}
+					}
+				}
+			}
+		}
+		for (EObject object : doomed) {
+			delete(object);
+		}
+	}
+
+	/**
+	 * Deletes an object of the target model: out of its container or the extent, and out of
+	 * every reference the target model holds to it or to what it contains.
+	 */
+	@SuppressWarnings("unchecked")
+	private void delete(EObject object) {
+		QvtdModelExtent extent = null;
+		for (Map.Entry<String, QvtdModelExtent> entry : context.modelExtents().entrySet()) {
+			if (entry.getValue().getContents().contains(EcoreUtil.getRootContainer(object))) {
+				extent = entry.getValue();
+			}
+		}
+		if (extent == null) {
+			return;
+		}
+		Set<EObject> gone = Collections.newSetFromMap(new IdentityHashMap<>());
+		gone.add(object);
+		object.eAllContents().forEachRemaining(gone::add);
+		for (EObject root : List.copyOf(extent.getContents())) {
+			List<EObject> tree = new ArrayList<>();
+			tree.add(root);
+			root.eAllContents().forEachRemaining(tree::add);
+			for (EObject holder : tree) {
+				if (gone.contains(holder)) {
+					continue;
+				}
+				for (EReference reference : holder.eClass().getEAllReferences()) {
+					if (reference.isContainment() || reference.isContainer() || reference.isDerived()
+							|| !reference.isChangeable()) {
+						continue;
+					}
+					Object value = holder.eGet(reference);
+					if (reference.isMany()) {
+						((List<EObject>) value).removeIf(gone::contains);
+					} else if (value != null && gone.contains(value)) {
+						holder.eUnset(reference);
+					}
+				}
+			}
+		}
+		if (object.eContainer() != null) {
+			EcoreUtil.remove(object);
+		} else {
+			extent.getContents().remove(object);
+		}
+	}
+
+	/** Whether a trace record binds the domain's template variables to the same objects. */
+	private static boolean holdsFor(QvtrTraceManager.TraceRecord trace, Map<String, Object> binding,
+			List<String> variables) {
+		for (String variable : variables) {
+			if (binding.get(variable) instanceof EObject eo && trace.bindings().get(variable) != eo) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** The variables the object templates of a domain bind, root first, nested ones included. */
+	private static List<String> templateVariables(RelationDomain domain) {
+		List<String> variables = new ArrayList<>();
+		for (DomainPattern pattern : domain.getPattern()) {
+			TemplateExp root = pattern.getTemplateExpression();
+			if (root == null) {
+				continue;
+			}
+			List<EObject> templates = new ArrayList<>();
+			templates.add(root);
+			root.eAllContents().forEachRemaining(templates::add);
+			for (EObject o : templates) {
+				if (o instanceof ObjectTemplateExp template && template.getBindsTo() != null) {
+					variables.add(template.getBindsTo().getName());
+				}
+			}
+		}
+		return variables;
+	}
+
+	private boolean inTargetModel(EObject object, RelationDomain domain) {
+		return extentManager.getExtent(domain.getTypedModel()).getContents()
+				.contains(EcoreUtil.getRootContainer(object));
 	}
 
 	// ── Checking (§7.9, §7.10.1) ─────────────────────────────────────

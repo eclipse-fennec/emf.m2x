@@ -1613,7 +1613,6 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 	class ChangePropagation {
 
 		@Test
-		@Disabled("#352: enforce never deletes target objects, so the stale Schema stays")
 		@DisplayName("re-executing after a source change gives what a fresh execution gives")
 		void reExecutionAfterASourceChange_equalsAFreshExecution() throws QvtdParseException {
 			// §7.6: change propagation "is semantically equivalent to re-execution of the

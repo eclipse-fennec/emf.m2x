@@ -14,7 +14,10 @@
  */
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,10 +32,12 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.qvtbase.Predicate;
 import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.DomainPattern;
 import org.eclipse.fennec.m2x.model.qvtrelation.Key;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationCallExp;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomainAssignment;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
@@ -68,6 +73,19 @@ public class QvtrEnforcer {
 	private final QvtrDiagnosticSink diagnostics;
 	private final QvtrOclCallback oclCallback;
 	private final QvtrBlackboxBridge blackboxBridge;
+	/**
+	 * What this run assigned to single-valued features, and which relation did: a different value
+	 * for the same feature of the same object is a clash (§7.10.2). Values the object had before
+	 * the run are no clash — enforcing modifies them (#351).
+	 */
+	private final Map<EObject, Map<EStructuralFeature, Assignment>> assigned = new IdentityHashMap<>();
+	/** The objects created while enforcing the current domain. */
+	private final List<EObject> created = new ArrayList<>();
+	/** The relation whose domain is being enforced, for the clash report. */
+	private Relation enforcing;
+
+	private record Assignment(Object value, String relation) {
+	}
 
 	public QvtrEnforcer(QvtrExtentManager extentManager, QvtrPatternMatcher patternMatcher,
 			RelationalTransformation transformation, QvtrDiagnosticSink diagnostics,
@@ -85,14 +103,14 @@ public class QvtrEnforcer {
 	 */
 	public void enforceTargetDomain(Relation relation, RelationDomain targetDomain,
 			Map<String, Object> sourceBindings) {
-		// First try to match the target domain with existing elements
-		List<Map<String, Object>> targetMatches = patternMatcher.matchDomain(
-				targetDomain, sourceBindings);
-
-		if (!targetMatches.isEmpty()) {
-			// Target already consistent — merge bindings from first match
-			sourceBindings.putAll(targetMatches.get(0));
-			return;
+		// First try to match the target domain with existing elements: the first match that also
+		// satisfies the where condition (§7.10.2 "satisfies domain k's pattern and where
+		// condition", #351)
+		for (Map<String, Object> match : patternMatcher.matchDomain(targetDomain, sourceBindings)) {
+			if (whereAllows(relation, match)) {
+				sourceBindings.putAll(match);
+				return;
+			}
 		}
 
 		// Apply default value assignments (§7.11.3.7) for unbound variables
@@ -131,25 +149,83 @@ public class QvtrEnforcer {
 		}
 
 		// No match found → enforce: create target objects from template
+		enforcing = relation;
+		created.clear();
 		for (DomainPattern pattern : targetDomain.getPattern()) {
 			TemplateExp templateExp = pattern.getTemplateExpression();
 			if (templateExp instanceof ObjectTemplateExp objectTemplate) {
-				EObject created = enforceObjectTemplate(objectTemplate, sourceBindings, targetModel);
-				if (created != null) {
-					// Add created object to the target extent only if it's a new root
-					if (created.eContainer() == null
-							&& !extentManager.getExtent(targetModel).getContents().contains(created)) {
-						extentManager.getExtent(targetModel).add(created);
-					}
-
+				EObject root = enforceObjectTemplate(objectTemplate, sourceBindings, targetModel);
+				if (root != null) {
 					// Bind root variable
 					Variable rootVar = objectTemplate.getBindsTo();
 					if (rootVar != null) {
-						sourceBindings.put(rootVar.getName(), created);
+						sourceBindings.put(rootVar.getName(), root);
 					}
 				}
 			}
 		}
+		// Every object created here that no container holds is a root of the target model — also
+		// a Schema created by a nested template and holding the Table through the opposite of
+		// Table.schema, which used to hang in no extent (#351)
+		List<EObject> contents = extentManager.getExtent(targetModel).getContents();
+		for (EObject object : created) {
+			if (object.eContainer() == null && !contents.contains(object)) {
+				extentManager.getExtent(targetModel).add(object);
+			}
+		}
+		created.clear();
+	}
+
+	/**
+	 * Whether the where condition allows a target match: each OCL predicate whose variables the
+	 * match binds has to be true. Relation calls and predicates that read what is not bound yet
+	 * are left to the where clause after enforcing.
+	 */
+	private boolean whereAllows(Relation relation, Map<String, Object> match) {
+		if (relation.getWhere() == null) {
+			return true;
+		}
+		for (Predicate predicate : relation.getWhere().getPredicate()) {
+			OclExpression expr = predicate.getConditionExpression();
+			if (expr == null || expr instanceof RelationCallExp
+					|| !match.keySet().containsAll(QvtrFreeVariables.of(expr))) {
+				continue;
+			}
+			if (!Boolean.TRUE.equals(oclCallback.evaluate(expr, match))) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Assigns a single-valued feature unless this run already gave it a different value: "It is
+	 * an error, if the template expression evaluation results in an assignment of a value to a
+	 * property that clashes with another value set for the same property by another rule in the
+	 * transformation execution" (§7.10.2, #351).
+	 */
+	private void assign(EObject target, EStructuralFeature feature, Object value) {
+		Map<EStructuralFeature, Assignment> byFeature = assigned.computeIfAbsent(target, t -> new HashMap<>());
+		Assignment previous = byFeature.get(feature);
+		String relation = enforcing != null ? enforcing.getName() : "?";
+		if (previous != null && !Objects.equals(previous.value(), value)) {
+			diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0,
+					"Relation '%s' assigns %s to '%s' of %s, which relation '%s' set to %s in this run — the values clash (§7.10.2)"
+							.formatted(relation, show(value), feature.getName(), show(target), previous.relation(),
+									show(previous.value())), null));
+			return;
+		}
+		target.eSet(feature, value);
+		byFeature.put(feature, new Assignment(value, relation));
+	}
+
+	private static String show(Object value) {
+		if (value instanceof EObject eo) {
+			EStructuralFeature name = eo.eClass().getEStructuralFeature("name");
+			Object n = name != null ? eo.eGet(name) : null;
+			return eo.eClass().getName() + (n != null ? " '" + n + "'" : "");
+		}
+		return value instanceof String str ? "'" + str + "'" : String.valueOf(value);
 	}
 
 	/**
@@ -175,33 +251,29 @@ public class QvtrEnforcer {
 			}
 		}
 
-		// Key-based identity (§7.4): look for existing object matching key properties
-		EObject keyMatch = findByKey(template, bindings, eClass, targetModel);
-		if (keyMatch != null) {
-			if (bindVar != null) {
-				bindings.put(bindVar.getName(), keyMatch);
-			}
-			enforceProperties(template, keyMatch, bindings, targetModel);
-			return keyMatch;
+		// Key-based identity (§7.4): look for existing object matching key properties. Without
+		// a key that locates one, a new object is created — object identity comes only from keys
+		// (§7.10.2); the selection by bound variables that took over foreign objects is gone (#350)
+		Object keyMatch = findByKey(template, bindings, eClass, targetModel);
+		if (keyMatch == KEY_UNDETERMINED) {
+			return null;
 		}
-
-		// In-place / variable-based identity (§7.7)
-		EObject varMatch = findByBoundVariables(template, bindings, eClass, targetModel);
-		if (varMatch != null) {
+		if (keyMatch instanceof EObject found) {
 			if (bindVar != null) {
-				bindings.put(bindVar.getName(), varMatch);
+				bindings.put(bindVar.getName(), found);
 			}
-			enforceProperties(template, varMatch, bindings, targetModel);
-			return varMatch;
+			enforceProperties(template, found, bindings, targetModel);
+			return found;
 		}
 
 		// Create new instance
-		EObject created = EcoreUtil.create(eClass);
+		EObject fresh = EcoreUtil.create(eClass);
+		created.add(fresh);
 		if (bindVar != null) {
-			bindings.put(bindVar.getName(), created);
+			bindings.put(bindVar.getName(), fresh);
 		}
-		enforceProperties(template, created, bindings, targetModel);
-		return created;
+		enforceProperties(template, fresh, bindings, targetModel);
+		return fresh;
 	}
 
 	/**
@@ -223,9 +295,12 @@ public class QvtrEnforcer {
 				EObject nested = enforceObjectTemplate(nestedTemplate, bindings, targetModel);
 				if (nested != null) {
 					if (feature.isMany()) {
-						((List<EObject>) target.eGet(feature)).add(nested);
+						List<EObject> held = (List<EObject>) target.eGet(feature);
+						if (!held.contains(nested)) {
+							held.add(nested);
+						}
 					} else {
-						target.eSet(feature, nested);
+						assign(target, feature, nested);
 					}
 				}
 				continue;
@@ -251,7 +326,7 @@ public class QvtrEnforcer {
 				if (feature.isMany()) {
 					((List<Object>) target.eGet(feature)).add(value);
 				} else {
-					target.eSet(feature, value);
+					assign(target, feature, value);
 				}
 			}
 		}
@@ -274,104 +349,136 @@ public class QvtrEnforcer {
 		}
 	}
 
+	/** {@link #findByKey}: a key part's value could not be determined, an ERROR is reported. */
+	static final Object KEY_UNDETERMINED = new Object();
+
 	/**
-	 * Finds an existing object in the target extent that matches the Key properties (§7.4).
+	 * Finds an existing object in the target extent that one of the class's keys locates (§7.4):
+	 * "A class may have multiple keys", and an object is found when one of them matches
+	 * completely. A key applies when the template gives a value for each of its parts — for a
+	 * part whose value is an object template, the object that template enforces; for an
+	 * {@code opposite(C::p)} part, the object whose {@code p} holds the candidate (#350).
+	 *
+	 * @return the object, {@code null} when no key locates one, or {@link #KEY_UNDETERMINED}
 	 */
-	public EObject findByKey(ObjectTemplateExp template, Map<String, Object> bindings,
+	public Object findByKey(ObjectTemplateExp template, Map<String, Object> bindings,
 			EClass eClass, TypedModel targetModel) {
-		Key key = findKey(eClass);
-		if (key == null || key.getPart().isEmpty()) {
+		List<Key> keys = findKeys(eClass);
+		if (keys.isEmpty()) {
 			return null;
 		}
-
-		// Compute expected key values from the template's PropertyTemplateItems
-		Map<String, Object> keyValues = new HashMap<>();
-		for (EStructuralFeature keyPart : key.getPart()) {
-			String keyPropName = keyPart.getName();
-			for (PropertyTemplateItem item : template.getPart()) {
-				EStructuralFeature itemFeature = item.getReferredProperty();
-				if (itemFeature != null && keyPropName.equals(itemFeature.getName())) {
-					Object value = evaluatePropertyValue(item, bindings);
-					if (value != null) {
-						keyValues.put(keyPropName, value);
-					}
+		List<EObject> candidates = null;
+		for (Key key : keys) {
+			Map<EStructuralFeature, Object> values = new LinkedHashMap<>();
+			Map<EStructuralFeature, EObject> owners = new LinkedHashMap<>();
+			boolean applies = !key.getPart().isEmpty() || !key.getOppositePart().isEmpty();
+			for (EStructuralFeature part : key.getPart()) {
+				PropertyTemplateItem item = itemFor(template, part.getName(), false);
+				if (item == null) {
+					applies = false;
 					break;
+				}
+				Object value = keyValue(item, bindings, targetModel);
+				if (value == KEY_UNDETERMINED) {
+					return keyUndetermined(eClass, part);
+				}
+				values.put(part, value);
+			}
+			for (EStructuralFeature part : key.getOppositePart()) {
+				if (!applies) {
+					break;
+				}
+				// opposite(Schema::ownedTable): the template names Schema::ownedTable as an
+				// opposite, or the reverse end Table::schema directly
+				PropertyTemplateItem item = itemFor(template, part.getName(), true);
+				if (item == null && part instanceof EReference ref && ref.getEOpposite() != null) {
+					item = itemFor(template, ref.getEOpposite().getName(), false);
+				}
+				if (item == null) {
+					applies = false;
+					break;
+				}
+				Object owner = keyValue(item, bindings, targetModel);
+				if (owner == KEY_UNDETERMINED || !(owner instanceof EObject ownerObject)) {
+					return keyUndetermined(eClass, part);
+				}
+				owners.put(part, ownerObject);
+			}
+			if (!applies) {
+				continue;
+			}
+			if (candidates == null) {
+				candidates = extentManager.allInstances(targetModel, eClass);
+			}
+			for (EObject candidate : candidates) {
+				if (keyMatches(candidate, values, owners)) {
+					return candidate;
 				}
 			}
 		}
+		return null;
+	}
 
-		if (keyValues.size() != key.getPart().size()) {
-			return null;
-		}
+	private Object keyUndetermined(EClass eClass, EStructuralFeature part) {
+		diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0,
+				"Cannot determine the value of key part '%s' of %s, so the object to enforce cannot be located (§7.4)"
+						.formatted(part.getName(), eClass.getName()), null));
+		return KEY_UNDETERMINED;
+	}
 
-		// Search the target extent for a matching object
-		List<EObject> candidates = extentManager.allInstances(targetModel, eClass);
-		for (EObject candidate : candidates) {
-			boolean allMatch = true;
-			for (Map.Entry<String, Object> entry : keyValues.entrySet()) {
-				EStructuralFeature feature = candidate.eClass().getEStructuralFeature(entry.getKey());
-				if (feature == null) {
-					allMatch = false;
-					break;
-				}
-				Object actualValue = candidate.eGet(feature);
-				if (!Objects.equals(actualValue, entry.getValue())) {
-					allMatch = false;
-					break;
-				}
+	@SuppressWarnings("unchecked")
+	private static boolean keyMatches(EObject candidate, Map<EStructuralFeature, Object> values,
+			Map<EStructuralFeature, EObject> owners) {
+		for (Map.Entry<EStructuralFeature, Object> entry : values.entrySet()) {
+			EStructuralFeature feature = candidate.eClass().getEStructuralFeature(entry.getKey().getName());
+			if (feature == null) {
+				return false;
 			}
-			if (allMatch) {
-				return candidate;
+			Object expected = entry.getValue() == null ? null : OclValues.toEcore(entry.getValue(), feature.getEType());
+			if (!Objects.equals(candidate.eGet(feature), expected)) {
+				return false;
+			}
+		}
+		for (Map.Entry<EStructuralFeature, EObject> entry : owners.entrySet()) {
+			EObject owner = entry.getValue();
+			EStructuralFeature feature = owner.eClass().getEStructuralFeature(entry.getKey().getName());
+			if (feature == null) {
+				return false;
+			}
+			Object held = owner.eGet(feature);
+			boolean holds = feature.isMany() ? ((List<Object>) held).contains(candidate) : held == candidate;
+			if (!holds) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** The template item for a property, by name; an opposite item or a plain one. */
+	private static PropertyTemplateItem itemFor(ObjectTemplateExp template, String property, boolean opposite) {
+		for (PropertyTemplateItem item : template.getPart()) {
+			EStructuralFeature feature = item.getReferredProperty();
+			if (feature != null && item.isIsOpposite() == opposite && property.equals(feature.getName())) {
+				return item;
 			}
 		}
 		return null;
 	}
 
 	/**
-	 * Finds an existing object in the target extent whose properties match the
-	 * template constraints backed by already-bound variables (§7.7).
+	 * A key part's value: for a nested object template the object it binds, or else the object
+	 * enforcing it gives — "resolve the nested template first" (#350).
 	 */
-	public EObject findByBoundVariables(ObjectTemplateExp template,
-			Map<String, Object> bindings, EClass eClass, TypedModel targetModel) {
-		Map<EStructuralFeature, Object> constraints = new HashMap<>();
-		for (PropertyTemplateItem item : template.getPart()) {
-			EStructuralFeature feature = item.getReferredProperty();
-			if (feature == null) {
-				continue;
+	private Object keyValue(PropertyTemplateItem item, Map<String, Object> bindings, TypedModel targetModel) {
+		if (item.getValue() instanceof ObjectTemplateExp nested) {
+			Variable var = nested.getBindsTo();
+			if (var != null && bindings.get(var.getName()) instanceof EObject bound) {
+				return bound;
 			}
-			OclExpression valueExpr = item.getValue();
-			if (valueExpr instanceof VariableExp varExp) {
-				Variable ref = varExp.getReferredVariable();
-				if (ref != null && bindings.containsKey(ref.getName())) {
-					Object value = bindings.get(ref.getName());
-					if (value != null) {
-						EStructuralFeature resolved = eClass.getEStructuralFeature(
-								feature.getName());
-						if (resolved != null) {
-							constraints.put(resolved, value);
-						}
-					}
-				}
-			}
+			EObject enforced = enforceObjectTemplate(nested, bindings, targetModel);
+			return enforced != null ? enforced : KEY_UNDETERMINED;
 		}
-		if (constraints.isEmpty()) {
-			return null;
-		}
-
-		List<EObject> candidates = extentManager.allInstances(targetModel, eClass);
-		for (EObject candidate : candidates) {
-			boolean allMatch = true;
-			for (Map.Entry<EStructuralFeature, Object> entry : constraints.entrySet()) {
-				if (!Objects.equals(candidate.eGet(entry.getKey()), entry.getValue())) {
-					allMatch = false;
-					break;
-				}
-			}
-			if (allMatch) {
-				return candidate;
-			}
-		}
-		return null;
+		return evaluatePropertyValue(item, bindings);
 	}
 
 	/**
@@ -387,16 +494,37 @@ public class QvtrEnforcer {
 	}
 
 	/**
-	 * Finds the Key declaration for the given EClass (§7.4).
+	 * Finds a Key declaration that applies to the given EClass (§7.4): the first of
+	 * {@link #findKeys}.
 	 */
 	public Key findKey(EClass eClass) {
+		List<Key> keys = findKeys(eClass);
+		return keys.isEmpty() ? null : keys.get(0);
+	}
+
+	/**
+	 * The keys that identify objects of the class (§7.4): those declared for the class itself or
+	 * a superclass, compared by identity, not by name. Keys of the most specific classes take
+	 * precedence — a superclass key applies only where no more specific class has one (decided
+	 * in #350).
+	 */
+	public List<Key> findKeys(EClass eClass) {
+		List<Key> applicable = new ArrayList<>();
 		for (Key key : transformation.getOwnedKey()) {
 			EClass identifies = key.getIdentifies();
-			if (identifies != null && identifies.getName().equals(eClass.getName())) {
-				return key;
+			if (identifies != null && identifies.isSuperTypeOf(eClass)) {
+				applicable.add(key);
 			}
 		}
-		return null;
+		List<Key> mostSpecific = new ArrayList<>();
+		for (Key key : applicable) {
+			boolean shadowed = applicable.stream().anyMatch(other -> other.getIdentifies() != key.getIdentifies()
+					&& key.getIdentifies().isSuperTypeOf(other.getIdentifies()));
+			if (!shadowed) {
+				mostSpecific.add(key);
+			}
+		}
+		return mostSpecific;
 	}
 
 	/**

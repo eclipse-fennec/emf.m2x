@@ -74,6 +74,7 @@ public final class QvtdConfiguration {
 
 	private final long timeoutMs;
 	private final int maxTraceRecords;
+	private final boolean deleteUnmatched;
 
 	private QvtdConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
@@ -93,6 +94,7 @@ public final class QvtdConfiguration {
 		this.maxBindings = builder.maxBindings;
 		this.timeoutMs = builder.timeoutMs;
 		this.maxTraceRecords = builder.maxTraceRecords;
+		this.deleteUnmatched = builder.deleteUnmatched;
 	}
 
 	/**
@@ -251,6 +253,16 @@ public final class QvtdConfiguration {
 	}
 
 	/**
+	 * Whether an enforce run deletes the target objects that no valid binding requires
+	 * (§7.10.2, #352). Defaults to {@code true}.
+	 *
+	 * @return {@code true} if unmatched target objects are deleted
+	 */
+	public boolean deleteUnmatched() {
+		return deleteUnmatched;
+	}
+
+	/**
 	 * Creates a builder that uses the given OCL engine.
 	 *
 	 * @param oclEngine the engine to evaluate OCL expressions with, must not be {@code null}
@@ -318,6 +330,7 @@ public final class QvtdConfiguration {
 		private int maxBindings = 10_000;
 		private long timeoutMs = DEFAULT_TIMEOUT_MS;
 		private int maxTraceRecords = DEFAULT_MAX_TRACE_RECORDS;
+		private boolean deleteUnmatched = true;
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
@@ -533,6 +546,18 @@ public final class QvtdConfiguration {
 				throw new IllegalArgumentException("maxTraceRecords must be positive: " + max);
 			}
 			this.maxTraceRecords = max;
+			return this;
+		}
+
+		/**
+		 * Sets whether an enforce run deletes the target objects that no valid binding requires.
+		 * §7.10.2 deletes them — "delete the objects bound to the variables of domain k" when no
+		 * source binding makes the relation hold for them — so a re-execution after a change in
+		 * the source equals a fresh one (§7.6). {@code false} keeps everything the target model
+		 * held, e.g. objects a user added by hand. Defaults to {@code true} (#352).
+		 */
+		public Builder deleteUnmatched(boolean delete) {
+			this.deleteUnmatched = delete;
 			return this;
 		}
 
