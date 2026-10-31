@@ -112,6 +112,7 @@ import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.Cont
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.FatalAssertionException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.RaiseException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.ReturnException;
+import org.eclipse.fennec.m2x.qvto.parser.QvtoStandardLibraryTypes;
 
 /**
  * Imperative AST interpreter for QVT-O transformations.
@@ -2832,20 +2833,47 @@ public class QvtoEvaluator {
 				// §8.2.2.13: search except clauses for matching type
 				// Wrap FatalAssertionException as RaiseException for uniform matching
 				RaiseException re = (ex instanceof RaiseException r) ? r
-						: new RaiseException("AssertionFailed", null);
+						: new RaiseException("AssertionFailed", ((FatalAssertionException) ex).message,
+								QvtoStandardLibraryTypes.lookup("AssertionFailed"));
 
 				for (CatchExp catchExp : exp.getExceptClause()) {
 					if (matchesExceptClause(catchExp, re)) {
-						Object result = WRAPPED_NULL;
-						for (OclExpression bodyExpr : catchExp.getBody()) {
-							result = wrapNull(eval(bodyExpr));
+						// §8.2.2.14: the caught exception, an instance of its class with its reason (#340)
+						env.pushScope();
+						try {
+							if (catchExp.getExceptionVariable() != null) {
+								env.define(catchExp.getExceptionVariable().getName(), exceptionObject(re));
+							}
+							Object result = WRAPPED_NULL;
+							for (OclExpression bodyExpr : catchExp.getBody()) {
+								result = wrapNull(eval(bodyExpr));
+							}
+							return result;
+						} finally {
+							env.popScope();
 						}
-						return result;
 					}
 				}
 				// No matching clause — re-throw
 				throw ex;
 			}
+		}
+
+		/**
+		 * The raised exception as an object: an instance of its class (§8.3.1.4-6), whose reason is
+		 * the argument it was raised with (#340). A class that cannot be instantiated — none known,
+		 * or abstract — is represented by Exception.
+		 */
+		private EObject exceptionObject(RaiseException re) {
+			EClass exceptionClass = re.exceptionClassifier instanceof EClass ec && !ec.isAbstract() ? ec
+					: QvtoStandardLibraryTypes.lookup(re.exceptionType) instanceof EClass known ? known
+					: (EClass) QvtoStandardLibraryTypes.lookup("Exception");
+			EObject exception = EcoreUtil.create(exceptionClass);
+			EStructuralFeature reason = exceptionClass.getEStructuralFeature("reason");
+			if (reason != null && re.argument != null) {
+				exception.eSet(reason, re.argument);
+			}
+			return exception;
 		}
 
 		private boolean matchesExceptClause(CatchExp catchExp, RaiseException re) {

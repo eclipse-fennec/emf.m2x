@@ -19,7 +19,7 @@ src=${^src}
 	org.osgi.test.junit5.cm;version=latest,\
 	org.antlr.antlr4-runtime;version=latest,\
 	org.eclipse.fennec.m2x.qvto.parser;version=snapshot,\
-	org.eclipse.fennec.m2x.qvto.engine;version=snapshot,\
+	org.eclipse.fennec.m2x.qvto.engine;version=snapshot;packages='*',\
 	org.eclipse.fennec.m2x.qvto.api;version=snapshot,\
 	org.eclipse.fennec.m2x.qvt.model;version=snapshot,\
 	org.eclipse.fennec.m2x.qvto.model;version=snapshot,\

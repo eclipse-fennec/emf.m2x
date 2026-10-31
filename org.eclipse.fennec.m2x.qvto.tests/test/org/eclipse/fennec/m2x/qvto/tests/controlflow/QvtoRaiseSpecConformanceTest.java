@@ -72,6 +72,59 @@ class QvtoRaiseSpecConformanceTest extends AbstractQvtoEngineTest {
 	}
 
 	@Test
+	void theExceptVariable_givesTheReason() throws Exception {
+		// §8.2.2.14 exceptionVariable; §8.3.1.5 StringException "reason : String"
+		QvtoExecutionResult result = run("""
+				try { raise 'boom'; } except (ex : StringException) { log('reason=' + ex.reason); };
+				try { raise new StringException('newed'); } except (ex : StringException) { log('new=' + ex.reason); };
+				""");
+		assertTrue(result.isSuccess(), () -> result.diagnostics().toString());
+		assertLogged(result, "reason=boom");
+		assertLogged(result, "new=newed");
+	}
+
+	@Test
+	void anAssertionFailure_carriesItsMessageAsReason() throws Exception {
+		// §8.3.1.6 AssertionFailed "reason : String"
+		QvtoExecutionResult result = run("""
+				try { assert fatal (false) with log('broken'); } except (e : AssertionFailed) { log('assert=' + e.reason); };
+				""");
+		assertTrue(result.isSuccess(), () -> result.diagnostics().toString());
+		assertLogged(result, "assert=broken");
+	}
+
+	@Test
+	void aUserException_extendsException_andIsTypedByTheCommonSupertype() throws Exception {
+		// §8.3.1.4: Exception is the base class of all exceptions
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    exception MyError;
+				    main() {
+				        try { raise MyError('mine'); } except (e : Exception) { log('base=' + e.reason); };
+				        try { raise MyError('both'); } except (e : StringException, MyError) {
+				            log('common=' + e.reason + ' ' + e.oclIsKindOf(MyError).repr());
+				        };
+				    }
+				}
+				""");
+		assertTrue(result.isSuccess(), () -> result.diagnostics().toString());
+		assertLogged(result, "base=mine");
+		assertLogged(result, "common=both true");
+	}
+
+	@Test
+	void theExceptVariable_isNotVisibleOutsideItsClause() throws Exception {
+		// An unknown variable is a run-time error in QVT-O, as anywhere else
+		QvtoExecutionResult result = run("""
+				try { raise 'x'; } except (ex : StringException) { log('in'); };
+				log('out=' + ex.reason);
+				""");
+		assertFalse(result.isSuccess());
+		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("Unresolved variable: ex")),
+				() -> result.diagnostics().toString());
+	}
+
+	@Test
 	void anUnknownExceptionType_isAParseError() {
 		assertThrows(QvtoParseException.class, () -> run("raise NoSuchException('x');"));
 	}
