@@ -69,7 +69,7 @@ M2tEngine engine = M2tEngines.create(config);
 
 // 2. Parse template
 Module module = engine.parse(
-    "[module m(Ecore)/]\n" +
+    "[module m(ecore)/]\n" +
     "[template public main(c : EClass)]\n" +
     "[file (c.name.concat('.java'), false)]\n" +
     "public class [c.name/] {}\n" +
@@ -182,7 +182,7 @@ M2tEngine engine = M2tEngines.create(config);
 | `maxCrossProductSize(int)` | 1,000,000 | Maximum cross-product size for set-argument invocations |
 | `maxOutputSize(long)` | 10,000,000 | Maximum total output size in characters (~10 MB), `0` for unlimited |
 | `protectedAreaEnabled(boolean)` | `true` | Enable/disable protected area markers and merging (see [§10.5](#105-disabling-protected-areas)) |
-| `unresolvedReferenceMode(mode)` | `FAIL` | What an unresolvable `extends`, `import`, `overrides` or invocation does (see [§5.5](#55-references-that-cannot-be-resolved)) |
+| `unresolvedReferenceMode(mode)` | `FAIL` | What an unresolvable `extends`, `import`, `overrides` or invocation does (see [§5.6](#56-references-that-cannot-be-resolved)) |
 
 ### 3.5 Which Metamodels the Engine Sees
 
@@ -430,17 +430,21 @@ MOFM2T templates use `[` and `]` as delimiters. Everything outside `[...]` is li
 Every template file starts with a module declaration:
 
 ```mtl
-[module myModule(Ecore)/]
+[module myModule(ecore)/]
 ```
 
-The parameter in parentheses is the metamodel used by the templates. For Ecore models, use `Ecore`.
+The parameter in parentheses is the metamodel the templates transform: a package of the engine's package registry, named by its nsURI as an escaped identifier (`_'http://www.eclipse.org/emf/2002/Ecore'`) or by its package name (`ecore` — the name is case-sensitive, `Ecore` is not it). A metamodel the registry does not have is a parse error with its position (MOFM2T §8.1.1); before, it was ignored silently.
+
+A module extends at most one module: `[module m(ecore) extends a, b/]` is a parse error, as §7 supports "only single inheritance".
 
 ### 4.2 Template
+
+A template declares its visibility, `public` or `private` (MOFM2T §8.2), or `protected` (Acceleo). A declaration without one is taken as public and reported as a WARNING "missing visibility (MOFM2T §8.2)"; the same holds for a query.
 
 Templates are the main code-generation constructs. A template marked `main` (or named `main`) is the entry point. The mark is the Acceleo comment `[comment @main/]` directly before the template; a module has one entry point, so a second `@main` is a parse error:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public main(c : EClass)]
 [file (c.name.concat('.java'), false)]
 class [c.name/]
@@ -518,6 +522,19 @@ The `i` variable is available inside for blocks as a 1-based iteration counter:
 
 Output: `1. ClasseA`, `2. ClasseB`, `3. AbstractClass`
 
+What a for block iterates over (MOFM2T §8.1.8):
+
+- a collection: its elements;
+- a single value: that value, once — as Acceleo and OCL's implicit `asSet` do: `[for (s : String | c.name)][s/][/for]` writes the name;
+- `null`: nothing;
+- `invalid`: nothing, and an ERROR.
+
+An element that is no instance of the loop variable's type is skipped, with one ERROR per block: `[for (a : EAttribute | c.eStructuralFeatures)]` leaves out the references. A for block takes an init section after its header; it is evaluated per iteration and sees the loop variable:
+
+```mtl
+[for (f : EStructuralFeature | c.eStructuralFeatures) { u : String = f.name.toUpper(); }][u/] [/for]
+```
+
 ### 4.5 If / ElseIf / Else
 
 Conditional output:
@@ -534,25 +551,28 @@ OTHER
 
 The spec end tags `[/elseif]` and `[/else]` are optional (MOFM2T §8.2): `[elseif (…)]B[/elseif][else]C[/else][/if]` is the same block.
 
+A condition "needs to evaluate to true" (MOFM2T §8.1.21). One that is neither `true` nor `false` — `null`, `invalid`, a String — decides nothing: no branch runs, the `else` branch included, and it is an ERROR. The same holds for a template guard and a for guard. A lenient navigation inside a comparison is not affected: `[if (c.ePackage.eSuperPackage.name = 'X')]` compares `null` with `'X'`, which is `false`.
+
 ### 4.6 Let Block
 
-Bind a variable for use within the block:
+A let block is a type test (MOFM2T §7, §8.1.16): its body runs when the value is an instance of the declared type, and the variable is then bound to it:
 
 ```mtl
-[let n : String = p.name]
-package: [n/]
+[let ac : EClass = c]
+class: [ac.name/]
 [/let]
 ```
 
-The `let` block also supports an `else` branch that executes when the binding evaluates to null:
+With `elselet` branches the first one whose value fits runs, otherwise the `else` branch:
 
 ```mtl
-[let prefix : String = p.nsPrefix]
-prefix: [prefix/]
-[else]
-no prefix
+[let r : EReference = f]reference [r.name/]
+[elselet a : EAttribute = f]attribute [a.name/]
+[else]other
 [/let]
 ```
+
+`null` is no instance of any type, so it takes the `else` branch. An `invalid` value is an ERROR, and the let block produces nothing — the `else` branch included. The type may be left out (`[let n = c.name]`); the variable then takes the type of its value, and only `null` fails the test. A declaration with neither type nor value is a parse error.
 
 ### 4.7 File Block
 
@@ -661,7 +681,7 @@ The engine reads templates in text-explicit mode. `@text-explicit` before the mo
 A template can call other templates defined in the same module:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public genAttribute(a : EAttribute)]
 private [a.eType.name/] [a.name/];
 [/template]
@@ -690,7 +710,7 @@ public class Employee {
 Templates can call templates that call further templates:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public attrGen(a : EAttribute)]
 [a.eType.name/] [a.name/]
 [/template]
@@ -710,6 +730,8 @@ Output: `class Employee(EString name, EDouble salary)`
 
 ### 5.3 Template Invocation with Before/After/Separator
 
+An invocation passes its arguments as MOFM2T §8.1.10 says: a collection argument for a single parameter invokes the template once per element (several such arguments: once per combination), a collection argument for a collection parameter invokes it once, and a single argument for a collection parameter is passed as a collection of one. `before` goes in front of the first invocation, `separator` between two and `after` behind the last — of the invocations that took place: a template its guard declines was not invoked, and gets neither. They apply to a single invocation too: `[t(c) before ('<') after ('>')/]` writes `<…>`.
+
 When invoking a template on a collection, use `before`, `after`, and `separator`:
 
 ```mtl
@@ -727,7 +749,7 @@ With `[template public fmt(c : EClassifier)][c.name/][/template]` this produces:
 Queries encapsulate reusable OCL logic:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [query public fieldCount(c : EClass) : Integer = c.eAttributes->size()/]
 [template public genSummary(c : EClass)]
 [c.name/] ([c.fieldCount()/] fields)
@@ -745,7 +767,7 @@ A query is callable wherever an OCL expression is evaluated, not only in a templ
 template guard, a `for` guard, a `let` and an `if` all reach it:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 [template public main(c : EClass) ? (c.hasOps())]
 [file ('out', false)]
@@ -759,13 +781,30 @@ Both call forms work: `c.hasOps()`, where the receiver is the query's first para
 their visibility, the public and protected ones of transitively extended modules, and the public ones
 of imported modules.
 
-### 5.5 References That Cannot Be Resolved
+### 5.5 Arguments, Arity and Overloading
+
+A call passes as many arguments as the template, query or macro has parameters; another number is a link error ("'t' takes 1 argument(s), the call passes 2"), handled as in §5.6. At runtime an argument that is `null` or `invalid`, or that is no instance of its parameter's type, is an ERROR at the argument, and the template is not invoked (MOFM2T §8.1.10). Unlike a QVT-O helper, which runs with a `null` argument, a template is skipped — as in Acceleo.
+
+`before`, `separator` and `after` belong to a template invocation; on a query call they are a link error, as a query yields a value.
+
+A template call may stand inside a larger OCL expression (§8.2 `<invocation>` is an `OclExpressionCS`); its value is the text it generates: `['<' + t(c) + '>'/]`.
+
+Same-named templates of one module are kept apart by their parameter types, and a call runs the most specific one its arguments fit:
+
+```mtl
+[template public t(x : EClass)]CLASS[/template]
+[template public t(p : EPackage)]PACKAGE[/template]
+```
+
+`[t(c)/]` writes `CLASS`, `[t(c.ePackage)/]` writes `PACKAGE`. This is Acceleo's overloading and a deliberate deviation from MOFM2T §8.1.2 ("A module element has a unique name within the containing module"). Two templates with the same parameter types are a link error, and so are a template, query or macro sharing a name with one of another kind, or two queries or macros of the same name.
+
+### 5.6 References That Cannot Be Resolved
 
 A reference naming something that is not there — an `extends`, an `import`, an `overrides` or an
 invocation — ends the generation with an error diagnostic and produces no files:
 
 ```mtl
-[module child(Ecore) extends missing/]
+[module child(ecore) extends missing/]
 [template public main(c : EClass)][file ('out', false)]body[/file][/template]
 ```
 
@@ -800,7 +839,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 A template can accept multiple parameters. Pass multiple input elements via `M2tContext.of(List, Path)`:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public main(p : EPackage, c : EClass)]
 [file ('out', false)]
 package [p.name/];
@@ -863,7 +902,7 @@ Output: `Employee_name : EString` / `Employee_salary : EDouble`
 Iterate over model elements and generate a separate file for each:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public genClass(c : EClass)]
 [file (c.name.concat('.java'), false)]
 public class [c.name/] {
@@ -887,7 +926,7 @@ Generates `Employee.java` and `Manager.java` with their respective attributes.
 Generate different kinds of files from the same model:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public main(p : EPackage)]
 [file ('MANIFEST.MF', false)]
 Bundle-Name: [p.name/]
@@ -909,7 +948,7 @@ Generates `MANIFEST.MF` plus one `.java` file per classifier.
 Use append mode (`true`) to accumulate output across iterations:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public main(p : EPackage)]
 [for (c : EClassifier | p.eClassifiers)]
 [file (c.name.concat('.java'), false)]
@@ -1024,6 +1063,10 @@ Override chains work transitively. With modules A -> B -> C, each overriding `re
 
 Result: `A+B+C`
 
+`[super/]` points to the template whose invocation led to the override (MOFM2T §8.1.3): with `t2 overrides t1, t3`, a call of `t3` that runs `t2` makes `[super/]` run `t3`, a call of `t1` runs `t1`. Where `t2` is called directly, the first listed template, `t1`, is the one. A main template in the child module that calls its own override reaches the base the same way.
+
+An override is checked when the modules are linked (MOFM2T §7, §8.1.3). It must name a public or protected template of a module the overriding one extends — not one of its own module, not itself, not one it only imports, not a private one — and have as many parameters, each of the same type as the overridden one's, a subtype or a supertype. Anything else is a link error, handled as in §5.6. At runtime an override applies when every argument is an instance of its parameter type and its guard holds; one parameter that decides for the overridden template decides for it.
+
 ### 8.4 Visibility
 
 | Visibility | Same module | Via extends | Via import |
@@ -1039,6 +1082,18 @@ When multiple modules define a template with the same name, resolution priority 
 1. **Local** (defined in the current module)
 2. **Extended** (inherited from the parent module)
 3. **Imported** (from imported modules)
+
+Of the candidates in that order, the first with as many parameters as the call has arguments is taken.
+
+### 8.5.1 Entry Points
+
+`execute(module, context)` starts from the public template marked `[comment @main/]`, else the public template named `main`, of the module or a module it extends. MOFM2T §7 has no main template — "A transformation (template) can be started by directly invoking a public template with the correct parameters" — and that is `execute(module, templateName, context)`:
+
+```java
+M2tResult result = engine.execute(module, "classToJava", M2tContext.of(eClass));
+```
+
+In both, the input elements must fit the template's parameters in number and type. A module without an entry point, a private one, or inputs that do not fit are an ERROR in the result, and nothing is generated — no exception.
 
 ### 8.6 Linking API
 
@@ -1072,7 +1127,7 @@ A guard is an OCL boolean expression that controls whether a template produces o
 [/template]
 ```
 
-When the guard evaluates to `false`, the template produces no output.
+When the guard evaluates to `false`, the template produces no output. A guard that is neither `true` nor `false` is an ERROR, and the template is not invoked (§4.5).
 
 A guard is an ordinary OCL expression and may call the module's queries, like any other expression
 in the module — see [§5.4](#54-calling-queries-from-templates).

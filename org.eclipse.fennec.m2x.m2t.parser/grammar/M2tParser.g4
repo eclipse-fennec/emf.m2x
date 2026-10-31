@@ -103,8 +103,9 @@ initSection
     : LBRACE (variableDeclaration SEMICOLON)+ RBRACE
     ;
 
+// OCL 2.4 VariableDeclarationCS: the type is optional (MOFM2T §8.2 <letcmd>, #363)
 variableDeclaration
-    : identifier COLON typeExpression (EQUALS expression)?
+    : identifier (COLON typeExpression)? (EQUALS expression)?
     ;
 
 // ==================== Query ====================

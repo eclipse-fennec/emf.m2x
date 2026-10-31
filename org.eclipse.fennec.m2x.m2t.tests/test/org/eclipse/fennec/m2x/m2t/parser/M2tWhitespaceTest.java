@@ -91,7 +91,7 @@ class M2tWhitespaceTest {
 		@DisplayName("template body trims leading newline after head")
 		void templateBodyTrimsLeadingNewline() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"Hello\n" +
@@ -104,7 +104,7 @@ class M2tWhitespaceTest {
 		@DisplayName("template body trims trailing newline before tail")
 		void templateBodyTrimsTrailingNewline() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"Hello\n" +
@@ -118,7 +118,7 @@ class M2tWhitespaceTest {
 		@DisplayName("file block body is trimmed too")
 		void fileBlockBodyTrimmed() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"content\n" +
@@ -138,7 +138,7 @@ class M2tWhitespaceTest {
 		@DisplayName("standalone for strips leading whitespace and trailing newline")
 		void standaloneForStripsLeadingWhitespace() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"  [for (c : EClassifier | p.eClassifiers)]\n" +
@@ -154,7 +154,7 @@ class M2tWhitespaceTest {
 		@DisplayName("standalone if strips leading whitespace and trailing newline")
 		void standaloneIfStripsLeadingWhitespace() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"  [if (true)]\n" +
@@ -169,7 +169,7 @@ class M2tWhitespaceTest {
 		@DisplayName("standalone let strips leading whitespace and trailing newline")
 		void standaloneLetStripsLeadingWhitespace() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"  [let name : String = p.name]\n" +
@@ -184,7 +184,7 @@ class M2tWhitespaceTest {
 		@DisplayName("embedded block preserves whitespace")
 		void embeddedBlockPreservesWhitespace() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"text[if (true)]yes[/if]\n" +
@@ -197,7 +197,7 @@ class M2tWhitespaceTest {
 		@DisplayName("standalone for with explicit separator keeps it")
 		void standaloneForExplicitSeparatorKept() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (c : EClassifier | p.eClassifiers) separator(', ')]\n" +
@@ -212,7 +212,7 @@ class M2tWhitespaceTest {
 		@DisplayName("nested standalone blocks each normalized independently")
 		void nestedStandaloneBlocks() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (c : EClassifier | p.eClassifiers) separator(', ')]\n" +
@@ -237,7 +237,7 @@ class M2tWhitespaceTest {
 		void bolIndicatorStripsLeadingWhitespace() throws M2tParseException {
 			M2tEngine specEngine = engineWithMode(WhitespaceMode.SPEC);
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"    ^content\n" +
@@ -251,7 +251,7 @@ class M2tWhitespaceTest {
 		void bolIndicatorMidLine() throws M2tParseException {
 			M2tEngine specEngine = engineWithMode(WhitespaceMode.SPEC);
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"line1\n" +
@@ -265,7 +265,7 @@ class M2tWhitespaceTest {
 		@DisplayName("ACCELEO: caret is passed through as literal text")
 		void acceleoCaretPassedThrough() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"    ^content\n" +
@@ -286,7 +286,7 @@ class M2tWhitespaceTest {
 		@DisplayName("standalone invocation propagates indent to every line")
 		void standaloneInvocationIndentPropagation() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"  [helper(p)/]\n" +
@@ -306,7 +306,7 @@ class M2tWhitespaceTest {
 		@DisplayName("embedded invocation does not propagate indent")
 		void embeddedInvocationNoIndent() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"text[helper(p)/]\n" +
@@ -323,7 +323,7 @@ class M2tWhitespaceTest {
 		@DisplayName("indent propagation indents the first line like every other (#277)")
 		void indentPropagationIndentsFirstLine() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"before\n" +
@@ -345,7 +345,7 @@ class M2tWhitespaceTest {
 		@DisplayName("an indented invocation of an empty template emits nothing")
 		void indentedInvocationOfEmptyTemplate() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"before\n" +
@@ -371,7 +371,7 @@ class M2tWhitespaceTest {
 			// invocation (e.g., when the argument is a collection), if a separator character
 			// is not specified, use 'new line' as the default separator".
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"A\n" +
@@ -389,7 +389,7 @@ class M2tWhitespaceTest {
 		@DisplayName("an indented iterative invocation indents every line of every iteration")
 		void indentedIterativeInvocation() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"A\n" +
@@ -408,7 +408,7 @@ class M2tWhitespaceTest {
 		@DisplayName("an explicit separator wins over the default")
 		void explicitSeparatorWins() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[item(p.eClassifiers) separator (', ')/]\n" +
@@ -422,7 +422,7 @@ class M2tWhitespaceTest {
 		@DisplayName("an embedded iterative invocation is output as is")
 		void embeddedIterativeInvocation() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"<[item(p.eClassifiers)/]>\n" +
@@ -436,7 +436,7 @@ class M2tWhitespaceTest {
 		@DisplayName("a single-object invocation is not iterative — no separator in play")
 		void singleObjectInvocation() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[item(p.eClassifiers->first())/]\n" +
@@ -458,7 +458,7 @@ class M2tWhitespaceTest {
 		void specModeDefaultNewlineSeparator() throws M2tParseException {
 			M2tEngine specEngine = engineWithMode(WhitespaceMode.SPEC);
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (c : EClassifier | p.eClassifiers)]\n" +
@@ -482,7 +482,7 @@ class M2tWhitespaceTest {
 		void noNormalizationWhenNoneMode() throws M2tParseException {
 			M2tEngine noneEngine = engineWithMode(WhitespaceMode.NONE);
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"Hello\n" +

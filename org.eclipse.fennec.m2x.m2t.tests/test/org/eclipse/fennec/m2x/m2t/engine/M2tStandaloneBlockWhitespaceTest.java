@@ -92,7 +92,7 @@ class M2tStandaloneBlockWhitespaceTest {
 
 	private String generate(String body) throws M2tParseException {
 		String mtl = """
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[template public main(c : EClass)]
 				[file ('out', false)]
 				""" + body + """

@@ -118,7 +118,7 @@ public class AbstractExpressionBuilder {
 	 * answer — reporting a miss, choosing a placeholder, setting a type on an expression.
 	 *
 	 * <p>The scope it holds is what the unit declares: {@code modeltype} / typed models /
-	 * {@code [module m(Ecore)]} / a Complete OCL {@code import}, plus the aliases such a
+	 * {@code [module m(ecore)]} / a Complete OCL {@code import}, plus the aliases such a
 	 * document introduces. OCL v2.4 §9.3 resolves a simple name in the context namespace and
 	 * what is imported into it, not in every package the JVM happens to know — until #158 a
 	 * scan of the whole registry did the latter, and which name resolved depended on what else

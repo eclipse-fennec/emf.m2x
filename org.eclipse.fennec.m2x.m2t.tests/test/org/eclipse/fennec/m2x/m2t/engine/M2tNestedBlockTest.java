@@ -479,7 +479,7 @@ class M2tNestedBlockTest {
 
 	private M2tResult execute(String body) throws M2tParseException {
 		String mtl = """
-				[module nested(Ecore)/]
+				[module nested(ecore)/]
 				[template public main(p : EPackage)]
 				""" + body + """
 				[/template]

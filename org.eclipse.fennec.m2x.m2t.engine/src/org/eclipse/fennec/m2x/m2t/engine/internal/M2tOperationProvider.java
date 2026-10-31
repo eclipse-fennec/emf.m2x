@@ -23,6 +23,7 @@ import java.util.function.BiFunction;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Query;
+import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
@@ -54,15 +55,18 @@ class M2tOperationProvider implements OclOperationProvider {
 
 	private final Module module;
 	private final BiFunction<Query, Object[], Object> invoker;
+	private final BiFunction<Template, Object[], Object> templateInvoker;
 
 	/**
 	 * @param module the module whose visible queries become OCL operations
 	 * @param invoker evaluates a query with its argument values — the evaluator's own path, so
 	 *            that a query calling another query recurses naturally
 	 */
-	M2tOperationProvider(Module module, BiFunction<Query, Object[], Object> invoker) {
+	M2tOperationProvider(Module module, BiFunction<Query, Object[], Object> invoker,
+			BiFunction<Template, Object[], Object> templateInvoker) {
 		this.module = Objects.requireNonNull(module, "module must not be null");
 		this.invoker = Objects.requireNonNull(invoker, "invoker must not be null");
+		this.templateInvoker = Objects.requireNonNull(templateInvoker, "templateInvoker must not be null");
 	}
 
 	@Override
@@ -71,6 +75,15 @@ class M2tOperationProvider implements OclOperationProvider {
 		List<OclOperation> operations = new ArrayList<>();
 		for (Query query : M2tModuleLinker.visibleQueries(module).values()) {
 			operations.add(toOperation(query, any));
+		}
+		// §8.2: an <invocation> is an OclExpressionCS, so a template can be called inside a
+		// larger expression; its value is the text it generates (#364)
+		EClassifier string = OclStandardLibrary.INSTANCE.string();
+		for (Template template : M2tModuleLinker.visibleTemplates(module).values()) {
+			int receiverFormArity = Math.max(0, template.getParameter().size() - 1);
+			operations.add(new OclOperation(template.getName(), any,
+					new ArrayList<>(Collections.nCopies(receiverFormArity, (EClassifier) any)), string,
+					(self, args) -> templateInvoker.apply(template, arguments(template.getParameter().size(), self, args))));
 		}
 		return operations;
 	}
@@ -90,7 +103,10 @@ class M2tOperationProvider implements OclOperationProvider {
 	}
 
 	private Object invoke(Query query, Object self, Object[] args) {
-		int parameterCount = query.getParameter().size();
+		return invoker.apply(query, arguments(query.getParameter().size(), self, args));
+	}
+
+	private static Object[] arguments(int parameterCount, Object self, Object[] args) {
 		Object[] arguments;
 		if (args.length == parameterCount) {
 			// hasOps(c) — every parameter is an argument, the receiver plays no part
@@ -101,6 +117,6 @@ class M2tOperationProvider implements OclOperationProvider {
 			arguments[0] = self;
 			System.arraycopy(args, 0, arguments, 1, args.length);
 		}
-		return invoker.apply(query, arguments);
+		return arguments;
 	}
 }

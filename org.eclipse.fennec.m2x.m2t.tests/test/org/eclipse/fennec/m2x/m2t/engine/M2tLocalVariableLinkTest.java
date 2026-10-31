@@ -69,7 +69,7 @@ class M2tLocalVariableLinkTest {
 
 	@Test
 	void theLoopVariable_inTheBody_separatorAndGuard() throws M2tParseException {
-		assertLinked("[module m(Ecore)/]\n"
+		assertLinked("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)]"
 				+ "[for (a : EAttribute | c.eAttributes) separator(a.name) ? (a.name <> '')][a.name/][/for]"
 				+ "[/template]\n", "a");
@@ -77,26 +77,26 @@ class M2tLocalVariableLinkTest {
 
 	@Test
 	void theLetVariable_inTheBody() throws M2tParseException {
-		assertLinked("[module m(Ecore)/]\n"
+		assertLinked("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][let n : String = c.name][n/][/let][/template]\n", "n");
 	}
 
 	@Test
 	void theElseLetVariable_inItsBody() throws M2tParseException {
-		assertLinked("[module m(Ecore)/]\n"
+		assertLinked("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][let n : Integer = c.name][n/][elselet k : String = c.name][k/][/let][/template]\n",
 				"k");
 	}
 
 	@Test
 	void aTemplateInitVariable_inTheBodyAndTheNextInit() throws M2tParseException {
-		assertLinked("[module m(Ecore)/]\n"
+		assertLinked("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass) {x : String = c.name; y : String = x;}][x/][y/][/template]\n", "x");
 	}
 
 	@Test
 	void aForInitVariable_inTheBody() throws M2tParseException {
-		assertLinked("[module m(Ecore)/]\n"
+		assertLinked("[module m(ecore)/]\n"
 				+ "[template public main(c : EClass)][for (a : EAttribute | c.eAttributes) {u : String = a.name.toUpper();}][u/][/for][/template]\n",
 				"u");
 	}

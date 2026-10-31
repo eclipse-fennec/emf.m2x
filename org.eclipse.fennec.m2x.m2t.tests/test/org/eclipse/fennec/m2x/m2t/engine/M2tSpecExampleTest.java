@@ -109,7 +109,7 @@ class M2tSpecExampleTest {
 		void classTemplate() throws M2tParseException {
 			// Spec §7.0 Ex.1: template that generates a class definition
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file (c.name.concat('.java'), false)]\n" +
 					"class [c.name/]\n" +
@@ -138,7 +138,7 @@ class M2tSpecExampleTest {
 		@DisplayName("for block with attributes — §7.0 Ex.3 (adapted to Ecore)")
 		void forBlockWithAttributes() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file (c.name.concat('.java'), false)]\n" +
 					"class [c.name/]\n" +
@@ -170,7 +170,7 @@ class M2tSpecExampleTest {
 		@DisplayName("for block with separator — §7.0 (adapted)")
 		void forBlockWithSeparator() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file ('attrs', false)]\n" +
 					"[for (a : EAttribute | c.eAttributes) separator (', ')]\n" +
@@ -196,7 +196,7 @@ class M2tSpecExampleTest {
 			// Spec §7.0: classToJava invokes attributeToJava
 			// Indent propagation: the indent goes before every line, the first included (#277)
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file ('out', false)]\n" +
 					"class [c.name/] {\n" +
@@ -231,7 +231,7 @@ class M2tSpecExampleTest {
 		@DisplayName("query invocation — adapted allOperations")
 		void queryInvocation() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[query public opCount(c : EClass) : Integer = c.eOperations->size()/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file ('out', false)]\n" +
@@ -254,7 +254,7 @@ class M2tSpecExampleTest {
 		@DisplayName("file block with append mode — §7.3")
 		void fileBlockAppend() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[for (c : EClassifier | p.eClassifiers)]\n" +
 					"[file ('log.txt', true)]\n" +
@@ -271,7 +271,7 @@ class M2tSpecExampleTest {
 		@DisplayName("nested file blocks — main file + log")
 		void nestedFileBlocks() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file (c.name.concat('.java'), false)]\n" +
 					"[file ('log.txt', true)]generating [c.name/][/file]\n" +
@@ -295,7 +295,7 @@ class M2tSpecExampleTest {
 		void simpleMacro() throws M2tParseException {
 			// Simple macro (self-closing invocation, no Body param)
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[macro wrap(c : EClass)]<[c.name/]>[/macro]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file ('out', false)]\n" +
@@ -318,7 +318,7 @@ class M2tSpecExampleTest {
 		@DisplayName("protected block with unique id — §7.2 (adapted)")
 		void protectedArea() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file (c.name.concat('.java'), false)]\n" +
 					"class [c.name/] {\n" +
@@ -353,7 +353,7 @@ class M2tSpecExampleTest {
 		void mainCallsHelper() throws M2tParseException {
 			// Ein main-Template delegiert die Attribut-Generierung an ein helper-Template
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public genAttribute(a : EAttribute)]\n" +
 					"private [a.eType.name/] [a.name/];\n" +
 					"[/template]\n" +
@@ -378,7 +378,7 @@ class M2tSpecExampleTest {
 		void threeLayerTemplateChain() throws M2tParseException {
 			// main ruft classGen auf, das wiederum attrGen aufruft
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public attrGen(a : EAttribute)]\n" +
 					"[a.eType.name/] [a.name/]\n" +
 					"[/template]\n" +
@@ -404,7 +404,7 @@ class M2tSpecExampleTest {
 		void templateWithQueryCall() throws M2tParseException {
 			// Query berechnet einen Wert, Template nutzt ihn
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[query public fieldCount(c : EClass) : Integer = c.eAttributes->size()/]\n" +
 					"[template public genSummary(c : EClass)]\n" +
 					"[c.name/] ([c.fieldCount()/] fields)\n" +
@@ -434,7 +434,7 @@ class M2tSpecExampleTest {
 		void twoParameterTemplate() throws M2tParseException {
 			// main nimmt sowohl EPackage als auch EClass als Parameter
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage, c : EClass)]\n" +
 					"[file ('out', false)]\n" +
 					"package [p.name/];\n" +
@@ -454,7 +454,7 @@ class M2tSpecExampleTest {
 		void navigateToReferencedElement() throws M2tParseException {
 			// Ein EClass-Template navigiert zum übergeordneten EPackage
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file (c.name.concat('.java'), false)]\n" +
 					"package [c.ePackage.name/];\n" +
@@ -477,7 +477,7 @@ class M2tSpecExampleTest {
 		void helperWithTwoParameters() throws M2tParseException {
 			// Ein Helper-Template bekommt Klasse und Prefix als Parameter
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public genField(a : EAttribute, prefix : EString)]\n" +
 					"[prefix/]_[a.name/] : [a.eType.name/]\n" +
 					"[/template]\n" +
@@ -515,7 +515,7 @@ class M2tSpecExampleTest {
 			managerClass.getEStructuralFeatures().add(deptAttr);
 
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public genClass(c : EClass)]\n" +
 					"[file (c.name.concat('.java'), false)]\n" +
 					"public class [c.name/] {\n" +
@@ -550,7 +550,7 @@ class M2tSpecExampleTest {
 		@DisplayName("Java-Datei + Manifest — unterschiedliche Dateitypen")
 		void javaFileAndManifest() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('MANIFEST.MF', false)]\n" +
 					"Bundle-Name: [p.name/]\n" +
@@ -586,7 +586,7 @@ class M2tSpecExampleTest {
 			pkg.getEClassifiers().add(managerClass);
 
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[for (c : EClassifier | p.eClassifiers)]\n" +
 					"[file (c.name.concat('.java'), false)]\n" +
