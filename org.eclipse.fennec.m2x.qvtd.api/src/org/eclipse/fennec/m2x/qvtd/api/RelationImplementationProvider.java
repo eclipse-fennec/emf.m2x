@@ -63,4 +63,36 @@ public interface RelationImplementationProvider {
 	 */
 	RelationImplementationResult invoke(String operationName, List<Object> arguments,
 			QvtdExecutionContext context);
+
+	/**
+	 * Returns whether this provider serves the given operation for the given relational
+	 * transformation.
+	 *
+	 * <p>An operational transformation names the relational transformation it implements with
+	 * {@code refines} (QVT v1.3 §8.2.1.1); a provider whose transformations say whom they refine
+	 * serves only that one (#286). The default ignores the name.
+	 *
+	 * @param transformationName the name of the running relational transformation
+	 * @param operationName the name of the operation an {@code implementedby} clause names
+	 * @return {@code true} if this provider can invoke it for that transformation
+	 */
+	default boolean canProvide(String transformationName, String operationName) {
+		return canProvide(operationName);
+	}
+
+	/**
+	 * Invokes the operation an {@code implementedby} clause of the given relational
+	 * transformation names — see {@link #invoke(String, List, QvtdExecutionContext)} and
+	 * {@link #canProvide(String, String)}. The default ignores the name.
+	 *
+	 * @param transformationName the name of the running relational transformation
+	 * @param operationName the operation, one this provider serves for that transformation
+	 * @param arguments the evaluated arguments of the {@code implementedby} call, in order
+	 * @param context the QVT-R execution context, whose extents the operation works on
+	 * @return the operation's result and what it reported, never {@code null}
+	 */
+	default RelationImplementationResult invoke(String transformationName, String operationName,
+			List<Object> arguments, QvtdExecutionContext context) {
+		return invoke(operationName, arguments, context);
+	}
 }

@@ -133,10 +133,14 @@ public class QvtrBlackboxBridge {
 			String opName = impl.getImpl().getName();
 			List<Object> arguments = evaluateArguments(impl, bindings);
 
-			// §7.8 / D39: a RelationImplementationProvider (QVT-O) first
+			// §7.8 / D39: a RelationImplementationProvider (QVT-O) first — one that serves the
+			// operation for this transformation, as its refines says (§8.2.1.1, #286)
+			String transformationName = relation.getTransformation() != null
+					? relation.getTransformation().getName() : null;
 			for (RelationImplementationProvider provider : implementationProviders) {
-				if (provider.canProvide(opName)) {
-					RelationImplementationResult result = provider.invoke(opName, arguments, context);
+				if (provider.canProvide(transformationName, opName)) {
+					RelationImplementationResult result = provider.invoke(transformationName, opName, arguments,
+							context);
 					diagnostics.addAll(result.diagnostics());
 					if (result.diagnostics().stream().anyMatch(d -> d.getSeverity() >= Diagnostic.ERROR)) {
 						return Implementation.FAILED;

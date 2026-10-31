@@ -1216,8 +1216,8 @@ Compiling against `qvto.api` therefore needs `qvtd.api` on the class path.
 When a relation with an `implementedby` clause for the enforced direction does not hold (§7.11.3.6):
 
 1. The engine evaluates the clause's arguments — the root objects of the other domains (§10, rule 4.5).
-2. It asks the registered providers, in registration order, `canProvide(operationName)` with the name the clause gives; a QVT-O engine answers for a mapping of that name in a loaded transformation.
-3. The first provider that serves it gets `invoke(operationName, arguments, context)`. The QVT-O engine runs that one mapping — not the transformation's `main()` — with the first argument as its context object if the mapping has one, and with its model parameters bound by name to the QVT-R run's extents, so what it creates lands in the QVT-R target. The result's diagnostics join the run's; an error among them fails it.
+2. It asks the registered providers, in registration order, `canProvide(transformationName, operationName)` with the name of the running relational transformation and the name the clause gives. A QVT-O engine answers for a mapping of that name in a loaded transformation that refines this relational transformation, or that says nothing about whom it refines (§10.4).
+3. The first provider that serves it gets `invoke(transformationName, operationName, arguments, context)`. The QVT-O engine runs that one mapping — not the transformation's `main()` — with the first argument as its context object if the mapping has one, and with its model parameters bound by name to the QVT-R run's extents, so what it creates lands in the QVT-R target. The result's diagnostics join the run's; an error among them fails it.
 4. If no provider serves the operation, a blackbox library may (§9); if none does, that is an error.
 5. The relation is checked again; if it still does not hold, that is an error.
 
@@ -1235,7 +1235,56 @@ mapping uml::Package::packageToSchema() : rdbms::Schema
 }
 ```
 
-The parser supports both `::` (spec §8.4.7) and `.` (Eclipse-compatible) separators in the `refines` module reference. `refines` records which relation a mapping implements; which mapping an `implementedby` clause calls is decided by the name the clause gives.
+The parser supports both `::` (spec §8.4.7) and `.` (Eclipse-compatible) separators in the `refines` module reference.
+
+The transformation's `refines` decides which relational transformation its mappings serve: `refines Uml2Rdbms` serves the `implementedby` clauses of `Uml2Rdbms` and of no other transformation. A transformation without `refines` serves any (#286). A mapping's `refines` records which relation it implements; which mapping an `implementedby` clause calls is decided by the name the clause gives.
+
+### 10.5 Under OSGi
+
+Under OSGi the QVT-O side is a service of its own, and the QVT-R engine binds it (#286).
+
+**1. Publish the QVT-O unit** as a `QvtoUnitResolver` service with its unit name, and mark it as a relation implementation:
+
+```java
+@Component(property = {
+    "qvto.unit.name=my.company.Uml2RdbmsImpl",
+    "qvto.relation.implementation=true" })
+public class Uml2RdbmsImplUnit implements QvtoUnitResolver {
+    @Override
+    public Optional<QvtoUnit> resolveUnit(String qualifiedName) {
+        try (InputStream in = getClass().getResourceAsStream("/transforms/Uml2RdbmsImpl.qvto")) {
+            String source = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            return Optional.of(new QvtoUnit.SourceUnit(qualifiedName,
+                    URI.createURI("bundle:/transforms/Uml2RdbmsImpl.qvto"), source));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e); // a unit that cannot be read is no "not found"
+        }
+    }
+}
+```
+
+Which relational transformation the unit serves is said by the unit itself, with `refines` (§10.4). The property only says that it is an implementation.
+
+**2. The provider.** The component `QvtoRelationImplementations` (in `org.eclipse.fennec.m2x.qvto.engine`) binds every unit so marked and is registered as `RelationImplementationProvider`. It loads the units into an engine instance of its own when they are first needed after they changed, so units may come and go at run time. A unit that cannot be resolved or parsed is not served. Without configuration there is one provider for all marked units. A factory configuration of the same name makes more, each narrowed with `units.target`:
+
+```json
+"QvtoRelationImplementations~uml": {
+    "units.target": "(&(qvto.relation.implementation=true)(qvto.unit.name=my.company.uml.*))",
+    "provider.group": "uml"
+}
+```
+
+**3. Enable it on the QVT-R engine.** `DefaultQvtdEngine` binds `RelationImplementationProvider` services through a dynamic `0..n` reference, but it uses them only when this is switched on, as with blackboxes (§9.2):
+
+```json
+"DefaultQvtdEngine": {
+    "qvtd.implementationProvidersEnabled": true,
+    "implementationProviders.target": "(provider.group=uml)",
+    "implementationProviders.cardinality.minimum": 1
+}
+```
+
+A provider runs code on the QVT-R run's models, so the switch is off by default. If it is off and providers are bound, a run with an `implementedby` clause says so in a WARNING. Several providers are asked in the order of their `service.ranking`, highest first. A provider registered with `registerImplementationProvider(...)` comes before them and needs no switch.
 
 ---
 
