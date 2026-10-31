@@ -63,7 +63,7 @@ workspace/
 **Key cross-component dependencies:**
 - `qvto.model` depends on `ocl.model` (ImperativeOCL extends OCL expression types)
 - `qvto.engine` depends on `ocl.engine` (delegates OCL expression evaluation)
-- `qvto.parser` imports `Ocl.g4` grammar for expression parsing
+- `qvto.parser` imports `Ocl.g4` grammar for expression parsing, and depends on `ocl.parser` for the shared OCL builder and the type rules (#378)
 
 ---
 
@@ -740,7 +740,34 @@ Entry rule: `compilationUnitEntry()`. Extends OCL with transformation-level cons
 
 `QvtoUnitBuilder` delegates expression sub-trees to `QvtoExpressionBuilder`.
 
-### 5.4 Parsing API
+### 5.4 Static typing (GAP-3, #378)
+
+`QvtoExpressionBuilder` builds its nodes itself, but holds an `AbstractExpressionBuilder` from
+`ocl.parser` as `support`, as the QVT-R and MTL builders do: operation calls are resolved and typed
+through it, and every OCL node is typed by its rules (`support.typeNode`, see the OCL architecture
+§5.10). Its errors go to the unit's diagnostics, at the QVT-O builder's position. QVT-O settings on
+`support`: the QVT-O library (`QvtoLibrarySignatures`, §8.3, on top of OCL's), implicit conditions
+(an element or a collection as an `if` condition, §8.4.5(2)), the unit's variables for type
+arguments, and — where the unit imports others — an open operation scope, in which a call on a model
+class that fits no library signature is left to the evaluator, since an imported helper may have that
+name.
+
+| What | Rule |
+|---|---|
+| Helpers and queries | `QvtoUnitBuilder.collectOperationSignatures` collects context, parameter types, defaults and result before any body is built (`QvtoScope.definitions`). A call — contextual, unit-level, or a contextual one with `self` as first argument (§8.2.1.10) — has the declared result type and its arguments are checked (#345). Fewer arguments are fine where parameters have defaults; a name of the unit that fits no arity is left to the evaluator |
+| ImperativeOCL (§8.2.2) | `BlockExp`, `WhileExp`, `ForExp`, `LogExp`, `AssertExp`, `ReturnExp`, `BreakExp`, `ContinueExp`, `RaiseExp`, `UnlinkExp` are `OclVoid`; `ComputeExp` the returned variable's type; `AltExp`/`SwitchExp` the (common) body type; `VariableInitExp` the variable's type with `::=`, else `OclVoid`; `AssignExp` the right-hand side's |
+| QVT-O expressions | `InstantiationExp`/`ObjectExp` the created class; a mapping call the declared result (`QvtoScope.mappingResults`); `ResolveExp`/`ResolveInExp` the target or `inMapping` result type, a `Sequence` of it unless `one`; `xcollect` a `Sequence` of the body, `xselect` of the source's elements or — for `coll[Type]` — of `Type` (§8.2.2.7 re-casting), the `…One` variants a single one |
+| Assignments (#339) | A variable's initial value conforms to its declared type (§8.2.2.10); an assignment's value conforms to the target, a collection target taking elements and collections of them; a collection assigned to a single-valued target is an error |
+| Model parameters (§8.2.1.5) | The type is a declared `modeltype` or a collection of one |
+| Type names (§8.4.8.1) | An unqualified name found in two declared packages is ambiguous, an error |
+| Disjuncts (§8.1.14.1) | A candidate has the disjunction's number of parameters, and a covariant result |
+| Overrides (§8.2.1.10) | At link time, with the base in hand: an operation of the same kind, name, context and arity as one of an `extends`-imported module overrides it — `overridden` is set — and each parameter type complies with the overridden one's |
+
+Intermediate class attributes are still typed `EJavaObject` whatever they declare; the type rules
+read `EJavaObject` as unknown, so they are never an error, and a declared attribute type is not
+checked yet.
+
+### 5.5 Parsing API
 
 ```java
 QvtoParserSupport parser = new QvtoParserSupport();
@@ -1185,7 +1212,7 @@ if (ro.oclIsKindOf(Family::Family)) then {
 - a mapping with `disjuncts` and a body (§8.2.1.15);
 - two contextual operations of one name, context and parameter types (§8.2.1.10).
 
-At run time a WARNING reports two kinds of side effect, without stopping the assignment: a property or module property assigned by a `query` (§8.2.1.12), and a property of an `inout` parameter assigned in an `init` section (§8.1.11.2). Only direct assignments are seen; a helper the query calls is not followed. Override compatibility, `overridden`, the types of model parameters and of explicit disjuncts are not checked (GAP-3). `refines` is a stub: the refined transformation is recorded by name, a mapping's `refines` as an annotation, and `relation`/`referredDomain` do not exist in the metamodel.
+At run time a WARNING reports two kinds of side effect, without stopping the assignment: a property or module property assigned by a `query` (§8.2.1.12), and a property of an `inout` parameter assigned in an `init` section (§8.1.11.2). Only direct assignments are seen; a helper the query calls is not followed. Override compatibility and `overridden`, the types of model parameters and the explicit disjuncts are checked by the type checker (§5.4). `refines` is a stub: the refined transformation is recorded by name, a mapping's `refines` as an annotation, and `relation`/`referredDomain` do not exist in the metamodel.
 
 **Lenient superset.** `==` and `!=` are accepted without the `use-traditional-comparison-syntax` directive (§8.4.4), and `=`/`<>` stay valid after it, as in Eclipse. **Precedence:** `xor` binds tighter than `or`, as in OCL v2.4 §9.3, while the QVT EBNF puts both on one level: `true xor true or true` is `false`. Both are deliberate (#346), and `QvtoConcreteSyntaxSpecConformanceTest` covers them.
 

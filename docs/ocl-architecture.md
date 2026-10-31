@@ -1592,10 +1592,9 @@ Optional `org.eclipse.fennec.m2x.ocl.uml` providing UML-specific OCL operations
 
 ### 14.4 Static typing in the other languages
 
-Stage A of GAP-3 (#378) types OCL and the OCL parts of QVT-R and MTL. QVT-O builds its expressions
-with its own builder; typing it, and the QVT-O checks of #378 (helper argument types, assignments,
-overrides, model types), is stage B. The constructs of QVT-R and MTL themselves (templates, text
-and file blocks) carry no type yet.
+GAP-3 (#378) types OCL and the OCL parts of QVT-R, MTL and QVT-O (stage B: QVT-O's builder uses
+`AbstractExpressionBuilder` as `support`, see the QVT-O architecture §5.4). The constructs of QVT-R
+and MTL themselves (templates, text and file blocks) carry no type yet.
 
 ### 14.5 Known Implementation Gaps
 
@@ -1603,7 +1602,7 @@ and file blocks) carry no type yet.
 |---|-----|----------|--------|
 | GAP-1 | Complete OCL document parsing | Critical | Done |
 | GAP-2 | `@pre` parsed but never evaluated | Critical | **Done** ✅ (PreStateSnapshot) |
-| GAP-3 | Static type checker | Critical | OCL done (stage A, #378, §5.10); QVT-O open (stage B) |
+| GAP-3 | Static type checker | Critical | Done (#378): OCL §5.10, QVT-O (QVT-O architecture §5.4) |
 | GAP-6 | MessageExp has no evaluator case | Medium | Deferred (Eclipse also doesn't implement) |
 | GAP-7 | `oclIsNew` absent | Medium | **Done** ✅ (compares against PreStateSnapshot) |
 
