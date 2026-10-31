@@ -1292,7 +1292,8 @@ tutorial and the tests cannot drift apart.
   "EObjectRegistryMetadataBridge~ocl": {
     "emf.eobject.registry.name": "ocl-compiled",
     "aspect.type.id": "ocl.compiled",
-    "anchorResolver.target": "(anchor.resolver.name=ocl)"
+    "anchorResolver.target": "(anchor.resolver.name=ocl)",
+    "anchorResolver.cardinality.minimum": 1
   },
 
   "DefaultOclEngine": {
@@ -1300,6 +1301,10 @@ tutorial and the tests cannot drift apart.
   }
 }
 ```
+
+`anchorResolver.cardinality.minimum` matters: the bridge takes its resolver as an optional
+static reference, and without the minimum a bridge that starts before the OCL resolver never
+binds it and anchors every entry on the expression instead of its class.
 
 The last one is what makes an engine use it. Without it everything above still runs and simply
 holds nothing anyone reads — nothing here displaces the default cache by existing.
