@@ -41,8 +41,10 @@ import org.eclipse.fennec.m2x.model.imperativeocl.AltExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.AssertExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.AssignExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.BlockExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.BreakExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ComputeExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ForExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
@@ -54,6 +56,7 @@ import org.eclipse.fennec.m2x.model.imperativeocl.SeverityKind;
 import org.eclipse.fennec.m2x.model.imperativeocl.SwitchExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.UnlinkExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
@@ -103,6 +106,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Visitor that transforms ANTLR4 parse tree nodes into EMF OCL + Imperative OCL AST nodes.
@@ -151,6 +155,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 */
 	private final AbstractExpressionBuilder support;
 
+	/** What the unit knows, among it the result types of its mappings. */
+	private final QvtoScope scope;
+
 	/**
 	 * Keeps the diagnostic position with the descent — see {@link ParseDiagnostics}. One override
 	 * covers the visitor, because every step into the tree goes through here.
@@ -182,6 +189,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			// the node's parts are built and typed; what it is itself follows from them
 			support.positionAt(line, column);
 			support.typeNode(expression);
+			typeImperative(expression);
 		}
 		// The same step that keeps the parse-time cursor also learns which node came out of this
 		// piece of text — the one place where both are in hand (#116).
@@ -189,6 +197,155 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			nodePositions.putIfAbsent(node, new SourcePosition(line, column));
 		}
 		return built;
+	}
+
+	/**
+	 * Types the expressions ImperativeOCL and QVT-O add to OCL (QVT v1.3 §8.2.2, §8.2.1.x, #378)
+	 * and checks what an assignment or a variable initialization is given against what it is
+	 * declared to hold (§8.2.2.10, §8.2.2.11, #339). A node with a type keeps it.
+	 */
+	private void typeImperative(OclExpression node) {
+		if (node.getType() != null) {
+			return;
+		}
+		EClassifier type = switch (node) {
+			// statements: "returns null" (§8.2.2.2, §8.2.2.4, §8.2.2.6, §8.2.2.15–§8.2.2.20)
+			case BlockExp b -> LIBRARY.oclVoid();
+			case WhileExp w -> LIBRARY.oclVoid();
+			case ForExp f -> LIBRARY.oclVoid();
+			case LogExp l -> LIBRARY.oclVoid();
+			case AssertExp a -> LIBRARY.oclVoid();
+			case ReturnExp r -> LIBRARY.oclVoid();
+			case BreakExp b -> LIBRARY.oclVoid();
+			case ContinueExp c -> LIBRARY.oclVoid();
+			case RaiseExp r -> LIBRARY.oclVoid();
+			case UnlinkExp u -> LIBRARY.oclVoid();
+			// §8.2.2.3: the value of the variable at the end of the body
+			case ComputeExp compute -> compute.getReturnedElement() != null ? compute.getReturnedElement().getType() : null;
+			// §8.2.2.9: the body if the condition holds, else null
+			case AltExp alt -> alt.getBody() != null ? alt.getBody().getType() : null;
+			case SwitchExp switchExp -> switchType(switchExp);
+			case VariableInitExp init -> init.isWithResult() && init.getReferredVariable() != null
+					? init.getReferredVariable().getType() : LIBRARY.oclVoid();
+			case AssignExp assign -> assign.getValue().size() == 1 ? assign.getValue().get(0).getType() : null;
+			case InstantiationExp instantiation -> instantiation.getInstantiatedClass();
+			case ResolveExp resolve -> resolveType(resolve);
+			case ImperativeIterateExp iterate -> imperativeIterateType(iterate);
+			case MappingCallExp call -> mappingResultType(call.getName());
+			default -> null;
+		};
+		if (type != null && node.getType() == null) {
+			node.setType(copyType(type));
+		}
+	}
+
+	private static final OclStandardLibrary LIBRARY = OclStandardLibrary.INSTANCE;
+
+	/** §8.2.2.8: the common supertype of what the alternatives and the else part give. */
+	private static EClassifier switchType(SwitchExp switchExp) {
+		List<EClassifier> types = new ArrayList<>();
+		for (AltExp alternative : switchExp.getAlternativePart()) {
+			types.add(alternative.getBody() != null ? alternative.getBody().getType() : null);
+		}
+		types.add(switchExp.getElsePart() != null ? switchExp.getElsePart().getType() : LIBRARY.oclVoid());
+		return OclTypeRules.commonSuperType(types);
+	}
+
+	/**
+	 * §8.2.2.10: "The initializer must … conform to any explicit Variable type". Checked where the
+	 * declaration is built, which is not always through {@link #visit}.
+	 */
+	private void checkVariableInit(Variable variable) {
+		OclExpression value = variable.getOwnedInit();
+		if (value != null && variable.getType() != null && value.getType() != null
+				&& !OclTypeRules.conformsTo(value.getType(), variable.getType())) {
+			support.addTypeFinding("The variable '" + variable.getName() + "' is declared as "
+					+ OclTypeRules.nameOf(variable.getType()) + " but initialized with a "
+					+ OclTypeRules.nameOf(value.getType()));
+		}
+	}
+
+	/**
+	 * §8.2.2.11: "the type of the LHS is unchanged by the assignment". A value that cannot be the
+	 * LHS's — a collection for a single-valued target, an element of the wrong type — is a type
+	 * error (#339).
+	 */
+	private void checkAssignment(AssignExp assign) {
+		OclExpression left = assign.getLeft();
+		EClassifier target = left != null ? OclTypeRules.normalize(left.getType()) : null;
+		EClassifier valueType = null;
+		for (OclExpression value : assign.getValue()) {
+			valueType = OclTypeRules.normalize(value.getType());
+			if (target == null || valueType == null) {
+				continue;
+			}
+			if (target instanceof CollectionType collection) {
+				// a collection target takes elements and collections of them (§8.2.2.11 flattening)
+				EClassifier element = valueType instanceof CollectionType given ? given.getElementType() : valueType;
+				if (!OclTypeRules.conformsTo(element, collection.getElementType())) {
+					support.addTypeFinding("A " + OclTypeRules.nameOf(valueType) + " cannot be assigned to a "
+							+ OclTypeRules.nameOf(target));
+				}
+			} else if (valueType instanceof CollectionType) {
+				support.addTypeFinding("A " + OclTypeRules.nameOf(valueType)
+						+ " cannot be assigned to a single-valued " + OclTypeRules.nameOf(target));
+			} else if (!OclTypeRules.conformsTo(valueType, target)) {
+				support.addTypeFinding("A " + OclTypeRules.nameOf(valueType) + " cannot be assigned to a "
+						+ OclTypeRules.nameOf(target));
+			}
+		}
+	}
+
+	/**
+	 * §8.2.2.x ResolveExp/ResolveInExp: the target's type, or the mapping's result type for a
+	 * resolveIn without target; a Sequence of it unless {@code one}. Without either the resolved
+	 * type is Object, whose values this parser knows nothing about.
+	 */
+	private EClassifier resolveType(ResolveExp resolve) {
+		EClassifier resolved = resolve.getTarget() != null ? resolve.getTarget().getType() : null;
+		if (resolved == null && resolve instanceof ResolveInExp resolveIn && resolveIn.getInMapping() != null
+				&& resolveIn.getInMapping().getResult().size() == 1) {
+			resolved = resolveIn.getInMapping().getResult().get(0).getEType();
+		}
+		if (resolve.isOne()) {
+			return resolved;
+		}
+		return OclTypeRules.collectionType(CollectionKind.SEQUENCE, copyType(resolved));
+	}
+
+	/**
+	 * §8.2.2.7: xcollect gives a Sequence of the body's values, xselect a Sequence of the source's
+	 * elements — of the type a TypeExp condition names — and the *One variants a single one;
+	 * xcollectselect gives what its target variable holds.
+	 */
+	private EClassifier imperativeIterateType(ImperativeIterateExp iterate) {
+		String name = iterate.getName();
+		if (name == null) {
+			return null;
+		}
+		EClassifier element = switch (name) {
+			case "xcollect" -> iterate.getOwnedBody() != null ? flatElement(iterate.getOwnedBody().getType()) : null;
+			case "xselect", "xselectOne" -> iterate.getCondition() instanceof TypeExp typeExp
+					? typeExp.getReferredType() : inferElementType(iterate.getOwnedSource());
+			case "xcollectselect", "xcollectselectOne" -> iterate.getTarget() != null ? iterate.getTarget().getType()
+					: null;
+			default -> null;
+		};
+		if (name.endsWith("One")) {
+			return element;
+		}
+		return OclTypeRules.collectionType(CollectionKind.SEQUENCE, copyType(element));
+	}
+
+	private static EClassifier flatElement(EClassifier type) {
+		EClassifier t = OclTypeRules.normalize(type);
+		return t instanceof CollectionType c ? c.getElementType() : type;
+	}
+
+	/** The result type of the mappings of that name, where they all declare the same one. */
+	private EClassifier mappingResultType(String name) {
+		List<EClassifier> types = scope.mappingResults().get(name);
+		return types == null || types.isEmpty() ? null : OclTypeRules.commonSuperType(types);
 	}
 
 	/**
@@ -210,7 +367,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 */
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
 			QvtoScope scope) {
-		Objects.requireNonNull(scope, "scope must not be null");
+		this.scope = Objects.requireNonNull(scope, "scope must not be null");
 		this.declaredPackages = scope.declaredPackages();
 		this.localTypes = scope.localTypes();
 		this.diagnostics = scope.diagnostics();
@@ -596,7 +753,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		// var x := expr → combine into VariableInitExp with init
 		if (left instanceof VariableInitExp varInit) {
-			varInit.getReferredVariable().setOwnedInit(right);
+			Variable variable = varInit.getReferredVariable();
+			variable.setOwnedInit(right);
+			if (variable.getType() == null && right != null && right.getType() != null) {
+				variable.setType(copyType(right.getType()));
+			}
+			positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+			checkVariableInit(variable);
 			return varInit;
 		}
 
@@ -613,6 +776,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			assign.getValue().clear();
 			assign.getValue().addAll(block.getBody());
 		}
+		positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+		checkAssignment(assign);
 		return assign;
 	}
 
@@ -742,6 +907,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		if (typeCondition != null) {
 			selectExp.setCondition(isKindOf(iterVar, typeCondition));
+			// §8.2.2.7 "Type re-casting": a Sequence of the type the condition names
+			selectExp.setType(OclTypeRules.collectionType(CollectionKind.SEQUENCE, typeCondition.getReferredType()));
 		} else {
 			OclExpression condition = (OclExpression) visit(conditionCtx);
 			selectExp.setCondition(condition);
@@ -783,6 +950,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		OclExpression condition;
 		if (typeCondition != null) {
 			condition = isKindOf(iterVar, typeCondition);
+			// §8.2.2.7 "Type re-casting": an instance of the type the condition names
+			anyExp.setType(typeCondition.getReferredType());
 		} else {
 			condition = (OclExpression) visit(ctx.xselectOneCondition);
 		}
@@ -1714,6 +1883,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (built != null && ctx.getStart() != null) {
 			nodePositions.putIfAbsent(built, new SourcePosition(ctx.getStart().getLine(),
 					ctx.getStart().getCharPositionInLine()));
+			// typed here for the same reason: a declaration does not pass through visit (#378)
+			positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+			typeImperative(built);
 		}
 		return built;
 	}
@@ -1927,13 +2099,27 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * a bare type name depend on what else was registered in the JVM.
 	 */
 	private EClassifier findInDeclaredPackages(String name) {
+		EClassifier first = null;
 		for (EPackage pkg : declaredScope()) {
 			EClassifier found = pkg.getEClassifier(name);
-			if (found != null) {
-				return found;
+			if (found == null || found == first) {
+				continue;
 			}
+			if (first != null) {
+				// §8.4.8.1: "If the resolution rule provides more than one result, the
+				// specification is erroneous" — before, the first package won (#346)
+				diagnostics.add(positions.at("Type '" + name + "' is ambiguous: " + qualified(first) + " and "
+						+ qualified(found) + "; qualify it with its model type or package (§8.4.8.1)"));
+				return first;
+			}
+			first = found;
 		}
-		return null;
+		return first;
+	}
+
+	private static String qualified(EClassifier classifier) {
+		return classifier.getEPackage() != null ? classifier.getEPackage().getName() + "::" + classifier.getName()
+				: classifier.getName();
 	}
 
 	/**
@@ -2772,6 +2958,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable var = buildVarFromDeclarator(ctx);
 		initExp.setReferredVariable(var);
+		positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+		checkVariableInit(var);
 
 		// §8.2.2.10: '::=' notation — withResult=true, the expression returns the init value
 		if (ctx.varInitOp() != null && ctx.varInitOp().getText().equals("::=")) {

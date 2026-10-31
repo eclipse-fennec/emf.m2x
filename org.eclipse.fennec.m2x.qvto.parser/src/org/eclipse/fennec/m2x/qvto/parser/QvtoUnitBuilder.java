@@ -141,6 +141,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private final Map<EObject, SourcePosition> earlierPositions = new IdentityHashMap<>();
 	/** The signatures of the unit's helpers and queries, known before any body is built (#378). */
 	private final List<AbstractExpressionBuilder.Definition> definitions = new ArrayList<>();
+	/** The declared result type of each mapping, by name, known before any body is built. */
+	private final Map<String, List<EClassifier>> mappingResults = new HashMap<>();
 	/** What this unit knows so far, shared with every expression builder it creates. */
 	private final QvtoScope scope;
 	private String intermediatePackageUri;
@@ -149,7 +151,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
-		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, declaredPackages, definitions);
+		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, declaredPackages, definitions,
+				mappingResults);
 		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry, scope);
 	}
 
@@ -222,6 +225,13 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 						mp.setEType(mt);
 						break;
 					}
+				}
+				if (mp.getEType() == null) {
+					// §8.2.1.5: "The type of a ModelParameter is a ModelType or Collection of a
+					// ModelType" — before, any other name left the parameter silently untyped
+					diagnostics.add(new ParseDiagnostic("Model parameter '" + mp.getName() + "' has the type '"
+							+ typeName + "', which is no model type of the transformation (§8.2.1.5)",
+							ParseDiagnostic.UNKNOWN_POSITION, ParseDiagnostic.UNKNOWN_POSITION));
 				}
 				mp.getEAnnotations().remove(ann);
 			}
@@ -2222,6 +2232,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				signature = element.queryDef().simpleSignature();
 				results = element.queryDef().resultList();
 			} else {
+				if (element.mappingDef() != null) {
+					collectMappingResult(element.mappingDef());
+				}
 				continue;
 			}
 			String fullName = expressionBuilder.scopedNameText(name);
@@ -2255,6 +2268,22 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// reported again where each operation is built
 		diagnostics.subList(reported, diagnostics.size()).clear();
 		updateExpressionBuilder();
+	}
+
+	/** The result type a mapping declares, for typing a call of it (§8.2.1.16, #378). */
+	private void collectMappingResult(QvtOParser.MappingDefContext mapping) {
+		String fullName = expressionBuilder.scopedNameText(mapping.scopedName());
+		int colon = fullName.lastIndexOf("::");
+		String name = colon >= 0 ? fullName.substring(colon + 2) : fullName;
+		QvtOParser.ResultListContext results = mapping.mappingSignature().resultList();
+		EClassifier type = null;
+		if (results != null && results.resultParam().size() == 1) {
+			QvtOParser.ResultParamContext result = results.resultParam().get(0);
+			QvtOParser.TypeSpecContext typeSpec = result instanceof QvtOParser.NamedResultContext named
+					? named.typeSpec() : ((QvtOParser.UnnamedResultContext) result).typeSpec();
+			type = expressionBuilder.resolveTypeExpression(typeSpec.typeExpression());
+		}
+		mappingResults.computeIfAbsent(name, k -> new ArrayList<>()).add(type);
 	}
 
 	private void preRegisterTypedefs(List<QvtOParser.ModuleElementContext> elements) {

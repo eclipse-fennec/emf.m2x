@@ -1666,21 +1666,28 @@ public class AbstractExpressionBuilder {
 			if (!definition.isOperation() || !definition.name().equals(exp.getName())) {
 				continue;
 			}
+			// QVT-O §8.2.1.10: a contextual operation "can be invoked either as a non-contextual
+			// operation (self is the first argument of the call expression) or as an operation of
+			// the context class"
+			boolean selfAsArgument = definition.owner() != null && unitLevel
+					&& exp.getOwnedArguments().size() == definition.parameterTypes().size() + 1
+					&& definition.appliesTo(exp.getOwnedArguments().get(0).getType());
 			boolean applies = definition.owner() == null ? unitLevel
-					: receiver != null && definition.appliesTo(receiver);
+					: selfAsArgument || receiver != null && definition.appliesTo(receiver);
 			if (!applies) {
 				continue;
 			}
 			named = true;
-			if (!definition.takes(exp.getOwnedArguments().size())) {
+			int offset = selfAsArgument ? 1 : 0;
+			if (!definition.takes(exp.getOwnedArguments().size() - offset)) {
 				continue;
 			}
-			for (int i = 0; i < exp.getOwnedArguments().size(); i++) {
+			for (int i = offset; i < exp.getOwnedArguments().size(); i++) {
 				EClassifier argument = exp.getOwnedArguments().get(i).getType();
-				EClassifier parameter = definition.parameterTypes().get(i);
+				EClassifier parameter = definition.parameterTypes().get(i - offset);
 				if (!OclTypeRules.conformsTo(argument, parameter)) {
 					addTypeFinding("Argument " + (i + 1) + " of " + definition.name() + " is a "
-							+ OclTypeRules.nameOf(argument) + ", but the parameter '" + definition.parameterNames().get(i)
+							+ OclTypeRules.nameOf(argument) + ", but the parameter '" + definition.parameterNames().get(i - offset)
 							+ "' is a " + OclTypeRules.nameOf(parameter));
 				}
 			}
