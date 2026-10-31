@@ -761,11 +761,19 @@ name.
 | Model parameters (§8.2.1.5) | The type is a declared `modeltype` or a collection of one |
 | Type names (§8.4.8.1) | An unqualified name found in two declared packages is ambiguous, an error |
 | Disjuncts (§8.1.14.1) | A candidate has the disjunction's number of parameters, and a covariant result |
+| Intermediate attributes (#404) | Typed as declared (below), so an assignment to one is checked like any other |
 | Overrides (§8.2.1.10) | At link time, with the base in hand: an operation of the same kind, name, context and arity as one of an `extends`-imported module overrides it — `overridden` is set — and each parameter type complies with the overridden one's |
 
-Intermediate class attributes are still typed `EJavaObject` whatever they declare; the type rules
-read `EJavaObject` as unknown, so they are never an error, and a declared attribute type is not
-checked yet.
+**Intermediate class attributes (#404)** have the Ecore type of what the engine computes with, so a
+written value fits and reads back as the same OCL value: `String` → `EString`, `Boolean` →
+`EBooleanObject` (null by default, #339), `Integer` → `EBigInteger` (unbounded, #322), `Real` →
+`EBigDecimal`; a data type of a metamodel or of the module stays itself. A class type makes a
+reference (not contained unless `composes`), a collection type a multi-valued feature of its element
+type. What has no Ecore counterpart — `UnlimitedNatural`, tuples, `Dict`, `OclAny` — stays
+`EJavaObject`, which the type rules read as unknown. Every write converts numbers to the attribute's
+instance class (`coerceForFeature`, also for defaults and `out` arguments). Intermediate instances do
+not leave the run (§8.2.1.1) except through the trace or an explicit extent; there the declared
+types make their values serializable.
 
 ### 5.5 Parsing API
 

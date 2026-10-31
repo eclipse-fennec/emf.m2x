@@ -1470,11 +1470,30 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 			feature = ref;
 		} else {
-			// EAttribute: default to EJAVA_OBJECT (as before)
-			EAttribute attr = EcoreFactory.eINSTANCE.createEAttribute();
-			attr.setName(featureName);
-			attr.setEType(EcorePackage.Literals.EJAVA_OBJECT);
-			feature = attr;
+			EClassifier declared = expressionBuilder.resolveTypeExpression(featureCtx.typeExpression());
+			EClassifier elementType = declared instanceof CollectionType collection ? collection.getElementType()
+					: declared;
+			if (elementType instanceof EClass targetClass) {
+				// a class-typed property holds objects: a reference, as an attribute cannot have a
+				// class type (Ecore); not contained, as 'composes' was not written
+				EReference ref = EcoreFactory.eINSTANCE.createEReference();
+				ref.setName(featureName);
+				ref.setEType(targetClass);
+				feature = ref;
+			} else {
+				EAttribute attr = EcoreFactory.eINSTANCE.createEAttribute();
+				attr.setName(featureName);
+				attr.setEType(attributeType(elementType));
+				feature = attr;
+			}
+			if (declared instanceof CollectionType collection && featureCtx.multiplicity() == null) {
+				// a collection-typed property is a multi-valued feature of its element type, as a
+				// module property is since #339
+				feature.setUpperBound(ETypedElement.UNBOUNDED_MULTIPLICITY);
+				CollectionKind kind = collection.getKind();
+				feature.setOrdered(kind == CollectionKind.SEQUENCE || kind == CollectionKind.ORDERED_SET);
+				feature.setUnique(kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET);
+			}
 		}
 
 		// Multiplicity
@@ -1541,6 +1560,30 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 
 		intermediateClass.getEStructuralFeatures().add(feature);
+	}
+
+	/**
+	 * The Ecore type an intermediate attribute of the declared type has (§8.1.10, #404): the one
+	 * whose instance class is what the engine computes with — Integer unbounded (#322), Real a
+	 * BigDecimal, Boolean null by default (#339) — so a written value fits and reads back as the
+	 * same OCL value. A data type of a metamodel or of the module stays itself; what has no Ecore
+	 * counterpart (UnlimitedNatural, tuples, Dict, OclAny, an unknown type) stays EJavaObject,
+	 * which the type rules read as unknown.
+	 */
+	private static EClassifier attributeType(EClassifier declared) {
+		if (declared instanceof PrimitiveType primitive) {
+			return switch (primitive.getName()) {
+				case "String" -> EcorePackage.Literals.ESTRING;
+				case "Boolean" -> EcorePackage.Literals.EBOOLEAN_OBJECT;
+				case "Integer" -> EcorePackage.Literals.EBIG_INTEGER;
+				case "Real" -> EcorePackage.Literals.EBIG_DECIMAL;
+				default -> EcorePackage.Literals.EJAVA_OBJECT;
+			};
+		}
+		if (declared instanceof EDataType && !(declared instanceof OclType)) {
+			return declared;
+		}
+		return EcorePackage.Literals.EJAVA_OBJECT;
 	}
 
 	/**

@@ -1374,7 +1374,7 @@ public class QvtoEvaluator {
 					&& eval(propExp.getOwnedSource()) instanceof EObject target
 					&& target.eClass().getEAllStructuralFeatures().contains(propExp.getReferredProperty())) {
 				checkNotReadOnly(target, propExp.getReferredProperty().getName(), argExpr);
-				target.eSet(propExp.getReferredProperty(), args[i]);
+				target.eSet(propExp.getReferredProperty(), coerceForFeature(propExp.getReferredProperty(), args[i]));
 			}
 		}
 	}

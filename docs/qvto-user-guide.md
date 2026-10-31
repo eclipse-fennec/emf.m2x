@@ -686,8 +686,9 @@ same name, context and arity — needs parameter types that comply with the over
 (§8.2.1.10); that is checked when the transformation is linked, so it surfaces at `compile()` or
 `execute()`, like an unresolved import.
 
-Unknown types are never an error: a value of a dynamic model, a blackbox result, an intermediate
-class attribute (typed `EJavaObject` for now), a call into an imported unit. What the evaluator
+Unknown types are never an error: a value of a dynamic model, a blackbox result, a call into an
+imported unit. Intermediate class attributes have their declared type (#404), so
+`h.label := 5` for `label : String` is a type error too. What the evaluator
 meets at run time is checked there, as before.
 
 ### 9.2 Execution Diagnostics
