@@ -28,8 +28,10 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
 import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
+import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.MacroInvocation;
 import org.eclipse.fennec.m2x.model.m2t.Module;
@@ -42,7 +44,6 @@ import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
 import org.eclipse.fennec.m2x.model.m2t.VisibilityKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
-import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 
@@ -318,8 +319,8 @@ public class M2tModuleLinker {
 	// --- Phase 5: Inline invocation resolution ---
 
 	/**
-	 * Walks the module AST to find inline expression wrappers (LetBlock with
-	 * __inline__ variable) that contain OperationCallExp matching a module element.
+	 * Walks the module AST to find inline expressions ({@code [expr/]}) whose expression is an
+	 * OperationCallExp matching a module element.
 	 * Replaces them with the appropriate invocation node.
 	 */
 	private void resolveInlineInvocations(Module module) {
@@ -338,16 +339,11 @@ public class M2tModuleLinker {
 		for (int i = 0; i < body.size(); i++) {
 			TemplateExpression expr = body.get(i);
 
-			// Check for __inline__ LetBlock wrapper around OperationCallExp
-			if (expr instanceof LetBlock letBlock
-					&& letBlock.getLetVariable() != null
-					&& letBlock.getLetVariable().getName().startsWith("__inline__")
-					&& letBlock.getBody().isEmpty()) {
+			// An inline expression whose expression calls a template, query or macro
+			if (expr instanceof InlineExpression inline) {
+				OclExpression init = inline.getExpression();
 
-				Variable letVar = letBlock.getLetVariable();
-				OclExpression init = letVar.getOwnedInit();
-
-				// Handle [super/] — parsed as VariableExp("super") inside __inline__ LetBlock
+				// Handle [super/] — parsed as VariableExp("super") inside an inline expression
 				if (init instanceof VariableExp ve
 						&& ve.getReferredVariable() != null
 						&& "super".equals(ve.getReferredVariable().getName())) {
@@ -363,6 +359,7 @@ public class M2tModuleLinker {
 					if (opName != null) {
 						ModuleElement target = resolveModuleElement(opName, contextModule);
 						if (target != null) {
+							checkBodyArgument(target, opCall, contextModule);
 							TemplateExpression replacement = createInvocation(target, opCall);
 							if (replacement != null) {
 								body.set(i, replacement);
@@ -441,6 +438,26 @@ public class M2tModuleLinker {
 			return inv;
 		}
 		return null;
+	}
+
+	/**
+	 * §7.4, §8.1.19, §8.1.20: a body goes to a macro whose last parameter is of type Body, and
+	 * such a macro is called with one (#371).
+	 */
+	private void checkBodyArgument(ModuleElement target, OperationCallExp call, Module contextModule) {
+		List<OclExpression> arguments = call.getOwnedArguments();
+		boolean withBody = !arguments.isEmpty() && arguments.get(arguments.size() - 1) instanceof Block;
+		boolean takesBody = target instanceof Macro macro && !macro.getParameter().isEmpty()
+				&& macro.getParameter().get(macro.getParameter().size() - 1).getType() == M2tPackage.Literals.BODY;
+		if (withBody && !takesBody) {
+			unresolved(contextModule, "'" + target.getName() + "' is called with a body, but "
+					+ (target instanceof Macro ? "the macro has no Body parameter" : "only a macro takes one")
+					+ " (MOFM2T §8.1.19)", positionOf(contextModule, call));
+		} else if (takesBody && !withBody) {
+			unresolved(contextModule, "Macro '" + target.getName()
+					+ "' takes a body: call it as [" + target.getName() + "(…)]…[/" + target.getName() + "] (MOFM2T §7.4)",
+					positionOf(contextModule, call));
+		}
 	}
 
 	// --- Resolution helpers ---

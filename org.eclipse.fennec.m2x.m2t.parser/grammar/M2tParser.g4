@@ -271,9 +271,15 @@ templateInvocation
 // §7.4, §8.1.20: [name(args)]…body…[/name] — a macro invocation whose body is the macro's last,
 // Body-typed argument (#371)
 macroBlockInvocation
-    : BLOCK_OPEN pathName LPAREN argumentList? RPAREN CLOSE
+    : BLOCK_OPEN name=macroName LPAREN argumentList? RPAREN CLOSE
       body
-      BLOCK_OPEN SLASH endName=pathName CLOSE
+      BLOCK_OPEN SLASH endName=macroName CLOSE
+    ;
+
+// A plain name: a block keyword ([elseif (c)], [for (…)], …) opens its own block, never a macro
+// invocation, whose head looks the same
+macroName
+    : (IDENTIFIER | ESCAPED_IDENTIFIER) (COLONCOLON identifier)*
     ;
 
 // ==================== OCL Expressions (inline, same precedence as OCL v2.5) ====================

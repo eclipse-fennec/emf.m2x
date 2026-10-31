@@ -1956,10 +1956,6 @@ class OclStdlib {
 		};
 	}
 
-	private static int compareOcl(Object a, Object b) {
-		return OclCollectionUtil.compareOcl(a, b);
-	}
-
 	/**
 	 * The key of the Dict that is OCL-equal to {@code key} — the key itself on a hash hit,
 	 * otherwise the one {@code oclEquals} matches — or {@link #NOT_FOUND} (#317).

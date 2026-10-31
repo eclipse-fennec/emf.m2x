@@ -1292,10 +1292,6 @@ public class OclEvaluator extends OclSwitch<Object> {
 		}
 	}
 
-	private static int compareOcl(Object a, Object b) {
-		return OclCollectionUtil.compareOcl(a, b);
-	}
-
 	private Object iteratorClosure(Collection<?> source, List<Variable> iterVars,
 			OclExpression body) {
 		// §11.9.1: Result = OrderedSet if source is ordered, Set otherwise

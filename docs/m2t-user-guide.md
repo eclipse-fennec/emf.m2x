@@ -437,7 +437,7 @@ The parameter in parentheses is the metamodel used by the templates. For Ecore m
 
 ### 4.2 Template
 
-Templates are the main code-generation constructs. A template marked `main` (or named `main`) is the entry point:
+Templates are the main code-generation constructs. A template marked `main` (or named `main`) is the entry point. The mark is the Acceleo comment `[comment @main/]` directly before the template; a module has one entry point, so a second `@main` is a parse error:
 
 ```mtl
 [module m(Ecore)/]
@@ -475,7 +475,12 @@ Inline OCL expressions are enclosed in `[` and `/]`:
 [c.eAttributes->size()/]            [comment]collection operation[/comment]
 [c.name.toUpper()/]                 [comment]string operation[/comment]
 ['hello'.concat(' world')/]         [comment]string literal[/comment]
+[c.abstract ? 'A' : 'C'/]           [comment]conditional (MOFM2T §8.2 ifExp)[/comment]
 ```
+
+The expression part is OCL v2.4 as the OCL engine parses it — escaped identifiers (`_'it\'s'`), qualified features (`self.EClassifier::name`), `iterate` without an iterator variable and nested `/* */` comments included; a test runs the OCL expression corpus through `[expr/]` as well. `cond ? a : b` is the MOFM2T shorthand for `if cond then a else b endif`.
+
+In a template, query or macro, `self` is the first parameter; in a `post` expression it is the generated text.
 
 ### 4.4 For Block
 
@@ -527,6 +532,8 @@ OTHER
 [/if]
 ```
 
+The spec end tags `[/elseif]` and `[/else]` are optional (MOFM2T §8.2): `[elseif (…)]B[/elseif][else]C[/else][/if]` is the same block.
+
 ### 4.6 Let Block
 
 Bind a variable for use within the block:
@@ -565,6 +572,8 @@ Generated: [c.name/]
 [/file]
 ```
 
+The `let` block also takes `[elselet v : T = e]` branches; the spec's `[/elselet]` end tag may be written or left out (Acceleo leaves it out).
+
 ### 4.8 Query
 
 Queries are reusable OCL expressions that return a value:
@@ -579,15 +588,15 @@ Use in templates:
 [c.opCount()/]
 ```
 
+The body must conform to the declared return type. Where the parser knows the body's type, a mismatch is a parse error (`[query public q(c : EClass) : Integer = 'abc'/]`); otherwise the evaluator checks the value and reports a WARNING when it does not conform (MOFM2T §8.1.15).
+
 ### 4.9 Macro
 
-Macros are like templates that return a string value rather than writing to the output stream:
+A macro is a block that is expanded where it is called and writes to the output there, like a template (MOFM2T §7.4, §8.1.19):
 
 ```mtl
 [macro wrap(c : EClass)]<[c.name/]>[/macro]
 ```
-
-Use in templates:
 
 ```mtl
 Result: [wrap(c)/]
@@ -595,17 +604,53 @@ Result: [wrap(c)/]
 
 Output: `Result: <Employee>`
 
+A macro may take a body. Its last parameter is then of the predefined type `Body`, and the call passes the text between the start and the end tag; `[b/]` inserts it. The body is expanded in the context of the call, so it sees the caller's variables:
+
+```mtl
+[macro javaMethod(type : String, name : String, resultType : String, body : Body)]
+public [resultType/] [name/]() {
+  [body/]
+}
+[/macro]
+
+[javaMethod(t, 'm', 'r')]result = [c.name/];[/javaMethod]
+```
+
+Only the last parameter may be a `Body`. A macro with a `Body` parameter is called with a body (`[m(…)]…[/m]`), any other one without (`[m(…)/]`); the wrong form is an unresolved reference. The end tag must name the macro it closes. Recursion counts towards the template depth limit, and the body of a macro is normalised like that of a template (§16).
+
 ### 4.10 Comment
+
+Three forms are comments:
 
 ```mtl
 [comment]
-  this is a comment, and it is discarded
+  the Acceleo block form — its content is discarded
 [/comment]
+
+[comment()]the MOFM2T form: the predefined comment macro with a body (§7.4)[/comment]
+
+[comment a single-line comment, Acceleo /]
 ```
 
-Only the paired form exists. MOFM2T v1.0 specifies comments as a macro — `[comment()] … [/comment]` — and the grammar follows that; the single-expression form `[comment]…[/comment]` is an Acceleo 3.x extension the parser does not know.
+The body of a block comment is literal text up to the first `[/comment]`. Square brackets and template code inside it are neither parsed nor evaluated, so `[comment]// see [:tlsPort][/comment]` or `[comment][c.oldName/][/comment]` are fine. Because the first `[/comment]` closes the comment, comments do not nest. An unterminated `[comment]` is a parse error.
 
-The body of a comment is literal text up to the first `[/comment]`. Square brackets and template code inside it are neither parsed nor evaluated, so `[comment]// see [:tlsPort][/comment]` or `[comment][c.oldName/][/comment]` are fine. Because the first `[/comment]` closes the comment, comments do not nest. An unterminated `[comment]` is a parse error.
+`[comment @main/]` directly before a template marks it as the entry point (§4.2).
+
+`//` is no comment in a template body: MOFM2T §8.2 treats text after `//` as a comment only in code-explicit mode, and in text-explicit mode it is output like any other text (the spec's own §7 example generates `// Constructor`).
+
+### 4.11 Trace
+
+```mtl
+[trace (c)]class [c.name/][/trace]
+```
+
+A trace block outputs its body. The model element is evaluated, and an invalid one is an ERROR (MOFM2T §8.1.18); trace records (file, range, model element, template) are not collected — `M2tResult` carries none.
+
+### 4.12 Text Outside Templates and Escape Modes
+
+Text between module elements is not generated. Text other than whitespace there is usually a tag whose `[` went missing, so the parser reports it as a WARNING with its position (`unit:line:col: text outside a template is not generated: '…' (MOFM2T §8.2)`). Parse warnings reach the caller as WARNING diagnostics of the `M2tResult`.
+
+The engine reads templates in text-explicit mode. `@text-explicit` before the module declaration is accepted and changes nothing; `@code-explicit` is a parse error "code-explicit mode is not supported" with its position.
 
 ---
 

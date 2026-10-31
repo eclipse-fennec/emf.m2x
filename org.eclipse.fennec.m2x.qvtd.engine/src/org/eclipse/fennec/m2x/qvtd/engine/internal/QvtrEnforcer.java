@@ -37,7 +37,6 @@ import org.eclipse.fennec.m2x.model.qvtbase.TypedModel;
 import org.eclipse.fennec.m2x.model.qvtrelation.DomainPattern;
 import org.eclipse.fennec.m2x.model.qvtrelation.Key;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
-import org.eclipse.fennec.m2x.model.qvtrelation.RelationCallExp;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomainAssignment;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;

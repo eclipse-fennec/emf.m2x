@@ -43,6 +43,7 @@ import org.eclipse.fennec.m2x.m2t.api.M2tResult;
 import org.eclipse.fennec.m2x.model.compiled.CompiledPackage;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.ocl.OclPackage;
@@ -157,15 +158,21 @@ class M2tCompiledUnitTest {
 		}
 	}
 
-	// Two inline expressions get two different, deterministic names — not one derived from an
-	// identity hash, which changed with every JVM run.
+	// An inline expression is an InlineExpression node (#370), not a let block with a synthetic
+	// variable — so nothing in the unit is named by a counter or an identity hash, and the same
+	// source compiles to the same fingerprint every time (#138, #154).
 	@Test
-	void inlineVariables_haveDeterministicNames() throws Exception {
-		Module first = engine.parse(MODULE, "m");
-		Module second = engine.parse(MODULE, "m");
-		assertEquals(inlineNames(first), inlineNames(second));
-		assertTrue(inlineNames(first).stream().allMatch(n -> n.matches("__inline__\\d+")),
-				"names are counter-based: " + inlineNames(first));
+	void inlineExpressions_areNodes_andTheFingerprintIsReproducible() throws Exception {
+		Module module = engine.parse(MODULE, "m");
+		List<InlineExpression> inline = new ArrayList<>();
+		module.eAllContents().forEachRemaining(o -> {
+			if (o instanceof InlineExpression expression) {
+				inline.add(expression);
+			}
+		});
+		assertEquals(2, inline.size(), "[op.name/] and [n.toUpper()/]");
+		assertEquals(engine.compile(MODULE, "m").getManifest().getUnitFingerprint(),
+				engine.compile(MODULE, "m").getManifest().getUnitFingerprint());
 	}
 
 	// ==== Round trips ====
@@ -195,16 +202,6 @@ class M2tCompiledUnitTest {
 	}
 
 	// ---- Helpers ----
-
-	private static List<String> inlineNames(Module module) {
-		List<String> names = new ArrayList<>();
-		module.eAllContents().forEachRemaining(o -> {
-			if (o instanceof Variable v && v.getName() != null && v.getName().startsWith("__inline__")) {
-				names.add(v.getName());
-			}
-		});
-		return names;
-	}
 
 	private String generate(Module module) {
 		M2tResult result = engine.execute(module, M2tContext.of(input));

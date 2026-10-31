@@ -227,6 +227,12 @@ public interface M2tParserVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitMacroBlockInvocation(M2tParser.MacroBlockInvocationContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link M2tParser#macroName}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMacroName(M2tParser.MacroNameContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code NotExp}
 	 * labeled alternative in {@link M2tParser#expression}.
 	 * @param ctx the parse tree

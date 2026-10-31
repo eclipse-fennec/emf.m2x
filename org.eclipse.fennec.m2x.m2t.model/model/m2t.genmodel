@@ -18,6 +18,7 @@
       <genEnumLiterals ecoreEnumLiteral="m2t.ecore#//VisibilityKind/private"/>
       <genEnumLiterals ecoreEnumLiteral="m2t.ecore#//VisibilityKind/protected"/>
     </genEnums>
+    <genDataTypes ecoreDataType="m2t.ecore#//Body"/>
     <genClasses ecoreClass="m2t.ecore#//Module">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//Module/ownedModuleElement"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference m2t.ecore#//Module/input"/>
@@ -82,6 +83,9 @@
     </genClasses>
     <genClasses ecoreClass="m2t.ecore#//TraceBlock">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//TraceBlock/modelElement"/>
+    </genClasses>
+    <genClasses ecoreClass="m2t.ecore#//InlineExpression">
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference m2t.ecore#//InlineExpression/expression"/>
     </genClasses>
     <genClasses ecoreClass="m2t.ecore#//TextExpression">
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute m2t.ecore#//TextExpression/value"/>
