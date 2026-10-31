@@ -1495,14 +1495,49 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				}
 			}
 
-			for (OclExpression stmtExpr : blockContents(catchCtx.block())) {
-				catchExp.getBody().add(stmtExpr);
+			// §8.2.2.14 exceptionVariable: "the variable through which the caught exception may be
+			// accessed" — typed by the listed exception, the common supertype of several, or
+			// Exception (#340)
+			QvtoEnvironment savedEnv = this.environment;
+			if (catchCtx.exceptionVar != null) {
+				Variable exceptionVariable = OCL.createVariable();
+				exceptionVariable.setName(qvtoIdentifierText(catchCtx.exceptionVar));
+				exceptionVariable.setType(commonExceptionType(catchExp.getException()));
+				catchExp.setExceptionVariable(exceptionVariable);
+				this.environment = this.environment.nested(exceptionVariable);
+			}
+			try {
+				for (OclExpression stmtExpr : blockContents(catchCtx.block())) {
+					catchExp.getBody().add(stmtExpr);
+				}
+			} finally {
+				this.environment = savedEnv;
 			}
 
 			tryExp.getExceptClause().add(catchExp);
 		}
 
 		return tryExp;
+	}
+
+	/** The most derived class the listed exceptions share, Exception if they share none or none is listed. */
+	private static EClassifier commonExceptionType(List<EClassifier> exceptions) {
+		EClassifier base = QvtoStandardLibraryTypes.lookup("Exception");
+		if (exceptions.size() == 1) {
+			return exceptions.get(0);
+		}
+		if (exceptions.isEmpty() || !(exceptions.get(0) instanceof EClass first)) {
+			return base;
+		}
+		List<EClass> candidates = new ArrayList<>();
+		candidates.add(first);
+		candidates.addAll(first.getEAllSuperTypes().reversed());
+		for (EClass candidate : candidates) {
+			if (exceptions.stream().allMatch(e -> e instanceof EClass c && (c == candidate || c.getEAllSuperTypes().contains(candidate)))) {
+				return candidate;
+			}
+		}
+		return base;
 	}
 
 	@Override

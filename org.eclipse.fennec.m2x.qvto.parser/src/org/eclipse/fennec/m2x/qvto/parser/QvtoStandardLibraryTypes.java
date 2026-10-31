@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvto.parser;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
@@ -81,8 +82,13 @@ public final class QvtoStandardLibraryTypes {
 		ePackage.setNsURI(NS_URI);
 		ePackage.setNsPrefix("qvtostdlib");
 
-		// §8.3.1.4: base class of all exceptions
+		// §8.3.1.4: base class of all exceptions; §8.3.1.5/6: StringException and AssertionFailed
+		// have "reason : String" — held by the base, so every exception answers it (#340)
 		EClass exception = createClass(ePackage, "Exception");
+		EAttribute reason = EcoreFactory.eINSTANCE.createEAttribute();
+		reason.setName("reason");
+		reason.setEType(EcorePackage.Literals.ESTRING);
+		exception.getEStructuralFeatures().add(reason);
 		// §8.3.1.5: shorthand raised by a string-valued RaiseExp
 		createClass(ePackage, "StringException", exception);
 		// §8.3.1.6: raised by a fatal AssertExp

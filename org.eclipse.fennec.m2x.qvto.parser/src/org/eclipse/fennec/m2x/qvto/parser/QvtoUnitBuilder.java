@@ -1059,6 +1059,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				}
 			}
 		}
+		// §8.3.1.4: Exception is "the base class of all exceptions" — exception E; extends it, and
+		// so carries its reason (#340)
+		if (exceptionClass.getESuperTypes().isEmpty()
+				&& QvtoStandardLibraryTypes.lookup("Exception") instanceof EClass base) {
+			exceptionClass.getESuperTypes().add(base);
+		}
 
 		// Features: properties and operations
 		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
@@ -1308,6 +1314,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					exceptionClass.getESuperTypes().add(superClass);
 				}
 			}
+		}
+		// §8.3.1.4: Exception is "the base class of all exceptions" — exception E; extends it, and
+		// so carries its reason (#340)
+		if (exceptionClass.getESuperTypes().isEmpty()
+				&& QvtoStandardLibraryTypes.lookup("Exception") instanceof EClass base) {
+			exceptionClass.getESuperTypes().add(base);
 		}
 
 		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {

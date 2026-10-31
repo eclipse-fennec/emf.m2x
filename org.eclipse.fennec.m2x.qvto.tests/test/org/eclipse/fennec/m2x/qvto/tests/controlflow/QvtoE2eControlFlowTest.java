@@ -1634,14 +1634,15 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 				        try {
 				            raise 'something wrong';
 				        } except (ex : Exception) {
-				            msg := 'caught';
+				            msg := 'caught:' + ex.reason;
 				        };
 				        log(msg);
 				    }
 				}
 				""");
 		assertSuccess(result);
-		assertLogged(result, "caught");
+		// §8.2.2.14: the except variable gives access to the exception (#340)
+		assertLogged(result, "caught:something wrong");
 	}
 
 	@Test
@@ -1695,14 +1696,14 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 				        try {
 				            assert fatal (false) with log('NPE');
 				        } except (ex : Exception) {
-				            msg := 'caught_fatal';
+				            msg := 'caught_fatal:' + ex.reason;
 				        };
 				        log(msg);
 				    }
 				}
 				""");
 		assertSuccess(result);
-		assertLogged(result, "caught_fatal");
+		assertLogged(result, "caught_fatal:NPE");
 	}
 
 	@Test
@@ -1790,7 +1791,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 				            try {
 				                raise 'deep_error';
 				            } except (ex : Exception) {
-				                trace := trace + 'inner.';
+				                trace := trace + 'inner(' + ex.reason + ').';
 				                raise 'rethrown';
 				            };
 				            trace := trace + 'should_not_reach.';
@@ -1803,7 +1804,7 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 				""");
 		assertSuccess(result);
 		// inner catches, then re-raises → outer catches
-		assertLogged(result, "inner.outer.");
+		assertLogged(result, "inner(deep_error).outer.");
 	}
 
 	@Test
@@ -1819,14 +1820,14 @@ class QvtoE2eControlFlowTest extends AbstractQvtoEngineTest {
 				        try {
 				            failingHelper();
 				        } except (ex : Exception) {
-				            msg := 'caught_from_helper';
+				            msg := 'caught_from_helper:' + ex.oclIsUndefined().repr();
 				        };
 				        log(msg);
 				    }
 				}
 				""");
 		assertSuccess(result);
-		assertLogged(result, "caught_from_helper");
+		assertLogged(result, "caught_from_helper:false");
 	}
 
 	@Test
