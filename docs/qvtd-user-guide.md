@@ -803,6 +803,8 @@ checkonly domain uml p : Package [?] { name = pn };
 -- If no Package matches, p = null (vacuous match)
 ```
 
+The relation holds for the null binding: it records a trace, so a relation whose when clause calls it runs. This applies to top and non-top relations alike.
+
 ---
 
 ## 8. Binding Validation
@@ -1194,7 +1196,9 @@ The engine maintains implicit trace records (§7.2.1) for each executed relation
 - Each successful relation execution records a `TraceRecord(relation, bindings)`
 - `RelationCallExp` in **when-clauses** looks up existing trace records. Per §7.2.3 every matching trace gives a binding of the arguments.
 
-> **Known gap (#349):** the engine currently binds only the first matching trace, and it runs top relations in declaration order.
+Top relations run in the order of their when dependencies, not in the order they are declared: a relation runs after the relations its when clause calls. Relations whose when clauses call each other run until they add no trace (§7.2.2).
+
+A relation leaves a trace only for a binding it holds for. If enforcing the target fails with an ERROR, no trace is recorded, and no relation whose when clause depends on that binding runs for it.
 - `RelationCallExp` in **where-clauses** invokes non-top relations with the given arguments as pre-bindings
 
 ### 12.2 Trace-Driven When-Clauses
@@ -1230,9 +1234,9 @@ The trace is **implicit and internal** — there is no public API to read trace 
 
 | Feature | Spec Reference | Status |
 |---------|---------------|--------|
-| Top relations | §7.10.1 | Implemented — declaration order instead of dependency order (#349) |
+| Top relations | §7.10.1, §7.2.2 | Fully implemented — dependency order, cycles to a fixpoint |
 | Non-top relations | §7.10.2 | Fully implemented |
-| When/where clauses | §7.2.1 | Implemented — a when call binds only the first trace (#349) |
+| When/where clauses | §7.2.1 | Fully implemented |
 | Checkonly domains | §7.10 | Partly — a violation does not make `isConsistent()` false (#348) |
 | Enforce domains | §7.10.2 | Partly — no deletion (#352), no clash detection (#351) |
 | Binding validation | §7.5 | Implemented (static analysis) — every declared variable counts as bound (#359) |

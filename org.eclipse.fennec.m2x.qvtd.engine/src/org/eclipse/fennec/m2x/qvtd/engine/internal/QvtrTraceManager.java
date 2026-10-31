@@ -15,10 +15,13 @@
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -60,11 +63,19 @@ public class QvtrTraceManager {
 		public TraceRecord {
 			Objects.requireNonNull(relation);
 			Objects.requireNonNull(bindings);
-			bindings = Map.copyOf(bindings);
+			// Not Map.copyOf: a [?] root without a match is bound to null, and the relation holds
+			// for that binding too (#349)
+			bindings = Collections.unmodifiableMap(new HashMap<>(bindings));
 		}
 	}
 
 	private final Map<String, List<TraceRecord>> tracesByRelation = new HashMap<>();
+	/**
+	 * Every record once: a relation that runs again for a binding it already holds for adds
+	 * nothing, which is how the evaluator sees that a cycle of relations has reached its
+	 * fixpoint (#349).
+	 */
+	private final Set<TraceRecord> known = new HashSet<>();
 
 	/** Records held across all relations — what {@code maxTraceRecords} bounds. */
 	private int recorded;
@@ -96,6 +107,10 @@ public class QvtrTraceManager {
 	public boolean record(Relation relation, Map<String, Object> bindings) {
 		String key = relation.getName();
 		List<TraceRecord> traces = tracesByRelation.computeIfAbsent(key, k -> new ArrayList<>());
+		TraceRecord record = new TraceRecord(relation, bindings);
+		if (known.contains(record)) {
+			return true;
+		}
 		if (recorded >= maxTraceRecords) {
 			return false;
 		}
@@ -105,9 +120,20 @@ public class QvtrTraceManager {
 					"Relation ''{0}'' has accumulated {1} trace records — possible memory issue",
 					new Object[]{key, size});
 		}
-		traces.add(new TraceRecord(relation, bindings));
+		traces.add(record);
+		known.add(record);
 		recorded++;
 		return true;
+	}
+
+	/**
+	 * The number of distinct records, which grows only when a relation holds for a binding it
+	 * did not hold for before (#349).
+	 *
+	 * @return the number of records
+	 */
+	public int size() {
+		return recorded;
 	}
 
 	/**
@@ -188,5 +214,7 @@ public class QvtrTraceManager {
 	 */
 	public void clear() {
 		tracesByRelation.clear();
+		known.clear();
+		recorded = 0;
 	}
 }

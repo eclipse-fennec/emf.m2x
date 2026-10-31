@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -193,6 +194,7 @@ public class QvtrEvaluator {
 			}
 		}
 
+		List<Relation> topRelations = new ArrayList<>();
 		for (Rule rule : transformation.getRule()) {
 			if (rule instanceof Relation relation && relation.isIsTopLevel()) {
 				if (relation.isIsAbstract()) {
@@ -201,19 +203,38 @@ public class QvtrEvaluator {
 				if (overriddenNames.contains(relation.getName())) {
 					continue; // §7.6: overridden relations are skipped
 				}
-				try {
-					executeRelation(relation);
-				} catch (QvtdExecutionException e) {
-					throw e;
-				} catch (Exception e) {
-					diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0,
-							"Error executing relation '%s': %s"
-									.formatted(relation.getName(), e.getMessage()),
-							null));
-				}
+				topRelations.add(relation);
 			}
 		}
+
+		// §7.2.2: all top relations have to hold, in no order of declaration — each runs after
+		// what its when clause depends on, a cycle until it adds no trace (#349)
+		for (List<Relation> component : QvtrRelationOrder.components(topRelations)) {
+			if (!QvtrRelationOrder.isCyclic(component)) {
+				runTopRelation(component.get(0));
+				continue;
+			}
+			int traced;
+			do {
+				checkDeadline();
+				traced = traceManager.size();
+				component.forEach(this::runTopRelation);
+			} while (traceManager.size() > traced);
+		}
 		return diagnostics;
+	}
+
+	private void runTopRelation(Relation relation) {
+		try {
+			executeRelation(relation);
+		} catch (QvtdExecutionException e) {
+			throw e;
+		} catch (Exception e) {
+			diagnostics.add(new BasicDiagnostic(Diagnostic.ERROR, SOURCE_ID, 0,
+					"Error executing relation '%s': %s"
+							.formatted(relation.getName(), e.getMessage()),
+					null));
+		}
 	}
 
 	// ── Relation execution ───────────────────────────────────────────
@@ -226,63 +247,7 @@ public class QvtrEvaluator {
 		warnBeyondSection78(relation);
 		env.pushScope();
 		try {
-			// 1. Evaluate the when-clause's relation calls to get pre-bindings. The remaining
-			// predicates are evaluated per candidate binding below, because they may read what
-			// the domains bind (§7.10.2, #145).
-			Map<String, Object> whenBindings = evaluateWhenPreBindings(relation);
-			if (whenBindings == null) {
-				return; // A relation call in the when-clause found nothing (§7.2.1)
-			}
-
-			// 2. Classify domains into source, target, and primitive
-			List<RelationDomain> sourceDomains = new ArrayList<>();
-			RelationDomain targetDomain = null;
-
-			for (Domain domain : relation.getDomain()) {
-				if (domain instanceof RelationDomain rd) {
-					if (isPrimitiveDomain(rd)) {
-						continue; // §7.13.4 primitive domain
-					}
-					if (!context.checkOnly() && rd.isIsEnforceable()
-								&& extentManager.isTargetModel(rd.getTypedModel())) {
-						targetDomain = rd;
-					} else {
-						sourceDomains.add(rd);
-					}
-				}
-			}
-
-			// In check-only mode, all domains are source domains
-			if (context.checkOnly()) {
-				matchAndCheckAllDomains(relation, sourceDomains, whenBindings);
-				return;
-			}
-
-			// 3. Match source domains
-			if (sourceDomains.isEmpty()) {
-				return;
-			}
-
-			List<Map<String, Object>> sourceBindings = matchSourceDomains(sourceDomains, whenBindings);
-
-			// 4. For each source binding, pre-compute where bindings, then enforce
-			for (Map<String, Object> sourceBinding : sourceBindings) {
-				checkDeadline();
-				if (hasOptionalNullBinding(sourceDomains, sourceBinding)) {
-					continue;
-				}
-				if (!whenConditionHolds(relation, sourceBinding)) {
-					continue;
-				}
-
-				queryEvaluator.preComputeWhereBindings(relation, sourceBinding);
-
-				if (targetDomain != null) {
-					enforcer.enforceTargetDomain(relation, targetDomain, sourceBinding);
-				}
-				recordTrace(relation, sourceBinding);
-				evaluateWhereClause(relation, sourceBinding);
-			}
+			runRelation(relation, Map.of());
 		} finally {
 			env.popScope();
 		}
@@ -305,88 +270,134 @@ public class QvtrEvaluator {
 		relationCallDepth++;
 		env.pushScope();
 		try {
-			Map<String, Object> whenBindings = evaluateWhenPreBindings(relation);
-			if (whenBindings == null) {
-				return;
-			}
-
-			Map<String, Object> mergedBindings = new HashMap<>(preBindings);
-			mergedBindings.putAll(whenBindings);
-
-			List<RelationDomain> sourceDomains = new ArrayList<>();
-			RelationDomain targetDomain = null;
-
-			for (Domain domain : relation.getDomain()) {
-				if (domain instanceof RelationDomain rd) {
-					if (isPrimitiveDomain(rd)) {
-						continue;
-					}
-					if (!context.checkOnly() && rd.isIsEnforceable()
-									&& extentManager.isTargetModel(rd.getTypedModel())) {
-						targetDomain = rd;
-					} else {
-						sourceDomains.add(rd);
-					}
-				}
-			}
-
-			if (context.checkOnly()) {
-				matchAndCheckAllDomains(relation, sourceDomains, mergedBindings);
-				return;
-			}
-
-			List<Map<String, Object>> sourceBindings = matchSourceDomains(
-					sourceDomains, mergedBindings);
-
-			for (Map<String, Object> binding : sourceBindings) {
-				if (hasOptionalNullBinding(sourceDomains, binding)) {
-					recordTrace(relation, binding);
-					continue;
-				}
-				if (!whenConditionHolds(relation, binding)) {
-					continue;
-				}
-				queryEvaluator.preComputeWhereBindings(relation, binding);
-				if (targetDomain != null) {
-					enforcer.enforceTargetDomain(relation, targetDomain, binding);
-				}
-				recordTrace(relation, binding);
-				evaluateWhereClause(relation, binding);
-			}
+			runRelation(relation, preBindings);
 		} finally {
 			relationCallDepth--;
 			env.popScope();
 		}
 	}
 
+	/**
+	 * Runs a relation for every valid binding: "For each valid binding of variables of the when
+	 * clause and variables of domains other than the target domain k, that satisfy the when
+	 * condition and source domain patterns and conditions" (§7.10.2) — a top relation from no
+	 * binding, a relation a where clause invokes from the arguments it got.
+	 */
+	private void runRelation(Relation relation, Map<String, Object> preBindings) {
+		// 1. The when clause's relation calls: one binding per trace that matches (§7.2.1,
+		// §7.3) — the remaining predicates are evaluated per candidate binding below, because
+		// they may read what the domains bind (§7.10.2, #145)
+		List<Map<String, Object>> whenBindings = evaluateWhenPreBindings(relation, preBindings);
+		if (whenBindings.isEmpty()) {
+			return; // A relation call in the when clause found nothing (§7.2.1)
+		}
+
+		// 2. Classify domains into source, target, and primitive
+		List<RelationDomain> sourceDomains = new ArrayList<>();
+		RelationDomain targetDomain = null;
+
+		for (Domain domain : relation.getDomain()) {
+			if (domain instanceof RelationDomain rd) {
+				if (isPrimitiveDomain(rd)) {
+					continue; // §7.13.4 primitive domain
+				}
+				if (!context.checkOnly() && rd.isIsEnforceable()
+							&& extentManager.isTargetModel(rd.getTypedModel())) {
+					targetDomain = rd;
+				} else {
+					sourceDomains.add(rd);
+				}
+			}
+		}
+
+		// In check-only mode, all domains are source domains
+		if (context.checkOnly()) {
+			for (Map<String, Object> whenBinding : whenBindings) {
+				matchAndCheckAllDomains(relation, sourceDomains, whenBinding);
+			}
+			return;
+		}
+
+		// 3. Match source domains, once per when binding
+		if (sourceDomains.isEmpty()) {
+			return;
+		}
+		Set<Map<String, Object>> sourceBindings = new LinkedHashSet<>();
+		for (Map<String, Object> whenBinding : whenBindings) {
+			sourceBindings.addAll(matchSourceDomains(sourceDomains, whenBinding));
+		}
+
+		// 4. For each source binding, pre-compute where bindings, then enforce
+		for (Map<String, Object> binding : List.copyOf(sourceBindings)) {
+			checkDeadline();
+			Map<String, Object> sourceBinding = new HashMap<>(binding);
+			if (hasOptionalNullBinding(sourceDomains, sourceBinding)) {
+				// [?] with nothing to match: the relation holds for the binding, and the when
+				// clauses that depend on it find it — for top and non-top relations alike (#349)
+				recordTrace(relation, sourceBinding);
+				continue;
+			}
+			if (!whenConditionHolds(relation, sourceBinding)) {
+				continue;
+			}
+
+			queryEvaluator.preComputeWhereBindings(relation, sourceBinding);
+
+			// A binding the target could not be enforced for does not hold, so no when clause
+			// may count on it (#349)
+			if (targetDomain != null && !enforce(relation, targetDomain, sourceBinding)) {
+				continue;
+			}
+			recordTrace(relation, sourceBinding);
+			evaluateWhereClause(relation, sourceBinding);
+		}
+	}
+
+	/** Enforces the target domain for a binding; whether it holds afterwards, without error. */
+	private boolean enforce(Relation relation, RelationDomain targetDomain, Map<String, Object> binding) {
+		int before = diagnostics.size();
+		enforcer.enforceTargetDomain(relation, targetDomain, binding);
+		return diagnostics.subList(before, diagnostics.size()).stream()
+				.noneMatch(d -> d.getSeverity() >= Diagnostic.ERROR);
+	}
+
 	// ── When-clause evaluation ───────────────────────────────────────
 
 	/**
-	 * Evaluates the relation-call predicates of a when-clause and returns what they bind
-	 * (§7.2.1), or {@code null} if one of them is not satisfied.
+	 * Evaluates the relation-call predicates of a when-clause and returns the bindings they
+	 * allow (§7.2.1) — none if one of them is not satisfied.
 	 *
 	 * <p>These run before the domains are matched, because that is what they are for: a
 	 * {@code when \{ PackageToSchema(p, s); \}} looks the earlier relation up in the trace and
 	 * binds {@code p} and {@code s}, which then restrict what the domain patterns match
-	 * (§7.2.3). A relation call that finds nothing rejects the relation as a whole — there is
-	 * no binding under which it could hold.
+	 * (§7.2.3). Every trace that matches gives a binding of its own — "the pattern will only
+	 * match those classes whose namespace property has a reference to the same package that is
+	 * bound to p" (§7.3) holds for each package, not for the first one found (#349).
 	 *
 	 * <p>The remaining predicates are <em>not</em> evaluated here. They may read variables the
 	 * domains bind, which do not exist yet at this point; {@link #whenConditionHolds} evaluates
 	 * them per candidate binding.
+	 *
+	 * @param preBindings what the relation is called with; empty for a top relation
 	 */
-	private Map<String, Object> evaluateWhenPreBindings(Relation relation) {
-		Map<String, Object> bindings = new HashMap<>();
+	private List<Map<String, Object>> evaluateWhenPreBindings(Relation relation,
+			Map<String, Object> preBindings) {
+		List<Map<String, Object>> bindings = List.of(new HashMap<>(preBindings));
 		Pattern when = relation.getWhen();
 		if (when == null) {
 			return bindings;
 		}
 
 		for (Predicate predicate : when.getPredicate()) {
-			OclExpression expr = predicate.getConditionExpression();
-			if (expr instanceof RelationCallExp relCall
-					&& !evaluateWhenRelationCall(relCall, bindings)) {
-				return null;
+			if (predicate.getConditionExpression() instanceof RelationCallExp relCall) {
+				Set<Map<String, Object>> next = new LinkedHashSet<>();
+				for (Map<String, Object> binding : bindings) {
+					next.addAll(evaluateWhenRelationCall(relCall, binding));
+				}
+				if (next.isEmpty()) {
+					return List.of();
+				}
+				bindings = List.copyOf(next);
 			}
 		}
 		return bindings;
@@ -428,51 +439,44 @@ public class QvtrEvaluator {
 	}
 
 	/**
-	 * Evaluates a RelationCallExp in a when-clause by looking up the trace.
+	 * Evaluates a RelationCallExp in a when-clause by looking up the trace: the binding extended
+	 * by each matching trace entry. An argument the binding already holds selects the entries;
+	 * one it does not hold yet is bound from each of them (#349).
 	 */
-	private boolean evaluateWhenRelationCall(RelationCallExp relCall,
-			Map<String, Object> bindings) {
+	private List<Map<String, Object>> evaluateWhenRelationCall(RelationCallExp relCall,
+			Map<String, Object> binding) {
 		Relation calledRelation = relCall.getReferredRelation();
 		if (calledRelation == null) {
-			return false;
+			return List.of();
 		}
 
 		List<Object> argValues = new ArrayList<>();
 		for (OclExpression argExpr : relCall.getArgument()) {
 			if (argExpr instanceof VariableExp varExp) {
 				Variable ref = varExp.getReferredVariable();
-				if (ref != null) {
-					argValues.add(bindings.get(ref.getName()));
-				} else {
-					argValues.add(null);
-				}
+				argValues.add(ref != null ? binding.get(ref.getName()) : null);
 			} else {
-				argValues.add(evaluateOcl(argExpr, bindings));
+				argValues.add(evaluateOcl(argExpr, binding));
 			}
 		}
 
-		List<QvtrTraceManager.TraceRecord> traces = traceManager.lookup(
-				calledRelation, argValues);
-		if (traces.isEmpty()) {
-			return false;
-		}
-
-		QvtrTraceManager.TraceRecord match = traces.get(0);
 		List<String> rootVarNames = QvtrTraceManager.collectRootVarNames(calledRelation);
-		for (int i = 0; i < Math.min(rootVarNames.size(), relCall.getArgument().size()); i++) {
-			OclExpression argExpr = relCall.getArgument().get(i);
-			if (argExpr instanceof VariableExp varExp) {
-				Variable ref = varExp.getReferredVariable();
-				if (ref != null) {
-					String varName = ref.getName();
+		List<Map<String, Object>> extended = new ArrayList<>();
+		for (QvtrTraceManager.TraceRecord match : traceManager.lookup(calledRelation, argValues)) {
+			Map<String, Object> next = new HashMap<>(binding);
+			for (int i = 0; i < Math.min(rootVarNames.size(), relCall.getArgument().size()); i++) {
+				if (relCall.getArgument().get(i) instanceof VariableExp varExp
+						&& varExp.getReferredVariable() != null) {
+					String varName = varExp.getReferredVariable().getName();
 					Object traceValue = match.bindings().get(rootVarNames.get(i));
-					if (traceValue != null && !bindings.containsKey(varName)) {
-						bindings.put(varName, traceValue);
+					if (traceValue != null && !next.containsKey(varName)) {
+						next.put(varName, traceValue);
 					}
 				}
 			}
+			extended.add(next);
 		}
-		return true;
+		return extended;
 	}
 
 	// ── Where-clause evaluation ──────────────────────────────────────

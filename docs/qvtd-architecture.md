@@ -141,15 +141,19 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 ### 5.2 Execution Flow
 
 1. **`execute(transformation, context)`** → `QvtrEvaluator.execute()`
-2. For each **top relation** (skip abstract, skip overridden — unconditionally for now, #356):
-   a. Evaluate the when-clause's **relation calls** → pre-bindings (RelationCallExp → trace lookup)
+2. Order the top relations (`QvtrRelationOrder`, #349): each runs after the relations its
+   when clause calls. A when call to a non-top relation depends on the top relations whose where
+   clauses invoke it. Relations that depend on each other form a component, which runs until it
+   adds no trace record. The result does not depend on the order of declaration (§7.2.2).
+3. For each **top relation** (skip abstract, skip overridden — unconditionally for now, #356):
+   a. Evaluate the when-clause's **relation calls** → one pre-binding per matching trace (RelationCallExp → trace lookup)
    b. **Classify domains**: source vs. target (based on `isEnforceable()` + target model)
    c. **Match source domains** → list of binding maps
    d. For each source binding:
-      - Check **optional null** (`[?]`) → skip if root variable is null
+      - Check **optional null** (`[?]`) → record the trace and skip the rest if the root variable is null
       - Evaluate the **remaining when-predicates** against this binding → skip the binding if one is false
       - **Pre-compute where bindings** (query calls, computed values)
-      - **Enforce target domain** (or check-only verify)
+      - **Enforce target domain** (or check-only verify) → skip the binding if that reported an ERROR
       - Record **trace**
       - Evaluate **where-clause** (may invoke non-top relations)
 
@@ -231,8 +235,13 @@ Extracted into `QvtrQueryEvaluator` for testability.
 
 - `QvtrTraceManager` stores `TraceRecord(relation, Map<String, Object>)` per execution
 - `RelationCallExp` in **when-clause** → trace lookup (the called relation must have a matching
-  trace). Per §7.2.3 every matching trace gives a binding. The engine currently binds only the
-  first one, and runs top relations in declaration order instead of dependency order (#349).
+  trace). Every matching trace gives a binding: arguments that are already bound select the
+  records, and unbound ones are bound from each of them (§7.2.3, #349).
+- A trace is recorded only for a binding the relation holds for. If the target could not be
+  enforced (an ERROR during enforcement), no trace is recorded and no when clause can count on
+  it. A `[?]` root bound to null holds and is traced, for top and non-top relations alike.
+- Equal records are kept once; `size()` grows only with a new binding, which ends the fixpoint
+  of a cycle.
 - `RelationCallExp` in **where-clause** → invokes non-top relation with pre-bindings
 
 ### 5.7 OCL Integration (D36)
@@ -245,9 +254,9 @@ Extracted into `QvtrQueryEvaluator` for testability.
 
 | Feature | Spec Reference | Implementation |
 |---------|---------------|----------------|
-| Top relations | §7.10.1 | Iterate + execute — declaration order, not dependency order (#349) |
+| Top relations | §7.10.1, §7.2.2 | Dependency order, fixpoint for cycles (`QvtrRelationOrder`) |
 | Non-top relations | §7.10.2 | Via where-clause `RelationCallExp` |
-| When-clause | §7.2.1 | Predicate eval + trace lookup — first trace only (#349) |
+| When-clause | §7.2.1 | Predicate eval + trace lookup, one binding per matching trace |
 | Where-clause | §7.2.1 | Predicate eval + relation invocation |
 | Checkonly domains | §7.10 | Match-only, no enforcement — a violation does not yet make `isConsistent()` false (#348) |
 | Enforce domains | §7.10.2 | Find-or-create via templates — no deletion (#352), no clash detection (#351) |
@@ -291,7 +300,6 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 |-----|---------|--------|--------|
 | GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution — which needs the deletion of #352 to be equal | Phase 5 |
 | #348 | Checkonly verdict | `isConsistent()` is an alias of `isSuccess()` | — |
-| #349 | Relation order, when traces | Declaration order; only the first trace is bound | — |
 | #350 | Keys | `findByBoundVariables` heuristic; template/opposite key parts | — |
 | #351 | Clash detection | Clashing values are overwritten silently | — |
 | #352 | Deletion | Target objects without a valid binding stay | — |
@@ -333,4 +341,4 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | `QvtdCommentTest` | §7.13.3: comments, nested paragraph comments | 4 |
 
 **Total (2026-10-31): 320 tests, 0 failures, 9 @Disabled** — each disabled test names the issue
-that will enable it (#348, #349, #352, #354, #356, #360, #361).
+that will enable it (#348, #352, #354, #356, #360, #361).

@@ -28,7 +28,6 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -810,7 +809,6 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 		}
 
 		@Test
-		@Disabled("#349: the when call binds only the first trace — Account gets no Table")
 		@DisplayName("Multiple traces: correct trace selected by bound argument")
 		void multipleTracesCorrectSelection() throws QvtdParseException {
 			// Two packages, each with a class. ClassToTable uses when-bound s
