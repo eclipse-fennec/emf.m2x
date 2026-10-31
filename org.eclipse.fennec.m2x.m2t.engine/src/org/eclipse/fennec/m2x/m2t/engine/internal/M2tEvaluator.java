@@ -239,7 +239,7 @@ public class M2tEvaluator {
 		templateDepth++;
 		Template enclosing = executing;
 		executing = template;
-		env.pushScope();
+		env.pushFrame();
 		try {
 			// Bind template parameters
 			List<Variable> params = template.getParameter();
@@ -282,7 +282,7 @@ public class M2tEvaluator {
 
 			return result;
 		} finally {
-			env.popScope();
+			env.popFrame();
 			templateDepth--;
 			executing = enclosing;
 		}
@@ -604,14 +604,14 @@ public class M2tEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			env.pushScope();
+			// Evaluate all arguments once, in the caller's scope
+			List<Variable> params = query.getParameter();
+			List<Object> evalArgs = new ArrayList<>();
+			for (int i = 0; i < invocation.getArgument().size(); i++) {
+				evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
+			}
+			env.pushFrame();
 			try {
-				// Evaluate all arguments once
-				List<Variable> params = query.getParameter();
-				List<Object> evalArgs = new ArrayList<>();
-				for (int i = 0; i < invocation.getArgument().size(); i++) {
-					evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
-				}
 				for (int i = 0; i < params.size() && i < evalArgs.size(); i++) {
 					env.define(params.get(i).getName(), evalArgs.get(i));
 				}
@@ -621,7 +621,7 @@ public class M2tEvaluator {
 
 				writers.append(render(query.getExpression()));
 			} finally {
-				env.popScope();
+				env.popFrame();
 			}
 
 			return WRAPPED_NULL;
@@ -635,14 +635,14 @@ public class M2tEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			env.pushScope();
+			// Evaluate all arguments once, in the caller's scope
+			List<Variable> params = macro.getParameter();
+			List<Object> evalArgs = new ArrayList<>();
+			for (int i = 0; i < invocation.getArgument().size(); i++) {
+				evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
+			}
+			env.pushFrame();
 			try {
-				// Evaluate all arguments once
-				List<Variable> params = macro.getParameter();
-				List<Object> evalArgs = new ArrayList<>();
-				for (int i = 0; i < invocation.getArgument().size(); i++) {
-					evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
-				}
 				for (int i = 0; i < params.size() && i < evalArgs.size(); i++) {
 					env.define(params.get(i).getName(), evalArgs.get(i));
 				}
@@ -660,7 +660,7 @@ public class M2tEvaluator {
 
 				executeBody(macro);
 			} finally {
-				env.popScope();
+				env.popFrame();
 			}
 
 			return WRAPPED_NULL;
@@ -897,7 +897,7 @@ public class M2tEvaluator {
 			return null;
 		}
 		queryDepth++;
-		env.pushScope();
+		env.pushFrame();
 		try {
 			List<Variable> parameters = query.getParameter();
 			for (int i = 0; i < parameters.size() && i < arguments.length; i++) {
@@ -908,7 +908,7 @@ public class M2tEvaluator {
 			}
 			return evaluateOcl(query.getExpression());
 		} finally {
-			env.popScope();
+			env.popFrame();
 			queryDepth--;
 		}
 	}
@@ -1018,7 +1018,7 @@ public class M2tEvaluator {
 
 		// Check guard if present
 		if (override.getGuard() != null) {
-			env.pushScope();
+			env.pushFrame();
 			try {
 				// Bind parameters for guard evaluation
 				List<Variable> params = override.getParameter();
@@ -1034,7 +1034,7 @@ public class M2tEvaluator {
 				}
 				return isTrue(evaluateOcl(override.getGuard()));
 			} finally {
-				env.popScope();
+				env.popFrame();
 			}
 		}
 
@@ -1065,7 +1065,7 @@ public class M2tEvaluator {
 		templateDepth++;
 		Template enclosing = executing;
 		executing = target;
-		env.pushScope();
+		env.pushFrame();
 		try {
 			List<Variable> params = target.getParameter();
 			for (int i = 0; i < params.size() && i < argValues.size(); i++) {
@@ -1104,7 +1104,7 @@ public class M2tEvaluator {
 				executeBody(target);
 			}
 		} finally {
-			env.popScope();
+			env.popFrame();
 			templateDepth--;
 			executing = enclosing;
 		}
