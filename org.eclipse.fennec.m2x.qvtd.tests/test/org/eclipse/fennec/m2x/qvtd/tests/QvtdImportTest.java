@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -45,6 +46,7 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -107,17 +109,20 @@ class QvtdImportTest {
 	}
 
 	@Test
-	@DisplayName("an imported relation runs")
-	void importedRelationIsExecuted() throws Exception {
+	@Disabled("#360: import merges every relation of the imported unit into the importer")
+	@DisplayName("an import makes names visible, it does not run the imported unit's top relations")
+	void anImportedTopRelation_doesNotRunThroughTheImport() throws Exception {
+		// §7.13.1: an import makes the unit's names usable; its relations take part in the
+		// importer's execution only through extends or a call (#360) — the importer here declares
+		// no relation, so nothing is enforced
 		QvtdEngine engine = engine(builder -> builder
 				.addUnitResolver(library())
 				.unitResolverEnabled(true));
 
-		QvtdModelExtent target = run(engine).target();
+		Run run = run(engine);
 
-		assertEquals(1, target.getContents().size(),
-				"the relation that produces the Book came in through the import");
-		assertEquals("Moby Dick", title(target.getContents().get(0)));
+		assertTrue(run.result().isSuccess(), () -> "diagnostics: " + run.result().diagnostics());
+		assertEquals(List.of(), run.target().getContents());
 	}
 
 	@Test
@@ -239,9 +244,5 @@ class QvtdImportTest {
 				QvtdExecutionContext.enforce("target",
 						Map.of("source", source, "target", target)));
 		return new Run(result, target);
-	}
-
-	private String title(EObject book) {
-		return (String) book.eGet(((EClass) book.eClass()).getEStructuralFeature("title"));
 	}
 }

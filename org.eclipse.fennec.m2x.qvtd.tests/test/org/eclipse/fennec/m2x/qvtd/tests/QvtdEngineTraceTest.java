@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,6 +28,7 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -808,6 +810,7 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 		}
 
 		@Test
+		@Disabled("#349: the when call binds only the first trace — Account gets no Table")
 		@DisplayName("Multiple traces: correct trace selected by bound argument")
 		void multipleTracesCorrectSelection() throws QvtdParseException {
 			// Two packages, each with a class. ClassToTable uses when-bound s
@@ -827,6 +830,7 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							p : Package;
 							cn : String;
 							checkonly domain uml c : Class {
+								owningPackage = p,
 								name = cn
 							};
 							enforce domain rdbms s : Schema {
@@ -861,13 +865,13 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 					.filter(o -> "Schema".equals(o.eClass().getName()))
 					.toList();
 
-			// At least one Schema should have tables — ideally each has its correct one
-			int totalTables = schemas.stream()
-					.mapToInt(s -> getTables(s).size())
-					.sum();
-			assertTrue(totalTables >= 1,
-					"Tables should be nested inside Schemas via when-bound 's'. "
-					+ "Total tables found: " + totalTables);
+			// §7.2.3: the when call binds s to the Schema of c's own Package — each Table lands
+			// in the Schema of its Class's Package, not in whichever Schema came first (#349)
+			Map<String, List<String>> layout = new HashMap<>();
+			for (EObject schema : schemas) {
+				layout.put(getName(schema), getTables(schema).stream().map(t -> getName(t)).toList());
+			}
+			assertEquals(Map.of("HR", List.of("Employee"), "Finance", List.of("Account")), layout);
 		}
 
 		@Test

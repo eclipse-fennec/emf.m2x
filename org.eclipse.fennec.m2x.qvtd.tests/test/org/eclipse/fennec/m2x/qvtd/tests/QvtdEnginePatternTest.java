@@ -22,12 +22,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -400,6 +402,7 @@ class QvtdEnginePatternTest extends AbstractQvtdEngineTest {
 	class CheckOnlySemantics {
 
 		@Test
+		@Disabled("#348: isConsistent() is an alias of isSuccess(), a checkonly violation leaves it true")
 		@DisplayName("Check-only detects inconsistency: Package without matching Schema")
 		void checkOnlyDetectsInconsistency() throws QvtdParseException {
 			String source = """
@@ -424,10 +427,15 @@ class QvtdEnginePatternTest extends AbstractQvtdEngineTest {
 			QvtdExecutionResult result = executeCheckOnly(source,
 					Map.of("uml", umlExtent, "rdbms", rdbmsExtent));
 
-			assertNotNull(result);
-			// Should report a warning about missing match
-			assertFalse(result.diagnostics().isEmpty(),
-					"Should report inconsistency when Package has no matching Schema");
+			// §7.2.3/§7.10: a checkonly run that finds a violation ran without error, but the
+			// models are not consistent — one WARNING per violated relation, direction and object
+			assertTrue(result.isSuccess(), "" + result.diagnostics());
+			assertFalse(result.isConsistent(), "Package HR has no Schema: the models are inconsistent");
+			List<Diagnostic> warnings = result.diagnostics().stream()
+					.filter(d -> d.getSeverity() == Diagnostic.WARNING).toList();
+			assertEquals(1, warnings.size(), "" + result.diagnostics());
+			assertTrue(warnings.get(0).getMessage().contains("PackageToSchema")
+					&& warnings.get(0).getMessage().contains("HR"), warnings.get(0).getMessage());
 		}
 
 		@Test

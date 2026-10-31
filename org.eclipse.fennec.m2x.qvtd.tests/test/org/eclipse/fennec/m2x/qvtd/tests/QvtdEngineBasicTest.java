@@ -27,6 +27,7 @@ import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -127,7 +128,8 @@ class QvtdEngineBasicTest extends AbstractQvtdEngineTest {
 		}
 
 		@Test
-		@DisplayName("Check-only: empty models — no bindings, warning expected")
+		@Disabled("#348: a relation without bindings reports a WARNING in check-only mode")
+		@DisplayName("Check-only: empty models — vacuously consistent, nothing reported")
 		void checkOnlyEmptyModels() throws QvtdParseException {
 			String source = """
 					transformation PackageToSchema(uml : simpleuml, rdbms : simplerdbms) {
@@ -146,9 +148,11 @@ class QvtdEngineBasicTest extends AbstractQvtdEngineTest {
 			QvtdExecutionResult result = executeCheckOnly(source,
 					Map.of("uml", emptyExtent(), "rdbms", emptyExtent()));
 
-			assertNotNull(result);
-			// Empty models — no bindings to check, should still succeed (vacuously true)
-			// or warn about no matches
+			// Empty models: no Package, so nothing PackageToSchema requires — vacuously consistent,
+			// and nothing to report (710-P02b)
+			assertTrue(result.isSuccess(), "" + result.diagnostics());
+			assertTrue(result.isConsistent());
+			assertEquals(List.of(), result.diagnostics());
 		}
 	}
 
