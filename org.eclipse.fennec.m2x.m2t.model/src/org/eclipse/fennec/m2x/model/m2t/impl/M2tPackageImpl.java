@@ -738,7 +738,7 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 	 * @generated
 	 */
 	@Override
-	public EReference getFileBlock_UniqId() {
+	public EReference getFileBlock_AppendExpr() {
 		return (EReference)fileBlockEClass.getEStructuralFeatures().get(2);
 	}
 
@@ -748,8 +748,18 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 	 * @generated
 	 */
 	@Override
-	public EReference getFileBlock_Charset() {
+	public EReference getFileBlock_UniqId() {
 		return (EReference)fileBlockEClass.getEStructuralFeatures().get(3);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getFileBlock_Charset() {
+		return (EReference)fileBlockEClass.getEStructuralFeatures().get(4);
 	}
 
 	/**
@@ -1078,6 +1088,7 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 		fileBlockEClass = createEClass(FILE_BLOCK);
 		createEReference(fileBlockEClass, FILE_BLOCK__FILE_URL);
 		createEAttribute(fileBlockEClass, FILE_BLOCK__OPEN_MODE);
+		createEReference(fileBlockEClass, FILE_BLOCK__APPEND_EXPR);
 		createEReference(fileBlockEClass, FILE_BLOCK__UNIQ_ID);
 		createEReference(fileBlockEClass, FILE_BLOCK__CHARSET);
 
@@ -1226,6 +1237,7 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 		initEClass(fileBlockEClass, FileBlock.class, "FileBlock", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getFileBlock_FileUrl(), theOclPackage.getOclExpression(), null, "fileUrl", null, 1, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getFileBlock_OpenMode(), this.getOpenModeKind(), "openMode", "overwrite", 0, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getFileBlock_AppendExpr(), theOclPackage.getOclExpression(), null, "appendExpr", null, 0, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getFileBlock_UniqId(), theOclPackage.getOclExpression(), null, "uniqId", null, 0, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getFileBlock_Charset(), theOclPackage.getOclExpression(), null, "charset", null, 0, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 

@@ -39,7 +39,7 @@ public class M2tEPackageConfigurator implements EPackageConfigurator {
 	 * service property.
 	 * @generated
 	 */
-	public static final String FINGERPRINT = "fp1:fc4cd38e281dabd39b184369f63cebaf2e22216b9311d98a19cce1a8043fb085";
+	public static final String FINGERPRINT = "fp1:54db63605ea8fe48a4c0232fe4c3573262fb40a53b38a0bf50d6175f4429d738";
 
 	private M2tPackage ePackage;
 

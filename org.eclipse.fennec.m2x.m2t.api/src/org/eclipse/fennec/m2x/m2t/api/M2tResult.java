@@ -30,13 +30,26 @@ import org.eclipse.emf.common.util.Diagnostic;
  * @param diagnostics collected diagnostics during execution, never {@code null}
  * @param generatedFiles map of file path to generated content (for in-memory mode)
  * @param fileUniqueIds map of file path to unique ID (for file-rename tracking, §8.1.17)
+ * @param standardOutput what went to the standard output: {@code [file (stdout)]} blocks
+ *            (MOFM2T §7.3) and the text the entry template generates outside any file block,
+ *            in the order generated; never {@code null}. The engine is a library and prints
+ *            nothing itself — the host decides whether to show it (#368)
  * @author Data In Motion Consulting
  * @since 1.0
  */
 public record M2tResult(
 		List<Diagnostic> diagnostics,
 		Map<String, String> generatedFiles,
-		Map<String, String> fileUniqueIds) {
+		Map<String, String> fileUniqueIds,
+		String standardOutput) {
+
+	/**
+	 * Convenience constructor without standard output.
+	 */
+	public M2tResult(List<Diagnostic> diagnostics, Map<String, String> generatedFiles,
+			Map<String, String> fileUniqueIds) {
+		this(diagnostics, generatedFiles, fileUniqueIds, "");
+	}
 
 	/**
 	 * Convenience constructor without unique IDs.
@@ -54,6 +67,7 @@ public record M2tResult(
 		fileUniqueIds = fileUniqueIds == null
 				? Map.of()
 				: Map.copyOf(fileUniqueIds);
+		standardOutput = standardOutput == null ? "" : standardOutput;
 	}
 
 	/**

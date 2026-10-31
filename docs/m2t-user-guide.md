@@ -592,6 +592,13 @@ Generated: [c.name/]
 [/file]
 ```
 
+The arguments follow MOFM2T §7.3 and §8.2:
+
+1. **URL.** A path relative to the output, or a `file:` URI. `file:x`, `file:/x` and `file:\x` are relative to the output directory; `file:///abs/x` is absolute and must lie inside it. The keyword `stdout`, or the string `'stdout'`, sends the body to the standard output instead of a file: `M2tResult.standardOutput()`. Text the entry template writes outside any `[file]` block goes there too, in order with the `[file (stdout)]` blocks. The engine prints nothing itself; the host decides.
+2. **Append flag**, default `false`. Any Boolean expression is allowed (`[file ('log', c.abstract)]`). `null`, `invalid` or a value that is not a Boolean is an ERROR, and the block is skipped. Within one run, an overwrite block for a path replaces what earlier blocks wrote, on disk too.
+3. **Unique id** (`uniqId`). When nothing exists under the file's path, the protected areas of the file generated before under the same id are taken over (§7.3: "even when a model element was renamed"). This is reported as INFO, and the old file is kept. `FileSystemGenerationStrategy` remembers the ids in `.m2t-ids` in its output directory.
+4. **Charset** (extension). Without one, `M2tConfiguration.defaultCharset()` applies. Acceleo templates put the charset third; a charset name there is the unique id, and it is reported as a WARNING.
+
 The `let` block also takes `[elselet v : T = e]` branches; the spec's `[/elselet]` end tag may be written or left out (Acceleo leaves it out).
 
 ### 4.8 Query
@@ -1205,13 +1212,30 @@ Protected areas mark regions in generated files that are preserved across regene
 [/protected]
 ```
 
-The generated output contains markers with a content hash (D31):
+The generated output contains markers with a content hash (D31). Both markers stand on lines of their own, indented like the `[protected]` tag (MOFM2T §7.2 example):
 
 ```
 // [protected 'unique_id' a1b2c3d4]
 // default content
 // [/protected]
 ```
+
+The comment syntax of the markers depends on the file's extension: `//` for `.java` and any extension not configured, `<!-- … -->` for `.xml` and `.html`, `#` for `.py`, `--` for `.sql`. More can be configured:
+
+```java
+M2tConfiguration config = M2tConfiguration.builder(oclConfig)
+    .protectedAreaDelimiter("yaml", ProtectedAreaDelimiter.HASH)
+    .protectedAreaDelimiter("vue", new ProtectedAreaDelimiter("<!--", "-->"))
+    .build();
+```
+
+An id is unique per file (§7.2: "a unique identification"). Several cases are an ERROR:
+
+- an id used twice in one file: the second area is not written;
+- an id held twice by the existing file: that id is not merged;
+- an empty or `invalid` id: the area is not written.
+
+An id containing `'` is written escaped (`'it\'s'`) and survives the round trip.
 
 ### 10.2 Dynamic IDs
 
@@ -1236,6 +1260,8 @@ The protected area merger uses SHA-256 hashes to detect changes:
 3. **Regeneration (user edited):** The existing content hash differs from the marker — user content is preserved
 
 This approach is more robust than marker-only matching because it detects when the default content was changed by the user.
+
+An area the existing file has but the templates no longer generate keeps its user code (§7.2: "preserved and not overwritten"). If the user changed it, it goes to `M2tGenerationStrategy.lostContent(path, areas, charset)` and is reported as a WARNING. `FileSystemGenerationStrategy` appends it to `<file>.lost`, as Acceleo does. An area left at its default goes without a word.
 
 ### 10.4 M2tGenerationStrategy for Protected Areas
 
@@ -1266,7 +1292,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 
 ```mtl
 [template public main(c : EClass)]
-[file ('out.java', false, 'UTF-8')]
+[file ('out.java', false)]
 public class [c.name/] {
     [protected ('fields')]
     // custom fields
@@ -1527,6 +1553,14 @@ public interface M2tGenerationStrategy {
 
     // Read existing content for protected area merging (default: null)
     default String readExistingContent(String filePath, Charset charset) { ... }
+
+    // User code of protected areas no longer generated (default: dropped; file system: <file>.lost)
+    default void lostContent(String filePath, Map<String, String> areas, Charset charset) { ... }
+
+    // The path a [file] unique id was written to before, and remembering the paths of a run
+    // (default: none; file system: .m2t-ids)
+    default String pathOfUniqueId(String uniqueId) { ... }
+    default void recordUniqueIds(Map<String, String> pathsByUniqueId) { ... }
 }
 ```
 
@@ -1596,7 +1630,7 @@ The whitespace normalizer applies these rules:
 1. **Body-trimming** — The first and last newlines of template and multi-line block bodies are stripped
 2. **Standalone block stripping** — When a block tag (`[for]`, `[if]`, `[/for]`, `[/if]`, etc.) is alone on a line, the whitespace in front of the tag is removed from the output. What happens to the newline that ends the tag line follows the shape of the block — see 16.2.2. A block that shares its head or tail line with other body elements is *embedded* and is output as is — see 16.2.3
 3. **Default separator injection** — Standalone **multi-line** `[for]` blocks without an explicit `separator()` get a `"\n"` separator. A single-line `[for …]…[/for]` alone on its line runs its iterations together (`[for (c : EClass | p.eClassifiers)][i/][/for]` produces `123`), exactly as Acceleo 3.7 does
-4. **BOL indicator** (**SPEC mode only**) — The `^` character at the beginning of a line resets indentation to column 0. In ACCELEO mode, `^` is passed through as literal text (Acceleo 3.7 does not implement this feature)
+4. **BOL indicator** (**SPEC mode only**) — The `^` character at the beginning of a line resets indentation to column 0. It removes only the whitespace the template writes itself: an invoked template's `^l2` under a caller's propagated indentation keeps that indentation, as propagation belongs to the call site. In ACCELEO mode, `^` is passed through as literal text (Acceleo 3.7 does not implement this feature)
 5. **Indent propagation** — When a template invocation stands on a line by itself and is indented, that indent is put in front of every line of the invoked template's output, the first line included
 6. **Iterative invocation separator** — A standalone template invocation whose argument is a collection separates the outputs of the iterations with `"\n"` unless it names a `separator()`, the same way a multi-line `[for]` does
 
@@ -1608,10 +1642,11 @@ the newline ending the tail line:
 | Shape | Body per §8.4 | Newline after the tail |
 |-------|---------------|------------------------|
 | multi-line (`[for]` … `[/for]` on their own lines) | starts on the line after the head, ends **excluding** the newline in front of the tail | **kept** — the construct already spent a newline in front of its tail |
-| single-line (`[if (…)]text[/if]` on one line) | starts after the head's closing bracket, ends before the tail's opening bracket | **removed** — no newline was spent, so the tag line takes its own |
+| single-line (`[if (…)]text[/if]` on one line) | starts after the head's closing bracket, ends before the tail's opening bracket | **kept when the block wrote text**, removed when it wrote nothing |
 
-So a multi-line block leaves the line after it on its own line, while a single-line block on
-a line by itself contributes only the text it produced:
+The newline after a single-line block is a whitespace element of the enclosing body, which §8.4 outputs "as is". `A\n  [if (true)]X[/if]\nB\n  [if (false)]Y[/if]\nC` therefore produces `A\nX\nB\nC`: the `X` keeps its own line, and the line of the block that wrote nothing disappears instead of leaving an empty one, as in Acceleo's `testingIf`. This holds in both modes (#374).
+
+A multi-line block leaves the line after it on its own line:
 
 ```mtl
 A
@@ -1649,6 +1684,10 @@ multi-line, so that the inner block's line is its own (#272).
 | Default separator injection | Yes | Yes |
 | BOL indicator `^` | Yes — strips leading whitespace | No — literal passthrough |
 | Indent propagation | Yes | Yes |
+
+A template saved with CRLF line ends is read as if it had `\n` ones (line and column numbers unchanged), so no stray `\r` remains where a rule takes a newline away; the output uses `\n`.
+
+The §8.2 keywords `guard`, `init`, `each` and `mode` have no tokens: a guard is written `? (…)`, an init section `{ … }`, the separator `separator (…)`, and only text-explicit mode exists (§4.12).
 
 ### 16.3 Configuration
 

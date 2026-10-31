@@ -52,7 +52,6 @@ import org.eclipse.fennec.m2x.m2t.parser.M2tParserSupport;
 import org.eclipse.fennec.m2x.m2t.parser.M2tWhitespaceNormalizer;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.m2t.Module;
-import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
 import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
@@ -462,8 +461,9 @@ public class M2tEngineImpl implements M2tEngine {
 					UNRESOLVED_SOURCE_ID, 0, entry.problem(), null))), Map.of(), Map.of());
 		}
 		Template main = entry.template();
+		String standardOutput = "";
 		try {
-			evaluator.execute(main, inputElements);
+			standardOutput = evaluator.execute(main, inputElements);
 		} catch (StackOverflowError stackRanOut) {
 			// The depth guard counts template invocations; a deep enough recursion exhausts the
 			// stack before the count is reached, and an Error would leave the caller with no
@@ -487,11 +487,12 @@ public class M2tEngineImpl implements M2tEngine {
 		M2tGenerationStrategy strategy = generationStrategy(context);
 		if (strategy != null) {
 			generatedFiles = new M2tOutputWriter(strategy, config.protectedAreaEnabled(),
-					config.defaultCharset(), evaluator)
-					.write(generatedFiles, openModes, charsets);
+					config.defaultCharset(), config.protectedAreaDelimiters(), evaluator)
+					.write(generatedFiles, openModes, charsets, fileUniqueIds);
 		}
 
-		return new M2tResult(withParseWarnings(module, evaluator.getDiagnostics()), generatedFiles, fileUniqueIds);
+		return new M2tResult(withParseWarnings(module, evaluator.getDiagnostics()), generatedFiles, fileUniqueIds,
+				standardOutput);
 	}
 
 	/**

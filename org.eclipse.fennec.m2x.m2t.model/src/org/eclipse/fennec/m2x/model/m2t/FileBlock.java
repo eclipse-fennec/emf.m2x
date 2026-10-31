@@ -33,6 +33,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <ul>
  *   <li>{@link org.eclipse.fennec.m2x.model.m2t.FileBlock#getFileUrl <em>File Url</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.m2t.FileBlock#getOpenMode <em>Open Mode</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.m2t.FileBlock#getAppendExpr <em>Append Expr</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.m2t.FileBlock#getUniqId <em>Uniq Id</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.m2t.FileBlock#getCharset <em>Charset</em>}</li>
  * </ul>
@@ -90,6 +91,31 @@ public interface FileBlock extends Block {
 	 * @generated
 	 */
 	void setOpenMode(OpenModeKind value);
+
+	/**
+	 * Returns the value of the '<em><b>Append Expr</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * The append flag when it is not the literal true or false (MOFM2T 1.0 Section 8.2 allows an OclExpressionCS): evaluated at runtime, true opens the file in append mode. When set, openMode is not used.
+	 * <!-- end-model-doc -->
+	 * @return the value of the '<em>Append Expr</em>' containment reference.
+	 * @see #setAppendExpr(OclExpression)
+	 * @see org.eclipse.fennec.m2x.model.m2t.M2tPackage#getFileBlock_AppendExpr()
+	 * @model containment="true"
+	 * @generated
+	 */
+	OclExpression getAppendExpr();
+
+	/**
+	 * Sets the value of the '{@link org.eclipse.fennec.m2x.model.m2t.FileBlock#getAppendExpr <em>Append Expr</em>}' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @param value the new value of the '<em>Append Expr</em>' containment reference.
+	 * @see #getAppendExpr()
+	 * @generated
+	 */
+	void setAppendExpr(OclExpression value);
 
 	/**
 	 * Returns the value of the '<em><b>Uniq Id</b></em>' containment reference.

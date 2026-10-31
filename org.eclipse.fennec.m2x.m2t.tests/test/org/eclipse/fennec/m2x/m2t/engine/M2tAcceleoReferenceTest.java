@@ -30,6 +30,7 @@ import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
+import org.eclipse.fennec.m2x.m2t.engine.internal.M2tProtectedAreaMerger;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -483,9 +484,9 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "out");
-			assertTrue(content.contains("// [protected 'my_area'"), "start marker");
-			assertTrue(content.contains("default content"), "default body");
-			assertTrue(content.contains("// [/protected]"), "end marker");
+			// the exact layout: the end marker on its own line (#367)
+			assertEquals("// [protected 'my_area' " + M2tProtectedAreaMerger.contentHash("default content\n")
+					+ "]\ndefault content\n// [/protected]", content);
 		}
 
 		@Test

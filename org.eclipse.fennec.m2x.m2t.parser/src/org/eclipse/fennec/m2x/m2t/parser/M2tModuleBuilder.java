@@ -52,6 +52,8 @@ import org.eclipse.fennec.m2x.model.m2t.TraceBlock;
 import org.eclipse.fennec.m2x.model.m2t.VisibilityKind;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
@@ -667,22 +669,35 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	private FileBlock buildFileBlock(M2tParser.FileBlockContext ctx) {
 		FileBlock fileBlock = FACTORY.createFileBlock();
 
-		List<M2tParser.ExpressionContext> exprs = ctx.expression();
+		// File URL (first argument); §7.3: "The uri 'stdout' denotes the stdout output stream",
+		// written as the keyword or as the string — both reach the evaluator as 'stdout' (#368)
+		if (ctx.stdout != null) {
+			StringLiteralExp stdout = OclFactory.eINSTANCE.createStringLiteralExp();
+			stdout.setStringSymbol(M2tParserSupport.STDOUT);
+			fileBlock.setFileUrl(stdout);
+		} else {
+			fileBlock.setFileUrl(exprBuilder.buildExpression(ctx.url));
+		}
 
-		// File URL (first expression)
-		fileBlock.setFileUrl(exprBuilder.buildExpression(exprs.get(0)));
-
-		// Append mode (second expression — Boolean, MOFM2T §7.3 / §8.1.17)
-		if (exprs.size() > 1) {
-			OclExpression modeExpr = exprBuilder.buildExpression(exprs.get(1));
-			if (modeExpr instanceof BooleanLiteralExp boolLit && boolLit.isBooleanSymbol()) {
-				fileBlock.setOpenMode(OpenModeKind.APPEND);
+		// Append flag (second argument, MOFM2T §7.3, §8.2): a literal is the open mode, any
+		// other expression is evaluated when the block runs (#368)
+		if (ctx.appendFlag != null) {
+			OclExpression modeExpr = exprBuilder.buildExpression(ctx.appendFlag);
+			if (modeExpr instanceof BooleanLiteralExp literal) {
+				fileBlock.setOpenMode(literal.isBooleanSymbol() ? OpenModeKind.APPEND : OpenModeKind.OVERWRITE);
+			} else {
+				fileBlock.setAppendExpr(modeExpr);
 			}
 		}
 
-		// Unique ID (third expression — MOFM2T §8.1.17)
-		if (exprs.size() > 2) {
-			fileBlock.setUniqId(exprBuilder.buildExpression(exprs.get(2)));
+		// Unique ID (third argument — MOFM2T §8.1.17)
+		if (ctx.uniqId != null) {
+			fileBlock.setUniqId(exprBuilder.buildExpression(ctx.uniqId));
+		}
+
+		// Charset (fourth argument — an extension)
+		if (ctx.charset != null) {
+			fileBlock.setCharset(exprBuilder.buildExpression(ctx.charset));
 		}
 
 		// Body

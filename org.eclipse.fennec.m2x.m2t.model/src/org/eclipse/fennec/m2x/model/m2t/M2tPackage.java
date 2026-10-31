@@ -46,7 +46,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = M2tPackage.eNS_URI, fingerprint = "fp1:fc4cd38e281dabd39b184369f63cebaf2e22216b9311d98a19cce1a8043fb085", genModel = "/model/m2t.genmodel", genModelSourceLocations = {"model/m2t.genmodel","org.eclipse.fennec.m2x.m2t.model/model/m2t.genmodel"}, ecore = "/model/m2t.ecore", ecoreSourceLocations = "/model/m2t.ecore")
+@EPackage(uri = M2tPackage.eNS_URI, fingerprint = "fp1:54db63605ea8fe48a4c0232fe4c3573262fb40a53b38a0bf50d6175f4429d738", genModel = "/model/m2t.genmodel", genModelSourceLocations = {"model/m2t.genmodel","org.eclipse.fennec.m2x.m2t.model/model/m2t.genmodel"}, ecore = "/model/m2t.ecore", ecoreSourceLocations = "/model/m2t.ecore")
 public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -1056,13 +1056,22 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int FILE_BLOCK__OPEN_MODE = BLOCK_FEATURE_COUNT + 1;
 
 	/**
+	 * The feature id for the '<em><b>Append Expr</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int FILE_BLOCK__APPEND_EXPR = BLOCK_FEATURE_COUNT + 2;
+
+	/**
 	 * The feature id for the '<em><b>Uniq Id</b></em>' containment reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int FILE_BLOCK__UNIQ_ID = BLOCK_FEATURE_COUNT + 2;
+	int FILE_BLOCK__UNIQ_ID = BLOCK_FEATURE_COUNT + 3;
 
 	/**
 	 * The feature id for the '<em><b>Charset</b></em>' containment reference.
@@ -1071,7 +1080,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int FILE_BLOCK__CHARSET = BLOCK_FEATURE_COUNT + 3;
+	int FILE_BLOCK__CHARSET = BLOCK_FEATURE_COUNT + 4;
 
 	/**
 	 * The number of structural features of the '<em>File Block</em>' class.
@@ -1080,7 +1089,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int FILE_BLOCK_FEATURE_COUNT = BLOCK_FEATURE_COUNT + 4;
+	int FILE_BLOCK_FEATURE_COUNT = BLOCK_FEATURE_COUNT + 5;
 
 	/**
 	 * The number of operations of the '<em>File Block</em>' class.
@@ -2038,6 +2047,17 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	EAttribute getFileBlock_OpenMode();
 
 	/**
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.m2t.FileBlock#getAppendExpr <em>Append Expr</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the containment reference '<em>Append Expr</em>'.
+	 * @see org.eclipse.fennec.m2x.model.m2t.FileBlock#getAppendExpr()
+	 * @see #getFileBlock()
+	 * @generated
+	 */
+	EReference getFileBlock_AppendExpr();
+
+	/**
 	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.m2t.FileBlock#getUniqId <em>Uniq Id</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2731,6 +2751,14 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EAttribute FILE_BLOCK__OPEN_MODE = eINSTANCE.getFileBlock_OpenMode();
+
+		/**
+		 * The meta object literal for the '<em><b>Append Expr</b></em>' containment reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference FILE_BLOCK__APPEND_EXPR = eINSTANCE.getFileBlock_AppendExpr();
 
 		/**
 		 * The meta object literal for the '<em><b>Uniq Id</b></em>' containment reference feature.

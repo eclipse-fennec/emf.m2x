@@ -65,6 +65,10 @@ public class M2tParserSupport {
 	 */
 	public M2tParser.ModuleContext parse(String source) throws M2tParseException {
 		Objects.requireNonNull(source, "source must not be null");
+		// §8.4 counts lines: a template saved with CRLF line ends would otherwise leave a stray
+		// \r wherever the whitespace rules take a newline away. One line end, \n, inside; line
+		// and column numbers stay the same (#374).
+		source = source.replace("\r\n", "\n").replace('\r', '\n');
 		rejectCodeExplicitMode(source);
 
 		M2tLexer lexer = new M2tLexer(CharStreams.fromString(source));
@@ -105,6 +109,9 @@ public class M2tParserSupport {
 	 * say — which a generation reports, since the parse has no channel for them (#371).
 	 */
 	public static final String WARNINGS_ANNOTATION = "m2t.warnings";
+
+	/** The file URL that denotes the standard output (MOFM2T §7.3: "The uri 'stdout' denotes the stdout output stream"). */
+	public static final String STDOUT = "stdout";
 
 	private static void recordWarnings(Module module, List<String> warnings) {
 		if (warnings.isEmpty()) {
