@@ -36,13 +36,40 @@ import java.util.Objects;
  * @param targetModelName the target model name for enforce direction, or
  *        {@code null} for check-only mode
  * @param checkOnly {@code true} for check-only mode (§7.9)
+ * @param postCheck {@code true} to check every relation in every direction once an enforce run
+ *        is done; by default an enforce run checks only the domains of the target model that are
+ *        not enforced (§7.2.3, #348)
  * @author Data In Motion Consulting
  * @since 1.0
  */
 public record QvtdExecutionContext(
 		Map<String, QvtdModelExtent> modelExtents,
 		String targetModelName,
-		boolean checkOnly) {
+		boolean checkOnly,
+		boolean postCheck) {
+
+	/**
+	 * A context without the post-check of an enforce run.
+	 *
+	 * @param modelExtents named model extents keyed by TypedModel name
+	 * @param targetModelName the target model name, or {@code null} for check-only mode
+	 * @param checkOnly {@code true} for check-only mode (§7.9)
+	 */
+	public QvtdExecutionContext(Map<String, QvtdModelExtent> modelExtents, String targetModelName,
+			boolean checkOnly) {
+		this(modelExtents, targetModelName, checkOnly, false);
+	}
+
+	/**
+	 * This context, with every relation checked in every direction once the enforce run is done;
+	 * a relation that does not hold makes {@link QvtdExecutionResult#isConsistent()} false (#348).
+	 * A check-only run checks every direction anyway.
+	 *
+	 * @return the context with the post-check
+	 */
+	public QvtdExecutionContext withPostCheck() {
+		return new QvtdExecutionContext(modelExtents, targetModelName, checkOnly, true);
+	}
 
 	/**
 	 * Compact constructor: validates and makes extents unmodifiable.

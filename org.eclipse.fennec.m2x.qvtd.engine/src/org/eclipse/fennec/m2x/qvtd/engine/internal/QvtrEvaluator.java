@@ -31,6 +31,7 @@ import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
@@ -53,6 +54,7 @@ import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 
 /**
  * Core evaluator for QVT-R transformations (§7.10).
@@ -114,6 +116,11 @@ public class QvtrEvaluator {
 	private final LongSupplier nanoTimeSource;
 
 	private int relationCallDepth;
+	/**
+	 * Whether relations are checked rather than enforced: a check-only run, or the post-check
+	 * of an enforce run (#348).
+	 */
+	private boolean checking;
 	private long deadlineNanos;
 
 	/**
@@ -207,8 +214,23 @@ public class QvtrEvaluator {
 			}
 		}
 
-		// §7.2.2: all top relations have to hold, in no order of declaration — each runs after
-		// what its when clause depends on, a cycle until it adds no trace (#349)
+		checking = context.checkOnly();
+		runAll(topRelations);
+		// An enforce run checks only the target model's checked domains, unless asked to check
+		// every direction once it is done (#348)
+		if (!checking && context.postCheck()) {
+			checking = true;
+			traceManager.clear();
+			runAll(topRelations);
+		}
+		return diagnostics;
+	}
+
+	/**
+	 * §7.2.2: all top relations have to hold, in no order of declaration — each runs after what
+	 * its when clause depends on, a cycle until it adds no trace (#349).
+	 */
+	private void runAll(List<Relation> topRelations) {
 		for (List<Relation> component : QvtrRelationOrder.components(topRelations)) {
 			if (!QvtrRelationOrder.isCyclic(component)) {
 				runTopRelation(component.get(0));
@@ -221,7 +243,6 @@ public class QvtrEvaluator {
 				component.forEach(this::runTopRelation);
 			} while (traceManager.size() > traced);
 		}
-		return diagnostics;
 	}
 
 	private void runTopRelation(Relation relation) {
@@ -293,30 +314,39 @@ public class QvtrEvaluator {
 		}
 
 		// 2. Classify domains into source, target, and primitive
-		List<RelationDomain> sourceDomains = new ArrayList<>();
-		RelationDomain targetDomain = null;
+		List<RelationDomain> modelDomains = modelDomains(relation);
 
-		for (Domain domain : relation.getDomain()) {
-			if (domain instanceof RelationDomain rd) {
-				if (isPrimitiveDomain(rd)) {
-					continue; // §7.13.4 primitive domain
-				}
-				if (!context.checkOnly() && rd.isIsEnforceable()
-							&& extentManager.isTargetModel(rd.getTypedModel())) {
-					targetDomain = rd;
-				} else {
-					sourceDomains.add(rd);
-				}
-			}
-		}
-
-		// In check-only mode, all domains are source domains
-		if (context.checkOnly()) {
-			for (Map<String, Object> whenBinding : whenBindings) {
-				matchAndCheckAllDomains(relation, sourceDomains, whenBinding);
+		// §7.9: checking asks whether the relation holds in every direction (#348)
+		if (checking) {
+			for (RelationDomain direction : modelDomains) {
+				checkDirection(relation, without(modelDomains, direction), direction, whenBindings);
 			}
 			return;
 		}
+
+		RelationDomain targetDomain = null;
+		RelationDomain checkedDomain = null;
+		for (RelationDomain rd : modelDomains) {
+			if (rd.isIsEnforceable() && extentManager.isTargetModel(rd.getTypedModel())) {
+				targetDomain = rd;
+			}
+		}
+		if (targetDomain == null) {
+			// §7.2.3: "When a relation executes in the direction of a checkonly domain, the domain
+			// is simply checked to see whether there exists a valid match" — and every binding it
+			// does not hold for is reported (#348). With an enforced domain in the target model,
+			// one that is only checked stays a source domain, as for an in-place transformation.
+			for (RelationDomain rd : modelDomains) {
+				if (extentManager.isTargetModel(rd.getTypedModel())) {
+					checkedDomain = rd;
+				}
+			}
+		}
+		if (checkedDomain != null) {
+			checkDirection(relation, without(modelDomains, checkedDomain), checkedDomain, whenBindings);
+			return;
+		}
+		List<RelationDomain> sourceDomains = without(modelDomains, targetDomain);
 
 		// 3. Match source domains, once per when binding
 		if (sourceDomains.isEmpty()) {
@@ -568,32 +598,161 @@ public class QvtrEvaluator {
 		return currentBindings;
 	}
 
+	// ── Checking (§7.9, §7.10.1) ─────────────────────────────────────
+
 	/**
-	 * In check-only mode, checks that all domain patterns are consistent.
+	 * Checks a relation in the direction of one domain: "For each valid binding of variables of
+	 * the when clause and variables of domains other than the target domain k, that satisfy the
+	 * when condition and source domain patterns and conditions, there must exist a valid binding
+	 * of the remaining unbound variables of domain k that satisfies domain k's pattern and where
+	 * condition" (§7.10.1). A binding without one is an inconsistency, reported with relation,
+	 * direction and binding; a binding the relation holds for is traced, so the relations whose
+	 * when clauses depend on it are checked too (#348).
 	 */
-	private void matchAndCheckAllDomains(Relation relation, List<RelationDomain> domains,
-			Map<String, Object> whenBindings) {
-		if (whenBindings == null) {
-			return;
+	private void checkDirection(Relation relation, List<RelationDomain> others, RelationDomain direction,
+			List<Map<String, Object>> whenBindings) {
+		Set<Map<String, Object>> sourceBindings = new LinkedHashSet<>();
+		for (Map<String, Object> whenBinding : whenBindings) {
+			sourceBindings.addAll(others.isEmpty() ? List.of(whenBinding) : matchSourceDomains(others, whenBinding));
 		}
-
-		List<Map<String, Object>> bindings = matchSourceDomains(domains, whenBindings);
-
-		if (bindings.isEmpty() && !domains.isEmpty()) {
-			diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
-					"Relation '%s': no matching bindings found in check-only mode"
-							.formatted(relation.getName()),
-					null));
-		}
-
-		for (Map<String, Object> binding : bindings) {
-			// The when-condition filters here too: checking asks for a target binding only
-			// "for each valid binding ... that satisfies the when condition" (§7.10.1).
-			if (!whenConditionHolds(relation, binding)) {
+		for (Map<String, Object> binding : List.copyOf(sourceBindings)) {
+			checkDeadline();
+			Map<String, Object> sourceBinding = new HashMap<>(binding);
+			if (hasOptionalNullBinding(others, sourceBinding)) {
+				recordTrace(relation, sourceBinding); // [?] without a match holds (#349)
 				continue;
 			}
-			evaluateWhereClause(relation, binding);
+			if (!whenConditionHolds(relation, sourceBinding)) {
+				continue;
+			}
+			queryEvaluator.preComputeWhereBindings(relation, sourceBinding);
+			Map<String, Object> holding = null;
+			for (Map<String, Object> match : patternMatcher.matchDomain(direction, sourceBinding)) {
+				if (whereHolds(relation, match)) {
+					holding = match;
+					break;
+				}
+			}
+			if (holding != null) {
+				recordTrace(relation, holding);
+			} else {
+				reportInconsistency(relation, others, direction, sourceBinding);
+			}
 		}
+	}
+
+	/**
+	 * Whether the where condition holds for a binding: its OCL predicates are true and the
+	 * relations it calls hold for their arguments (§7.10.1 "satisfies domain k's pattern and where
+	 * condition").
+	 */
+	private boolean whereHolds(Relation relation, Map<String, Object> binding) {
+		Pattern where = relation.getWhere();
+		if (where == null) {
+			return true;
+		}
+		for (Predicate predicate : where.getPredicate()) {
+			OclExpression expr = predicate.getConditionExpression();
+			if (expr == null) {
+				continue;
+			}
+			boolean holds = expr instanceof RelationCallExp call
+					? relationHolds(call, binding)
+					: Boolean.TRUE.equals(evaluateOcl(expr, binding));
+			if (!holds) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Whether a relation called from a where clause holds for its arguments: there is a binding
+	 * of all its domains, extending the arguments, that satisfies its when and where conditions.
+	 * Checking calls it, it does not enforce it.
+	 */
+	private boolean relationHolds(RelationCallExp call, Map<String, Object> callerBinding) {
+		Relation called = call.getReferredRelation();
+		if (called == null) {
+			return false;
+		}
+		Map<String, Object> preBindings = new HashMap<>();
+		List<String> rootVarNames = QvtrTraceManager.collectRootVarNames(called);
+		for (int i = 0; i < Math.min(rootVarNames.size(), call.getArgument().size()); i++) {
+			Object value = evaluateOcl(call.getArgument().get(i), callerBinding);
+			if (value != null) {
+				preBindings.put(rootVarNames.get(i), value);
+			}
+		}
+		if (relationCallDepth >= config.maxRelationDepth()) {
+			throw new QvtdExecutionException("Relation call depth limit exceeded (%d) in relation '%s'"
+					.formatted(config.maxRelationDepth(), called.getName()));
+		}
+		relationCallDepth++;
+		try {
+			List<RelationDomain> domains = modelDomains(called);
+			for (Map<String, Object> whenBinding : evaluateWhenPreBindings(called, preBindings)) {
+				for (Map<String, Object> match : matchSourceDomains(domains, whenBinding)) {
+					Map<String, Object> binding = new HashMap<>(match);
+					if (whenConditionHolds(called, binding) && whereHolds(called, binding)) {
+						recordTrace(called, binding);
+						return true;
+					}
+				}
+			}
+			return false;
+		} finally {
+			relationCallDepth--;
+		}
+	}
+
+	/**
+	 * Reports a binding a relation does not hold for in one direction: a WARNING with the code
+	 * {@link QvtdExecutionResult#INCONSISTENCY} — the run did not fail, the models are not
+	 * consistent (#348).
+	 */
+	private void reportInconsistency(Relation relation, List<RelationDomain> others, RelationDomain direction,
+			Map<String, Object> binding) {
+		StringBuilder described = new StringBuilder();
+		for (RelationDomain domain : others) {
+			for (Variable root : domain.getRootVariable()) {
+				if (!described.isEmpty()) {
+					described.append(", ");
+				}
+				described.append(root.getName()).append(" = ").append(describe(binding.get(root.getName())));
+			}
+		}
+		String model = direction.getTypedModel() != null ? direction.getTypedModel().getName() : direction.getName();
+		diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, QvtdExecutionResult.INCONSISTENCY,
+				"Relation '%s' does not hold in direction '%s': no match for %s (§7.10.1)"
+						.formatted(relation.getName(), model, described.isEmpty() ? "the empty binding" : described),
+				null));
+	}
+
+	private static String describe(Object value) {
+		if (value instanceof EObject eo) {
+			EStructuralFeature name = eo.eClass().getEStructuralFeature("name");
+			Object n = name != null ? eo.eGet(name) : null;
+			return eo.eClass().getName() + (n != null ? " '" + n + "'" : "");
+		}
+		return value instanceof String str ? "'" + str + "'" : String.valueOf(value);
+	}
+
+	/** The domains of a relation that have a model, primitive domains left out (§7.13.4). */
+	private List<RelationDomain> modelDomains(Relation relation) {
+		List<RelationDomain> domains = new ArrayList<>();
+		for (Domain domain : relation.getDomain()) {
+			if (domain instanceof RelationDomain rd && !isPrimitiveDomain(rd)) {
+				domains.add(rd);
+			}
+		}
+		return domains;
+	}
+
+	private static List<RelationDomain> without(List<RelationDomain> domains, RelationDomain left) {
+		List<RelationDomain> rest = new ArrayList<>(domains);
+		rest.remove(left);
+		return rest;
 	}
 
 	// ── OCL evaluation ───────────────────────────────────────────────

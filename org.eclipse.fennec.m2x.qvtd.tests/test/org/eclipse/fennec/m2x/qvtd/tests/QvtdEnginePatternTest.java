@@ -29,7 +29,6 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -402,7 +401,6 @@ class QvtdEnginePatternTest extends AbstractQvtdEngineTest {
 	class CheckOnlySemantics {
 
 		@Test
-		@Disabled("#348: isConsistent() is an alias of isSuccess(), a checkonly violation leaves it true")
 		@DisplayName("Check-only detects inconsistency: Package without matching Schema")
 		void checkOnlyDetectsInconsistency() throws QvtdParseException {
 			String source = """

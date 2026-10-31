@@ -555,8 +555,19 @@ if (result.isConsistent()) {
 }
 ```
 
-> **Known gap (#348):** `isConsistent()` is currently an alias of `isSuccess()`. A violated
-> relation is reported as a WARNING but leaves `isConsistent()` true.
+Check-only mode checks every relation in every direction, regardless of whether a domain is marked `checkonly` or `enforce` (§7.9, §7.10.1). Each binding a relation does not hold for is reported as a WARNING with the code `QvtdExecutionResult.INCONSISTENCY`, for example:
+
+```
+Relation 'PackageToSchema' does not hold in direction 'rdbms': no match for p = Package 'B' (§7.10.1)
+```
+
+The run still succeeds (`isSuccess()` is true), but `isConsistent()` is false. Empty models are consistent and report nothing.
+
+An enforce run in the direction of a domain that is only `checkonly` checks that domain and reports what does not hold, without creating anything (§7.2.3). Apart from that, an enforce run reports no inconsistencies. To check every relation in every direction after enforcing, use `withPostCheck()`:
+
+```java
+engine.execute(trafo, QvtdExecutionContext.enforce("tgt", extents).withPostCheck());
+```
 
 ### 6.3 Bidirectional Execution
 
@@ -1183,7 +1194,7 @@ if (!result.isSuccess()) {
 | `QvtdExecutionException` | Runtime (unchecked) | A limit was exceeded: relation or query call depth, bindings, timeout (§3.2) |
 | `IllegalArgumentException` | Creating the context | The target model name of `enforce(...)` is not among the extents |
 | `isSuccess() == false` | Runtime | Relation enforcement failed, OCL evaluation error |
-| `isConsistent() == false` | Check-only | Relations do not hold between the models |
+| `isConsistent() == false` | Check-only, enforce towards a `checkonly` domain, `withPostCheck()` | A relation does not hold: `INCONSISTENCY` warnings name relation, direction and binding |
 
 ---
 
@@ -1237,7 +1248,7 @@ The trace is **implicit and internal** — there is no public API to read trace 
 | Top relations | §7.10.1, §7.2.2 | Fully implemented — dependency order, cycles to a fixpoint |
 | Non-top relations | §7.10.2 | Fully implemented |
 | When/where clauses | §7.2.1 | Fully implemented |
-| Checkonly domains | §7.10 | Partly — a violation does not make `isConsistent()` false (#348) |
+| Checkonly domains | §7.9, §7.10.1, §7.2.3 | Fully implemented |
 | Enforce domains | §7.10.2 | Partly — no deletion (#352), no clash detection (#351) |
 | Binding validation | §7.5 | Implemented (static analysis) — every declared variable counts as bound (#359) |
 | Key-based identity | §7.4, §7.13.4 | Partly — template and opposite key parts, superclass keys (#350) |
