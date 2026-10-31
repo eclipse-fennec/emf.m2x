@@ -86,7 +86,8 @@ class QvtoNullInvalidStatementTest extends AbstractQvtoEngineTest {
 				""");
 
 		assertFalse(result.isSuccess());
-		assertTrue(messages(result).contains("Null argument for operation 'concat'"),
+		// The OCL diagnostic carries its position now (#116): "test:4:8 Null argument …"
+		assertTrue(messages(result).stream().anyMatch(m -> m.endsWith("Null argument for operation 'concat'")),
 				() -> "diagnostics: " + result.diagnostics());
 	}
 
