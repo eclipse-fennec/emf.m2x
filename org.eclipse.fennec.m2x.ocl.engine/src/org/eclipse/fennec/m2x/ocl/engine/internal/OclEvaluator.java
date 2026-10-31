@@ -81,6 +81,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
 import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
+import org.eclipse.fennec.m2x.ocl.api.OclOperationException;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 
@@ -1561,6 +1562,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 				// A language on top of OCL steering its own control flow — QVT-O's raise
 				// travelling to the except that catches it. Not a failure, and not ours to stop.
 				throw failure;
+			}
+			if (failure instanceof OclOperationException rejected) {
+				// The operation rejects the call by design, in its own words (#373)
+				addError(rejected.getMessage());
+				return OclInvalid.INSTANCE;
 			}
 			addError("Custom operation '" + op.name() + "' failed: " + failure);
 			return OclInvalid.INSTANCE;

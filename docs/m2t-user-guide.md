@@ -1326,23 +1326,33 @@ Use `protectedAreaEnabled(false)` when processing untrusted templates or when pr
 
 ## 11. Standard Library
 
-MOFM2T defines 13 string operations (§8.3) in addition to the full OCL standard library. These are automatically available in all templates:
+MOFM2T defines 13 string operations (§8.3.1) in addition to the full OCL standard library. These are automatically available in all templates:
 
 | Operation | Signature | Description | Example |
 |-----------|-----------|-------------|---------|
-| `substitute` | `substitute(s, r) : String` | Replace all occurrences of `s` with `r` | `'test'.substitute('es', 'se')` = `tset` |
-| `index` | `index(s) : Integer` | 1-based position of first occurrence | `'test'.index('es')` = `2` |
+| `substitute` | `substitute(r, t) : String` | Replace the **first** occurrence of `r` with `t` | `'aXbXc'.substitute('X', '-')` = `a-bXc` |
+| `index` | `index(r) : Integer` | 1-based position of the first occurrence, `-1` if none | `'test'.index('es')` = `2` |
 | `first` | `first(n) : String` | First `n` characters | `'hello'.first(3)` = `hel` |
 | `last` | `last(n) : String` | Last `n` characters | `'hello'.last(3)` = `llo` |
-| `strstr` | `strstr(s) : Boolean` | Contains check | `'test'.strstr('es')` = `true` |
-| `strcmp` | `strcmp(s) : Integer` | Lexicographic comparison (0 = equal) | `'test'.strcmp('test')` = `0` |
-| `isAlpha` | `isAlpha() : Boolean` | All characters are letters | `'abc'.isAlpha()` = `true` |
-| `isAlphanum` | `isAlphanum() : Boolean` | All characters are letters or digits | `'abc1'.isAlphanum()` = `true` |
+| `strstr` | `strstr(r) : Boolean` | Contains check | `'test'.strstr('es')` = `true` |
+| `strtok` | `strtok(s1, flag) : String` | Next token; flag `0` starts, `1` continues, `''` at the end | `'a,b'.strtok(',', 0)` = `a` |
+| `strcmp` | `strcmp(s1) : Integer` | Lexicographic comparison, the sign of C's `strcmp(self, s1)` | `'b'.strcmp('a')` > `0` |
+| `isAlpha` | `isAlpha() : Boolean` | All characters are letters (`''` included) | `'abc'.isAlpha()` = `true` |
+| `isAlphanum` | `isAlphanum() : Boolean` | All characters are letters or digits (`''` included) | `'abc1'.isAlphanum()` = `true` |
 | `toUpper` | `toUpper() : String` | Convert to uppercase | `'Hello'.toUpper()` = `HELLO` |
 | `toLower` | `toLower() : String` | Convert to lowercase | `'Hello'.toLower()` = `hello` |
 | `toUpperFirst` | `toUpperFirst() : String` | Capitalize first character | `'test'.toUpperFirst()` = `Test` |
 | `toLowerFirst` | `toLowerFirst() : String` | Lowercase first character | `'TEST'.toLowerFirst()` = `tEST` |
-| `trim` | `trim() : String` | Remove leading/trailing whitespace | `' hi '.trim()` = `hi` |
+
+§8.3.2 and §8.3.3 add `Integer::toString()` and `Real::toString()`, which the OCL library provides (`[42.toString()/]`).
+
+Notes on the deviations and decisions (#373):
+
+- **`substitute`.** It replaces the first occurrence, as the spec's singular "substring r" and Acceleo 3.7 read it. Every occurrence is replaced by `substituteAll`, an extension the OCL library provides, as it does `trim` (also an extension, not MOFM2T). An empty search string makes `substitute` invalid.
+- **`strcmp`.** It keeps the sign of C and Acceleo: positive when `self` is greater. The spec's sentence ("depending on whether s1 is lexicographically less than … self") reads the other way round; it is taken as an erratum.
+- **`strtok`.** Flag `1` without a preceding `0` starts the tokenization, as in Acceleo. Any flag other than `0` or `1` is invalid.
+- **Invalid calls.** A `null` or `invalid` source or argument, and a negative length (`first(-1)`), make the call `invalid` with an ERROR such as "Null argument for operation 'first'". They no longer yield `''` or the text of a Java exception — the line of #306 for the predefined operations.
+- **Case mapping** does not depend on the platform's default locale: on a Turkish system `'i'.toUpper()` is `I` as well.
 
 All OCL String and Collection operations are also available:
 

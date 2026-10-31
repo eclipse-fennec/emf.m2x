@@ -290,6 +290,11 @@ a provider as a DS component; narrow the set with `operationProvider.target` if 
 see only some of them (see [User Guide §11.3](ocl-user-guide.md#113-osgi-registration)).
 The D29 `customOperationsEnabled` gate must also be enabled.
 
+An operation that rejects a call by design — a `null` argument, a value out of range — throws
+`OclOperationException` with its message: the evaluator answers `invalid` and reports exactly that
+message as an ERROR. Any other exception from a provider is reported as the provider's failure,
+"Custom operation 'x' failed: …" with the exception in it (#182, #373).
+
 ```java
 @ConsumerType
 public interface CompleteOclContribution {
