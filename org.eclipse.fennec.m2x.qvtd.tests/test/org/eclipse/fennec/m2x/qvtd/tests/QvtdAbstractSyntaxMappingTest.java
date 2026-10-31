@@ -173,8 +173,8 @@ class QvtdAbstractSyntaxMappingTest extends AbstractQvtdEngineTest {
 					top relation R {
 						a, b : String;
 						n : String = 'X';
-						checkonly domain uml p : Package { name = n };
-						enforce domain rdbms s : Schema { name = a + b };
+						checkonly domain uml p : Package { name = a, ownedClass = c : Class { name = b } };
+						enforce domain rdbms s : Schema { name = a + b + n };
 					}
 				}
 				"""), "R");

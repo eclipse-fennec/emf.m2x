@@ -22,15 +22,17 @@ import java.util.Objects;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.model.qvtbase.Domain;
 import org.eclipse.fennec.m2x.model.qvtbase.Rule;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
-import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import java.util.Map;
 import java.util.IdentityHashMap;
 
@@ -171,6 +173,38 @@ public class QvtrParserSupport {
 		lexer.addErrorListener(errorListener);
 
 		return errorListener;
+	}
+
+	/**
+	 * The §7.5 check of one direction: for each relation that enforces a domain of the target
+	 * model, the variables it needs there but nothing binds in that direction (rule 2.1). A
+	 * variable only the target domain binds passes the parse-time check, which cannot know the
+	 * direction, and is reported here, before a run (decided in #359).
+	 *
+	 * @param transformation the transformation
+	 * @param targetModelName the model the run enforces
+	 * @return one message per relation and variable, empty if the direction is executable
+	 */
+	public List<String> unboundInDirection(RelationalTransformation transformation, String targetModelName) {
+		Objects.requireNonNull(transformation, "transformation must not be null");
+		QvtrBindingValidator validator = new QvtrBindingValidator(Map.of());
+		List<String> messages = new ArrayList<>();
+		for (Rule rule : transformation.getRule()) {
+			if (!(rule instanceof Relation relation) || relation.isIsAbstract()) {
+				continue;
+			}
+			for (Domain domain : relation.getDomain()) {
+				if (domain instanceof RelationDomain target && target.isIsEnforceable()
+						&& target.getTypedModel() != null && target.getTypedModel().getName().equals(targetModelName)) {
+					for (String variable : validator.unboundForTarget(relation, target)) {
+						messages.add("§7.5: Variable '" + variable + "' of relation '" + relation.getName()
+								+ "' is not bound when enforcing '" + targetModelName
+								+ "': nothing but the enforced domain binds it");
+					}
+				}
+			}
+		}
+		return messages;
 	}
 
 	/**

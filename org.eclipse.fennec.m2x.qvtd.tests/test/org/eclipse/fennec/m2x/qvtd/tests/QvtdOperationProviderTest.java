@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -112,12 +113,13 @@ class QvtdOperationProviderTest extends AbstractQvtdEngineTest {
 	}
 
 	@Test
-	@DisplayName("a genuinely unknown operation fails the execution, loudly")
-	void genuinelyUnknownOperationIsAnError() throws QvtdParseException {
+	@DisplayName("a genuinely unknown operation fails, loudly — at parse time")
+	void genuinelyUnknownOperationIsAnError() {
 		// Before #118 every OCL error was dropped (and then deliberately filtered), so this
 		// misspelling produced an empty where-result and a "predicate not satisfied" warning —
-		// with no hint that the predicate could never be evaluated.
-		QvtdExecutionResult result = execute("""
+		// with no hint that the predicate could never be evaluated. Since #358 a call of a name
+		// that is neither a relation nor a query of the transformation is a parse error.
+		QvtdParseException e = assertThrows(QvtdParseException.class, () -> execute("""
 				transformation T(uml : simpleuml, rdbms : simplerdbms) {
 					query TypeMap(umlType : String) : String;
 
@@ -134,13 +136,9 @@ class QvtdOperationProviderTest extends AbstractQvtdEngineTest {
 						}
 					}
 				}
-				""");
-
-		assertFalse(result.isSuccess(), "a predicate that cannot be evaluated is not a success");
-		assertTrue(result.diagnostics().stream()
-				.anyMatch(d -> d.getMessage().contains("Unknown operation")
-						&& d.getMessage().contains("TypeMapp")),
-				() -> "and the diagnostic names the misspelt operation: " + result.diagnostics());
+				"""));
+		assertTrue(e.getMessage().contains("Unknown relation or query 'TypeMapp'"),
+				() -> "the diagnostic names the misspelt operation: " + e.getMessage());
 	}
 
 	// --- helpers ---

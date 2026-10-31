@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.parser;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -28,6 +29,7 @@ import org.eclipse.fennec.m2x.model.ocl.IterateExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
 import org.eclipse.fennec.m2x.model.ocl.LetExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.model.qvtbase.Domain;
@@ -37,6 +39,7 @@ import org.eclipse.fennec.m2x.model.qvtrelation.DomainPattern;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationCallExp;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomain;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationDomainAssignment;
 import org.eclipse.fennec.m2x.model.qvttemplate.CollectionTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
@@ -100,15 +103,20 @@ class QvtrBindingValidator {
 		Set<String> whenBindings = collectWhenBindings(relation);
 		Map<RelationDomain, Set<String>> domainBindings = collectAllDomainBindings(relation);
 
+		Set<String> whereAssigned = collectWhereAssignments(relation);
+
 		Set<String> allBindings = new HashSet<>(varDeclBindings);
 		allBindings.addAll(whenBindings);
 		domainBindings.values().forEach(allBindings::addAll);
 
-		// Phase 2: Check when-clause — all non-binding variable references must
-		// be resolvable from variable declarations or when-clause bindings themselves
+		// Phase 2: Check when-clause — §7.5 rule 1: its expressions may read the when clause's
+		// own bindings, initialized declarations and what the source domains bind. Which domains
+		// are sources depends on the direction, so here a variable is only required to be bound
+		// by some domain; the direction itself is checked when a run starts (#359)
 		if (relation.getWhen() != null) {
 			Set<String> whenAvailable = new HashSet<>(varDeclBindings);
 			whenAvailable.addAll(whenBindings);
+			domainBindings.values().forEach(whenAvailable::addAll);
 			checkPattern(relation.getWhen(), whenAvailable, "when-clause", relName,
 					diagnostics);
 		}
@@ -122,6 +130,7 @@ class QvtrBindingValidator {
 
 			Set<String> externalBindings = new HashSet<>(varDeclBindings);
 			externalBindings.addAll(whenBindings);
+			externalBindings.addAll(whereAssigned);
 			for (var other : domainBindings.entrySet()) {
 				if (other.getKey() != domain) {
 					externalBindings.addAll(other.getValue());
@@ -151,7 +160,9 @@ class QvtrBindingValidator {
 
 		// Phase 4: Check where-clause — all refs must be bound by when + all domains + varDecls
 		if (relation.getWhere() != null) {
-			checkPattern(relation.getWhere(), allBindings, "where-clause", relName,
+			Set<String> whereAvailable = new HashSet<>(allBindings);
+			whereAvailable.addAll(whereAssigned);
+			checkPattern(relation.getWhere(), whereAvailable, "where-clause", relName,
 					diagnostics);
 		}
 
@@ -160,6 +171,94 @@ class QvtrBindingValidator {
 		checkDeclarations(relation, diagnostics);
 
 		return diagnostics;
+	}
+
+	// ==================== Direction Check ====================
+
+	/**
+	 * The variables a relation needs but cannot bind when it is enforced towards the target
+	 * domain: §7.5 rule 2.1, "There are no free variable occurrences in <expression>", for the
+	 * target domain and the where clause of that direction. A variable only the target domain
+	 * binds is bound in the opposite direction and free in this one, so the parse-time check
+	 * cannot reject it; a run in that direction reports it before anything runs (decided in
+	 * #359).
+	 *
+	 * @param relation the relation
+	 * @param target the domain enforced in this direction
+	 * @return the names of the variables left free, in order of first use
+	 */
+	List<String> unboundForTarget(Relation relation, RelationDomain target) {
+		Set<String> available = new HashSet<>(collectVarDeclBindings(relation));
+		available.addAll(collectWhenBindings(relation));
+		collectAllDomainBindings(relation).forEach((domain, bound) -> {
+			if (domain != target) {
+				available.addAll(bound);
+			}
+		});
+		// The when clause runs before anything is enforced: §7.5 rule 1 gives it the when
+		// bindings, initialized declarations and the source domains — not the target's
+		Set<String> whenNeeded = new LinkedHashSet<>();
+		if (relation.getWhen() != null) {
+			for (Predicate predicate : relation.getWhen().getPredicate()) {
+				if (!(predicate.getConditionExpression() instanceof RelationCallExp)) {
+					collectFreeVarRefs(predicate.getConditionExpression(), new HashSet<>(), whenNeeded);
+				}
+			}
+		}
+		Set<String> whenAvailable = new HashSet<>(available);
+		available.addAll(collectWhereAssignments(relation));
+		// What enforcing the target binds itself: the objects its templates locate or create,
+		// its default values and its root
+		Set<String> needed = new LinkedHashSet<>();
+		for (DomainPattern pattern : target.getPattern()) {
+			if (pattern.getTemplateExpression() != null) {
+				collectTemplateObjects(pattern.getTemplateExpression(), available);
+				collectTemplateBindings(pattern.getTemplateExpression(), needed);
+			}
+		}
+		for (Variable root : target.getRootVariable()) {
+			available.add(root.getName());
+		}
+		for (RelationDomainAssignment assignment : target.getDefaultAssignment()) {
+			if (assignment.getVariable() != null) {
+				available.add(assignment.getVariable().getName());
+			}
+		}
+		needed.addAll(collectDomainUsages(target));
+		if (relation.getWhere() != null) {
+			for (Predicate predicate : relation.getWhere().getPredicate()) {
+				collectFreeVarRefs(predicate.getConditionExpression(), new HashSet<>(), needed);
+			}
+		}
+		Set<String> declared = new HashSet<>();
+		relation.getVariable().forEach(v -> declared.add(v.getName()));
+		List<String> unbound = new ArrayList<>();
+		for (String name : whenNeeded) {
+			if (!whenAvailable.contains(name) && !IMPLICIT_VARS.contains(name) && declared.contains(name)) {
+				unbound.add(name);
+			}
+		}
+		for (String name : needed) {
+			if (unbound.contains(name)) {
+				continue;
+			}
+			if (!available.contains(name) && !IMPLICIT_VARS.contains(name) && declared.contains(name)) {
+				unbound.add(name);
+			}
+		}
+		return unbound;
+	}
+
+	/** The variables a template's object templates bind — the objects enforcing creates or finds. */
+	private void collectTemplateObjects(TemplateExp template, Set<String> objects) {
+		if (template.getBindsTo() != null) {
+			objects.add(template.getBindsTo().getName());
+		}
+		for (var it = template.eAllContents(); it.hasNext();) {
+			if (it.next() instanceof TemplateExp nested && nested.getBindsTo() != null) {
+				objects.add(nested.getBindsTo().getName());
+			}
+		}
 	}
 
 	// ==================== Declaration Check ====================
@@ -289,14 +388,16 @@ class QvtrBindingValidator {
 	// ==================== Binding Collection ====================
 
 	/**
-	 * Collects variables bound by explicit relation-level variable declarations.
-	 * Includes variables with or without init expressions, since template matching
-	 * can also bind declared variables.
+	 * Collects the variables a declaration binds: those with an initializer. A plain declaration
+	 * binds nothing — counting it bound let "declared but never bound" through (§7.5 rule 1.3,
+	 * #359); template matching binds a declared variable through its domain instead.
 	 */
 	private Set<String> collectVarDeclBindings(Relation relation) {
 		Set<String> bindings = new HashSet<>();
 		for (Variable v : relation.getVariable()) {
-			bindings.add(v.getName());
+			if (v.getOwnedInit() != null) {
+				bindings.add(v.getName());
+			}
 		}
 		return bindings;
 	}
@@ -322,6 +423,32 @@ class QvtrBindingValidator {
 			}
 		}
 		return bindings;
+	}
+
+	/**
+	 * The variables a where clause assigns: a predicate {@code x = expr} binds whichever side is
+	 * a variable not bound otherwise, before the target is enforced (as the engine's
+	 * preComputeWhereBindings does).
+	 */
+	private Set<String> collectWhereAssignments(Relation relation) {
+		Set<String> assigned = new HashSet<>();
+		if (relation.getWhere() == null) {
+			return assigned;
+		}
+		// Only a declared variable: an assignment declares nothing (§7.13.5, #278)
+		Set<Variable> declared = new HashSet<>(relation.getVariable());
+		for (Predicate pred : relation.getWhere().getPredicate()) {
+			if (pred.getConditionExpression() instanceof OperationCallExp eq && "=".equals(eq.getName())) {
+				if (eq.getOwnedSource() instanceof VariableExp ve && declared.contains(ve.getReferredVariable())) {
+					assigned.add(ve.getReferredVariable().getName());
+				}
+				if (!eq.getOwnedArguments().isEmpty() && eq.getOwnedArguments().get(0) instanceof VariableExp ve
+						&& declared.contains(ve.getReferredVariable())) {
+					assigned.add(ve.getReferredVariable().getName());
+				}
+			}
+		}
+		return assigned;
 	}
 
 	/**

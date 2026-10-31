@@ -128,6 +128,8 @@ public class QvtrEvaluator {
 	 * of an enforce run (#348).
 	 */
 	private boolean checking;
+	/** Whether a when clause is being evaluated: a relation call in it looks up the trace. */
+	private boolean inWhen;
 	/** Whether the run changed the target model (§7.7, #353). */
 	private boolean modelChanged;
 	/** In-place: the objects of the source snapshot, each with the original it copies (#353). */
@@ -532,7 +534,7 @@ public class QvtrEvaluator {
 		}
 		for (Predicate predicate : where.getPredicate()) {
 			OclExpression expr = predicate.getConditionExpression();
-			if (expr == null || expr instanceof RelationCallExp
+			if (expr == null || QvtrFreeVariables.callsRelation(expr)
 					|| !binding.keySet().containsAll(QvtrFreeVariables.of(expr))) {
 				continue;
 			}
@@ -575,6 +577,30 @@ public class QvtrEvaluator {
 		boolean holds = enforce(relation, targetDomain, onTarget);
 		onTarget.forEach(binding::putIfAbsent);
 		return holds;
+	}
+
+	/**
+	 * The value of a relation call inside an expression ({@code not R(p, s)}, decided in #358):
+	 * in a when clause whether the trace holds the call, in a check whether the relation holds,
+	 * and in an enforced where clause the call is made and holds.
+	 */
+	private Boolean relationCallValue(RelationCallExp call, Map<String, Object> bindings) {
+		if (checking) {
+			return relationHolds(call, bindings);
+		}
+		Relation called = call.getReferredRelation();
+		if (called == null) {
+			return Boolean.FALSE;
+		}
+		if (inWhen) {
+			List<Object> arguments = new ArrayList<>();
+			for (OclExpression argument : call.getArgument()) {
+				arguments.add(evaluateOcl(argument, bindings));
+			}
+			return traceManager.hasTrace(called, arguments);
+		}
+		invokeNonTopRelation(call, bindings);
+		return Boolean.TRUE;
 	}
 
 	/** Enforces the target domain for a binding; whether it holds afterwards, without error. */
@@ -650,6 +676,16 @@ public class QvtrEvaluator {
 		if (when == null) {
 			return true;
 		}
+		boolean outer = inWhen;
+		inWhen = true;
+		try {
+			return whenPredicatesHold(when, binding);
+		} finally {
+			inWhen = outer;
+		}
+	}
+
+	private boolean whenPredicatesHold(Pattern when, Map<String, Object> binding) {
 		for (Predicate predicate : when.getPredicate()) {
 			OclExpression expr = predicate.getConditionExpression();
 			if (expr == null || expr instanceof RelationCallExp) {
@@ -1146,7 +1182,12 @@ public class QvtrEvaluator {
 				return bindings.get(ref.getName());
 			}
 		}
-		OclContext ctx = new OclContext(null, null, bindings);
+		// A relation call inside an expression — not R(p, s) — is handed back here (#358)
+		OclContext ctx = new OclContext(null, null, bindings, null, null, (foreign, inner) -> {
+			Map<String, Object> scope = new HashMap<>(bindings);
+			scope.putAll(inner);
+			return foreign instanceof RelationCallExp call ? relationCallValue(call, scope) : null;
+		});
 		try {
 			// With diagnostics: what an expression reports is what tells an author why a relation
 			// did not match, and the node it came from is what places it (#116). Before this they

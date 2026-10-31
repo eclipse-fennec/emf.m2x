@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvtd.parser;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -45,6 +46,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.qvtbase.Domain;
 import org.eclipse.fennec.m2x.model.qvtbase.Function;
 import org.eclipse.fennec.m2x.model.qvtbase.FunctionParameter;
 import org.eclipse.fennec.m2x.model.qvtbase.Pattern;
@@ -114,6 +116,12 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private final Map<String, TypedModel> typedModelMap = new HashMap<>();
 	/** Map of relation name → Relation object for RelationCallExp resolution. */
 	private final Map<String, Relation> relationMap = new HashMap<>();
+	/** The query names of the transformation being built, known before its relations (#358). */
+	private final Set<String> queryNames = new HashSet<>();
+	/** The relations already built — a second one of the same name gets its own object (#358). */
+	private final Set<Relation> builtRelations = new HashSet<>();
+	/** Where each transformation's extends clause names its base, for an unknown name. */
+	private final Map<RelationalTransformation, int[]> extendsPositions = new HashMap<>();
 	/** The relations with an overrides clause, and the name they override. */
 	private final Map<Relation, PendingOverride> pendingOverrides = new LinkedHashMap<>();
 
@@ -190,6 +198,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 					if (base != null) {
 						t.setExtends(base);
 						mergeInheritedRules(t, base);
+					} else if (extendsPositions.containsKey(t)) {
+						int[] at = extendsPositions.get(t);
+						positions.positionAt(at[0], at[1]);
+						diagnostics.add(positions.at("Transformation '" + t.getName() + "' extends '" + baseName
+								+ "', which is no transformation of this unit"));
 					}
 				}
 			}
@@ -360,6 +373,9 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		// Process model declarations (typed models)
 		for (QvtRParser.ModelDeclContext modelCtx : ctx.modelDecl()) {
 			TypedModel tm = visitModelDecl(modelCtx);
+			if (typedModelMap.containsKey(tm.getName())) {
+				keyError(modelCtx, "Duplicate model parameter '" + tm.getName() + "'");
+			}
 			currentTransformation.getModelParameter().add(tm);
 			typedModelMap.put(tm.getName(), tm);
 		}
@@ -378,12 +394,25 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 				ann.setSource("qvtr.extends");
 				ann.getDetails().put("name", extendsName);
 				currentTransformation.getEAnnotations().add(ann);
+				extendsPositions.put(currentTransformation, new int[] {
+						ctx.identifier(1).getStart().getLine(), ctx.identifier(1).getStart().getCharPositionInLine() });
 			}
+		}
+
+		queryNames.clear();
+		for (QvtRParser.QueryDefContext queryCtx : ctx.queryDef()) {
+			List<String> segments = QvtrExpressionBuilder.pathNameSegments(queryCtx.pathName());
+			queryNames.add(segments.get(segments.size() - 1));
 		}
 
 		// Pre-pass: collect all relation names for RelationCallExp resolution
 		for (QvtRParser.RelationContext relCtx : ctx.relation()) {
 			String relName = getRelationName(relCtx);
+			if (relationMap.containsKey(relName)) {
+				// Before #358 the second relation's domains were merged into the first
+				keyError(relCtx, "Duplicate relation '" + relName + "'");
+				continue;
+			}
 			Relation rel = REL.createRelation();
 			rel.setName(relName);
 			relationMap.put(relName, rel);
@@ -413,6 +442,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			}
 		}
 
+		checkRelationCalls(currentTransformation);
 		return currentTransformation;
 	}
 
@@ -507,9 +537,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	public Relation visitRelation(QvtRParser.RelationContext ctx) {
 		String name = identifierText(ctx.identifier(0));
 
-		// Reuse pre-created relation from pre-pass
+		// Reuse pre-created relation from pre-pass — not for a duplicate, which is reported and
+		// gets its own object instead of merging its domains into the first (#358)
 		Relation relation = relationMap.get(name);
-		if (relation == null) {
+		if (relation == null || !builtRelations.add(relation)) {
 			relation = REL.createRelation();
 			relation.setName(name);
 		}
@@ -623,6 +654,9 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		TypedModel tm = typedModelMap.get(modelId);
 		if (tm != null) {
 			domain.setTypedModel(tm);
+		} else {
+			keyError(ctx.identifier(), "Unknown model '" + modelId + "': the transformation declares "
+					+ String.join(", ", typedModelMap.keySet()));
 		}
 
 		// Process templates → DomainPattern(s)
@@ -634,6 +668,16 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			}
 			DomainPattern pattern = REL.createDomainPattern();
 			pattern.setTemplateExpression(templateExp);
+
+			// An anonymous root gets an implicit variable, as Eclipse does: rootVariable is [1..*]
+			// (§7.11.3.3, decided in #358)
+			if (templateExp instanceof ObjectTemplateExp root && root.getBindsTo() == null) {
+				root.setBindsTo(templateVariable(modelId + "$root" + domain.getPattern().size(),
+						root.getReferredClass(), tmplCtx));
+			}
+			if (tm != null) {
+				checkClassesOfModel(templateExp, tm, tmplCtx);
+			}
 
 			// Root variable comes from the template's bindsTo
 			if (templateExp.getBindsTo() != null) {
@@ -774,6 +818,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		EClassifier cls = resolveClassifier(classPath);
 		if (cls instanceof EClass eClass) {
 			ote.setReferredClass(eClass);
+		} else {
+			keyError(ctx.pathName(), "Unknown class (" + String.join("::", classPath) + ")");
 		}
 
 		// Optional variable binding
@@ -811,11 +857,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			List<String> classPath = QvtrExpressionBuilder.pathNameSegments(ctx.pathName());
 			String propName = identifierText(ctx.identifier());
 			EClassifier cls = resolveClassifier(classPath);
-			if (cls instanceof EClass eClass) {
-				EStructuralFeature feat = eClass.getEStructuralFeature(propName);
-				if (feat != null) {
-					item.setReferredProperty(feat);
-				}
+			EStructuralFeature feat = cls instanceof EClass eClass ? eClass.getEStructuralFeature(propName) : null;
+			if (feat != null) {
+				item.setReferredProperty(feat);
+			} else {
+				keyError(ctx, "Unknown property (opposite(" + String.join("::", classPath) + "::" + propName + "))");
 			}
 		} else {
 			// identifier = expression — resolved against the enclosing object template's class
@@ -941,19 +987,151 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	private OclExpression buildExpressionOrRelationCall(QvtRParser.ExpressionContext ctx) {
 		OclExpression expr = buildOcl(ctx);
 
-		// Post-process: if the expression is an OperationCallExp whose name matches
-		// a known relation, convert it to a RelationCallExp
-		if (expr instanceof OperationCallExp opCall) {
-			String opName = opCall.getName();
-			if (opName != null && relationMap.containsKey(opName)) {
-				RelationCallExp relCall = REL.createRelationCallExp();
-				relCall.setReferredRelation(relationMap.get(opName));
-				relCall.getArgument().addAll(opCall.getOwnedArguments());
-				return relCall;
+		// A relation call is a Boolean expression usable anywhere — not R(p, s), R(p, s) or …
+		// (decided in #358, as Eclipse): every call of a relation in the tree becomes a
+		// RelationCallExp, the innermost first
+		List<OperationCallExp> calls = new ArrayList<>();
+		if (expr instanceof OperationCallExp call) {
+			calls.add(call);
+		}
+		expr.eAllContents().forEachRemaining(o -> {
+			if (o instanceof OperationCallExp call) {
+				calls.add(call);
+			}
+		});
+		Collections.reverse(calls);
+		for (OperationCallExp call : calls) {
+			RelationCallExp relCall = relationCall(call, ctx);
+			if (relCall == null) {
+				continue;
+			}
+			if (call == expr) {
+				expr = relCall;
+			} else {
+				EcoreUtil.replace(call, relCall);
 			}
 		}
-
 		return expr;
+	}
+
+	/**
+	 * The relation call an operation call denotes: an implicit-source call of a relation, or one
+	 * qualified with the transformation's own name (§7.13.7 RelationCallExpCS "(identifierCS[1]
+	 * '.')? identifierCS[2]"). A qualifier naming no transformation, and an implicit-source call
+	 * of a name that is neither a relation nor a query, are errors (#358).
+	 */
+	private RelationCallExp relationCall(OperationCallExp call, ParserRuleContext ctx) {
+		String name = call.getName();
+		if (name == null) {
+			return null;
+		}
+		boolean relation = relationMap.containsKey(name);
+		boolean qualified = false;
+		if (!call.isIsImplicit() && call.getOwnedSource() instanceof VariableExp qualifier
+				&& qualifier.getReferredVariable() != null && !isRelationVariable(qualifier.getReferredVariable())) {
+			String transformationName = qualifier.getReferredVariable().getName();
+			if (!transformationName.equals(currentTransformation.getName())) {
+				if (relation) {
+					keyError(ctx, "Unknown transformation '" + transformationName + "' in " + transformationName
+							+ "." + name + "(…)");
+				}
+				return null;
+			}
+			qualified = true;
+		}
+		if (!relation) {
+			if (call.isIsImplicit() && call.getReferredOperation() == null && !queryNames.contains(name)) {
+				keyError(ctx, "Unknown relation or query '" + name + "'");
+			}
+			return null;
+		}
+		if (!call.isIsImplicit() && !qualified) {
+			return null;
+		}
+		RelationCallExp relCall = REL.createRelationCallExp();
+		relCall.setReferredRelation(relationMap.get(name));
+		relCall.getArgument().addAll(call.getOwnedArguments());
+		recordPosition(relCall, ctx);
+		return relCall;
+	}
+
+	private boolean isRelationVariable(Variable variable) {
+		return currentRelation != null && currentRelation.getVariable().contains(variable);
+	}
+
+	/**
+	 * §7.11.3.8: "The number and types of the arguments must match the total number and types
+	 * of the root variables of the domains" — checked once every relation of the transformation
+	 * is built (#358).
+	 */
+	private void checkRelationCalls(RelationalTransformation transformation) {
+		List<RelationCallExp> calls = new ArrayList<>();
+		transformation.eAllContents().forEachRemaining(o -> {
+			if (o instanceof RelationCallExp call) {
+				calls.add(call);
+			}
+		});
+		for (RelationCallExp call : calls) {
+			Relation called = call.getReferredRelation();
+			if (called == null) {
+				continue;
+			}
+			List<Variable> roots = new ArrayList<>();
+			for (Domain domain : called.getDomain()) {
+				if (domain instanceof RelationDomain rd) {
+					roots.addAll(rd.getRootVariable());
+				}
+			}
+			SourcePosition at = templatePositions.get(call);
+			if (roots.size() != call.getArgument().size()) {
+				callError(at, "Relation '" + called.getName() + "' has " + roots.size() + " root variables, but is called with "
+						+ call.getArgument().size() + " arguments");
+				continue;
+			}
+			for (int i = 0; i < roots.size(); i++) {
+				if (roots.get(i).getType() instanceof EClass expected
+						&& call.getArgument().get(i).getType() instanceof EClass actual
+						&& !expected.isSuperTypeOf(actual) && !actual.isSuperTypeOf(expected)) {
+					callError(at, "Argument " + (i + 1) + " of the call of '" + called.getName() + "' is a "
+							+ actual.getName() + ", but its root variable '" + roots.get(i).getName() + "' is a "
+							+ expected.getName());
+				}
+			}
+		}
+	}
+
+	private void callError(SourcePosition at, String message) {
+		if (at != null) {
+			positions.positionAt(at.line(), at.column());
+		}
+		diagnostics.add(positions.at(message));
+	}
+
+	/**
+	 * A domain's templates may only use classes of its typed model's metamodels: §7.1 "the types
+	 * of elements they can contain are restricted to those within a set of referenced packages"
+	 * (#358).
+	 */
+	private void checkClassesOfModel(TemplateExp root, TypedModel model, ParserRuleContext ctx) {
+		List<EObject> nodes = new ArrayList<>();
+		nodes.add(root);
+		root.eAllContents().forEachRemaining(nodes::add);
+		for (EObject node : nodes) {
+			if (node instanceof ObjectTemplateExp template && template.getReferredClass() != null
+					&& !inPackages(template.getReferredClass().getEPackage(), model.getUsedPackage())) {
+				keyError(ctx, "Class " + template.getReferredClass().getName() + " is not in a metamodel of model '"
+						+ model.getName() + "'");
+			}
+		}
+	}
+
+	private static boolean inPackages(EPackage pkg, List<EPackage> packages) {
+		for (EPackage p = pkg; p != null; p = p.getESuperPackage()) {
+			if (packages.contains(p)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ==================== Assignment ====================
@@ -973,7 +1151,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			}
 		}
 		if (assignment.getVariable() == null) {
-			// Create placeholder variable
+			// §7.13.7: "assignmentExpCS.ast.variable = … variable->any(v | v.name = …)" — a name no
+			// variable has is an error; a placeholder assigned nothing (#358)
+			keyError(ctx, "default_values assigns '" + varName + "', which is no variable of relation '"
+					+ (currentRelation != null ? currentRelation.getName() : "?") + "'");
 			Variable placeholder = OCL.createVariable();
 			placeholder.setName(varName);
 			assignment.setVariable(placeholder);
@@ -1084,7 +1265,6 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * Resolves an EClassifier from a path name using all typed models' packages.
 	 */
 	private EClassifier resolveClassifier(List<String> path) {
-		String simpleName = path.get(path.size() - 1);
 
 		// Search in all typed models' packages
 		for (TypedModel tm : typedModelMap.values()) {
@@ -1096,16 +1276,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			}
 		}
 
-		// Fallback: search all registered packages
-		for (Object value : packageRegistry.values()) {
-			if (value instanceof EPackage pkg) {
-				EClassifier cls = pkg.getEClassifier(simpleName);
-				if (cls != null) {
-					return cls;
-				}
-			}
-		}
-
+		// No fallback to the whole package registry: a class resolves only in the metamodels of
+		// the declared model types (decided in #358)
 		return null;
 	}
 
@@ -1114,7 +1286,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 */
 	private EClassifier findClassifierInPackage(EPackage pkg, List<String> path) {
 		if (path.size() == 1) {
-			return pkg.getEClassifier(path.get(0));
+			EClassifier cls = pkg.getEClassifier(path.get(0));
+			for (int i = 0; cls == null && i < pkg.getESubpackages().size(); i++) {
+				cls = findClassifierInPackage(pkg.getESubpackages().get(i), path);
+			}
+			return cls;
 		}
 		// Multi-segment path: navigate sub-packages
 		if (path.get(0).equals(pkg.getName())) {

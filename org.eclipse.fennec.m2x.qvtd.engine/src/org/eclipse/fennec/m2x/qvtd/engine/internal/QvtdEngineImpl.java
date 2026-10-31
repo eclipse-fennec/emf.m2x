@@ -254,6 +254,16 @@ public class QvtdEngineImpl implements QvtdEngine {
 
 	/** The evaluation itself, shared by the linking and the prepared path. */
 	private QvtdExecutionResult run(RelationalTransformation transformation, QvtdExecutionContext context) {
+		// §7.5 for the chosen direction, before anything runs (#359)
+		if (!context.checkOnly()) {
+			List<String> unbound = parserSupport.unboundInDirection(transformation, context.targetModelName());
+			if (!unbound.isEmpty()) {
+				return new QvtdExecutionResult(unbound.stream()
+						.<Diagnostic>map(message -> new BasicDiagnostic(Diagnostic.ERROR, QvtdExecutionResult.SOURCE, 0,
+								message, null))
+						.toList(), true);
+			}
+		}
 		QvtrEvalEnvironment env = new QvtrEvalEnvironment();
 		QvtrRun run = QvtrRun.of(transformation, context, config)
 				.withImplementationProviders(List.copyOf(implementationProviders))

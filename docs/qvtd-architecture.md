@@ -315,7 +315,7 @@ Extracted into `QvtrQueryEvaluator` for testability.
 | Optional `[?]` | Eclipse ext. | `DomainPattern` EAnnotation, null binding |
 | Default values | §7.11.3 | `default_values { ... }` assignment |
 | Opposite properties | §7.11.2 | `opposite(T::prop)` in templates |
-| Binding validation | §7.5 | `QvtrBindingValidator` — post-parse static analysis; counts every declared variable as bound (#359) |
+| Binding validation | §7.5 | `QvtrBindingValidator` — post-parse static analysis; a declaration binds only with an initializer; per-direction check before an enforce run (`QvtrParserSupport.unboundInDirection`) |
 | Standard Library | §7.12 | OCL standard library (spec: "no additional operation") |
 
 ### 6.1 Binding Validation (§7.5)
