@@ -24,6 +24,7 @@ import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
+import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
 import org.eclipse.fennec.m2x.model.m2t.Template;
@@ -90,8 +91,12 @@ public class M2tWhitespaceNormalizer {
 			return Map.of();
 		}
 		for (ModuleElement element : module.getOwnedModuleElement()) {
+			// §8.4 applies to "the body of a template (or a block expression)"; a macro is a
+			// block too (§8.1.19, #371)
 			if (element instanceof Template template) {
 				processBody(template.getBody(), trimBody(template));
+			} else if (element instanceof Macro macro) {
+				processBody(macro.getBody(), trimBody(macro));
 			}
 		}
 		return Map.copyOf(indentationMap);
@@ -170,9 +175,8 @@ public class M2tWhitespaceNormalizer {
 	 */
 	private void processBody(EList<TemplateExpression> body, boolean multiLine) {
 		// First pass: process nested blocks (trim their bodies + recurse)
-		// Skip inline LetBlocks — they are expression wrappers, not structural blocks
 		for (TemplateExpression expr : body) {
-			if (expr instanceof Block nested && !isInlineLetBlock(nested)) {
+			if (expr instanceof Block nested) {
 				boolean nestedMultiLine = trimBody(nested);
 				multiLineBlocks.put(nested, nestedMultiLine);
 				processBody(nested.getBody(), nestedMultiLine);
@@ -184,7 +188,7 @@ public class M2tWhitespaceNormalizer {
 		// Iterate by index since we modify TextExpression values
 		for (int i = 0; i < body.size(); i++) {
 			TemplateExpression expr = body.get(i);
-			if (expr instanceof Block block && !isInlineLetBlock(block)) {
+			if (expr instanceof Block block) {
 				processStandaloneBlock(body, i, block, multiLine);
 			} else if (expr instanceof TemplateInvocation invocation && !invocation.isSuper()) {
 				processStandaloneInvocation(body, i, invocation, multiLine);
@@ -417,17 +421,5 @@ public class M2tWhitespaceNormalizer {
 		// Trailing newline is kept — it separates invocation output from following text.
 		indentationMap.put(invocation, indent);
 		stripLeadingWhitespace(body, index);
-	}
-
-	/**
-	 * Returns {@code true} if the block is an inline expression wrapper
-	 * (a LetBlock with a synthetic {@code __inline__} variable name).
-	 * These are not structural blocks and should not be treated as standalone.
-	 */
-	private static boolean isInlineLetBlock(Block block) {
-		return block instanceof LetBlock let
-				&& let.getLetVariable() != null
-				&& let.getLetVariable().getName() != null
-				&& let.getLetVariable().getName().startsWith("__inline__");
 	}
 }

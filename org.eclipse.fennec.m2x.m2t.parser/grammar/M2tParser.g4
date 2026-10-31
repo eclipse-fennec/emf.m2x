@@ -26,7 +26,7 @@ options { tokenVocab = M2tLexer; }
 // ==================== Entry Point ====================
 
 module
-    : TEXT? moduleDecl (TEXT | importDecl)* (TEXT | moduleElement)* EOF
+    : TEXT? moduleDecl (TEXT | LINE_COMMENT_BLOCK | importDecl)* (TEXT | LINE_COMMENT_BLOCK | moduleElement)* EOF
     ;
 
 // ==================== Module Declaration ====================
@@ -61,8 +61,10 @@ moduleElement
 
 // ==================== Comment ====================
 
-// [comment] ... [/comment] is consumed and dropped by the lexer (COMMENT_BLOCK), so the body
-// is literal text that never reaches the parser. KW_COMMENT remains a keyword for `identifier`.
+// [comment] ... [/comment] and [comment()] ... [/comment] are consumed and dropped by the lexer
+// (COMMENT_BLOCK), so the body is literal text that never reaches the parser. The single-line
+// [comment … /] is a token of its own (LINE_COMMENT_BLOCK): a '[comment @main/]' before a
+// template marks it as the entry point (#372). KW_COMMENT remains a keyword for `identifier`.
 
 // ==================== Template ====================
 
@@ -140,6 +142,7 @@ body
 
 bodyElement
     : textBlock
+    | LINE_COMMENT_BLOCK
     | inlineExpression
     | forBlock
     | ifBlock
@@ -147,6 +150,7 @@ bodyElement
     | fileBlock
     | traceBlock
     | protectedBlock
+    | macroBlockInvocation
     | templateInvocation
     ;
 
@@ -196,14 +200,18 @@ ifBlock
       BLOCK_OPEN SLASH KW_IF CLOSE
     ;
 
+// §8.2: the end tags of elseif, else and elselet are optional here — '[/elseif]' and '[/else]'
+// are optional in the spec, and Acceleo omits '[/elselet]', which the spec requires (#375)
 elseIfBlock
     : BLOCK_OPEN KW_ELSEIF LPAREN expression RPAREN CLOSE
       body
+      (BLOCK_OPEN SLASH KW_ELSEIF CLOSE)?
     ;
 
 elseBlock
     : BLOCK_OPEN KW_ELSE CLOSE
       body
+      (BLOCK_OPEN SLASH KW_ELSE CLOSE)?
     ;
 
 // ==================== Let Block ====================
@@ -220,6 +228,7 @@ letBlock
 elseLetBlock
     : BLOCK_OPEN KW_ELSELET variableDeclaration CLOSE
       body
+      (BLOCK_OPEN SLASH KW_ELSELET CLOSE)?
     ;
 
 // ==================== File Block ====================
@@ -259,6 +268,20 @@ templateInvocation
     | BLOCK_OPEN KW_SUPER SLASH_CLOSE
     ;
 
+// §7.4, §8.1.20: [name(args)]…body…[/name] — a macro invocation whose body is the macro's last,
+// Body-typed argument (#371)
+macroBlockInvocation
+    : BLOCK_OPEN name=macroName LPAREN argumentList? RPAREN CLOSE
+      body
+      BLOCK_OPEN SLASH endName=macroName CLOSE
+    ;
+
+// A plain name: a block keyword ([elseif (c)], [for (…)], …) opens its own block, never a macro
+// invocation, whose head looks the same
+macroName
+    : (IDENTIFIER | ESCAPED_IDENTIFIER) (COLONCOLON identifier)*
+    ;
+
 // ==================== OCL Expressions (inline, same precedence as OCL v2.5) ====================
 
 expression
@@ -274,15 +297,18 @@ expression
     | expression KW_OR expression                                           # OrExp
     | expression KW_XOR expression                                          # XorExp
     | expression KW_IMPLIES expression                                      # ImpliesExp
+    // §8.2 <ifExp>: a ? b : c, the lowest precedence; a guard's '?' always follows a ')' of a
+    // signature or a for clause, never an expression (#375)
+    | <assoc=right> condition=expression KW_GUARD thenExp=expression COLON elseExp=expression # TernaryExp
     | primaryExpression                                                     # PrimaryExp
     ;
 
 primaryExpression
     : LPAREN expression RPAREN                                              # ParenExp
     | KW_SELF                                                               # SelfExp
-    | KW_IF expression KW_THEN expression
-      (KW_ELSEIF expression KW_THEN expression)*
-      KW_ELSE expression KW_ENDIF                                           # OclIfExp
+    | KW_IF condition=expression KW_THEN thenExp=expression
+      (KW_ELSEIF elseIfCondition+=expression KW_THEN elseIfExp+=expression)*
+      KW_ELSE elseExp=expression KW_ENDIF                                   # OclIfExp
     | KW_LET letBinding (COMMA letBinding)* KW_IN expression               # OclLetExp
     | literalExpression                                                     # LiteralExp
     | pathName LPAREN argumentList? RPAREN                                  # OperationCallExp
@@ -300,9 +326,10 @@ propertyOrCallSuffix
 
 iteratorOrOperationCall
     : identifier LPAREN iteratorVariables PIPE expression RPAREN            # IteratorCall
-    | identifier LPAREN identifier (COLON typeExpression)?
-      SEMICOLON identifier (COLON typeExpression)? EQUALS expression
-      PIPE expression RPAREN                                                # IterateCall
+    // §9.3.26: the iterator variable may be omitted — the body then has an implicit one (#320, #375)
+    | identifier LPAREN (iterName=identifier (COLON iterType=typeExpression)? SEMICOLON)?
+      accName=identifier (COLON accType=typeExpression)? EQUALS accInit=expression
+      PIPE iterBody=expression RPAREN                                       # IterateCall
     | identifier LPAREN argumentList? RPAREN                                # CollectionOperationCall
     ;
 
@@ -411,7 +438,14 @@ tupleTypePart
 // ==================== Path Names ====================
 
 pathName
-    : identifier (COLONCOLON identifier)*
+    : identifier (COLONCOLON (identifier | restrictedWord))*
+    ;
+
+/** §7.4.11: "A restricted word can only be used as a name when preceded by a '::'" (#325, #375). */
+restrictedWord
+    : KW_BAG | KW_BOOLEAN | KW_COLLECTION | KW_INTEGER | KW_OCLANY | KW_OCLINVALID | KW_OCLMESSAGE
+    | KW_OCLVOID | KW_ORDEREDSET | KW_REAL | KW_SEQUENCE | KW_SET | KW_STRING | KW_TUPLE
+    | KW_UNLIMITEDNATURAL
     ;
 
 // ==================== Identifier ====================

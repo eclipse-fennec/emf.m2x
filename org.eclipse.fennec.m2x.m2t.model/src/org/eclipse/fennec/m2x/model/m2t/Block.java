@@ -24,7 +24,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Abstract container of template expressions with optional init section (MOFM2T 1.0 Section 8.1).
+ * Container of template expressions with optional init section (MOFM2T 1.0 Section 8.1.4); concrete for an else branch and the body passed to a macro (Sections 8.1.19, 8.1.20).
  * <!-- end-model-doc -->
  *
  * <p>
@@ -36,7 +36,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * </ul>
  *
  * @see org.eclipse.fennec.m2x.model.m2t.M2tPackage#getBlock()
- * @model abstract="true"
+ * @model
  * @generated
  */
 @ProviderType

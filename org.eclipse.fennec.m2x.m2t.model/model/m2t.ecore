@@ -61,9 +61,9 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="module" eType="#//Module"
         eOpposite="#//Module/ownedModuleElement"/>
   </eClassifiers>
-  <eClassifiers xsi:type="ecore:EClass" name="Block" abstract="true" eSuperTypes="#//TemplateExpression">
+  <eClassifiers xsi:type="ecore:EClass" name="Block" eSuperTypes="#//TemplateExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
-      <details key="documentation" value="Abstract container of template expressions with optional init section (MOFM2T 1.0 Section 8.1)."/>
+      <details key="documentation" value="Container of template expressions with optional init section (MOFM2T 1.0 Section 8.1.4); concrete for an else branch and the body passed to a macro (Sections 8.1.19, 8.1.20)."/>
     </eAnnotations>
     <eStructuralFeatures xsi:type="ecore:EReference" name="body" upperBound="-1" eType="#//TemplateExpression"
         containment="true"/>
@@ -214,6 +214,19 @@
     <eStructuralFeatures xsi:type="ecore:EReference" name="modelElement" lowerBound="1"
         eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
         containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EClass" name="InlineExpression" eSuperTypes="#//TemplateExpression">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="An OCL expression whose value is written to the output: '[' OclExpressionCS '/]' (MOFM2T 1.0 Sections 8.1.6, 8.2)."/>
+    </eAnnotations>
+    <eStructuralFeatures xsi:type="ecore:EReference" name="expression" lowerBound="1"
+        eType="ecore:EClass http://www.eclipse.org/fennec/m2x/ocl/1.0#//OclExpression"
+        containment="true"/>
+  </eClassifiers>
+  <eClassifiers xsi:type="ecore:EDataType" name="Body" instanceClassName="java.lang.Object">
+    <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
+      <details key="documentation" value="The special type of a macro's last parameter: the body of the macro invocation, written where the parameter is referred (MOFM2T 1.0 Sections 7.4, 8.1.19)."/>
+    </eAnnotations>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="TextExpression" eSuperTypes="#//TemplateExpression">
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">

@@ -705,17 +705,6 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	}
 
 	/**
-	 * §8.1.3.2: Guards mutation operations on read-only extents.
-	 */
-	private static void checkExtentWritable(QvtoModelExtent extent) {
-		if (extent.isReadOnly()) {
-			throw new QvtoControlFlowException.RaiseException(
-					"InvalidModelMutation",
-					"Cannot modify read-only model extent (in-parameter)");
-		}
-	}
-
-	/**
 	 * Maps Ecore EDataType names to OCL primitive type names.
 	 */
 	private static String mapEcoreToOclPrimitiveName(String ecoreName) {

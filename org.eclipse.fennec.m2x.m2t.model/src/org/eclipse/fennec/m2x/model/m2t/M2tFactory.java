@@ -46,6 +46,15 @@ public interface M2tFactory extends EFactory {
 	Module createModule();
 
 	/**
+	 * Returns a new object of class '<em>Block</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>Block</em>'.
+	 * @generated
+	 */
+	Block createBlock();
+
+	/**
 	 * Returns a new object of class '<em>Init Section</em>'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -134,6 +143,15 @@ public interface M2tFactory extends EFactory {
 	 * @generated
 	 */
 	TraceBlock createTraceBlock();
+
+	/**
+	 * Returns a new object of class '<em>Inline Expression</em>'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return a new object of class '<em>Inline Expression</em>'.
+	 * @generated
+	 */
+	InlineExpression createInlineExpression();
 
 	/**
 	 * Returns a new object of class '<em>Text Expression</em>'.

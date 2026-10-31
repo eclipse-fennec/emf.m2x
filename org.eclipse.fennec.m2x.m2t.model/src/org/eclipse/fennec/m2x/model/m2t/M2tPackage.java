@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.model.m2t;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -45,7 +46,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = M2tPackage.eNS_URI, fingerprint = "fp1:f1b8897acf20bae8c6b154c2b2c1574f0aaf5c88e1b3159af23c248b3939525a", genModel = "/model/m2t.genmodel", genModelSourceLocations = {"model/m2t.genmodel","org.eclipse.fennec.m2x.m2t.model/model/m2t.genmodel"}, ecore = "/model/m2t.ecore", ecoreSourceLocations = "/model/m2t.ecore")
+@EPackage(uri = M2tPackage.eNS_URI, fingerprint = "fp1:fc4cd38e281dabd39b184369f63cebaf2e22216b9311d98a19cce1a8043fb085", genModel = "/model/m2t.genmodel", genModelSourceLocations = {"model/m2t.genmodel","org.eclipse.fennec.m2x.m2t.model/model/m2t.genmodel"}, ecore = "/model/m2t.ecore", ecoreSourceLocations = "/model/m2t.ecore")
 public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -1219,6 +1220,52 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	int TRACE_BLOCK_OPERATION_COUNT = BLOCK_OPERATION_COUNT + 0;
 
 	/**
+	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.m2t.impl.InlineExpressionImpl <em>Inline Expression</em>}' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see org.eclipse.fennec.m2x.model.m2t.impl.InlineExpressionImpl
+	 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getInlineExpression()
+	 * @generated
+	 */
+	int INLINE_EXPRESSION = 14;
+
+	/**
+	 * The feature id for the '<em><b>Type</b></em>' reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int INLINE_EXPRESSION__TYPE = TEMPLATE_EXPRESSION__TYPE;
+
+	/**
+	 * The feature id for the '<em><b>Expression</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int INLINE_EXPRESSION__EXPRESSION = TEMPLATE_EXPRESSION_FEATURE_COUNT + 0;
+
+	/**
+	 * The number of structural features of the '<em>Inline Expression</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int INLINE_EXPRESSION_FEATURE_COUNT = TEMPLATE_EXPRESSION_FEATURE_COUNT + 1;
+
+	/**
+	 * The number of operations of the '<em>Inline Expression</em>' class.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int INLINE_EXPRESSION_OPERATION_COUNT = TEMPLATE_EXPRESSION_OPERATION_COUNT + 0;
+
+	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.m2t.impl.TextExpressionImpl <em>Text Expression</em>}' class.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -1226,7 +1273,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getTextExpression()
 	 * @generated
 	 */
-	int TEXT_EXPRESSION = 14;
+	int TEXT_EXPRESSION = 15;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1272,7 +1319,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getTemplateInvocation()
 	 * @generated
 	 */
-	int TEMPLATE_INVOCATION = 15;
+	int TEMPLATE_INVOCATION = 16;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1363,7 +1410,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getQueryInvocation()
 	 * @generated
 	 */
-	int QUERY_INVOCATION = 16;
+	int QUERY_INVOCATION = 17;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1418,7 +1465,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getMacroInvocation()
 	 * @generated
 	 */
-	int MACRO_INVOCATION = 17;
+	int MACRO_INVOCATION = 18;
 
 	/**
 	 * The feature id for the '<em><b>Type</b></em>' reference.
@@ -1473,7 +1520,7 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getOpenModeKind()
 	 * @generated
 	 */
-	int OPEN_MODE_KIND = 18;
+	int OPEN_MODE_KIND = 19;
 
 	/**
 	 * The meta object id for the '{@link org.eclipse.fennec.m2x.model.m2t.VisibilityKind <em>Visibility Kind</em>}' enum.
@@ -1483,7 +1530,17 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getVisibilityKind()
 	 * @generated
 	 */
-	int VISIBILITY_KIND = 19;
+	int VISIBILITY_KIND = 20;
+
+	/**
+	 * The meta object id for the '<em>Body</em>' data type.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see java.lang.Object
+	 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getBody()
+	 * @generated
+	 */
+	int BODY = 21;
 
 
 	/**
@@ -2045,6 +2102,27 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getTraceBlock_ModelElement();
 
 	/**
+	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.m2t.InlineExpression <em>Inline Expression</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for class '<em>Inline Expression</em>'.
+	 * @see org.eclipse.fennec.m2x.model.m2t.InlineExpression
+	 * @generated
+	 */
+	EClass getInlineExpression();
+
+	/**
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.m2t.InlineExpression#getExpression <em>Expression</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the containment reference '<em>Expression</em>'.
+	 * @see org.eclipse.fennec.m2x.model.m2t.InlineExpression#getExpression()
+	 * @see #getInlineExpression()
+	 * @generated
+	 */
+	EReference getInlineExpression_Expression();
+
+	/**
 	 * Returns the meta object for class '{@link org.eclipse.fennec.m2x.model.m2t.TextExpression <em>Text Expression</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -2224,6 +2302,20 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 */
 	EEnum getVisibilityKind();
+
+	/**
+	 * Returns the meta object for data type '{@link java.lang.Object <em>Body</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+     * <!-- begin-model-doc -->
+     * The special type of a macro's last parameter: the body of the macro invocation, written where the parameter is referred (MOFM2T 1.0 Sections 7.4, 8.1.19).
+     * <!-- end-model-doc -->
+	 * @return the meta object for data type '<em>Body</em>'.
+	 * @see java.lang.Object
+	 * @model instanceClass="java.lang.Object"
+	 * @generated
+	 */
+	EDataType getBody();
 
 	/**
 	 * Returns the factory that creates the instances of the model.
@@ -2693,6 +2785,24 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 		EReference TRACE_BLOCK__MODEL_ELEMENT = eINSTANCE.getTraceBlock_ModelElement();
 
 		/**
+		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.m2t.impl.InlineExpressionImpl <em>Inline Expression</em>}' class.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see org.eclipse.fennec.m2x.model.m2t.impl.InlineExpressionImpl
+		 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getInlineExpression()
+		 * @generated
+		 */
+		EClass INLINE_EXPRESSION = eINSTANCE.getInlineExpression();
+
+		/**
+		 * The meta object literal for the '<em><b>Expression</b></em>' containment reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference INLINE_EXPRESSION__EXPRESSION = eINSTANCE.getInlineExpression_Expression();
+
+		/**
 		 * The meta object literal for the '{@link org.eclipse.fennec.m2x.model.m2t.impl.TextExpressionImpl <em>Text Expression</em>}' class.
 		 * <!-- begin-user-doc -->
 		 * <!-- end-user-doc -->
@@ -2839,6 +2949,16 @@ public interface M2tPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EEnum VISIBILITY_KIND = eINSTANCE.getVisibilityKind();
+
+		/**
+		 * The meta object literal for the '<em>Body</em>' data type.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @see java.lang.Object
+		 * @see org.eclipse.fennec.m2x.model.m2t.impl.M2tPackageImpl#getBody()
+		 * @generated
+		 */
+		EDataType BODY = eINSTANCE.getBody();
 
 	}
 

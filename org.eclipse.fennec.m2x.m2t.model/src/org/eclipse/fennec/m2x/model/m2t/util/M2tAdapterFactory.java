@@ -29,6 +29,7 @@ import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.InitSection;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
@@ -156,6 +157,10 @@ public class M2tAdapterFactory extends AdapterFactoryImpl {
 			@Override
 			public Adapter caseTraceBlock(TraceBlock object) {
 				return createTraceBlockAdapter();
+			}
+			@Override
+			public Adapter caseInlineExpression(InlineExpression object) {
+				return createInlineExpressionAdapter();
 			}
 			@Override
 			public Adapter caseTextExpression(TextExpression object) {
@@ -402,6 +407,20 @@ public class M2tAdapterFactory extends AdapterFactoryImpl {
 	 * @generated
 	 */
 	public Adapter createTraceBlockAdapter() {
+		return null;
+	}
+
+	/**
+	 * Creates a new adapter for an object of class '{@link org.eclipse.fennec.m2x.model.m2t.InlineExpression <em>Inline Expression</em>}'.
+	 * <!-- begin-user-doc -->
+	 * This default implementation returns null so that we can easily ignore cases;
+	 * it's useful to ignore a case when inheritance will catch all the cases anyway.
+	 * <!-- end-user-doc -->
+	 * @return the new adapter.
+	 * @see org.eclipse.fennec.m2x.model.m2t.InlineExpression
+	 * @generated
+	 */
+	public Adapter createInlineExpressionAdapter() {
 		return null;
 	}
 

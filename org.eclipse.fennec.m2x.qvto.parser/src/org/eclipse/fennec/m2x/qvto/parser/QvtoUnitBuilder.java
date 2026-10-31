@@ -2011,17 +2011,6 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 	}
 
-	private void setReturnType(
-			ImperativeOperation operation,
-			EClassifier type) {
-		VarParameter resultParam = QVTO.createVarParameter();
-		resultParam.setName("result");
-		if (type != null) {
-			setParameterType(resultParam, type);
-		}
-		operation.getResult().add(resultParam);
-	}
-
 	private void setParameterType(VarParameter param, EClassifier type) {
 		if (type != null && !(type instanceof OclType)) {
 			param.setEType(type);

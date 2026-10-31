@@ -26,14 +26,9 @@ import java.util.stream.Stream;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
-import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
-import org.eclipse.fennec.m2x.unit.api.PreparedContext;
-import org.eclipse.fennec.m2x.unit.api.Unit;
-import org.eclipse.fennec.m2x.unit.api.UnitBinder;
-import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
-import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.resource.impl.ResourceSetImpl;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
@@ -47,6 +42,11 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
 import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
 /**
  * Plain Java implementation of the {@link QvtdEngine} facade.

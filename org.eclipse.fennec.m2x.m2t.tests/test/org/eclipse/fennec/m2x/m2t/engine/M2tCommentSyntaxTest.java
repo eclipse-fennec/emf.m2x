@@ -68,14 +68,15 @@ class M2tCommentSyntaxTest {
 	}
 
 	@Test
-	@DisplayName("the single-expression form of Acceleo 3.x is not accepted")
-	void singleExpressionCommentIsRejected() {
-		assertThrows(M2tParseException.class, () -> generate("""
+	@DisplayName("the single-line form of Acceleo 3.x is a comment (#372)")
+	void singleExpressionCommentIsAccepted() throws Exception {
+		String output = generate("""
 				[module doc(_'http://www.eclipse.org/emf/2002/Ecore')/]
 				[template public main(c : EClass)]
-				[comment this form does not exist /]
+				[file ('out.txt', false)]a[comment this form exists /]b[/file]
 				[/template]
-				"""));
+				""");
+		assertEquals("ab", output.strip());
 	}
 
 	@Test

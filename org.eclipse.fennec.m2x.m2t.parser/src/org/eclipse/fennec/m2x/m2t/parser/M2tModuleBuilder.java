@@ -19,19 +19,26 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.InitSection;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
+import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
@@ -45,10 +52,11 @@ import org.eclipse.fennec.m2x.model.m2t.TraceBlock;
 import org.eclipse.fennec.m2x.model.m2t.VisibilityKind;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
-import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
 import org.eclipse.fennec.m2x.ocl.parser.OclEnvironment;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Visitor that transforms an ANTLR4 M2T parse tree (CST) into an EMF M2T AST.
@@ -62,7 +70,6 @@ import org.eclipse.fennec.m2x.ocl.parser.OclEnvironment;
 class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 	/** Numbers the synthetic variables that wrap inline expressions, per module. */
-	private int inlineCounter;
 
 	private static final M2tFactory FACTORY = M2tFactory.eINSTANCE;
 
@@ -122,12 +129,88 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			recordReferencePosition(name, importCtx);
 		}
 
-		// Module elements (templates, queries, macros)
-		for (M2tParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
-			visit(elemCtx);
+		// Module elements (templates, queries, macros), in source order with the text and the
+		// single-line comments between them
+		Token pendingMain = null;
+		Template main = null;
+		boolean declared = false;
+		for (ParseTree child : ctx.children) {
+			if (child instanceof M2tParser.ModuleDeclContext) {
+				declared = true;
+			} else if (child instanceof TerminalNode node && node.getSymbol().getType() == M2tLexer.LINE_COMMENT_BLOCK) {
+				// Acceleo's [comment @main/] marks the template that follows as the entry point
+				// (D15, #372)
+				if (MAIN_ANNOTATION.matcher(node.getText()).find()) {
+					pendingMain = node.getSymbol();
+				}
+			} else if (child instanceof TerminalNode node && node.getSymbol().getType() == M2tLexer.TEXT
+					&& !node.getText().isBlank()) {
+				warnAboutStrayText(node.getSymbol(), declared);
+			} else if (child instanceof M2tParser.ModuleElementContext elemCtx) {
+				Object element = visit(elemCtx);
+				if (pendingMain != null && element instanceof Template template) {
+					if (main != null) {
+						addError("@main marks both '" + main.getName() + "' and '" + template.getName()
+								+ "': a module has one entry point", pendingMain);
+					} else {
+						template.setMain(true);
+						main = template;
+					}
+				}
+				pendingMain = null;
+			}
 		}
 
+		// §8.1.1: a module is an EPackage — one with a namespace, so that it is a well-formed one
+		// (#370)
+		String name = module.getName() != null ? module.getName() : unitName;
+		module.setNsURI(NS_URI_SCHEME + name.replace("::", "/"));
+		module.setNsPrefix(name.replace("::", "_"));
 		return module;
+	}
+
+	/** The namespace scheme of a parsed module: {@code m2t:/<module name>} (#370). */
+	static final String NS_URI_SCHEME = "m2t:/";
+
+	private static final Pattern MAIN_ANNOTATION = Pattern.compile("(^|\\s)@main(\\s|/\\]|$)");
+
+	/**
+	 * Text outside a template does not go anywhere (§8.2 text-explicit mode). Blank text is the
+	 * layout between declarations; anything else is most likely a tag whose '[' got lost, which
+	 * vanished without a word before #371. The mode marker {@code @text-explicit} before the
+	 * module is the default mode and fine.
+	 */
+	private void warnAboutStrayText(Token text, boolean afterModuleDeclaration) {
+		String raw = text.getText();
+		String content = raw.strip();
+		if (!afterModuleDeclaration && content.equals("@text-explicit")) {
+			return;
+		}
+		// at the first character that is not layout, not where the token began
+		int first = raw.indexOf(content.charAt(0));
+		String before = raw.substring(0, first);
+		int newlines = (int) before.chars().filter(c -> c == '\n').count();
+		int line = text.getLine() + newlines;
+		int column = newlines == 0 ? text.getCharPositionInLine() + first : first - (before.lastIndexOf('\n') + 1);
+		warnings.add(new SourcePosition(unitName, line, column)
+				+ ": text outside a template is not generated: '" + abbreviate(content) + "' (MOFM2T §8.2)");
+	}
+
+	private static String abbreviate(String text) {
+		String line = text.lines().findFirst().orElse("");
+		return line.length() > 40 ? line.substring(0, 40) + "…" : line;
+	}
+
+	/** Warnings of this parse, reported when the module runs — the parse has no channel for them. */
+	private final List<String> warnings = new ArrayList<>();
+
+	List<String> getWarnings() {
+		return List.copyOf(warnings);
+	}
+
+	private void addError(String message, Token at) {
+		exprBuilder.support.positionAt(at.getLine(), at.getCharPositionInLine());
+		exprBuilder.support.addError(message);
 	}
 
 	@Override
@@ -171,11 +254,11 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	@Override
 	public Object visitModuleElement(M2tParser.ModuleElementContext ctx) {
 		if (ctx.templateDef() != null) {
-			visit(ctx.templateDef());
+			return visit(ctx.templateDef());
 		} else if (ctx.queryDef() != null) {
-			visit(ctx.queryDef());
+			return visit(ctx.queryDef());
 		} else if (ctx.macroDef() != null) {
-			visit(ctx.macroDef());
+			return visit(ctx.macroDef());
 		}
 		return null;
 	}
@@ -229,18 +312,15 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		// Parameters
 		if (sig.argList() != null) {
 			for (M2tParser.ArgDeclContext argCtx : sig.argList().argDecl()) {
-				Variable param = buildParameter(argCtx);
-				template.getParameter().add(param);
-
-				// First parameter determines if this is a "main" template
-				// (main = public template with first param typed to a metamodel input type)
+				template.getParameter().add(buildParameter(argCtx));
 			}
+			checkBodyParameters(template.getParameter(), false, sig.argList());
 		}
 		// The parameters are in scope for guard, post, init and body: an unknown name made the
 		// OCL parser create a fresh Variable at every mention, so c in [c.name/] referred to a
 		// different object each time and never to the parameter (#154)
 		OclEnvironment outerScope = exprBuilder.env();
-		exprBuilder.setEnv(outerScope.nested(template.getParameter()));
+		exprBuilder.setEnv(withSelf(outerScope.nested(template.getParameter()), template.getParameter()));
 
 		// Overrides declarations — collect names for linking
 		if (sig.overridesDecl() != null) {
@@ -264,7 +344,15 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 		// Post
 		if (sig.postDecl() != null) {
-			template.setPost(exprBuilder.buildExpression(sig.postDecl().expression()));
+			// In post, self is the generated text, as the evaluator binds it
+			OclEnvironment bodyScope = exprBuilder.env();
+			exprBuilder.setEnv(bodyScope.alias("self",
+					exprBuilder.support.createVariable("self", EcorePackage.Literals.ESTRING, null)));
+			try {
+				template.setPost(exprBuilder.buildExpression(sig.postDecl().expression()));
+			} finally {
+				exprBuilder.setEnv(bodyScope);
+			}
 		}
 
 		// Body
@@ -307,6 +395,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			for (M2tParser.ArgDeclContext argCtx : ctx.argList().argDecl()) {
 				query.getParameter().add(buildParameter(argCtx));
 			}
+			checkBodyParameters(query.getParameter(), false, ctx.argList());
 		}
 
 		// Return type
@@ -314,11 +403,18 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 		// Expression body, with the parameters in scope (#154)
 		OclEnvironment outerScope = exprBuilder.env();
-		exprBuilder.setEnv(outerScope.nested(query.getParameter()));
+		exprBuilder.setEnv(withSelf(outerScope.nested(query.getParameter()), query.getParameter()));
 		try {
 			query.setExpression(exprBuilder.buildExpression(ctx.expression()));
 		} finally {
 			exprBuilder.setEnv(outerScope);
+		}
+		// §8.1.15: a query "has a return type" — a body known not to be of it is a type error
+		// (#370); one of unknown type is checked when it runs
+		OclExpression body = query.getExpression();
+		if (body != null && !OclTypeRules.conformsTo(body.getType(), query.getReturnType())) {
+			exprBuilder.support.addTypeFinding("Query '" + query.getName() + "' declares " + OclTypeRules.nameOf(query.getReturnType())
+					+ " but its body is a " + OclTypeRules.nameOf(body.getType()), body);
 		}
 
 		module.getOwnedModuleElement().add(query);
@@ -339,11 +435,12 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			for (M2tParser.ArgDeclContext argCtx : ctx.argList().argDecl()) {
 				macro.getParameter().add(buildParameter(argCtx));
 			}
+			checkBodyParameters(macro.getParameter(), true, ctx.argList());
 		}
 
 		// Body, with the parameters in scope (#154)
 		OclEnvironment outerScope = exprBuilder.env();
-		exprBuilder.setEnv(outerScope.nested(macro.getParameter()));
+		exprBuilder.setEnv(withSelf(outerScope.nested(macro.getParameter()), macro.getParameter()));
 		try {
 			if (ctx.body() != null) {
 				for (TemplateExpression bodyExpr : buildBody(ctx.body())) {
@@ -402,6 +499,9 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		if (ctx.templateInvocation() != null) {
 			return buildTemplateInvocation(ctx.templateInvocation());
 		}
+		if (ctx.macroBlockInvocation() != null) {
+			return buildMacroBlockInvocation(ctx.macroBlockInvocation());
+		}
 		return null;
 	}
 
@@ -420,28 +520,16 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	// ==================== Inline Expression ====================
 
 	private TemplateExpression buildInlineExpression(M2tParser.InlineExpressionContext ctx) {
-		// An inline expression [expr/] evaluates an OCL expression and converts result to text.
-		// OclExpression is the supertype of TemplateExpression, so a plain OCL expression
-		// cannot be added directly to EList<TemplateExpression> (EMF enforces EType).
-		// We wrap it in a LetBlock: [let __inline = <expr>] outputs the variable value.
 		OclExpression expr = exprBuilder.buildExpression(ctx.expression());
-
 		// If the expression is already a TemplateExpression, return directly
 		if (expr instanceof TemplateExpression te) {
 			return te;
 		}
-
-		// Wrap in a LetBlock: the evaluator outputs let variable values
-		LetBlock wrapper = FACTORY.createLetBlock();
-		Variable var = OclFactory.eINSTANCE.createVariable();
-		// A name from a counter, not from identityHashCode: the latter differs per JVM run and
-		// would make the same module fingerprint differently each time it is compiled (#154, #138)
-		var.setName("__inline__" + (++inlineCounter));
-		var.setOwnedInit(expr);
-		wrapper.setLetVariable(var);
-		// Store the original expression as a marker so the evaluator can output its value
-		// The LetBlock has no body elements — the evaluator should output the let variable
-		return wrapper;
+		// §8.1.6, §8.2 '[' OclExpressionCS '/]': an expression whose value is written (#370).
+		// Before, it was a LetBlock with a variable named __inline__N, recognised by that name
+		InlineExpression inline = FACTORY.createInlineExpression();
+		inline.setExpression(expr);
+		return inline;
 	}
 
 	// ==================== For Block ====================
@@ -515,7 +603,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 		// Else block
 		if (ctx.elseBlock() != null) {
-			Block elseBlock = FACTORY.createIfBlock();
+			Block elseBlock = FACTORY.createBlock(); // an else branch has no condition (§8.1.21, #370)
 			for (TemplateExpression bodyExpr : buildBody(ctx.elseBlock().body())) {
 				elseBlock.getBody().add(bodyExpr);
 			}
@@ -551,7 +639,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 		// Else block
 		if (ctx.elseBlock() != null) {
-			Block elseBlock = FACTORY.createIfBlock();
+			Block elseBlock = FACTORY.createBlock(); // an else branch has no condition (§8.1.21, #370)
 			for (TemplateExpression bodyExpr : buildBody(ctx.elseBlock().body())) {
 				elseBlock.getBody().add(bodyExpr);
 			}
@@ -661,10 +749,81 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 
 	// ==================== Helper Methods ====================
 
+	/**
+	 * Lets {@code self} denote the first parameter, as the evaluator binds it.
+	 */
+	private static OclEnvironment withSelf(OclEnvironment scope, List<Variable> parameters) {
+		return parameters.isEmpty() ? scope : scope.alias("self", parameters.get(0));
+	}
+
 	private Variable buildParameter(M2tParser.ArgDeclContext ctx) {
 		String name = M2tExpressionBuilder.identifierText(ctx.identifier());
-		EClassifier type = exprBuilder.resolveTypeExpression(ctx.typeExpression());
+		// §8.1.19: the special type of a macro's last parameter, the body of the call (#371)
+		EClassifier type = BODY_TYPE_NAME.equals(ctx.typeExpression().getText()) ? M2tPackage.Literals.BODY
+				: exprBuilder.resolveTypeExpression(ctx.typeExpression());
 		return exprBuilder.support.createVariable(name, type, null);
+	}
+
+	private static final String BODY_TYPE_NAME = "Body";
+
+	private static List<String> macroNameSegments(M2tParser.MacroNameContext ctx) {
+		List<String> segments = new ArrayList<>();
+		for (ParseTree child : ctx.children) {
+			if (child instanceof TerminalNode token && token.getSymbol().getType() == M2tLexer.IDENTIFIER) {
+				segments.add(token.getText());
+			} else if (child instanceof TerminalNode token && token.getSymbol().getType() == M2tLexer.ESCAPED_IDENTIFIER) {
+				segments.add(AbstractExpressionBuilder.extractEscapedIdentifier(token.getText()));
+			} else if (child instanceof M2tParser.IdentifierContext id) {
+				segments.add(M2tExpressionBuilder.identifierText(id));
+			}
+		}
+		return segments;
+	}
+
+	/**
+	 * §8.1.19: "The last parameter must be of a special type Body" — of a macro, and only the
+	 * last (#371).
+	 */
+	private void checkBodyParameters(List<Variable> parameters, boolean macro, ParserRuleContext at) {
+		for (int i = 0; i < parameters.size(); i++) {
+			if (parameters.get(i).getType() != M2tPackage.Literals.BODY) {
+				continue;
+			}
+			if (!macro || i != parameters.size() - 1) {
+				exprBuilder.support.positionAt(at);
+				exprBuilder.support.addError("Parameter '" + parameters.get(i).getName() + "' is of type Body, which only "
+						+ "the last parameter of a macro may be (MOFM2T §8.1.19)");
+			}
+		}
+	}
+
+	/**
+	 * §7.4, §8.1.20: {@code [m(args)]…[/m]} — a macro invocation whose last argument is its body,
+	 * a block written in the caller's scope (#371). Built as a call the linker resolves like any
+	 * other; that the callee is a macro taking a Body is checked there.
+	 */
+	private TemplateExpression buildMacroBlockInvocation(M2tParser.MacroBlockInvocationContext ctx) {
+		List<String> segments = macroNameSegments(ctx.name);
+		String name = segments.get(segments.size() - 1);
+		List<String> endSegments = macroNameSegments(ctx.endName);
+		if (!segments.equals(endSegments)) {
+			exprBuilder.support.positionAt(ctx.endName);
+			exprBuilder.support.addError("[/" + String.join("::", endSegments) + "] closes the invocation of '"
+					+ String.join("::", segments) + "'");
+		}
+		List<OclExpression> arguments = new ArrayList<>();
+		if (ctx.argumentList() != null) {
+			for (M2tParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+				arguments.add(exprBuilder.buildExpression(argCtx));
+			}
+		}
+		Block body = FACTORY.createBlock();
+		body.getBody().addAll(buildBody(ctx.body()));
+		arguments.add(body);
+		exprBuilder.support.positionAt(ctx);
+		InlineExpression call = FACTORY.createInlineExpression();
+		call.setExpression(exprBuilder.support.buildImplicitOperationCall(name, arguments, false));
+		return call;
 	}
 
 	private Variable buildVariableDeclaration(M2tParser.VariableDeclarationContext ctx) {

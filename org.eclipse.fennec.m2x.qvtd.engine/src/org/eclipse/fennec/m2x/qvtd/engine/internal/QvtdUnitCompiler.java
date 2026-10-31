@@ -45,9 +45,9 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
-import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 import org.eclipse.fennec.m2x.unit.compile.SignatureFingerprint;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Compile for QVT-R: parse → resolve → package (§4 of the compiled-unit concept, #139).

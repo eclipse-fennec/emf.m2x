@@ -14,6 +14,8 @@
  */
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
 import java.nio.charset.StandardCharsets;
@@ -42,6 +44,7 @@ import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.MacroInvocation;
@@ -60,6 +63,7 @@ import org.eclipse.fennec.m2x.model.m2t.util.M2tSwitch;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
@@ -67,8 +71,10 @@ import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Switch-based interpreter for MOFM2T template evaluation.
@@ -400,13 +406,20 @@ public class M2tEvaluator {
 		}
 
 		@Override
-		public Object caseLetBlock(LetBlock block) {
-			// Inline expression wrapper — special case, no elseLet/else semantics
-			Variable letVar = block.getLetVariable();
-			if (block.getBody().isEmpty() && letVar.getName().startsWith("__inline__")) {
-				writers.append(render(letVar.getOwnedInit()));
+		public Object caseInlineExpression(InlineExpression inline) {
+			// §7.4: a macro's Body parameter, referred to, inserts the body of the call
+			if (inline.getExpression() instanceof VariableExp reference && reference.getReferredVariable() != null
+					&& env.lookup(reference.getReferredVariable().getName()) instanceof BodyArgument body) {
+				expandBody(body);
 				return WRAPPED_NULL;
 			}
+			// §8.2 '[' OclExpressionCS '/]': the value goes into the document (#370)
+			writers.append(render(inline.getExpression()));
+			return WRAPPED_NULL;
+		}
+
+		@Override
+		public Object caseLetBlock(LetBlock block) {
 
 			// MOFM2T §8.1.16: LetBlock is a subtype test chain.
 			// Evaluate init — if value is non-null (cast succeeded), bind and execute body.
@@ -490,7 +503,13 @@ public class M2tEvaluator {
 
 		@Override
 		public Object caseTraceBlock(TraceBlock block) {
-			// Trace blocks are evaluated but the traceability info is not yet used
+			// D15 (#371): a trace block emits its body; the trace information itself is not
+			// recorded. Its model element is evaluated all the same — a mistake in it went
+			// unnoticed before
+			if (block.getModelElement() != null && evaluateOcl(block.getModelElement()) == OclInvalid.INSTANCE) {
+				addDiagnostic(Diagnostic.ERROR, "The model element of a trace block is invalid (MOFM2T §8.1.18)",
+						positionOf(block.getModelElement()));
+			}
 			executeBody(block);
 			return WRAPPED_NULL;
 		}
@@ -619,7 +638,9 @@ public class M2tEvaluator {
 					env.define("self", evalArgs.get(0));
 				}
 
-				writers.append(render(query.getExpression()));
+				OclResult result = evaluate(query.getExpression());
+				checkQueryResult(query, result == null ? null : result.value());
+				writers.append(render(result, query.getExpression()));
 			} finally {
 				env.popFrame();
 			}
@@ -635,11 +656,19 @@ public class M2tEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			// Evaluate all arguments once, in the caller's scope
+			// A macro calling itself is bounded like a template doing so (#371)
+			if (templateDepth >= limits.maxTemplateDepth()) {
+				addError("Maximum template depth exceeded (" + limits.maxTemplateDepth()
+						+ ") — possible infinite recursion in macro '" + macro.getName() + "'");
+				return WRAPPED_NULL;
+			}
+			// Evaluate all arguments once, in the caller's scope; the body of the call is kept
+			// with that scope, as §7.4 expands it "in the context of the macro call" (#371)
 			List<Variable> params = macro.getParameter();
 			List<Object> evalArgs = new ArrayList<>();
-			for (int i = 0; i < invocation.getArgument().size(); i++) {
-				evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
+			for (OclExpression argument : invocation.getArgument()) {
+				evalArgs.add(argument instanceof Block body ? new BodyArgument(body, env.allVisibleVariables())
+						: evaluateOcl(argument));
 			}
 			env.pushFrame();
 			try {
@@ -658,7 +687,12 @@ public class M2tEvaluator {
 					}
 				}
 
-				executeBody(macro);
+				templateDepth++;
+				try {
+					executeBody(macro);
+				} finally {
+					templateDepth--;
+				}
 			} finally {
 				env.popFrame();
 			}
@@ -731,7 +765,11 @@ public class M2tEvaluator {
 	 * {@code invalid}, or a failure the engine answers without a word.
 	 */
 	private String render(OclExpression expression) {
-		OclResult result = evaluate(expression);
+		return render(evaluate(expression), expression);
+	}
+
+	/** {@link #render(OclExpression)} for a result already evaluated. */
+	private String render(OclResult result, OclExpression expression) {
 		if (result == null) {
 			return "";
 		}
@@ -906,11 +944,58 @@ public class M2tEvaluator {
 			if (arguments.length > 0) {
 				env.define("self", arguments[0]);
 			}
-			return evaluateOcl(query.getExpression());
+			Object value = evaluateOcl(query.getExpression());
+			checkQueryResult(query, value);
+			return value;
 		} finally {
 			env.popFrame();
 			queryDepth--;
 		}
+	}
+
+	/** The body of a macro invocation, with the variables of the scope it was written in (#371). */
+	private record BodyArgument(Block block, Map<String, Object> scope) {
+	}
+
+	/** Writes the body of a macro invocation, in the scope of the call. */
+	private void expandBody(BodyArgument body) {
+		env.pushFrame();
+		try {
+			body.scope().forEach(env::define);
+			executeBody(body.block());
+		} finally {
+			env.popFrame();
+		}
+	}
+
+	/**
+	 * §8.1.15: a query has a return type. Where the body's type is known the parser checks it;
+	 * where it is not, a value that is known not to be of that type is reported here (#370).
+	 */
+	private void checkQueryResult(Query query, Object value) {
+		EClassifier returnType = query.getReturnType();
+		EClassifier valueType = OclTypeRules.normalize(runtimeType(value));
+		if (returnType != null && valueType != null && !OclTypeRules.conformsTo(valueType, returnType)) {
+			addDiagnostic(Diagnostic.WARNING, "Query '" + query.getName() + "' returned a "
+					+ OclTypeRules.nameOf(valueType) + ", which is no " + OclTypeRules.nameOf(returnType)
+					+ " as it declares (MOFM2T §8.1.15)");
+		}
+	}
+
+	/** The type of a value as far as it says: a model object's class, a primitive's library type. */
+	private static EClassifier runtimeType(Object value) {
+		OclStandardLibrary library = OclStandardLibrary.INSTANCE;
+		return switch (value) {
+			case EObject object -> object.eClass();
+			case String text -> library.string();
+			case Boolean bool -> library.booleanType();
+			case Long l -> library.integer();
+			case Integer i -> library.integer();
+			case BigInteger big -> library.integer();
+			case BigDecimal decimal -> library.real();
+			case Double d -> library.real();
+			case null, default -> null;
+		};
 	}
 
 	/**

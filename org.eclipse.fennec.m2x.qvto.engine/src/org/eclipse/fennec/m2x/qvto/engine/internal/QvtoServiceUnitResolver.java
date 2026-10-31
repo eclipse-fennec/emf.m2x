@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.Optional;
+
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.unit.osgi.OsgiServiceUnitResolver;
