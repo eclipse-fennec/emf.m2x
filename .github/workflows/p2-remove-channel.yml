@@ -1,0 +1,108 @@
+name: Remove p2 channel
+
+# Removes one channel of the OCL p2 site from download.eclipse.org — the counterpart of
+# p2-downloads.yml, with the same host, key setup and concurrency group, so a removal never
+# interleaves with an upload of the same channel. Built after PR #390 (2026-10-31) ran
+# release.yml by accident and published a pull request's build as the `latest` channel, which no
+# release had created before.
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Channel to remove, e.g. latest"
+        required: true
+        type: string
+      confirm:
+        description: "The channel name again, to confirm the removal"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p2-downloads-${{ inputs.channel }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  DOWNLOAD_HOST: projects-storage.eclipse.org
+  DOWNLOAD_BASE: /home/data/httpd/download.eclipse.org/fennec/m2x/ocl/p2
+  DOWNLOAD_URL: https://download.eclipse.org/fennec/m2x/ocl/p2
+
+jobs:
+  remove:
+    name: Remove OCL p2 channel (${{ inputs.channel }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate channel
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          CONFIRM: ${{ inputs.confirm }}
+        # The channel becomes a remote path component; keep it to a plain name.
+        run: |
+          set -euo pipefail
+          if [[ ! "$CHANNEL" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+            echo "::error::channel '$CHANNEL' is not a plain path segment"; exit 1
+          fi
+          if [[ "$CHANNEL" != "$CONFIRM" ]]; then
+            echo "::error::confirmation '$CONFIRM' does not match channel '$CHANNEL'"; exit 1
+          fi
+
+      - name: Set up ssh
+        env:
+          SCP_USERNAME: ${{ secrets.SCP_USERNAME }}
+          SCP_KEY: ${{ secrets.SCP_KEY }}
+          SCP_PASSPHRASE: ${{ secrets.SCP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SCP_KEY" > ~/.ssh/p2-deploy
+          # Strip the passphrase from the runner-local copy so rsync/ssh can run
+          # without an agent or a tty. The file lives in the runner's home for the
+          # duration of this job only and is removed in the last step.
+          ssh-keygen -q -p -P "$SCP_PASSPHRASE" -N "" -f ~/.ssh/p2-deploy
+          # Pinned host keys of projects-storage.eclipse.org (ssh-keyscan, 2026-09-15).
+          cat > ~/.ssh/known_hosts <<'KEYS'
+          projects-storage.eclipse.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAsn6PO2Uemsr7wIUu5x0RnlRcuK36D2sbmYNe2LSKdb
+          projects-storage.eclipse.org ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBAOUQ8p0E/Ib3uchk+6wEZ8UtBHTBvyI2E+eA/sOXajLQPKP0XIbVyECy8x5OmrrlvOYs+LxxniGJ69UIjiYZqM=
+          KEYS
+          cat > ~/.ssh/config <<CONF
+          Host ${DOWNLOAD_HOST}
+            User ${SCP_USERNAME}
+            IdentityFile ~/.ssh/p2-deploy
+            IdentitiesOnly yes
+            BatchMode yes
+            StrictHostKeyChecking yes
+          CONF
+
+      - name: Remove the channel
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          ssh "$DOWNLOAD_HOST" "set -e; cd '${DOWNLOAD_BASE}'; \
+            if [ ! -d '${CHANNEL}' ]; then echo 'no channel ${CHANNEL}'; fi; \
+            rm -rf '${CHANNEL}' '${CHANNEL}.new' '${CHANNEL}.old'; \
+            echo 'remaining channels:'; ls -la"
+
+      - name: Verify over HTTP
+        env:
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          url="${DOWNLOAD_URL}/${CHANNEL}/p2.index"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -L "${url}")
+          echo "${code}  ${url}"
+          # The server listing above is what counts; the download CDN may still serve a cached copy
+          [ "$code" = "404" ] || echo "::warning::${url} -> HTTP ${code}, expected 404 (CDN cache?)"
+          echo "### OCL p2 channel ${CHANNEL} removed" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove ssh key
+        if: always()
+        run: rm -rf ~/.ssh
