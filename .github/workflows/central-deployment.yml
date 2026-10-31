@@ -36,8 +36,9 @@ jobs:
       # Inputs reach the script through the environment only, never by interpolation
       DEPLOYMENT_ID: ${{ inputs.deployment-id }}
       ACTION: ${{ inputs.action }}
-      CS_USERNAME: ${{ secrets.CS_USERNAME }}
-      CS_PASSWORD: ${{ secrets.CS_PASSWORD }}
+      # The organisation secrets reusable-release.yml maps to CS_USERNAME/CS_PASSWORD
+      CS_USERNAME: ${{ secrets.CENTRAL_SONATYPE_TOKEN_USERNAME }}
+      CS_PASSWORD: ${{ secrets.CENTRAL_SONATYPE_TOKEN_PASSWORD }}
     steps:
       - name: Query and, on request, drop the deployment
         shell: bash
@@ -47,8 +48,8 @@ jobs:
             echo "::error::Not a deployment ID: ${DEPLOYMENT_ID}"
             exit 1
           fi
-          : "${CS_USERNAME:?the CS_USERNAME secret is not available}"
-          : "${CS_PASSWORD:?the CS_PASSWORD secret is not available}"
+          : "${CS_USERNAME:?the CENTRAL_SONATYPE_TOKEN_USERNAME secret is not available}"
+          : "${CS_PASSWORD:?the CENTRAL_SONATYPE_TOKEN_PASSWORD secret is not available}"
           BEARER=$(printf '%s:%s' "${CS_USERNAME}" "${CS_PASSWORD}" | base64 -w0)
           API=https://central.sonatype.com/api/v1/publisher
 
