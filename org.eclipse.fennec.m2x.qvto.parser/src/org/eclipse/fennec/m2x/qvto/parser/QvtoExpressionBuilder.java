@@ -1357,7 +1357,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		}
 
 		QvtoEnvironment savedEnv = this.environment;
-		this.environment = this.environment.nested(refVar);
+		this.environment = this.environment.nestedObjectBody(refVar);
 
 		// Body as ConstructorBody
 		var body = QVTO.createConstructorBody();
