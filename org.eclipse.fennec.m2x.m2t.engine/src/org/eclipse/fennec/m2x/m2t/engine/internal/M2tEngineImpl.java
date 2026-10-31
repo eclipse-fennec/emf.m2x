@@ -31,6 +31,7 @@ import java.util.stream.Stream;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.ResourceSet;
@@ -477,7 +478,24 @@ public class M2tEngineImpl implements M2tEngine {
 					.write(generatedFiles, openModes, charsets);
 		}
 
-		return new M2tResult(evaluator.getDiagnostics(), generatedFiles, fileUniqueIds);
+		return new M2tResult(withParseWarnings(module, evaluator.getDiagnostics()), generatedFiles, fileUniqueIds);
+	}
+
+	/**
+	 * What the parse found worth a warning — text outside a template, say — first, as a run is
+	 * the first place that can report it (#371).
+	 */
+	private static List<Diagnostic> withParseWarnings(Module module, List<Diagnostic> diagnostics) {
+		EAnnotation warnings = module.getEAnnotation(M2tParserSupport.WARNINGS_ANNOTATION);
+		if (warnings == null) {
+			return diagnostics;
+		}
+		List<Diagnostic> all = new ArrayList<>();
+		for (String warning : warnings.getDetails().values()) {
+			all.add(new BasicDiagnostic(Diagnostic.WARNING, UNRESOLVED_SOURCE_ID, 0, warning, null));
+		}
+		all.addAll(diagnostics);
+		return all;
 	}
 
 	/**

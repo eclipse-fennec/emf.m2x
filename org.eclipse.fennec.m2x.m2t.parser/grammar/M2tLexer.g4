@@ -34,8 +34,16 @@ lexer grammar M2tLexer;
 // (Acceleo 3.x reads the body as a raw substring up to the next '[/comment]' as well).
 // ANTLR prefers the longest match, so a complete comment always wins over the single '['.
 // An unterminated '[comment]' falls back to BLOCK_OPEN and is reported by the parser.
+// The paired form takes the spec's '[comment()]' (§7.4, a call of the comment macro, #372) as
+// well as Acceleo's '[comment]'.
 COMMENT_BLOCK
-    : '[' [ \t\r\n]* 'comment' [ \t\r\n]* ']' .*? '[' [ \t\r\n]* '/' [ \t\r\n]* 'comment' [ \t\r\n]* ']' -> skip
+    : '[' [ \t\r\n]* 'comment' [ \t\r\n]* ('(' [ \t\r\n]* ')' [ \t\r\n]*)? ']' .*? '[' [ \t\r\n]* '/' [ \t\r\n]* 'comment' [ \t\r\n]* ']' -> skip
+    ;
+
+// Acceleo's single-line '[comment … /]' (#372). It is not skipped: a '[comment @main/]' marks
+// the template that follows as the entry point, which the parser has to see.
+LINE_COMMENT_BLOCK
+    : '[' [ \t\r\n]* 'comment' [ \t\r\n] ~[\]]*? '/]'
     ;
 
 // The '[' delimiter opens a code block — switch to CODE_MODE
@@ -195,8 +203,14 @@ STRING_LITERAL
 
 // --- Identifiers ---
 
+// §9.3.4 [B]: the escapes of a string literal (_'\''); the doubled quote stays accepted (#325,
+// ported from Ocl.g4 for #375)
 ESCAPED_IDENTIFIER
-    : '_' '\'' ( '\'\'' | ~['] )* '\''
+    : '_' '\'' ( '\'\''
+               | '\\\\' | '\\\'' | '\\"' | '\\n' | '\\t' | '\\r' | '\\f' | '\\b'
+               | '\\x' [0-9a-fA-F] [0-9a-fA-F]
+               | '\\u' [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]
+               | ~['\\] )* '\''
     ;
 
 IDENTIFIER
@@ -209,6 +223,7 @@ fragment LETTER
     | [\u0370-\u037D\u037F-\u1FFF]
     | [\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF]
     | [\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]
+    | [\u{10000}-\u{EFFFF}]          // §9.3.4: supplementary planes (#325, #375)
     ;
 
 // --- Whitespace (skipped in code mode) ---
@@ -223,6 +238,7 @@ CODE_LINE_COMMENT
     : '--' ~[\r\n]* -> skip
     ;
 
+// §9.3.49: nested block comments (#375)
 CODE_BLOCK_COMMENT
-    : '/*' .*? '*/' -> skip
+    : '/*' ( CODE_BLOCK_COMMENT | . )*? '*/' -> skip
     ;

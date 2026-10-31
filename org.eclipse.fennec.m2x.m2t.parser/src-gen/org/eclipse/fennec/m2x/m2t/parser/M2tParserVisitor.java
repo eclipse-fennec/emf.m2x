@@ -221,6 +221,12 @@ public interface M2tParserVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitTemplateInvocation(M2tParser.TemplateInvocationContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link M2tParser#macroBlockInvocation}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitMacroBlockInvocation(M2tParser.MacroBlockInvocationContext ctx);
+	/**
 	 * Visit a parse tree produced by the {@code NotExp}
 	 * labeled alternative in {@link M2tParser#expression}.
 	 * @param ctx the parse tree
@@ -283,6 +289,13 @@ public interface M2tParserVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitUnaryMinusExp(M2tParser.UnaryMinusExpContext ctx);
+	/**
+	 * Visit a parse tree produced by the {@code TernaryExp}
+	 * labeled alternative in {@link M2tParser#expression}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitTernaryExp(M2tParser.TernaryExpContext ctx);
 	/**
 	 * Visit a parse tree produced by the {@code EqualityExp}
 	 * labeled alternative in {@link M2tParser#expression}.
@@ -608,6 +621,12 @@ public interface M2tParserVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitPathName(M2tParser.PathNameContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link M2tParser#restrictedWord}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitRestrictedWord(M2tParser.RestrictedWordContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link M2tParser#identifier}.
 	 * @param ctx the parse tree
