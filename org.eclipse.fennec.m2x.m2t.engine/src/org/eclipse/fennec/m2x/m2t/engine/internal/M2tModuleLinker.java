@@ -406,9 +406,17 @@ public class M2tModuleLinker {
 
 	/**
 	 * Creates the appropriate invocation node for a resolved module element.
+	 *
+	 * <p>In the receiver form {@code [c.genClass()/]} the receiver is the first argument, as
+	 * {@link M2tOperationProvider} does for a query inside an expression. Dropping it left the
+	 * parameter unbound, and the call only worked while the caller happened to have a variable of
+	 * the same name in scope (#383).
 	 */
 	private TemplateExpression createInvocation(ModuleElement target, OperationCallExp opCall) {
 		List<OclExpression> args = new ArrayList<>(opCall.getOwnedArguments());
+		if (!isStandaloneCall(opCall) && args.size() < parameterCount(target)) {
+			args.add(0, opCall.getOwnedSource());
+		}
 
 		if (target instanceof Template template) {
 			TemplateInvocation inv = FACTORY.createTemplateInvocation();
@@ -594,6 +602,15 @@ public class M2tModuleLinker {
 	 * Returns true if the OperationCallExp has no explicit source (standalone call
 	 * like {@code helper(e)}) rather than a method call like {@code e.op()}.
 	 */
+	private static int parameterCount(ModuleElement element) {
+		return switch (element) {
+			case Template template -> template.getParameter().size();
+			case Query query -> query.getParameter().size();
+			case Macro macro -> macro.getParameter().size();
+			default -> 0;
+		};
+	}
+
 	private static boolean isStandaloneCall(OperationCallExp opCall) {
 		OclExpression source = opCall.getOwnedSource();
 		if (source == null) {
