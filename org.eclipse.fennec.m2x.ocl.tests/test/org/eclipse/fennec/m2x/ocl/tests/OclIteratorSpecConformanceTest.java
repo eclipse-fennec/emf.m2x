@@ -62,25 +62,46 @@ class OclIteratorSpecConformanceTest extends AbstractOclTest {
 	class NonBooleanBody {
 
 		@Test
-		void select_reject_withNumberBody_areInvalidWithError() throws OclParseException {
-			assertInvalid("Set{1, 2}->select(x | x + 1)", self);
-			assertInvalid("Set{1, 2}->reject(x | x + 1)", self);
-			assertHasError("Set{1, 2}->select(x | x + 1)", self, "Body of 'select' must be Boolean");
+		void aNumberBody_isATypeError() {
+			// The body's type is known, so the error is found when parsing (#378)
+			assertTypeError("Set{1, 2}->select(x | x + 1)", self, "The body of select is a Integer, not a Boolean");
+			assertTypeError("Set{1, 2}->reject(x | x + 1)", self, "The body of reject is a Integer, not a Boolean");
+			assertTypeError("Set{1, 2}->forAll(x | x + 1)", self, "The body of forAll is a Integer, not a Boolean");
+			assertTypeError("Set{1, 2}->exists(x | x.toString())", self, "The body of exists is a String, not a Boolean");
+			assertTypeError("Set{1, 2}->forAll(x, y | x + y)", self, "The body of forAll is a Integer, not a Boolean");
+			assertTypeError("Set{1, 2}->any(x | x + 1)", self, "The body of any is a Integer, not a Boolean");
+			assertTypeError("Set{1, 2}->one(x | x + 1)", self, "The body of one is a Integer, not a Boolean");
+		}
+
+		/** v is bound only at evaluation: the body's type is unknown when parsing. */
+		private static final Map<String, Object> NUMBERS = Map.of("v", List.of(1L, 2L));
+
+		@Test
+		void select_reject_withNumberBody_atEvaluation_areInvalidWithError() throws OclParseException {
+			assertSame(OclInvalid.INSTANCE, evalWith("v->select(x | x + 1)", self, NUMBERS));
+			assertSame(OclInvalid.INSTANCE, evalWith("v->reject(x | x + 1)", self, NUMBERS));
+			assertRunTimeError("v->select(x | x + 1)", "Body of 'select' must be Boolean");
 		}
 
 		@Test
-		void forAll_exists_withNumberBody_areInvalidWithError() throws OclParseException {
-			assertInvalid("Set{1, 2}->forAll(x | x + 1)", self);
-			assertInvalid("Set{1, 2}->exists(x | x.toString())", self);
-			assertInvalid("Set{1, 2}->forAll(x, y | x + y)", self);
-			assertHasError("Set{1, 2}->exists(x | x + 1)", self, "Body of 'exists' must be Boolean");
+		void forAll_exists_withNumberBody_atEvaluation_areInvalidWithError() throws OclParseException {
+			assertSame(OclInvalid.INSTANCE, evalWith("v->forAll(x | x + 1)", self, NUMBERS));
+			assertSame(OclInvalid.INSTANCE, evalWith("v->exists(x | w)", self, Map.of("v", List.of(1L, 2L), "w", "x")));
+			assertSame(OclInvalid.INSTANCE, evalWith("v->forAll(x, y | x + y)", self, NUMBERS));
+			assertRunTimeError("v->exists(x | x + 1)", "Body of 'exists' must be Boolean");
 		}
 
 		@Test
-		void any_one_withNumberBody_areInvalidWithError() throws OclParseException {
-			assertInvalid("Set{1, 2}->any(x | x + 1)", self);
-			assertInvalid("Set{1, 2}->one(x | x + 1)", self);
-			assertHasError("Set{1, 2}->one(x | x + 1)", self, "Body of 'one' must be Boolean");
+		void any_one_withNumberBody_atEvaluation_areInvalidWithError() throws OclParseException {
+			assertSame(OclInvalid.INSTANCE, evalWith("v->any(x | x + 1)", self, NUMBERS));
+			assertSame(OclInvalid.INSTANCE, evalWith("v->one(x | x + 1)", self, NUMBERS));
+			assertRunTimeError("v->one(x | x + 1)", "Body of 'one' must be Boolean");
+		}
+
+		private void assertRunTimeError(String expression, String fragment) throws OclParseException {
+			OclResult result = evalWithDiagnosticsWith(expression, self, NUMBERS);
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains(fragment)),
+					() -> expression + ": " + result.diagnostics());
 		}
 
 		@Test
