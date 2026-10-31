@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -34,6 +35,9 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.impl.EPackageRegistryImpl;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
+import org.eclipse.fennec.m2x.model.qvtbase.Rule;
+import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -42,11 +46,12 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnit;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdUnitResolver;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
+import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -60,9 +65,8 @@ import org.junit.jupiter.api.Test;
  * {@code maxUnitResolvers} were read by no engine code, two of them documented as security
  * settings.
  *
- * <p>An imported unit contributes its relations, the way an {@code extends} does. What the
- * importing transformation declares itself wins, so an import cannot quietly replace a
- * relation.
+ * <p>An import makes the imported unit's names visible (§7.1.1); its relations take part in a
+ * run only through {@code extends} or a call (#360).
  */
 class QvtdImportTest {
 
@@ -109,7 +113,6 @@ class QvtdImportTest {
 	}
 
 	@Test
-	@Disabled("#360: import merges every relation of the imported unit into the importer")
 	@DisplayName("an import makes names visible, it does not run the imported unit's top relations")
 	void anImportedTopRelation_doesNotRunThroughTheImport() throws Exception {
 		// §7.13.1: an import makes the unit's names usable; its relations take part in the
@@ -123,6 +126,80 @@ class QvtdImportTest {
 
 		assertTrue(run.result().isSuccess(), () -> "diagnostics: " + run.result().diagnostics());
 		assertEquals(List.of(), run.target().getContents());
+	}
+
+	@Test
+	@DisplayName("extends names an imported transformation: its relations are inherited")
+	void extendsAnImportedTransformation_inheritsItsRelations() throws Exception {
+		Run run = run(withLibrary(), """
+				import shared.Library;
+				transformation importer(source : bookshelf, target : bookshelf) extends shared {
+				}
+				""");
+
+		assertTrue(run.result().isSuccess(), () -> "diagnostics: " + run.result().diagnostics());
+		assertEquals(List.of("Moby Dick"), titles(run.target()));
+	}
+
+	@Test
+	@DisplayName("a relation of an imported transformation is called by its qualified name")
+	void aQualifiedCall_reachesTheImportedRelation() throws Exception {
+		Run run = run(withLibrary(), callingImporter("shared.CopyTitle(b1, b2)"));
+
+		assertTrue(run.result().isSuccess(), () -> "diagnostics: " + run.result().diagnostics());
+		assertEquals(List.of("Moby Dick"), titles(run.target()));
+	}
+
+	@Test
+	@DisplayName("an import makes the unqualified name of an imported relation visible")
+	void anUnqualifiedCall_reachesTheImportedRelation() throws Exception {
+		Run run = run(withLibrary(), callingImporter("CopyTitle(b1, b2)"));
+
+		assertTrue(run.result().isSuccess(), () -> "diagnostics: " + run.result().diagnostics());
+		assertEquals(List.of("Moby Dick"), titles(run.target()));
+	}
+
+	@Test
+	@DisplayName("a called relation runs as called, not also as a top relation of the importer")
+	void aCalledRelation_isNoTopRelationOfTheImporter() throws Exception {
+		QvtdEngine engine = withLibrary();
+		RelationalTransformation transformation = engine.parse(callingImporter("shared.CopyTitle(b1, b2)"), "importer");
+		executeAndCountRules(engine, transformation);
+
+		assertEquals(List.of("Copy"), transformation.getRule().stream()
+				.filter(rule -> ((Relation) rule).isIsTopLevel()).map(Rule::getName).toList());
+	}
+
+	@Test
+	@DisplayName("a call that no imported transformation answers is a positioned error")
+	void aCallNoImportAnswers_isAPositionedError() throws Exception {
+		Run run = run(withLibrary(), callingImporter("shared.Nope(b1, b2)"));
+		assertFalse(run.result().isSuccess());
+		assertTrue(run.result().diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains("Unknown relation or query 'shared.Nope'")),
+				() -> "diagnostics: " + run.result().diagnostics());
+
+		// compiled with the import embedded, the open call is reported where it was written
+		QvtdParseException failure = assertThrows(QvtdParseException.class, () -> withLibrary()
+				.compile(callingImporter("shared.Nope(b1, b2)"), "importer", UnitCompileOptions.of(DependencyMode.EMBED)));
+
+		assertTrue(failure.getErrors().stream().anyMatch(d -> d.getMessage().contains("Unknown relation or query 'shared.Nope'")
+				&& d.getLine() == 6), () -> "" + failure.getErrors());
+	}
+
+	@Test
+	@DisplayName("extends naming neither a transformation of the unit nor an imported one is an error")
+	void extendsNoImportAnswers_isAnError() throws Exception {
+		Run run = run(withLibrary(), """
+				import shared.Library;
+				transformation importer(source : bookshelf, target : bookshelf) extends other {
+				}
+				""");
+
+		assertFalse(run.result().isSuccess());
+		assertTrue(run.result().diagnostics().stream().anyMatch(d -> d.getMessage()
+				.contains("extends 'other', which is neither a transformation of its unit nor an imported one")),
+				() -> "diagnostics: " + run.result().diagnostics());
 	}
 
 	@Test
@@ -190,14 +267,11 @@ class QvtdImportTest {
 	@Test
 	@DisplayName("executing twice does not import twice")
 	void repeatedExecutionIsIdempotent() throws Exception {
-		// The linker runs per execution, so a second run resolves the import again and
-		// merges again. Merging skips a rule whose name the transformation already carries,
-		// which is what keeps the second run from producing a second copy of every relation.
-		QvtdEngine engine = engine(builder -> builder
-				.addUnitResolver(library())
-				.unitResolverEnabled(true));
+		// The linker runs per execution, so a second run resolves the import again. A called
+		// relation is copied in once; a second link finds the copy instead of adding another.
+		QvtdEngine engine = withLibrary();
 
-		RelationalTransformation transformation = engine.parse(IMPORTER, "importer");
+		RelationalTransformation transformation = engine.parse(callingImporter("shared.CopyTitle(b1, b2)"), "importer");
 		int afterFirst = executeAndCountRules(engine, transformation);
 		int afterSecond = executeAndCountRules(engine, transformation);
 
@@ -206,6 +280,28 @@ class QvtdImportTest {
 	}
 
 	// --- helpers ---
+
+	/** An importer whose one top relation creates a Book per Book and calls {@code %s} in its where. */
+	private static String callingImporter(String call) {
+		return """
+				import shared.Library;
+				transformation importer(source : bookshelf, target : bookshelf) {
+				    top relation Copy {
+				        checkonly domain source b1 : Book {};
+				        enforce domain target b2 : Book {};
+				        where { %s; }
+				    }
+				}
+				""".formatted(call);
+	}
+
+	private QvtdEngine withLibrary() {
+		return engine(builder -> builder.addUnitResolver(library()).unitResolverEnabled(true));
+	}
+
+	private List<Object> titles(QvtdModelExtent extent) {
+		return extent.getContents().stream().map(book -> book.eGet(bookClass.getEStructuralFeature("title"))).toList();
+	}
 
 	private QvtdUnitResolver library() {
 		return name -> "shared.Library".equals(name)
@@ -233,7 +329,11 @@ class QvtdImportTest {
 	}
 
 	private Run run(QvtdEngine engine) throws Exception {
-		RelationalTransformation transformation = engine.parse(IMPORTER, "importer");
+		return run(engine, IMPORTER);
+	}
+
+	private Run run(QvtdEngine engine, String importer) throws Exception {
+		RelationalTransformation transformation = engine.parse(importer, "importer");
 
 		EObject book = EcoreUtil.create(bookClass);
 		book.eSet(bookClass.getEStructuralFeature("title"), "Moby Dick");

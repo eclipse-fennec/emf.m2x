@@ -111,6 +111,22 @@ public class QvtrExtentManager {
 	}
 
 	/**
+	 * The instances of a class in every model of the run — where a template that stands as a
+	 * predicate, outside any domain, is matched (#361).
+	 *
+	 * @param eClass the type to match
+	 * @return the instances, never {@code null}
+	 */
+	public List<EObject> allInstances(EClass eClass) {
+		Objects.requireNonNull(eClass, "eClass must not be null");
+		List<EObject> result = new ArrayList<>();
+		for (QvtdModelExtent extent : extentsByName.values()) {
+			collectInstances(extent.getContents(), eClass, result);
+		}
+		return result;
+	}
+
+	/**
 	 * The instances of a class in the model the object belongs to — where the owner of a
 	 * non-navigable opposite role is looked for (§7.3, #355).
 	 *

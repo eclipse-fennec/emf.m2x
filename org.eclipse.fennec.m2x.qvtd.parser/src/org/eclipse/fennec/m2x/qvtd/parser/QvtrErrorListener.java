@@ -14,7 +14,11 @@
  */
 package org.eclipse.fennec.m2x.qvtd.parser;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.antlr.v4.runtime.BaseErrorListener;
 import org.antlr.v4.runtime.RecognitionException;
@@ -40,7 +44,35 @@ class QvtrErrorListener extends BaseErrorListener {
 	@Override
 	public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol,
 			int line, int charPositionInLine, String msg, RecognitionException e) {
-		errors.addError(msg, line, charPositionInLine);
+		errors.addError(collapseIdentifiers(msg), line, charPositionInLine);
+	}
+
+	/**
+	 * The tokens that are all "an identifier" where one is expected: the words OCL and QVT-R
+	 * allow as names besides {@code IDENTIFIER} (#361). Listed one by one they buried what the
+	 * message is about.
+	 */
+	private static final Set<String> IDENTIFIER_TOKENS = Set.of("IDENTIFIER", "ESCAPED_IDENTIFIER", "'body'",
+			"'context'", "'def'", "'derive'", "'endpackage'", "'init'", "'inv'", "'package'", "'post'", "'pre'",
+			"'static'", "'include'", "'library'", "'abstract'", "'opposite'", "'default_values'");
+
+	private static final Pattern EXPECTING = Pattern.compile("expecting \\{([^}]*)\\}");
+
+	/** Replaces the identifier tokens of an expectation set by the single word "identifier". */
+	static String collapseIdentifiers(String msg) {
+		Matcher matcher = EXPECTING.matcher(msg);
+		if (!matcher.find()) {
+			return msg;
+		}
+		List<String> expected = new ArrayList<>(List.of(matcher.group(1).split(", ")));
+		if (!expected.contains("IDENTIFIER")) {
+			return msg;
+		}
+		expected.removeIf(IDENTIFIER_TOKENS::contains);
+		expected.add("identifier");
+		String replacement = expected.size() == 1 ? "expecting identifier"
+				: "expecting {" + String.join(", ", expected) + "}";
+		return msg.substring(0, matcher.start()) + replacement + msg.substring(matcher.end());
 	}
 
 	/**

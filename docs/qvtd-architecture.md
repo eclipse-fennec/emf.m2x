@@ -54,7 +54,7 @@ it as a satellite.
 
 | Interface/Class | Purpose |
 |-----------------|---------|
-| `QvtdEngine` | Main engine interface: `parse()`, `execute()` |
+| `QvtdEngine` | Main engine interface: `parse()` (one transformation, by name where a unit holds several), `parseAll()`, `execute()` |
 | `QvtdConfiguration` | Engine config: OCL config, blackbox registry, package registry (D42 — the single place applying the `EPackage.Registry.INSTANCE` fallback) |
 | `QvtdExecutionContext` | Execution mode (enforce/checkOnly), model extents, target model, `withPostCheck()` |
 | `QvtdExecutionResult` | Diagnostics, success flag |
@@ -79,8 +79,13 @@ describes it in full.
 
 **Dependencies (#139).** `compile(source, unitName, UnitCompileOptions)` resolves every `import`
 through the configured unit resolvers (D29 gate and allow-list as in `execute()`) and binds by the
-dependency mode. QVT-R binds an import by *merging* the imported relations into the importer
-(§7.11.1.1, `QvtdLinker.merge`) — afterwards nothing refers to the imported unit. Hence:
+dependency mode. An import only makes names visible (§7.1.1, #360); QVT-R binds it by *copying* what
+the importer takes from it into the importer (`QvtdLinker.merge`): the base an `extends` names
+(§7.11.1.1, `QvtrParserSupport.inherit`) and each relation a call names, as a non-top relation with a
+`qvtr.imported` annotation. Calls, bases and overrides the parser could not resolve because the unit
+imports others wait on the transformation (`qvtr.pendingCalls`, `qvtr.extends`) and are an error if
+still open after binding (`QvtdLinker.unresolved`). Afterwards nothing refers to the imported unit.
+Hence:
 
 - **embed** — the dependency is compiled and merged at compile time, and the name is struck from the
   `qvtr.imports` annotation. The merged rules *are* the embedding; no unit is attached under
@@ -102,14 +107,21 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 
 **Architecture:** Two-visitor composition pattern (like QVT-O):
 - `QvtrUnitBuilder` — Main CST→AST visitor. 2-pass for transformation-level constructs:
+  - Pass 0: Imports — a quoted URI the package registry knows is a metamodel (alias, `::Sub`,
+    `::*`), anything else a unit name for the link phase (§7.13.1, #360)
   - Pass 1: Build all transformations, typed models, relations, domains, templates
-  - Pass 2: Resolve `extends` inheritance (rule merging with `EcoreUtil.copy()`)
+  - Pass 2: Resolve `extends` inheritance (rule merging with `EcoreUtil.copy()`); a base, call or
+    `overrides` that is not in the unit is left for the link phase when the unit imports others
 - `QvtrExpressionBuilder` — OCL expression visitor, delegates to `AbstractExpressionBuilder` (shared with OCL/QVT-O parsers)
 
 **Key grammar extensions beyond OCL:**
 - `transformationDef`, `modelDecl`, `keyDecl`, `relation`, `domain`
 - `objectTemplate`, `collectionTemplate`, `propertyTemplate`
-- `whenClause`, `whereClause`, `queryDef`
+- `whenClause`, `whereClause` (a `predicate` is an expression or a template, #361), `queryDef`
+- `importDecl` with alias, URI, path and wildcard; `transformationId` as `pathName` (#360)
+- an own `identifier` rule: `import` is reserved, `abstract`/`opposite`/`default_values` are names;
+  `_key` is read as `key` (deprecated, §7.13.2); `QvtrErrorListener` folds the identifier tokens of
+  an expectation set into `identifier`
 - `optionalMultiplicity` (`[?]`) — Eclipse extension (GAP-5)
 - `implementedby` clause on domains (GAP-12)
 
@@ -122,7 +134,10 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 | `qvtr.optional` | `DomainPattern` | Marks `[?]` optional root variable |
 | `qvtr.extends` | `RelationalTransformation` | Stores base transformation name |
 | `qvtr.implementedby.args` | `RelationImplementation` | Stores argument expression references |
-| `qvtr.imports` | `RelationalTransformation` | Names of imported units still to merge; struck by `compile()` under `embed` |
+| `qvtr.imports` | `RelationalTransformation` | Names of imported units still to bind; struck by `compile()` under `embed` |
+| `qvtr.pendingCalls` | `RelationalTransformation` | Calls of relations an import may declare: references to the `RelationCallExp`s, details the called names (#360) |
+| `qvtr.imported` | `Relation` | A relation copied in because the importer calls it; not top-level (#360) |
+| `qvtr.warnings` | `RelationalTransformation` | Parse warnings (deprecated `_key`), reported as WARNING by a run (#361) |
 
 ## 5. Engine
 

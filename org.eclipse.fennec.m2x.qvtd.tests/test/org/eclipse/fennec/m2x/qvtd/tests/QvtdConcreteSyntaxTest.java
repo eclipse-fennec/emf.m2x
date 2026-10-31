@@ -15,14 +15,21 @@
 package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
+import org.eclipse.emf.common.util.Diagnostic;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -53,6 +60,12 @@ class QvtdConcreteSyntaxTest extends AbstractQvtdEngineTest {
 
 	private static void accepted(String source) throws QvtdParseException {
 		assertNotNull(parse(source));
+	}
+
+	/** The names of the variables the first relation holds, sorted. */
+	private static List<String> variableNames(RelationalTransformation t) {
+		return t.getRule().get(0).eContents().stream()
+				.filter(Variable.class::isInstance).map(v -> ((Variable) v).getName()).sorted().toList();
 	}
 
 	private static void rejected(String source) {
@@ -440,7 +453,6 @@ class QvtdConcreteSyntaxTest extends AbstractQvtdEngineTest {
 		}
 
 		@Test
-		@Disabled("#361: 'import' is accepted as a name")
 		void everyReservedWordAsName_isRejected() {
 			// "All these keywords are reserved words, they cannot be used as identifiers"
 			List<String> accepted = new ArrayList<>();
@@ -473,11 +485,65 @@ class QvtdConcreteSyntaxTest extends AbstractQvtdEngineTest {
 		}
 
 		@Test
-		@Disabled("#361: abstract, opposite and default_values are reserved by the grammar")
+		@DisplayName("_key is the deprecated escape of key: one name, two spellings")
+		void anUnderscorePrefixedReservedWord_isTheReservedWord() throws QvtdParseException {
+			// "A simple underscore prefix may also be used but is now deprecated" (#361)
+			RelationalTransformation t = parse(relation("""
+					_'key' : String;
+					checkonly domain uml p : Package { name = _key };
+					enforce domain rdbms s : Schema { name = _'key' };
+					"""));
+
+			assertEquals(List.of("key", "p", "s"), variableNames(t));
+		}
+
+		@Test
+		@DisplayName("_key is reported as deprecated: a WARNING at its place when the transformation runs")
+		void anUnderscorePrefixedReservedWord_isWarnedAbout() throws QvtdParseException {
+			QvtdExecutionResult result = executeEnforce(relation("""
+					_'key' : String;
+					checkonly domain uml p : Package { name = _key };
+					enforce domain rdbms s : Schema { name = _'key' };
+					"""), "rdbms", Map.of("uml", QvtdModelExtent.of(), "rdbms", emptyExtent()));
+
+			assertTrue(result.isSuccess(), "" + result.diagnostics());
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getSeverity() == Diagnostic.WARNING
+					&& d.getMessage().equals("test:4:42: '_key' is a deprecated escape of 'key'; write _'key' (§7.13.2)")),
+					"" + result.diagnostics());
+		}
+
+		@Test
+		@DisplayName("an underscore before a word that is not reserved stays part of the name")
+		void anUnderscorePrefixedName_staysAsItIs() throws QvtdParseException {
+			RelationalTransformation t = parse(relation("""
+					_name : String;
+					checkonly domain uml p : Package { name = _name };
+					enforce domain rdbms s : Schema { name = _name };
+					"""));
+
+			assertTrue(variableNames(t).contains("_name"), "" + variableNames(t));
+		}
+
+		@Test
+		@DisplayName("a syntax error expecting a name says identifier, not every OCL document keyword")
+		void aSyntaxErrorExpectingAName_saysIdentifier() {
+			QvtdParseException e = assertThrows(QvtdParseException.class, () -> parse(TRANSFORMATION.formatted("""
+					top relation {
+					}
+					""")));
+
+			assertTrue(e.getMessage().contains("identifier"), e.getMessage());
+			assertFalse(e.getMessage().contains("endpackage"), e.getMessage());
+		}
+
+		@Test
 		void wordsOutsideTheReservedList_areNames() throws QvtdParseException {
-			// abstract, opposite and default_values are not in the §7.13.2 list (#361)
+			// abstract, opposite and default_values are not in the §7.13.2 list (#361); the two
+			// the target domain reads are initialized, as §7.5 asks of what it does not bind
 			accepted(relation("""
-					abstract, opposite, default_values : String;
+					abstract : String;
+					opposite : String = 'o';
+					default_values : String = 'd';
 					checkonly domain uml p : Package { name = abstract };
 					enforce domain rdbms s : Schema { name = opposite + default_values };
 					"""));

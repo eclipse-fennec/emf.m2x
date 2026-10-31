@@ -127,6 +127,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	private record PendingOverride(String name, int line, int column) {
 	}
+	/** Whether the unit imports other units, whose names the link phase resolves (#360). */
+	private boolean unitImports;
+	/** The metamodels the imports made available, by alias or name (§7.1.1, #360). */
+	private final Map<String, EPackage> importedMetamodels = new HashMap<>();
 	/** Where each import was written, keyed by the annotation detail that carries it (#264). */
 	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
 	/**
@@ -159,28 +163,33 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		return super.visit(tree);
 	}
 	@Override
-	public RelationalTransformation visitCompilationUnitEntry(
+	public List<RelationalTransformation> visitCompilationUnitEntry(
 			QvtRParser.CompilationUnitEntryContext ctx) {
 		return visitCompilationUnit(ctx.compilationUnit());
 	}
 
 	@Override
-	public RelationalTransformation visitCompilationUnit(QvtRParser.CompilationUnitContext ctx) {
+	public List<RelationalTransformation> visitCompilationUnit(QvtRParser.CompilationUnitContext ctx) {
 		List<ImportedName> imports = importedUnitNames(ctx);
+		unitImports = !imports.isEmpty();
 		if (ctx.transformationDef().isEmpty()) {
 			RelationalTransformation empty = REL.createRelationalTransformation();
 			empty.setName("_unnamed");
 			recordImports(empty, imports);
-			return empty;
+			return List.of(empty);
 		}
 
-		// Parse all transformations in the compilation unit
+		// Parse all transformations in the compilation unit (§7.13.7 topLevelCS: a set of them)
 		Map<String, RelationalTransformation> transformations = new LinkedHashMap<>();
 		for (QvtRParser.TransformationDefContext tCtx : ctx.transformationDef()) {
 			// Reset per-transformation state
 			typedModelMap.clear();
 			relationMap.clear();
 			RelationalTransformation t = visitTransformationDef(tCtx);
+			if (transformations.containsKey(t.getName())) {
+				keyError(tCtx.name, "Duplicate transformation '" + t.getName() + "'");
+				continue;
+			}
 			transformations.put(t.getName(), t);
 		}
 
@@ -189,33 +198,29 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		}
 
 		// Resolve 'extends' annotations (§7.11.1.1): merge base rules into child
+		Set<RelationalTransformation> deferred = new HashSet<>();
 		for (RelationalTransformation t : transformations.values()) {
-			EAnnotation ann = t.getEAnnotation("qvtr.extends");
-			if (ann != null) {
-				String baseName = ann.getDetails().get("name");
-				if (baseName != null) {
-					RelationalTransformation base = transformations.get(baseName);
-					if (base != null) {
-						t.setExtends(base);
-						mergeInheritedRules(t, base);
-					} else if (extendsPositions.containsKey(t)) {
-						int[] at = extendsPositions.get(t);
-						positions.positionAt(at[0], at[1]);
-						diagnostics.add(positions.at("Transformation '" + t.getName() + "' extends '" + baseName
-								+ "', which is no transformation of this unit"));
-					}
-				}
+			EAnnotation ann = t.getEAnnotation(QvtrParserSupport.EXTENDS_ANNOTATION);
+			String baseName = ann != null ? ann.getDetails().get("name") : null;
+			if (baseName == null) {
+				continue;
+			}
+			RelationalTransformation base = transformations.get(baseName);
+			if (base != null) {
+				t.setExtends(base);
+				mergeInheritedRules(t, base);
+			} else if (unitImports) {
+				deferred.add(t); // an imported transformation, which the link phase has (#360)
+			} else if (extendsPositions.containsKey(t)) {
+				int[] at = extendsPositions.get(t);
+				positions.positionAt(at[0], at[1]);
+				diagnostics.add(positions.at("Transformation '" + t.getName() + "' extends '" + baseName
+						+ "', which is no transformation of this unit"));
 			}
 		}
 
-		resolveOverrides(transformations.values());
-
-		// Return the last transformation (typically the extending one)
-		RelationalTransformation last = null;
-		for (RelationalTransformation t : transformations.values()) {
-			last = t;
-		}
-		return last;
+		resolveOverrides(transformations.values(), deferred);
+		return new ArrayList<>(transformations.values());
 	}
 
 	/**
@@ -224,7 +229,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	 * error — before #356 the reference was set only by the evaluator, at run time, into the
 	 * caller's AST, and an unknown name was ignored.
 	 */
-	private void resolveOverrides(Collection<RelationalTransformation> transformations) {
+	private void resolveOverrides(Collection<RelationalTransformation> transformations,
+			Set<RelationalTransformation> deferred) {
 		for (RelationalTransformation t : transformations) {
 			for (Rule rule : t.getRule()) {
 				EAnnotation ann = rule.getEAnnotation("qvtr.overrides");
@@ -238,7 +244,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 					}
 				}
 				PendingOverride pending = pendingOverrides.get(rule);
-				if (rule.getOverrides() == null && pending != null) {
+				// with an imported base the rule may override an inherited one: the link phase checks it
+				if (rule.getOverrides() == null && pending != null && !deferred.contains(t)) {
 					positions.positionAt(pending.line(), pending.column());
 					diagnostics.add(positions.at("Relation '" + rule.getName() + "' overrides '" + name
 							+ "', which is no relation of its transformation"));
@@ -249,29 +256,78 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	}
 
 	/**
-	 * Merges rules from a base transformation into the extending transformation
-	 * (§7.11.1.1). Rules that are overridden by the child are not inherited.
-	 * Extension is transitive: if the base itself extends another transformation,
-	 * its inherited rules are already merged.
-	 */
-	/**
-	 * The qualified names a compilation unit imports (§7.11.1).
+	 * The units a compilation unit imports, after the metamodel imports among them are taken
+	 * care of (§7.1.1, §7.13.1, §7.13.4).
 	 *
-	 * <p>{@code import a::b::c;} names one unit; the grammar also allows several names in
-	 * one declaration and a trailing {@code ::*}, which selects everything below the name
-	 * rather than naming a different unit — so the wildcard does not change what is asked
-	 * for here.
+	 * <p>A quoted URI the package registry knows names a metamodel: it is made available under
+	 * its alias, or under its own name, and {@code ::Sub} selects a subpackage. Any other quoted
+	 * URI and every unquoted qualified name name a compilation unit, which the link phase
+	 * resolves. A trailing {@code ::*} imports all names below the target, so it does not change
+	 * what is asked for; an alias together with a wildcard is an error (§7.1.1).
 	 */
 	private List<ImportedName> importedUnitNames(QvtRParser.CompilationUnitContext ctx) {
 		List<ImportedName> names = new ArrayList<>();
 		for (QvtRParser.ImportDeclContext importCtx : ctx.importDecl()) {
-			for (QvtRParser.QualifiedNameContext nameCtx : importCtx.qualifiedName()) {
-				SourcePosition position = nameCtx.getStart() == null ? null
-						: new SourcePosition(nameCtx.getStart().getLine(), nameCtx.getStart().getCharPositionInLine());
-				names.add(new ImportedName(nameCtx.getText(), position));
+			if (importCtx.alias != null && importCtx.wildcard != null) {
+				keyError(importCtx, "An alias and a wildcard cannot be used together (§7.1.1)");
+				continue;
+			}
+			QvtRParser.ImportTargetContext target = importCtx.importTarget();
+			if (target.STRING_LITERAL() != null) {
+				String uri = unquote(target.STRING_LITERAL().getText());
+				if (packageRegistry.get(uri) != null) {
+					importMetamodel(importCtx, uri);
+					continue;
+				}
+				names.add(new ImportedName(uri, positionOf(target)));
+			} else {
+				names.add(new ImportedName(target.qualifiedName().getText(), positionOf(target)));
 			}
 		}
 		return names;
+	}
+
+	/** Makes a registered metamodel, or one of its subpackages, available to model declarations. */
+	private void importMetamodel(QvtRParser.ImportDeclContext importCtx, String uri) {
+		EPackage pkg = packageRegistry.getEPackage(uri);
+		if (pkg == null) {
+			keyError(importCtx.importTarget(), "'" + uri + "' is not a metamodel");
+			return;
+		}
+		for (QvtRParser.IdentifierContext segment : importCtx.identifier()) {
+			if (segment == importCtx.alias) {
+				continue;
+			}
+			String name = identifierText(segment);
+			EPackage sub = null;
+			for (EPackage candidate : pkg.getESubpackages()) {
+				if (name.equals(candidate.getName())) {
+					sub = candidate;
+				}
+			}
+			if (sub == null) {
+				keyError(segment, "Metamodel '" + pkg.getName() + "' has no subpackage '" + name + "'");
+				return;
+			}
+			pkg = sub;
+		}
+		String name = importCtx.alias != null ? identifierText(importCtx.alias) : pkg.getName();
+		importedMetamodels.put(name, pkg);
+		if (importCtx.wildcard != null) {
+			// all names below the target: its subpackages can be named on their own
+			for (EPackage sub : pkg.getESubpackages()) {
+				importedMetamodels.putIfAbsent(sub.getName(), sub);
+			}
+		}
+	}
+
+	private static String unquote(String literal) {
+		return literal.length() >= 2 ? literal.substring(1, literal.length() - 1) : literal;
+	}
+
+	private static SourcePosition positionOf(ParserRuleContext ctx) {
+		return ctx.getStart() == null ? null
+				: new SourcePosition(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
 	}
 
 	/** An imported name and where it was written, for the link phase to report it at (#264). */
@@ -302,7 +358,13 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		transformation.getEAnnotations().add(annotation);
 	}
 
-	private void mergeInheritedRules(RelationalTransformation child,
+	/**
+	 * Merges rules from a base transformation into the extending transformation
+	 * (§7.11.1.1). Rules that are overridden by the child are not inherited.
+	 * Extension is transitive: if the base itself extends another transformation,
+	 * its inherited rules are already merged.
+	 */
+	static void mergeInheritedRules(RelationalTransformation child,
 			RelationalTransformation base) {
 		// Collect names of child's own relations (for override detection)
 		Set<String> childRelationNames = new HashSet<>();
@@ -324,7 +386,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			child.getOwnedKey().add(EcoreUtil.copy(baseKey));
 		}
 
-		// Inherit queries (from _queries synthetic EClass)
+		mergeQueries(child, base);
+	}
+
+	/** Copies the base's queries the child does not declare (from the _queries synthetic EClass). */
+	static void mergeQueries(RelationalTransformation child, RelationalTransformation base) {
 		EClass baseQueries = findQueriesClass(base);
 		if (baseQueries != null) {
 			EClass childQueries = findQueriesClass(child);
@@ -348,7 +414,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	/**
 	 * Finds the synthetic {@code _queries} EClass in a transformation.
 	 */
-	private EClass findQueriesClass(RelationalTransformation t) {
+	private static EClass findQueriesClass(RelationalTransformation t) {
 		for (EClassifier cls : t.getEClassifiers()) {
 			if ("_queries".equals(cls.getName()) && cls instanceof EClass eClass) {
 				return eClass;
@@ -363,7 +429,8 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	public RelationalTransformation visitTransformationDef(
 			QvtRParser.TransformationDefContext ctx) {
 		currentTransformation = REL.createRelationalTransformation();
-		currentTransformation.setName(identifierText(ctx.identifier(0)));
+		// transformationId ::= pathNameCS (§7.13.4): the name is the last segment
+		currentTransformation.setName(lastSegment(ctx.name));
 
 		// Create expression builder with EObject as context type
 		expressionBuilder = new QvtrExpressionBuilder(
@@ -381,22 +448,15 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		}
 
 		// Handle 'extends' clause
-		if (ctx.EXTENDS() != null) {
-			// Store as EAnnotation for link-time resolution
-			// (actual extends resolution requires multi-file context)
-			int extendsIdx = ctx.identifier().size() > 1 ? 1 : 0;
-			if (extendsIdx == 1) {
-				String extendsName = identifierText(ctx.identifier(1));
-				// Deferred: setExtends needs the referenced transformation object
-				// For now we store the name as annotation for later resolution
-				EAnnotation ann =
-						EcoreFactory.eINSTANCE.createEAnnotation();
-				ann.setSource("qvtr.extends");
-				ann.getDetails().put("name", extendsName);
-				currentTransformation.getEAnnotations().add(ann);
-				extendsPositions.put(currentTransformation, new int[] {
-						ctx.identifier(1).getStart().getLine(), ctx.identifier(1).getStart().getCharPositionInLine() });
-			}
+		if (ctx.base != null) {
+			// Stored as an annotation and resolved once all transformations of the unit — and
+			// for an imported base, the imports — are known
+			EAnnotation ann = EcoreFactory.eINSTANCE.createEAnnotation();
+			ann.setSource(QvtrParserSupport.EXTENDS_ANNOTATION);
+			ann.getDetails().put("name", lastSegment(ctx.base));
+			currentTransformation.getEAnnotations().add(ann);
+			extendsPositions.put(currentTransformation, new int[] {
+					ctx.base.getStart().getLine(), ctx.base.getStart().getCharPositionInLine() });
 		}
 
 		queryNames.clear();
@@ -444,6 +504,11 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 		checkRelationCalls(currentTransformation);
 		return currentTransformation;
+	}
+
+	private static String lastSegment(QvtRParser.PathNameContext ctx) {
+		List<String> segments = QvtrExpressionBuilder.pathNameSegments(ctx);
+		return segments.get(segments.size() - 1);
 	}
 
 	/** Extracts the relation name from a RelationContext (for pre-pass). */
@@ -949,9 +1014,9 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	@Override
 	public Pattern visitWhenClause(QvtRParser.WhenClauseContext ctx) {
 		Pattern pattern = BASE.createPattern();
-		for (QvtRParser.ExpressionContext exprCtx : ctx.expression()) {
+		for (QvtRParser.PredicateContext predicateCtx : ctx.predicate()) {
 			Predicate predicate = BASE.createPredicate();
-			OclExpression condExpr = buildExpressionOrRelationCall(exprCtx);
+			OclExpression condExpr = buildPredicate(predicateCtx);
 			predicate.setConditionExpression(condExpr);
 			pattern.getPredicate().add(predicate);
 			// §7.11.1.8 bindsTo: a relation call binds the variables it is called with (#357)
@@ -970,13 +1035,27 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	@Override
 	public Pattern visitWhereClause(QvtRParser.WhereClauseContext ctx) {
 		Pattern pattern = BASE.createPattern();
-		for (QvtRParser.ExpressionContext exprCtx : ctx.expression()) {
+		for (QvtRParser.PredicateContext predicateCtx : ctx.predicate()) {
 			Predicate predicate = BASE.createPredicate();
-			OclExpression condExpr = buildExpressionOrRelationCall(exprCtx);
-			predicate.setConditionExpression(condExpr);
+			predicate.setConditionExpression(buildPredicate(predicateCtx));
 			pattern.getPredicate().add(predicate);
 		}
 		return pattern;
+	}
+
+	/**
+	 * A predicate of a when or where clause: an expression, or a template (§7.13.5
+	 * {@code <OclExpressionCS> ::= … | <template>}), which holds when a match of it exists (#361).
+	 */
+	private OclExpression buildPredicate(QvtRParser.PredicateContext ctx) {
+		if (ctx.template() == null) {
+			return buildExpressionOrRelationCall(ctx.expression());
+		}
+		TemplateExp template = visitTemplate(ctx.template());
+		if (template instanceof CollectionTemplateExp) {
+			keyError(ctx, "A collection template cannot be a predicate; use an object template");
+		}
+		return template;
 	}
 
 	/**
@@ -1031,6 +1110,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 				&& qualifier.getReferredVariable() != null && !isRelationVariable(qualifier.getReferredVariable())) {
 			String transformationName = qualifier.getReferredVariable().getName();
 			if (!transformationName.equals(currentTransformation.getName())) {
+				if (unitImports && call.getReferredOperation() == null) {
+					// a relation of an imported transformation: the link phase knows it (#360)
+					return pendingRelationCall(call, transformationName, ctx);
+				}
 				if (relation) {
 					keyError(ctx, "Unknown transformation '" + transformationName + "' in " + transformationName
 							+ "." + name + "(…)");
@@ -1041,6 +1124,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		}
 		if (!relation) {
 			if (call.isIsImplicit() && call.getReferredOperation() == null && !queryNames.contains(name)) {
+				if (unitImports) {
+					// an import makes the names of the imported unit visible (§7.1.1, #360)
+					return pendingRelationCall(call, null, ctx);
+				}
 				keyError(ctx, "Unknown relation or query '" + name + "'");
 			}
 			return null;
@@ -1052,6 +1139,28 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		relCall.setReferredRelation(relationMap.get(name));
 		relCall.getArgument().addAll(call.getOwnedArguments());
 		recordPosition(relCall, ctx);
+		return relCall;
+	}
+
+	/**
+	 * A call of a relation this unit does not declare, while it imports units: the relation is
+	 * looked for in the imported ones once the link phase has them (#360). The call is recorded
+	 * on the transformation, which an AST node of OCL cannot carry.
+	 */
+	private RelationCallExp pendingRelationCall(OperationCallExp call, String transformationName,
+			ParserRuleContext ctx) {
+		RelationCallExp relCall = REL.createRelationCallExp();
+		relCall.getArgument().addAll(call.getOwnedArguments());
+		recordPosition(relCall, ctx);
+		EAnnotation pending = currentTransformation.getEAnnotation(QvtrParserSupport.PENDING_CALLS_ANNOTATION);
+		if (pending == null) {
+			pending = EcoreFactory.eINSTANCE.createEAnnotation();
+			pending.setSource(QvtrParserSupport.PENDING_CALLS_ANNOTATION);
+			currentTransformation.getEAnnotations().add(pending);
+		}
+		pending.getDetails().put(String.valueOf(pending.getReferences().size()),
+				transformationName == null ? call.getName() : transformationName + "." + call.getName());
+		pending.getReferences().add(relCall);
 		return relCall;
 	}
 
@@ -1236,6 +1345,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	}
 
 	private EPackage resolvePackage(String name) {
+		EPackage imported = importedMetamodels.get(name);
+		if (imported != null) {
+			return imported;
+		}
 		// Try direct URI lookup first
 		Object pkg = packageRegistry.get(name);
 		if (pkg instanceof EPackage ePkg) {

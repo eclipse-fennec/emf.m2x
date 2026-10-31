@@ -75,7 +75,8 @@ import org.junit.jupiter.api.Test;
  * Compile binds the imports of a QVT-R unit the way the dependency mode says (#139, concept
  * §3.1/§4).
  *
- * <p>QVT-R binds an import by merging the imported relations into the importer (§7.11.1.1).
+ * <p>The importer extends the transformation it imports, so binding the import copies the base's
+ * relations into the importer (§7.11.1.1; an import alone only makes names visible, #360).
  * Under {@code embed} that merge is done at compile time and the import struck, so the unit
  * runs on an engine that knows no resolver; the merged rules are the embedding — no embedded
  * unit is attached. Under {@code pin} and {@code rebind} nothing is merged: the manifest names
@@ -109,7 +110,7 @@ class QvtdCompiledUnitDependencyTest {
 			""";
 	private static final String IMPORTER = """
 			import shared.Library;
-			transformation importer(source : bookshelf, target : bookshelf) {
+			transformation importer(source : bookshelf, target : bookshelf) extends shared {
 			}
 			""";
 	private static final String WITH_BLACKBOX = """
@@ -158,7 +159,7 @@ class QvtdCompiledUnitDependencyTest {
 		RelationalTransformation transformation = (RelationalTransformation) compiled.getUnit();
 
 		assertEquals(List.of("CopyTitle"), transformation.getRule().stream().map(Rule::getName).toList(),
-				"the imported relation is merged in at compile time");
+				"the base's relation is inherited at compile time");
 		assertNull(transformation.getEAnnotation(QvtrParserSupport.IMPORTS_ANNOTATION),
 				"the import is bound and struck — nothing asks for it again");
 		assertEquals(List.of(), compiled.getEmbedded(),

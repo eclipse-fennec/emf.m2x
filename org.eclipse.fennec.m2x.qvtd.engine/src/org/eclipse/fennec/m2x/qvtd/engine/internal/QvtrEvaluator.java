@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 import org.eclipse.emf.common.notify.Notification;
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -62,6 +63,7 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
+import org.eclipse.fennec.m2x.qvtd.parser.QvtrParserSupport;
 
 /**
  * Core evaluator for QVT-R transformations (§7.10).
@@ -204,6 +206,14 @@ public class QvtrEvaluator {
 		this.deadlineNanos = timeout > 0
 				? nanoTimeSource.getAsLong() + timeout * 1_000_000L
 				: 0;
+
+		// What the parse found worth a warning and had no channel for (#361)
+		EAnnotation warnings = transformation.getEAnnotation(QvtrParserSupport.WARNINGS_ANNOTATION);
+		if (warnings != null) {
+			for (String warning : warnings.getDetails().values()) {
+				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0, warning, null));
+			}
+		}
 
 		// Which relations override which: the parser set Rule.overrides (#356)
 		for (Rule rule : transformation.getRule()) {
@@ -1176,6 +1186,10 @@ public class QvtrEvaluator {
 	 * Evaluates an OCL expression with the current variable bindings.
 	 */
 	private Object evaluateOcl(OclExpression expression, Map<String, Object> bindings) {
+		if (expression instanceof ObjectTemplateExp template) {
+			// a template as a when or where predicate: it holds when a match exists (#361)
+			return patternMatcher.templateHolds(template, bindings);
+		}
 		if (expression instanceof VariableExp varExp) {
 			Variable ref = varExp.getReferredVariable();
 			if (ref != null && bindings.containsKey(ref.getName())) {

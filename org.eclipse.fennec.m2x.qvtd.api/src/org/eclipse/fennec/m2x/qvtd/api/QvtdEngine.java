@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.qvtd.api;
 
+import java.util.List;
 import java.util.Objects;
 
 import org.eclipse.emf.common.util.URI;
@@ -55,12 +56,40 @@ public interface QvtdEngine {
 	/**
 	 * Parses a QVT-R transformation from the given source string.
 	 *
+	 * <p>A unit may declare several transformations (§7.13.7). This returns the one no other
+	 * transformation of the unit extends; where there are several such, the choice is not left
+	 * open — {@link #parse(String, String, String)} names one, {@link #parseAll} returns all.
+	 *
 	 * @param source the transformation source text
 	 * @param unitName a logical unit name for error reporting
 	 * @return the parsed relational transformation
-	 * @throws QvtdParseException if the source contains syntax or semantic errors
+	 * @throws QvtdParseException if the source contains syntax or semantic errors, or several
+	 *             transformations none of which extends the others
 	 */
 	RelationalTransformation parse(String source, String unitName) throws QvtdParseException;
+
+	/**
+	 * Parses the transformation of the given name from a source string that may declare several.
+	 *
+	 * @param source the transformation source text
+	 * @param unitName a logical unit name for error reporting
+	 * @param transformationName the name of the transformation to return
+	 * @return the parsed relational transformation
+	 * @throws QvtdParseException if the source contains syntax or semantic errors, or no
+	 *             transformation of that name
+	 */
+	RelationalTransformation parse(String source, String unitName, String transformationName)
+			throws QvtdParseException;
+
+	/**
+	 * Parses every transformation a source string declares (§7.13.7 topLevelCS).
+	 *
+	 * @param source the transformation source text
+	 * @param unitName a logical unit name for error reporting
+	 * @return the transformations in declaration order
+	 * @throws QvtdParseException if the source contains syntax or semantic errors
+	 */
+	List<RelationalTransformation> parseAll(String source, String unitName) throws QvtdParseException;
 
 	// --- Compiling ---
 

@@ -140,6 +140,22 @@ public class QvtdEngineImpl implements QvtdEngine {
 	}
 
 	@Override
+	public RelationalTransformation parse(String source, String unitName, String transformationName)
+			throws QvtdParseException {
+		Objects.requireNonNull(source, "source must not be null");
+		Objects.requireNonNull(unitName, "unitName must not be null");
+		Objects.requireNonNull(transformationName, "transformationName must not be null");
+		return parserSupport.parse(source, unitName, transformationName, config.packageRegistry());
+	}
+
+	@Override
+	public List<RelationalTransformation> parseAll(String source, String unitName) throws QvtdParseException {
+		Objects.requireNonNull(source, "source must not be null");
+		Objects.requireNonNull(unitName, "unitName must not be null");
+		return parserSupport.parseAll(source, unitName, config.packageRegistry());
+	}
+
+	@Override
 	public CompiledUnit compile(String source, String unitName) throws QvtdParseException {
 		return compile(source, unitName, UnitCompileOptions.defaults());
 	}
