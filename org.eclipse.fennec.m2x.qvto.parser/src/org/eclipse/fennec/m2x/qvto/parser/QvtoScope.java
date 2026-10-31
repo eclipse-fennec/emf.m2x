@@ -44,6 +44,8 @@ import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
  * @param declaredPackages the metamodels this unit declared, in declaration order
  * @param definitions the signatures of the unit's helpers and queries, collected before any
  *        body is built, so that a call is typed and checked wherever it stands (#378)
+ * @param mappingResults the declared result type of each mapping, by name, for typing a
+ *        mapping call (#378)
  * @author Data In Motion Consulting
  * @since 1.0
  */
@@ -52,7 +54,8 @@ record QvtoScope(
 		Map<String, EClassifier> localTypes,
 		List<Resource.Diagnostic> diagnostics,
 		Set<EPackage> declaredPackages,
-		List<AbstractExpressionBuilder.Definition> definitions) {
+		List<AbstractExpressionBuilder.Definition> definitions,
+		Map<String, List<EClassifier>> mappingResults) {
 
 	QvtoScope {
 		Objects.requireNonNull(importedModuleStubs, "importedModuleStubs must not be null");
@@ -60,5 +63,6 @@ record QvtoScope(
 		Objects.requireNonNull(diagnostics, "diagnostics must not be null");
 		Objects.requireNonNull(declaredPackages, "declaredPackages must not be null");
 		Objects.requireNonNull(definitions, "definitions must not be null");
+		Objects.requireNonNull(mappingResults, "mappingResults must not be null");
 	}
 }

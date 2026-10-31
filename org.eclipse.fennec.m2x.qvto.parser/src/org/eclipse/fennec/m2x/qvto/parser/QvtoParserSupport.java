@@ -45,6 +45,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 
 /**
@@ -267,12 +268,45 @@ public class QvtoParserSupport {
 				problems.add(problem("mapping '" + mapping.getName()
 						+ "' has disjuncts and a body: a disjunction has no body (§8.2.1.15)"));
 			}
+			if (operation instanceof MappingOperation mapping) {
+				illFormedDisjuncts(mapping, problems);
+			}
 			if (operation.getContext() != null && !signatures.add(signature(operation))) {
 				problems.add(problem("operation '" + operation.getName() + "' is defined twice for "
 						+ typeName(operation.getContext().getEType()) + " with the same parameters (§8.2.1.10)"));
 			}
 		}
 		return problems;
+	}
+
+	/**
+	 * §8.1.14.1: "The number of candidate and disjuncting parameter types must be the same", and
+	 * "the candidate return type must be covariant, that is the same as, or derived from that of,
+	 * the disjuncting return type" (#347, #378). The parameter types themselves may be super- or
+	 * subtypes: they are what selects a candidate.
+	 */
+	private static void illFormedDisjuncts(MappingOperation mapping, List<Resource.Diagnostic> problems) {
+		int parameters = parameterCount(mapping);
+		EClassifier result = mapping.getResult().size() == 1 ? mapping.getResult().get(0).getEType() : null;
+		for (MappingOperation candidate : mapping.getDisjunct()) {
+			if (parameterCount(candidate) != parameters) {
+				problems.add(problem("mapping '" + candidate.getName() + "' has " + parameterCount(candidate)
+						+ " parameter(s), but the disjunction '" + mapping.getName() + "' it is a candidate of has "
+						+ parameters + " (§8.1.14.1)"));
+			}
+			EClassifier candidateResult = candidate.getResult().size() == 1 ? candidate.getResult().get(0).getEType()
+					: null;
+			if (!OclTypeRules.conformsTo(candidateResult, result)) {
+				problems.add(problem("mapping '" + candidate.getName() + "' returns a "
+						+ OclTypeRules.nameOf(candidateResult) + ", which is no " + OclTypeRules.nameOf(result)
+						+ " as the disjunction '" + mapping.getName() + "' returns: a candidate's result is covariant (§8.1.14.1)"));
+			}
+		}
+	}
+
+	/** The parameters of an operation, without its results. */
+	private static int parameterCount(ImperativeOperation operation) {
+		return (int) operation.getEParameters().stream().filter(p -> !operation.getResult().contains(p)).count();
 	}
 
 	private static boolean hasBody(MappingOperation mapping) {
