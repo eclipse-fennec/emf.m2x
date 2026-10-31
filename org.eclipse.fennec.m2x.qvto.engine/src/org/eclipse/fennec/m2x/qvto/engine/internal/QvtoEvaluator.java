@@ -24,6 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SequencedSet;
 import java.util.Set;
 import java.util.function.Supplier;
@@ -1566,6 +1567,11 @@ public class QvtoEvaluator {
 	 * extent's UnsupportedOperationException out of execute() (#338 side find).
 	 */
 	private void addToWritableExtent(QvtoModelExtent extent, EObject eObject) {
+		Optional<String> borrower = extentManager.borrowerOf(extent);
+		if (borrower.isPresent()) {
+			addError("Cannot add " + OclValues.repr(eObject) + " to " + lentModel(extent, borrower.get()));
+			return;
+		}
 		if (extent.isReadOnly()) {
 			addError("Cannot add " + OclValues.repr(eObject) + " to an in model: it is read-only (§8.1.3.2)");
 			return;
@@ -2099,8 +2105,17 @@ public class QvtoEvaluator {
 		}
 	}
 
-	private void addError(String message) {
+	void addError(String message) {
 		addDiagnostic(Diagnostic.ERROR, message);
+	}
+
+	/**
+	 * Names a model lent to a transformation running in parallel, for a refused modification.
+	 */
+	String lentModel(QvtoModelExtent extent, String borrower) {
+		String model = extent != null ? extentManager.getParameterName(extent) : null;
+		return "the model" + (model != null ? " '" + model + "'" : "") + ", which the transformation '"
+				+ borrower + "' started by parallelTransform() uses until it ends (§8.1.3.3)";
 	}
 
 	private void addWarning(String message) {
@@ -2302,6 +2317,16 @@ public class QvtoEvaluator {
 	 * @param node the assignment (or argument) that writes, for its position; may be null
 	 */
 	private void checkNotReadOnly(EObject target, String feature, EObject node) {
+		// §8.1.3.3: a model lent to a transformation running in parallel, checked first — while
+		// that transformation reads it as an in model, the flag below would misname the reason
+		Optional<String> borrower = extentManager.borrowerOf(target);
+		if (borrower.isPresent()) {
+			QvtoModelExtent extent = extentManager.extentOf(target);
+			SourcePosition position = node != null ? engine.positionOf(node) : null;
+			throw new RaiseException("InvalidModelMutation", (position != null ? position + " " : "")
+					+ "Cannot assign '" + feature + "' of " + OclValues.repr(target) + ": it belongs to "
+					+ lentModel(extent, borrower.get()));
+		}
 		if (extentManager.isReadOnly(target)) {
 			QvtoModelExtent extent = extentManager.extentOf(target);
 			String model = extent != null ? extentManager.getParameterName(extent) : null;
@@ -2485,7 +2510,10 @@ public class QvtoEvaluator {
 				if (exp.isIsReset() && env.lookup(varName) instanceof QvtoModelExtent target
 						&& value instanceof QvtoModelExtent replacement) {
 					if (target != replacement) {
-						if (target.isReadOnly()) {
+						Optional<String> borrower = extentManager.borrowerOf(target);
+						if (borrower.isPresent()) {
+							addError("Cannot assign to " + lentModel(target, borrower.get()));
+						} else if (target.isReadOnly()) {
 							addError("Cannot assign to the model '" + varName + "': it is an in model");
 						} else {
 							target.setContents(new ArrayList<>(replacement.getContents()));

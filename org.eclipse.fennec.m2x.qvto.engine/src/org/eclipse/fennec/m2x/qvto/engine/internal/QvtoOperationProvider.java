@@ -423,7 +423,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 						if (args.length > 0 && instance.getModelBindings().isEmpty()) {
 							instance = QvtoTransformationOperations.bindModels(instance, args);
 						}
-						return QvtoTransformationOperations.handleParallelTransform(instance);
+						return QvtoTransformationOperations.handleParallelTransform(instance, evaluator);
 					}
 					return null;
 				}));

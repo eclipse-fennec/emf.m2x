@@ -342,7 +342,12 @@ public class QvtoEngineImpl implements QvtoEngine, QvtoEngineServices {
 		QvtoEvaluator evaluator = new QvtoEvaluator(oclEngine, env,
 				new QvtoRun(transformation, context, options, registry, effectiveRegistry), this);
 
-		List<Diagnostic> diagnostics = evaluator.execute();
+		List<Diagnostic> diagnostics;
+		try {
+			diagnostics = evaluator.execute();
+		} finally {
+			evaluator.extentManager().releaseReadOnly();
+		}
 		Trace trace = options.tracingEnabled() ? evaluator.getTrace() : null;
 		return new QvtoExecutionResult(diagnostics, trace);
 	}

@@ -1109,6 +1109,14 @@ main() {
 }
 ```
 
+A model passed to `parallelTransform()` is lent to that transformation until it ends (§8.1.3.3: "The Models passed to nested transformation calls … may not be modified after the call"):
+
+- A second `parallelTransform()` on a model that is still in use fails: its status is failed, the transformation does not run, and an ERROR names the transformation in the way. Two transformations that both take the model as `in` may share it.
+- The caller may not modify the model until the transformation ends, which `wait` makes sure of. A modification raises `InvalidModelMutation`.
+- `transform()` runs synchronously, so the model is free again once the call returns.
+
+An extent the engine binds to an `in` parameter is read-only for that execution only. Afterwards it is writable again, including the caller's model after a nested `transform()` (#387).
+
 ---
 
 ### Resolving units through a ResourceSet

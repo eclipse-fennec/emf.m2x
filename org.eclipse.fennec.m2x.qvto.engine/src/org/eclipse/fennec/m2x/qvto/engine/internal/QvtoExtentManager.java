@@ -17,11 +17,15 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Future;
+import java.util.stream.Stream;
 
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
@@ -59,6 +63,20 @@ public class QvtoExtentManager {
 	private final QvtoModelExtent intermediateData = new BasicQvtoModelExtent();
 	/** For collection-of-models parameters: name → list of extents. */
 	private final Map<String, List<QvtoModelExtent>> groupedByName = new HashMap<>();
+	/**
+	 * The extents this execution made read-only for its in parameters. They belong to whoever
+	 * passed them, so the flag ends with the execution (#387).
+	 */
+	private final List<BasicQvtoModelExtent> madeReadOnly = new ArrayList<>();
+	/** The models lent to transformations started by parallelTransform() (§8.1.3.3, #385). */
+	private final Map<QvtoModelExtent, List<Lending>> lendings = new IdentityHashMap<>();
+
+	/**
+	 * A model passed to a transformation running in parallel: whether that transformation may
+	 * write it, and the run that ends the lending.
+	 */
+	private record Lending(String transformation, boolean writes, Future<?> run) {
+	}
 
 	public QvtoExtentManager(OperationalTransformation transformation, QvtoExecutionContext context) {
 		Objects.requireNonNull(transformation, "transformation must not be null");
@@ -96,7 +114,7 @@ public class QvtoExtentManager {
 				if (mp.getKind() == DirectionKind.IN) {
 					for (QvtoModelExtent ext : pb.extents()) {
 						if (ext instanceof BasicQvtoModelExtent basic) {
-							basic.setReadOnly(true);
+							makeReadOnly(basic);
 						}
 					}
 				}
@@ -110,10 +128,82 @@ public class QvtoExtentManager {
 				// §8.1.3.2: in-parameter extents are read-only
 				if (params.get(i).getKind() == DirectionKind.IN
 						&& extents.get(i) instanceof BasicQvtoModelExtent basic) {
-					basic.setReadOnly(true);
+					makeReadOnly(basic);
 				}
 			}
 		}
+	}
+
+	private void makeReadOnly(BasicQvtoModelExtent extent) {
+		if (!extent.isReadOnly()) {
+			extent.setReadOnly(true);
+			madeReadOnly.add(extent);
+		}
+	}
+
+	/**
+	 * Ends the read-only status this execution gave the extents of its in parameters (#387).
+	 */
+	void releaseReadOnly() {
+		madeReadOnly.forEach(extent -> extent.setReadOnly(false));
+		madeReadOnly.clear();
+	}
+
+	/**
+	 * Records that a transformation started by parallelTransform() uses the model until its run
+	 * ends (§8.1.3.3, #385).
+	 *
+	 * @param extent the model
+	 * @param transformation the name of the transformation it is passed to
+	 * @param writes whether that transformation may modify it (a parameter other than in)
+	 * @param run the run whose end ends the lending
+	 */
+	void lend(QvtoModelExtent extent, String transformation, boolean writes, Future<?> run) {
+		lendings.computeIfAbsent(extent, e -> new ArrayList<>()).add(new Lending(transformation, writes, run));
+	}
+
+	/**
+	 * The running transformation that uses the model in a way another use conflicts with:
+	 * two uses conflict unless both only read it (§8.1.3.3, #385).
+	 *
+	 * @param extent the model
+	 * @param writes whether the new use may modify it
+	 * @return the name of the transformation in the way
+	 */
+	Optional<String> conflictingUse(QvtoModelExtent extent, boolean writes) {
+		return running(extent).filter(lending -> writes || lending.writes())
+				.map(Lending::transformation).findFirst();
+	}
+
+	/**
+	 * The running transformation the object's model is lent to; the caller may not modify the
+	 * model until it ends (§8.1.3.3, #385).
+	 *
+	 * @param object the object to be modified
+	 * @return the name of the transformation
+	 */
+	Optional<String> borrowerOf(EObject object) {
+		QvtoModelExtent extent = object == null ? null : extentOf(object);
+		return extent == null ? Optional.empty() : borrowerOf(extent);
+	}
+
+	/**
+	 * The running transformation the model is lent to (§8.1.3.3, #385).
+	 *
+	 * @param extent the model
+	 * @return the name of the transformation
+	 */
+	Optional<String> borrowerOf(QvtoModelExtent extent) {
+		return running(extent).map(Lending::transformation).findFirst();
+	}
+
+	private Stream<Lending> running(QvtoModelExtent extent) {
+		List<Lending> lent = lendings.get(extent);
+		if (lent == null) {
+			return Stream.empty();
+		}
+		lent.removeIf(lending -> lending.run().isDone());
+		return List.copyOf(lent).stream();
 	}
 
 	/**
