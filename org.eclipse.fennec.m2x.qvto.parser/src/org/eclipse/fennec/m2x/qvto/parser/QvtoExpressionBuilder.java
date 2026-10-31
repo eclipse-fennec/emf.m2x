@@ -2351,7 +2351,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			iterVars.add(iterVar);
 			loop.getOwnedIterators().add(iterVar);
 		}
-		this.environment = this.environment.nested(iterVars);
+		this.environment = this.environment.nestedIterators(iterVars);
 
 		OclExpression argument = (OclExpression) visit(ctx.expression());
 		// §8.2.2.7 notation: the single expression is the body of a collecting variant and the
@@ -2398,8 +2398,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		accVar.setOwnedInit((OclExpression) visit(ctx.expression(0)));
 		exp.setOwnedResult(accVar);
 
-		this.environment = this.environment.nested(iterVar);
-		this.environment = this.environment.nested(accVar);
+		this.environment = this.environment.nestedIterators(List.of(iterVar, accVar));
 
 		exp.setOwnedBody((OclExpression) visit(ctx.expression(1)));
 
@@ -2565,29 +2564,37 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	/**
-	 * A bare name inside an iterator without a variable: the iterator's property, when its
-	 * element type has one of that name — or, the element type being unknown here, by name at
-	 * run time, as for any property this parser cannot resolve.
+	 * A bare name inside an iterator: the property of the innermost implicit source whose class
+	 * has one of that name (OCL v2.4 §9.4.1 [10], §7.8). The sources are the iterators without a
+	 * name and, as in OCL since #320, the named iterator variables — {@code ->collect(p | name)}
+	 * is p's name. An iterator without a name whose element type is unknown here takes the name
+	 * at run time, as for any property this parser cannot resolve; a named one of unknown type
+	 * does not, so a name in scope elsewhere keeps its meaning.
 	 */
 	private Optional<OclExpression> resolveOnImplicitIterator(String name) {
-		Optional<Variable> iterator = environment.lookupImplicitIterator();
-		if (iterator.isEmpty()) {
-			return Optional.empty();
-		}
-		Variable iterVar = iterator.get();
-		if (iterVar.getType() instanceof EClass eClass) {
-			if (eClass.getEStructuralFeature(name) == null) {
-				return Optional.empty();
+		for (Variable source : environment.lookupImplicitSources()) {
+			boolean anonymous = source.getName() != null && source.getName().startsWith("_implicit");
+			if (source.getType() instanceof EClass eClass) {
+				if (eClass.getEStructuralFeature(name) != null) {
+					return Optional.of(implicitProperty(source, name));
+				}
+			} else if (anonymous) {
+				// A data-typed element has no properties; a type name stays a type
+				if (source.getType() != null || findInDeclaredPackages(name) != null) {
+					return Optional.empty();
+				}
+				return Optional.of(implicitProperty(source, name));
 			}
-		} else if (iterVar.getType() != null || findInDeclaredPackages(name) != null) {
-			// A data-typed element has no properties; a type name stays a type
-			return Optional.empty();
 		}
+		return Optional.empty();
+	}
+
+	private PropertyCallExp implicitProperty(Variable source, String name) {
 		PropertyCallExp exp = OCL.createPropertyCallExp();
 		exp.setIsImplicit(true);
-		exp.setOwnedSource(createVariableExp(iterVar));
+		exp.setOwnedSource(createVariableExp(source));
 		resolveProperty(exp, name);
-		return Optional.of(exp);
+		return exp;
 	}
 
 	private OclExpression resolveImplicitProperty(String name) {
