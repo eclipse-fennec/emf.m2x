@@ -145,9 +145,15 @@ class M2tStandardLibraryTest {
 		}
 
 		@Test
-		@DisplayName("replaces all occurrences")
-		void replacesAllOccurrences() {
-			assertEquals("b-b-b", eval("'a-a-a'.substitute('a', 'b')"));
+		@DisplayName("replaces the first occurrence (§8.3.1 \"substring r\", as Acceleo, #373)")
+		void replacesFirstOccurrence() {
+			assertEquals("b-a-a", eval("'a-a-a'.substitute('a', 'b')"));
+		}
+
+		@Test
+		@DisplayName("substituteAll replaces every occurrence")
+		void substituteAllReplacesAllOccurrences() {
+			assertEquals("b-b-b", eval("'a-a-a'.substituteAll('a', 'b')"));
 		}
 	}
 
