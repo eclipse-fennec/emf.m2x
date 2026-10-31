@@ -24,6 +24,7 @@ import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
+import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
 import org.eclipse.fennec.m2x.model.m2t.Template;
@@ -90,8 +91,12 @@ public class M2tWhitespaceNormalizer {
 			return Map.of();
 		}
 		for (ModuleElement element : module.getOwnedModuleElement()) {
+			// §8.4 applies to "the body of a template (or a block expression)"; a macro is a
+			// block too (§8.1.19, #371)
 			if (element instanceof Template template) {
 				processBody(template.getBody(), trimBody(template));
+			} else if (element instanceof Macro macro) {
+				processBody(macro.getBody(), trimBody(macro));
 			}
 		}
 		return Map.copyOf(indentationMap);

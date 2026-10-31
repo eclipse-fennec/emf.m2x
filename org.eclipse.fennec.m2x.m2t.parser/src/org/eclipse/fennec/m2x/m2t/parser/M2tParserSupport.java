@@ -16,15 +16,20 @@ package org.eclipse.fennec.m2x.m2t.parser;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.model.m2t.Module;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 
 /**
  * Entry point for MOFM2T template parsing. Parses a MOFM2T template source
@@ -60,6 +65,7 @@ public class M2tParserSupport {
 	 */
 	public M2tParser.ModuleContext parse(String source) throws M2tParseException {
 		Objects.requireNonNull(source, "source must not be null");
+		rejectCodeExplicitMode(source);
 
 		M2tLexer lexer = new M2tLexer(CharStreams.fromString(source));
 		CommonTokenStream tokens = new CommonTokenStream(lexer);
@@ -72,6 +78,44 @@ public class M2tParserSupport {
 		checkErrors(errorListener, source);
 
 		return tree;
+	}
+
+	/**
+	 * §7.1, §8.2 {@code <mode>}: code-explicit mode is not supported (D15). Rejected before the
+	 * grammar reads the source, which would otherwise report a token far away from the cause —
+	 * "mismatched input '<EOF>' expecting '['" (#371).
+	 */
+	private static void rejectCodeExplicitMode(String source) throws M2tParseException {
+		Matcher mode = MODE_MARKER.matcher(source);
+		if (mode.lookingAt() && "code-explicit".equals(mode.group(2))) {
+			int offset = mode.start(1);
+			int line = 1 + (int) source.substring(0, offset).chars().filter(c -> c == '\n').count();
+			int column = offset - (source.lastIndexOf('\n', offset - 1) + 1);
+			String message = "code-explicit mode is not supported (MOFM2T §7.1, D15); write the templates text-explicit";
+			throw new M2tParseException("M2T parse error: " + message,
+					List.of(new ParseDiagnostic(message, line, column)));
+		}
+	}
+
+	/** A mode marker before the module: {@code @text-explicit} or {@code @code-explicit} (§8.2). */
+	private static final Pattern MODE_MARKER = Pattern.compile("\\s*(@([a-z-]+))");
+
+	/**
+	 * Annotation on a parsed module carrying the warnings of its parse — text outside a template,
+	 * say — which a generation reports, since the parse has no channel for them (#371).
+	 */
+	public static final String WARNINGS_ANNOTATION = "m2t.warnings";
+
+	private static void recordWarnings(Module module, List<String> warnings) {
+		if (warnings.isEmpty()) {
+			return;
+		}
+		EAnnotation annotation = EcoreFactory.eINSTANCE.createEAnnotation();
+		annotation.setSource(WARNINGS_ANNOTATION);
+		for (int i = 0; i < warnings.size(); i++) {
+			annotation.getDetails().put(String.valueOf(i), warnings.get(i));
+		}
+		module.getEAnnotations().add(annotation);
 	}
 
 	private M2tErrorListener configureErrorHandling(M2tLexer lexer, M2tParser parser) {
@@ -116,6 +160,7 @@ public class M2tParserSupport {
 		M2tModuleBuilder builder = new M2tModuleBuilder(unitName, contextType, packageRegistry);
 		Module module = builder.visitModule(cst);
 		checkResolutionErrors(builder.getDiagnostics());
+		recordWarnings(module, builder.getWarnings());
 		return module;
 	}
 
@@ -154,6 +199,7 @@ public class M2tParserSupport {
 		M2tModuleBuilder builder = new M2tModuleBuilder(unitName, contextType, packageRegistry);
 		builder.visitModule(cst);
 		checkResolutionErrors(builder.getDiagnostics());
+		recordWarnings(builder.getParseResult().module(), builder.getWarnings());
 		return builder.getParseResult();
 	}
 

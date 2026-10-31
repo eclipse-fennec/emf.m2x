@@ -40,7 +40,19 @@ class M2tErrorListener extends BaseErrorListener {
 	@Override
 	public void syntaxError(Recognizer<?, ?> recognizer, Object offendingSymbol,
 			int line, int charPositionInLine, String msg, RecognitionException e) {
-		errors.addError(msg, line, charPositionInLine);
+		errors.addError(withHint(msg), line, charPositionInLine);
+	}
+
+	/**
+	 * Adds what an author needs to know to a message ANTLR words for the grammar (#375): an
+	 * '@' in a template is mostly an OCL {@code @pre}, which has no meaning without a
+	 * postcondition.
+	 */
+	static String withHint(String msg) {
+		if (msg.startsWith("token recognition error at: '@")) {
+			return msg + " — '@pre' is not allowed in templates: a template has no postcondition (MOFM2T §8.2)";
+		}
+		return msg;
 	}
 
 	/**

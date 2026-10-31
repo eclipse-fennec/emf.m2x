@@ -19,8 +19,12 @@ import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
@@ -49,6 +53,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.parser.OclEnvironment;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Visitor that transforms an ANTLR4 M2T parse tree (CST) into an EMF M2T AST.
@@ -122,12 +127,88 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			recordReferencePosition(name, importCtx);
 		}
 
-		// Module elements (templates, queries, macros)
-		for (M2tParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
-			visit(elemCtx);
+		// Module elements (templates, queries, macros), in source order with the text and the
+		// single-line comments between them
+		Token pendingMain = null;
+		Template main = null;
+		boolean declared = false;
+		for (ParseTree child : ctx.children) {
+			if (child instanceof M2tParser.ModuleDeclContext) {
+				declared = true;
+			} else if (child instanceof TerminalNode node && node.getSymbol().getType() == M2tLexer.LINE_COMMENT_BLOCK) {
+				// Acceleo's [comment @main/] marks the template that follows as the entry point
+				// (D15, #372)
+				if (MAIN_ANNOTATION.matcher(node.getText()).find()) {
+					pendingMain = node.getSymbol();
+				}
+			} else if (child instanceof TerminalNode node && node.getSymbol().getType() == M2tLexer.TEXT
+					&& !node.getText().isBlank()) {
+				warnAboutStrayText(node.getSymbol(), declared);
+			} else if (child instanceof M2tParser.ModuleElementContext elemCtx) {
+				Object element = visit(elemCtx);
+				if (pendingMain != null && element instanceof Template template) {
+					if (main != null) {
+						addError("@main marks both '" + main.getName() + "' and '" + template.getName()
+								+ "': a module has one entry point", pendingMain);
+					} else {
+						template.setMain(true);
+						main = template;
+					}
+				}
+				pendingMain = null;
+			}
 		}
 
+		// §8.1.1: a module is an EPackage — one with a namespace, so that it is a well-formed one
+		// (#370)
+		String name = module.getName() != null ? module.getName() : unitName;
+		module.setNsURI(NS_URI_SCHEME + name.replace("::", "/"));
+		module.setNsPrefix(name.replace("::", "_"));
 		return module;
+	}
+
+	/** The namespace scheme of a parsed module: {@code m2t:/<module name>} (#370). */
+	static final String NS_URI_SCHEME = "m2t:/";
+
+	private static final Pattern MAIN_ANNOTATION = Pattern.compile("(^|\\s)@main(\\s|/\\]|$)");
+
+	/**
+	 * Text outside a template does not go anywhere (§8.2 text-explicit mode). Blank text is the
+	 * layout between declarations; anything else is most likely a tag whose '[' got lost, which
+	 * vanished without a word before #371. The mode marker {@code @text-explicit} before the
+	 * module is the default mode and fine.
+	 */
+	private void warnAboutStrayText(Token text, boolean afterModuleDeclaration) {
+		String raw = text.getText();
+		String content = raw.strip();
+		if (!afterModuleDeclaration && content.equals("@text-explicit")) {
+			return;
+		}
+		// at the first character that is not layout, not where the token began
+		int first = raw.indexOf(content.charAt(0));
+		String before = raw.substring(0, first);
+		int newlines = (int) before.chars().filter(c -> c == '\n').count();
+		int line = text.getLine() + newlines;
+		int column = newlines == 0 ? text.getCharPositionInLine() + first : first - (before.lastIndexOf('\n') + 1);
+		warnings.add(new SourcePosition(unitName, line, column)
+				+ ": text outside a template is not generated: '" + abbreviate(content) + "' (MOFM2T §8.2)");
+	}
+
+	private static String abbreviate(String text) {
+		String line = text.lines().findFirst().orElse("");
+		return line.length() > 40 ? line.substring(0, 40) + "…" : line;
+	}
+
+	/** Warnings of this parse, reported when the module runs — the parse has no channel for them. */
+	private final List<String> warnings = new ArrayList<>();
+
+	List<String> getWarnings() {
+		return List.copyOf(warnings);
+	}
+
+	private void addError(String message, Token at) {
+		exprBuilder.support.positionAt(at.getLine(), at.getCharPositionInLine());
+		exprBuilder.support.addError(message);
 	}
 
 	@Override
@@ -171,11 +252,11 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	@Override
 	public Object visitModuleElement(M2tParser.ModuleElementContext ctx) {
 		if (ctx.templateDef() != null) {
-			visit(ctx.templateDef());
+			return visit(ctx.templateDef());
 		} else if (ctx.queryDef() != null) {
-			visit(ctx.queryDef());
+			return visit(ctx.queryDef());
 		} else if (ctx.macroDef() != null) {
-			visit(ctx.macroDef());
+			return visit(ctx.macroDef());
 		}
 		return null;
 	}
@@ -319,6 +400,13 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			query.setExpression(exprBuilder.buildExpression(ctx.expression()));
 		} finally {
 			exprBuilder.setEnv(outerScope);
+		}
+		// §8.1.15: a query "has a return type" — a body known not to be of it is a type error
+		// (#370); one of unknown type is checked when it runs
+		OclExpression body = query.getExpression();
+		if (body != null && !OclTypeRules.conformsTo(body.getType(), query.getReturnType())) {
+			exprBuilder.support.addTypeFinding("Query '" + query.getName() + "' declares " + OclTypeRules.nameOf(query.getReturnType())
+					+ " but its body is a " + OclTypeRules.nameOf(body.getType()), body);
 		}
 
 		module.getOwnedModuleElement().add(query);
