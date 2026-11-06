@@ -3223,10 +3223,24 @@ public class QvtoEvaluator {
 			// Source object: §8.1.11.3 — when no explicit source, search ALL trace records (null).
 			// A late resolve's source was captured when its assignment was reached (§8.2.1.22).
 			Object sourceObj = null;
+			boolean hasSource = false;
 			if (deferredResolveSources.containsKey(exp)) {
 				sourceObj = deferredResolveSources.get(exp);
+				hasSource = true;
 			} else if (exp.getOwnedSource() != null) {
 				sourceObj = eval(exp.getOwnedSource());
+				hasSource = true;
+			}
+
+			// §8.2.1.22: with a source only that source's trace records count. A source that
+			// is undefined has none — it must not fall back to "all records" (#414)
+			if (hasSource) {
+				if (sourceObj instanceof OclInvalid) {
+					return OclInvalid.INSTANCE;
+				}
+				if (sourceObj == null) {
+					return exp.isOne() ? WRAPPED_NULL : wrapNull(new ArrayList<EObject>());
+				}
 			}
 
 			// §8.1.11.7: coll->resolve(Type) = coll->xcollect(resolve(Type))
@@ -3234,6 +3248,9 @@ public class QvtoEvaluator {
 			if (sourceObj instanceof Collection<?> coll) {
 				List<EObject> allResults = new ArrayList<>();
 				for (Object elem : coll) {
+					if (elem == null) {
+						continue; // an undefined element has no trace records (#414)
+					}
 					List<EObject> resolved = resolveForSource(exp, elem);
 					if (resolved == null) {
 						return OclInvalid.INSTANCE;
@@ -3245,6 +3262,9 @@ public class QvtoEvaluator {
 					// body of an xcollect" — one result per element, nulls dropped (#334)
 					List<EObject> perElement = new ArrayList<>();
 					for (Object elem : coll) {
+						if (elem == null) {
+							continue;
+						}
 						List<EObject> resolved = resolveForSource(exp, elem);
 						if (resolved != null && !resolved.isEmpty()) {
 							perElement.add(resolved.get(0));
