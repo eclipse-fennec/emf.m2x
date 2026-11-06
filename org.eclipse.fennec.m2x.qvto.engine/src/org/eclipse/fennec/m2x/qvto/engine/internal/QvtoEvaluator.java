@@ -3149,9 +3149,9 @@ public class QvtoEvaluator {
 
 			// Only check for update when variable was explicitly named (§8.2.1.24)
 			// "_objectExp" is the parser's name for an anonymous object expression.
-			// An explicit "result" keeps creating a fresh object (unchanged behaviour).
+			// An explicit "result" updates the mapping result when it is already set (§8.1.6, #418).
 			boolean isAnonymous = "_objectExp".equals(varName);
-			boolean isExplicitVar = !isAnonymous && !"result".equals(varName);
+			boolean isExplicitVar = !isAnonymous;
 			Object existing = isExplicitVar ? env.lookup(varName) : null;
 			boolean isUpdate = (existing instanceof EObject);
 			EObject target = isUpdate ? (EObject) existing : EcoreUtil.create(eClass);
