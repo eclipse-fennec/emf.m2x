@@ -567,6 +567,61 @@ class QvtoE2eObjectExpTest extends AbstractQvtoEngineTest {
 		assertSame(port, eGet(link, "ref"), "'result' must denote the mapping result");
 	}
 
+	// #418 / §8.1.6, §8.2.1.24: 'object result : T' in the population section updates the
+	// mapping result created by the instantiation section; no second object is created
+	@Test
+	void object_explicitResult_updatesMappingResult() throws Exception {
+		EObject src = createSourceElement("e", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        population {
+				            object result : TargetElement { name := 'port'; };
+				        }
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertEquals(1, outExtent.getContents().size(), "No second object may be created");
+		assertEquals("port", eGet(outExtent.getContents().get(0), "name"));
+	}
+
+	// #418: the object assigned to result in the init section is the one updated
+	@Test
+	void object_explicitResult_updatesObjectFromInitSection() throws Exception {
+		EObject src = createSourceElement("e", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        init {
+				            result := object TargetElement { name := 'init'; };
+				        }
+				        population {
+				            object result : TargetElement { value := 7; };
+				        }
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		assertEquals(1, outExtent.getContents().size(), "No second object may be created");
+		EObject port = findByName(outExtent, "init");
+		assertEquals(7, eGet(port, "value"));
+	}
+
 	// ---- Helpers ----
 
 	private static EObject findByName(QvtoModelExtent extent, String name) {
