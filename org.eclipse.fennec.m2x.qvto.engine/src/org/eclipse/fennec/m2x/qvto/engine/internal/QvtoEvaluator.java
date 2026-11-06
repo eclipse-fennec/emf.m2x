@@ -3148,8 +3148,10 @@ public class QvtoEvaluator {
 					? refObj.getName() : "_objectExp";
 
 			// Only check for update when variable was explicitly named (§8.2.1.24)
-			// Default names "result" / "_objectExp" mean no explicit variable reference
-			boolean isExplicitVar = !"result".equals(varName) && !"_objectExp".equals(varName);
+			// "_objectExp" is the parser's name for an anonymous object expression.
+			// An explicit "result" keeps creating a fresh object (unchanged behaviour).
+			boolean isAnonymous = "_objectExp".equals(varName);
+			boolean isExplicitVar = !isAnonymous && !"result".equals(varName);
 			Object existing = isExplicitVar ? env.lookup(varName) : null;
 			boolean isUpdate = (existing instanceof EObject);
 			EObject target = isUpdate ? (EObject) existing : EcoreUtil.create(eClass);
@@ -3161,7 +3163,9 @@ public class QvtoEvaluator {
 
 			env.pushScope();
 			try {
-				env.define(varName, target);
+				if (!isAnonymous) {
+					env.define(varName, target);
+				}
 				// Dedicated variable for resolveImplicitPropertyTarget lookups
 				env.define("_objectExp", target);
 				// §8.2.1.17/§8.2.1.18: self is NOT rebound inside object expressions.

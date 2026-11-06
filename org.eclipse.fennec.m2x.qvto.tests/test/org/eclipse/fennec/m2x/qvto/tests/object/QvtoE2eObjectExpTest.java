@@ -16,6 +16,8 @@ package org.eclipse.fennec.m2x.qvto.tests.object;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -510,7 +512,69 @@ class QvtoE2eObjectExpTest extends AbstractQvtoEngineTest {
 		assertTrue(found, "Conditional body should set name='high' for value>3");
 	}
 
+	// #413 / §8.2.1.24: inside an anonymous object expression in the end section,
+	// 'result' still denotes the mapping result, not the object under construction
+	@Test
+	void object_resultInEndSection_refersToMappingResult() throws Exception {
+		EObject src = createSourceElement("e", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        name := 'port';
+				        end {
+				            object TargetElement { name := 'link'; ref := result; };
+				        }
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		EObject port = findByName(outExtent, "port");
+		EObject link = findByName(outExtent, "link");
+		assertSame(port, eGet(link, "ref"), "'result' must denote the mapping result");
+		assertNull(eGet(port, "ref"));
+	}
+
+	// #413: same in the population section
+	@Test
+	void object_resultInPopulation_refersToMappingResult() throws Exception {
+		EObject src = createSourceElement("e", 1);
+		QvtoModelExtent inExtent = new BasicQvtoModelExtent(src);
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        name := 'port';
+				        ref := object TargetElement { name := 'link'; ref := result; };
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->forEach(e) { e.map toTarget(); };
+				    }
+				}
+				""", inExtent, outExtent);
+		assertSuccess(result);
+		EObject port = findByName(outExtent, "port");
+		EObject link = findByName(outExtent, "link");
+		assertSame(link, eGet(port, "ref"));
+		assertSame(port, eGet(link, "ref"), "'result' must denote the mapping result");
+	}
+
 	// ---- Helpers ----
+
+	private static EObject findByName(QvtoModelExtent extent, String name) {
+		return extent.getContents().stream()
+				.filter(o -> name.equals(eGet(o, "name")))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("No object named '" + name + "'"));
+	}
 
 	private static void assertSuccess(QvtoExecutionResult result) {
 		assertNotNull(result);

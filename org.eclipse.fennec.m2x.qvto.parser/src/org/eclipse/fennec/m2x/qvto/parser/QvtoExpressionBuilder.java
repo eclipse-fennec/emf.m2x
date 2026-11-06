@@ -1564,7 +1564,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				: null;
 		Variable refVar = existing != null ? existing : OCL.createVariable();
 		if (existing == null) {
-			refVar.setName(ctx.varName != null ? qvtoIdentifierText(ctx.varName) : "result");
+			// Anonymous object expression: use an internal name so the enclosing
+			// operation's 'result' is not shadowed inside the body (§8.2.1.24, #413)
+			refVar.setName(ctx.varName != null ? qvtoIdentifierText(ctx.varName) : "_objectExp");
 		}
 		objectExp.setReferredObject(refVar);
 
