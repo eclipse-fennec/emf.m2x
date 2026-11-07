@@ -19,10 +19,14 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -35,6 +39,7 @@ import org.eclipse.fennec.emf.osgi.metadata.MetadataServices;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -236,6 +241,68 @@ class RegistryExpressionCacheTest {
 				"refusing the model over one bad invariant is not this handler's decision");
 	}
 
+	@Test
+	@DisplayName("a failure is remembered in memory, never filed in the registry (#420)")
+	void failureStaysInMemory() {
+		EPackage ePackage = bookPackage(false);
+		RegistryExpressionCache cache = cache();
+		OclEngine engine = engine(ePackage, cache);
+
+		assertThrows(OclParseException.class, () -> engine.parse("self.pages >", bookOf(ePackage)));
+		long missesAfterFirst = cache.missCount();
+		assertThrows(OclParseException.class, () -> engine.parse("self.pages >", bookOf(ePackage)));
+
+		assertEquals(missesAfterFirst, cache.missCount(), "the second call is answered by the cache");
+		assertTrue(writer.getRegistry().entries().isEmpty(),
+				"the registry is shared, and what others find there must run");
+	}
+
+	@Test
+	@DisplayName("a failure on one version is not the verdict on the next")
+	void failureIsKeptPerVersion() throws Exception {
+		EPackage v1 = bookPackage(false);
+		EPackage v2 = withChapterClass(bookPackage(true));
+		RegistryExpressionCache shared = cache();
+		String expression = "self.oclIsKindOf(Chapter)";
+
+		assertThrows(OclParseException.class, () -> engine(v1, shared).parse(expression, bookOf(v1)),
+				"v1 has no Chapter");
+		assertNotNull(engine(v2, shared).parse(expression, bookOf(v2)),
+				"v2 has it: another fingerprint, so it is parsed");
+	}
+
+	@Test
+	@DisplayName("a parse with variables is cached in memory, not filed in the registry")
+	void variablesStayInMemory() throws Exception {
+		EPackage ePackage = bookPackage(false);
+		RegistryExpressionCache cache = cache();
+		OclEngine engine = engine(ePackage, cache);
+		Map<String, EClassifier> variables = Map.of("limit", EcorePackage.Literals.EINT);
+
+		OclExpression first = engine.parse("self.pages > limit", bookOf(ePackage), variables);
+		OclExpression second = engine.parse("self.pages > limit", bookOf(ePackage), variables);
+
+		assertSame(first, second);
+		assertTrue(writer.getRegistry().entries().isEmpty(),
+				"an AST with free variables does not run on its own");
+	}
+
+	@Test
+	@DisplayName("invalidating a failure parses it again; invalidateAll drops failures too")
+	void invalidateCoversFailures() {
+		EPackage ePackage = bookPackage(false);
+		RegistryExpressionCache cache = cache();
+		OclEngine engine = engine(ePackage, cache);
+
+		assertThrows(OclParseException.class, () -> engine.parse("self.pages >", bookOf(ePackage)));
+		assertEquals(1, cache.size());
+		cache.invalidate("self.pages >", bookOf(ePackage));
+		assertEquals(0, cache.size());
+		assertThrows(OclParseException.class, () -> engine.parse("self.pages >", bookOf(ePackage)));
+		cache.invalidateAll();
+		assertEquals(0, cache.size());
+	}
+
 	// --- helpers ---
 
 	/** Adds an invariant the way an .ecore carries one: named by Ecore, bodied by the delegate. */
@@ -298,6 +365,14 @@ class RegistryExpressionCacheTest {
 			book.getEStructuralFeatures().add(attribute("chapters"));
 		}
 		ePackage.getEClassifiers().add(book);
+		return ePackage;
+	}
+
+	/** Adds a class {@code Chapter}, so that a type name resolves in this version only. */
+	private static EPackage withChapterClass(EPackage ePackage) {
+		EClass chapter = EcoreFactory.eINSTANCE.createEClass();
+		chapter.setName("Chapter");
+		ePackage.getEClassifiers().add(chapter);
 		return ePackage;
 	}
 

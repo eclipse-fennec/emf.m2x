@@ -22,7 +22,9 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryWriter;
 import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclCacheKey;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
+import org.eclipse.fennec.m2x.ocl.api.OclParseResult;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -70,7 +72,7 @@ public class OclMetadataCacheComponent implements OclExpressionCache, OclVersion
 			@Reference(name = "writer") EObjectRegistryWriter writer,
 			@Reference FingerprintService fingerprintService) {
 		this.cache = new RegistryExpressionCache(writer, fingerprintService,
-				OclLruExpressionCache.ofSize(config.lruSize()));
+				OclLruExpressionCache.ofSize(config.lruSize(), config.lruFailureSize()));
 	}
 
 	@Override
@@ -86,6 +88,21 @@ public class OclMetadataCacheComponent implements OclExpressionCache, OclVersion
 	@Override
 	public void invalidate(String expression, EClassifier contextType) {
 		cache.invalidate(expression, contextType);
+	}
+
+	@Override
+	public Optional<OclParseResult> lookup(OclCacheKey key) {
+		return cache.lookup(key);
+	}
+
+	@Override
+	public void store(OclCacheKey key, OclParseResult result) {
+		cache.store(key, result);
+	}
+
+	@Override
+	public void invalidate(OclCacheKey key) {
+		cache.invalidate(key);
 	}
 
 	@Override

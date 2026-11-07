@@ -158,7 +158,7 @@ public class MyComponent {
 |-----------|-------|----------------|
 | `OclParserSupport` | PROTOTYPE | Nothing — each engine gets its own parser, bound `prototype_required` to its own `ResourceSet` from `emf.osgi`, whose package registry resolves qualified names |
 | `OclEngineComponent` (`DefaultOclEngine`) | PROTOTYPE | Nothing — each consumer gets its own engine with isolated `PropertyAccessorCache`. Published as `OclEngine` and, for the EMF delegates in the same bundle, as the internal `OclDelegateSupport` |
-| `DefaultOclExpressionCacheComponent` | SINGLETON | **Shared by default** — all engines share the same LRU parse cache (1024 entries) |
+| `DefaultOclExpressionCacheComponent` | SINGLETON | **Shared by default** — all engines share the same LRU parse cache (1024 entries, plus up to 256 remembered parse failures — properties `oclExpressionSize`, `oclExpressionFailureSize`) |
 
 The expression cache is shared because parsed `OclExpression` ASTs are immutable and thread-safe. This means a parse result from one engine benefits all others.
 
@@ -437,7 +437,8 @@ The declaration matters because a named iterator variable is an implicit source 
 it, `author` above is read as `b.author`, and the expression compares every book's author with
 itself. A bare name that is neither declared nor a property of an implicit source or `self` still
 becomes an external variable bound from `OclContext` (§3.7). Expressions parsed with declared
-variables are not cached: the declarations are part of what the text means. The same method
+variables are cached like any other, with the names and types of the variables as part of the key,
+since the declarations are part of what the text means (§7.1). The same method
 exists on `OclExpressionParser`.
 
 The EMF invocation delegate (§9.3) and Complete OCL documents (§10.6) declare the operation's
@@ -667,7 +668,38 @@ double hitRate = (double) hits / (hits + misses);
 
 - **Thread-safe** — internally synchronized
 - **LRU eviction** — least-recently-used entries evicted when full
-- **Cache key** — `nsURI#contextTypeName#expression`
+- **Cache key** — `nsURI#contextTypeName#expression`; with declared variables
+  `nsURI#contextTypeName(name:nsURI#Type,…)#expression`, the variables sorted by name
+
+**Parse failures are cached too (negative cache).** When a text does not parse, the engine keeps
+the failure under the same key, and the next `parse` with that key throws a fresh
+`OclParseException` with the same message and diagnostics, without parsing again. A caller that
+evaluates the same broken expression for every event therefore pays the parse once and needs no
+cache of its own. Failures live in a second LRU with a limit of its own (default 256), so a flood
+of broken expressions only evicts other failures, never a parse that works; `0` keeps none:
+
+```java
+// 2048 parsed expressions, at most 512 remembered failures
+OclLruExpressionCache cache = OclLruExpressionCache.ofSize(2048, 512);
+long failures = cache.failureCount();   // size() counts parses and failures
+```
+
+`invalidate(expression, contextType)` and `invalidateAll()` drop failures as well. With the
+fingerprint cache ([§3.4](#34-osgi-declarative-services)) the failure is keyed by the model
+fingerprint, so a changed model is parsed again instead of being handed the old verdict. Only
+`OclParseException` is remembered: syntax and type errors are a property of the text and the model.
+
+**Parses with variables are cached.** `parse(expression, contextType, variables)` uses the cache
+like the two-argument form. The names and types of the variables are part of the key, because the
+same text means something else under other declarations; the order in which they are declared
+does not matter.
+
+**Own cache implementations.** `OclExpressionCache` gained `lookup(OclCacheKey)`,
+`store(OclCacheKey, OclParseResult)` and `invalidate(OclCacheKey)` as `default` methods. An
+implementation that only implements `get`/`put` keeps working unchanged, and caches what it did
+before: successful parses without variables. Override the three methods to remember failures and
+parses with variables; `OclParseResult` is either `Parsed(expression)` or
+`Failed(message, errors)`.
 
 ### 7.2 WarmUp
 
@@ -1263,7 +1295,7 @@ tutorial and the tests cannot drift apart.
 | Piece | Role |
 |---|---|
 | `EObjectRegistry` | holds the compiled expressions, each anchored with `emf.nsURI` and `emf.fingerprint` |
-| `OclMetadataExpressionCache` | the `OclExpressionCache` service over that registry, with an LRU for what has no model version to anchor to |
+| `OclMetadataExpressionCache` | the `OclExpressionCache` service over that registry, with an in-memory LRU for what has no model version to anchor to, for parses with declared variables and for parse failures — those never go into the registry |
 | `OclConstraintPrecompiler` | binds `EPackage` services: when a model arrives, compiles the OCL it declares; when it goes, drops it |
 | `EObjectRegistryMetadataBridge` | optional — puts registry content onto the metadata tree of the model version it names |
 | `OclExpressionAnchorResolver` | tells that bridge which class a compiled expression belongs to: its context type |
@@ -1281,7 +1313,8 @@ tutorial and the tests cannot drift apart.
 
   "OclMetadataExpressionCache": {
     "writer.target": "(emf.eobject.registry.name=ocl-compiled)",
-    "ocl.metadata.lruSize": 256
+    "ocl.metadata.lruSize": 256,
+    "ocl.metadata.lruFailureSize": 256
   },
 
   "OclConstraintPrecompiler": {
@@ -1350,6 +1383,10 @@ model itself has no such dependency.
   appears on v1's tree and on no other, even while v2 of the same nsURI is live.
 - A version that goes takes its compiled OCL with it.
 - A model that registers *later* than its compiled OCL still gets it, through the handler replay.
+- Only executable ASTs go into the registry, because others read it. A text that does not parse,
+  and a parse with declared variables (whose AST has free variables), stay in memory under the
+  derived fingerprint; failures are bounded by `ocl.metadata.lruFailureSize`. `release` does not
+  reach them — they are bounded and age out of the LRU on their own.
 
 ### Limits worth knowing
 

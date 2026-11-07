@@ -15,12 +15,15 @@
 package org.eclipse.fennec.m2x.ocl.fingerprint;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclCacheKey;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
+import org.eclipse.fennec.m2x.ocl.api.OclParseResult;
 
 /**
  * An expression cache that tells two versions of one model apart.
@@ -40,7 +43,10 @@ import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
  * same content produce one, which is what an identity-based key could not do.
  *
  * <p>It is a decorator rather than a cache of its own: what to store and how long to keep it
- * is the wrapped cache's business, and only the key changes.
+ * is the wrapped cache's business, and only the key changes. That holds for remembered parse
+ * failures and parses with variables as well: they reach the wrapped cache under the
+ * fingerprinted key, so a changed model is parsed again instead of being handed the verdict
+ * on its predecessor.
  *
  * <p><b>Model mutation after registration is out of contract.</b> A fingerprint is computed
  * once per package instance; changing a package after expressions have been compiled against
@@ -84,6 +90,21 @@ public class FingerprintExpressionCache implements OclExpressionCache {
 	@Override
 	public void invalidate(String expression, EClassifier contextType) {
 		delegate.invalidate(key(expression, contextType), contextType);
+	}
+
+	@Override
+	public Optional<OclParseResult> lookup(OclCacheKey key) {
+		return delegate.lookup(key.withExpression(key(key.expression(), key.contextType())));
+	}
+
+	@Override
+	public void store(OclCacheKey key, OclParseResult result) {
+		delegate.store(key.withExpression(key(key.expression(), key.contextType())), result);
+	}
+
+	@Override
+	public void invalidate(OclCacheKey key) {
+		delegate.invalidate(key.withExpression(key(key.expression(), key.contextType())));
 	}
 
 	@Override

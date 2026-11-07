@@ -24,6 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -54,6 +55,7 @@ import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
+import org.eclipse.fennec.m2x.ocl.api.OclCacheKey;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
@@ -63,6 +65,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclParseResult;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefEntry;
@@ -144,9 +147,10 @@ public class OclEngineImpl implements OclDelegateSupport {
 	/**
 	 * Creates a new engine with the given parser and optional expression cache.
 	 *
-	 * <p>When a cache is provided, {@link #parse(String, EClassifier)} will
-	 * check the cache before parsing and store results after parsing. The cache
-	 * can be shared across multiple engine instances.
+	 * <p>When a cache is provided, both {@code parse} methods check the cache before
+	 * parsing and store the outcome after parsing — the AST, or the failure, which the
+	 * next call with the same key rethrows without parsing again. The cache can be shared
+	 * across multiple engine instances.
 	 *
 	 * @param parser the OCL expression parser, must not be {@code null}
 	 * @param cache the expression cache, or {@code null} for no caching
@@ -159,24 +163,38 @@ public class OclEngineImpl implements OclDelegateSupport {
 
 	@Override
 	public OclExpression parse(String expression, EClassifier contextType) throws OclParseException {
-		if (expressionCache != null) {
-			OclExpression cached = expressionCache.get(expression, contextType);
-			if (cached != null) {
-				return cached;
-			}
-		}
-		OclExpression parsed = parser.parse(expression, contextType);
-		if (expressionCache != null) {
-			expressionCache.put(expression, contextType, parsed);
-		}
-		return parsed;
+		return parse(expression, contextType, Map.of());
 	}
 
 	@Override
 	public OclExpression parse(String expression, EClassifier contextType, Map<String, EClassifier> variables)
 			throws OclParseException {
 		Objects.requireNonNull(variables, "variables must not be null");
-		return variables.isEmpty() ? parse(expression, contextType) : parser.parse(expression, contextType, variables);
+		if (expressionCache == null || contextType == null) {
+			return parseUncached(expression, contextType, variables);
+		}
+		OclCacheKey key = OclCacheKey.of(expression, contextType, variables);
+		Optional<OclParseResult> cached = expressionCache.lookup(key);
+		if (cached.isPresent()) {
+			return switch (cached.get()) {
+				case OclParseResult.Parsed parsed -> parsed.expression();
+				case OclParseResult.Failed failed -> throw failed.toException();
+			};
+		}
+		try {
+			OclExpression parsed = parseUncached(expression, contextType, variables);
+			expressionCache.store(key, new OclParseResult.Parsed(parsed));
+			return parsed;
+		} catch (OclParseException e) {
+			expressionCache.store(key, OclParseResult.Failed.of(e));
+			throw e;
+		}
+	}
+
+	private OclExpression parseUncached(String expression, EClassifier contextType,
+			Map<String, EClassifier> variables) throws OclParseException {
+		return variables.isEmpty() ? parser.parse(expression, contextType)
+				: parser.parse(expression, contextType, variables);
 	}
 
 	@Override
