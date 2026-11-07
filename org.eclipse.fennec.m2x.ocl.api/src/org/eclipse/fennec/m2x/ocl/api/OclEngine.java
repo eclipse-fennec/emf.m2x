@@ -51,6 +51,11 @@ public interface OclEngine {
 	/**
 	 * Parses an OCL expression string in the context of the given classifier.
 	 *
+	 * <p>With an {@link OclExpressionCache} configured, the outcome is cached: the AST, or
+	 * the failure, so a text that does not parse is reported again with a fresh
+	 * {@link OclParseException} without being parsed again (see
+	 * {@link OclExpressionCache#lookup(OclCacheKey)}).
+	 *
 	 * @param expression the OCL expression text
 	 * @param contextType the {@code EClassifier} that defines the type of {@code self}
 	 * @return the parsed expression AST with types resolved
@@ -60,8 +65,9 @@ public interface OclEngine {
 
 	/**
 	 * Parses an OCL expression with declared variables in scope — the parameters of an
-	 * operation, {@code result} in a postcondition (OCL v2.4 §12.2.1). Not cached: the
-	 * declarations are part of what the text means.
+	 * operation, {@code result} in a postcondition (OCL v2.4 §12.2.1). Cached like
+	 * {@link #parse(String, EClassifier)}, failures included; the declarations are part of
+	 * what the text means, so the names and types of the variables are part of the key.
 	 *
 	 * @param expression the OCL expression text
 	 * @param contextType the {@code EClassifier} that defines the type of {@code self}

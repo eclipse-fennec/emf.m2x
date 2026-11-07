@@ -321,8 +321,47 @@ public interface OclExpressionCache {
     long size();
     long hitCount();
     long missCount();
+
+    // #420 — what the engine calls; defaults map onto get/put/invalidate
+    default Optional<OclParseResult> lookup(OclCacheKey key) { ... }
+    default void store(OclCacheKey key, OclParseResult result) { ... }
+    default void invalidate(OclCacheKey key) { ... }
+}
+
+public record OclCacheKey(String expression, EClassifier contextType,
+        SortedMap<String, EClassifier> variables) { ... }
+
+public sealed interface OclParseResult {
+    record Parsed(OclExpression expression) implements OclParseResult { }
+    record Failed(String message, List<Resource.Diagnostic> errors) implements OclParseResult {
+        OclParseException toException();   // a fresh exception per call
+    }
 }
 ```
+
+**Outcome cache, not only AST cache (#420).** `OclEngineImpl.parse` — with or without variables —
+asks `lookup`, and stores the outcome with `store`: the AST, or the `OclParseException` as message
+plus diagnostics. A remembered failure is rethrown as a *new* exception each time, since a shared
+instance would carry the first caller's stack and could be changed through `addSuppressed`. Only
+`OclParseException` is remembered (syntax and type errors are a function of text and model); a
+context type of `null` bypasses the cache.
+
+**Variables are part of the key.** The same text means something else under other declarations,
+so `OclCacheKey` holds the variables sorted by name, types written as `nsURI#Name` (`?` when
+unknown). Before #420 parses with variables were not cached at all.
+
+**Non-breaking SPI.** The three new methods are `default` methods. An implementation that only
+implements `get`/`put` keeps working and caches what it did before (successes without
+variables); it just does not remember failures or parses with variables.
+
+| Implementation | Successes w/o variables | Parses with variables | Failures |
+|---|---|---|---|
+| `OclLruExpressionCache` | LRU (`maxSize`) | same LRU, variables in the key | second LRU (`maxFailures`, default 256, `0` = none) |
+| `FingerprintExpressionCache` | delegate, fingerprint-prefixed key | same | same — a changed model is parsed again |
+| `RegistryExpressionCache` | `EObjectRegistry` | delegate LRU, derived fingerprint in the key | delegate failure LRU, never the registry |
+
+Failures get a limit of their own so that a flood of broken expressions evicts only other
+failures, never a working parse.
 
 ### 4.8 OclExpressionParser (D21)
 
@@ -707,6 +746,7 @@ in the parse → resolve → evaluate pipeline.
          │  ─────────────────────────────  │
          │  Scope: shared across engines   │
          │  Key: nsURI#typeName#exprText   │
+         │  (+ variables; failures too)    │
          │  Hit: ~190 ns  Miss: ~23 µs    │
          │  Speedup: 100–190x             │
          └───────────────┬────────────────┘
@@ -1016,7 +1056,7 @@ engine.installDelegates();
                │
 ┌──────────────┼──────────────────────────────────────────────┐
 │  DefaultOclExpressionCacheComponent (SINGLETON)             │
-│  → OclExpressionCache service (LRU, 1024 entries)          │
+│  → OclExpressionCache service (LRU, 1024 + 256 failures)   │
 │  Shared across all engine instances by default              │
 └──────────────┬──────────────────────────────────────────────┘
                │ @Reference(name="expressionCache")
@@ -1058,7 +1098,7 @@ engine.installDelegates();
 - `OclParserSupport` — PROTOTYPE scope, ANTLR4-based parser
 - `OclEngineConfiguration` — `@ObjectClassDefinition` annotation with `ocl.*` prefixed properties
 - `OclConfigurationHelper` — maps `OclEngineConfiguration` to `OclConfiguration`
-- `DefaultOclExpressionCacheComponent` — SINGLETON, provides default LRU cache (1024 entries)
+- `DefaultOclExpressionCacheComponent` — SINGLETON, provides default LRU cache (1024 entries, `oclExpressionSize`; plus up to 256 remembered parse failures, `oclExpressionFailureSize`)
 - Delegate factories — separate `@Component` services with emf.osgi properties, inject `OclEngine`
 
 ### 9.4 Engine-Wide Defaults via ConfigAdmin
@@ -1124,6 +1164,7 @@ Create a cache with custom size; all engines that target it share the same insta
     ":configurator:resource-version": 1,
     "DefaultOclExpressionCache~large": {
         "oclExpressionSize": 8192,
+        "oclExpressionFailureSize": 1024,
         "name": "large-cache"
     },
     "DefaultOclEngine": {
@@ -1266,7 +1307,7 @@ million characters each is within both limits. Building it takes time, which is 
 | S-4 | Unbounded closure — `Seq{1}->closure(i \| i+1)` | High | Mitigated: iteration counter |
 | S-5 | Unsafe type casts in stdlib | Medium | Mitigated: safe pattern matching |
 | S-6 | Delegate injection (trust boundary) | Low | Documented: explicit opt-in |
-| S-7 | Parse amplification (repeated validation) | Medium | Mitigated: expression cache |
+| S-7 | Parse amplification (repeated validation) | Medium | Mitigated: expression cache, including failures (#420) in a separately bounded LRU, so broken input can neither be re-parsed on every call nor evict working parses |
 | S-8 | allInstances on large extent | Medium | Mitigated: size check (see S-12) |
 | S-9 | Stack overflow via deep recursion | High | Mitigated: depth counter |
 | S-10 | Integer overflow | Low | Gone: Integer is unbounded since #322. A `BigInteger` has no size limit of its own — repeated squaring in an `iterate` is bounded by `timeout` only |

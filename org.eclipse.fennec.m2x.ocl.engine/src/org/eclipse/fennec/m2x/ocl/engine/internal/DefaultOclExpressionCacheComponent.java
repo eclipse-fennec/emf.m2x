@@ -14,9 +14,13 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.util.Optional;
+
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclCacheKey;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
+import org.eclipse.fennec.m2x.ocl.api.OclParseResult;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
@@ -26,7 +30,8 @@ import org.osgi.service.component.annotations.ConfigurationPolicy;
  * Default {@link OclExpressionCache} service component.
  *
  * <p>Provides an LRU expression cache with 1024 entries as the default
- * cache service in OSGi. This component is automatically picked up by
+ * cache service in OSGi, plus up to 256 remembered parse failures in an LRU of their own
+ * (properties {@code oclExpressionSize} and {@code oclExpressionFailureSize}). This component is automatically picked up by
  * the {@link OclEngineComponent} unless a custom cache is targeted
  * via configuration.
  *
@@ -48,6 +53,8 @@ public class DefaultOclExpressionCacheComponent implements OclExpressionCache {
 	
 	public @interface Config {
 		int oclExpressionSize() default DefaultOclExpressionCacheComponent.DEFAULT_SIZE;
+
+		int oclExpressionFailureSize() default OclLruExpressionCache.DEFAULT_MAX_FAILURES;
 	}
 
 	/** Default cache size: 1024 entries. */
@@ -57,7 +64,7 @@ public class DefaultOclExpressionCacheComponent implements OclExpressionCache {
 
 	@Activate
 	public DefaultOclExpressionCacheComponent(Config config) {
-		this.delegate = new OclLruExpressionCache(config.oclExpressionSize());
+		this.delegate = new OclLruExpressionCache(config.oclExpressionSize(), config.oclExpressionFailureSize());
 	}
 
 	@Override
@@ -73,6 +80,21 @@ public class DefaultOclExpressionCacheComponent implements OclExpressionCache {
 	@Override
 	public void invalidate(String expression, EClassifier contextType) {
 		delegate.invalidate(expression, contextType);
+	}
+
+	@Override
+	public Optional<OclParseResult> lookup(OclCacheKey key) {
+		return delegate.lookup(key);
+	}
+
+	@Override
+	public void store(OclCacheKey key, OclParseResult result) {
+		delegate.store(key, result);
+	}
+
+	@Override
+	public void invalidate(OclCacheKey key) {
+		delegate.invalidate(key);
 	}
 
 	@Override
