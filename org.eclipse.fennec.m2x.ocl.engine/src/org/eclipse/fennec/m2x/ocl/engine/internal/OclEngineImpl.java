@@ -612,7 +612,10 @@ public class OclEngineImpl implements OclDelegateSupport {
 	 *       for all structural features (LambdaMetafactory accessors for generated models).</li>
 	 *   <li><b>Expression parse cache:</b> If an {@link OclExpressionCache} is configured,
 	 *       scans all EAnnotations with the Fennec OCL delegate URI and pre-parses
-	 *       OCL expressions (derivation, initial, body, pre, post, constraint names).</li>
+	 *       OCL expressions (derivation, initial, body, pre, post, constraint names).
+	 *       Operations with parameters are skipped: the invocation delegate parses their
+	 *       expressions with the parameters declared, which is a different cache key. A
+	 *       {@code post} is parsed with {@code result} declared, as the delegate does.</li>
 	 * </ol>
 	 *
 	 * <p>Parse errors during warm-up are silently ignored — they will be reported
@@ -653,22 +656,32 @@ public class OclEngineImpl implements OclDelegateSupport {
 						for (String key : List.of("derivation", "initial")) {
 							String expr = ann.getDetails().get(key);
 							if (expr != null) {
-								tryParse(expr, eClass);
+								tryParse(expr, eClass, Map.of());
 							}
 						}
 					}
 
-					// 3. Expression parse warm-up (body, pre, post on operations)
+					// 3. Expression parse warm-up (body, pre, post on operations). Only operations
+					// without parameters: the invocation delegate parses with the parameters
+					// declared, so a parse without them is cached under a key nobody asks for —
+					// and, failing, would only fill the failure cache (#420). The key must match
+					// the delegate's: body and pre without variables, post with `result`.
 					for (EOperation op : eClass.getEOperations()) {
 						EAnnotation ann = op.getEAnnotation(delegateUri);
-						if (ann == null) {
+						if (ann == null || !op.getEParameters().isEmpty()) {
 							continue;
 						}
-						for (String key : List.of("body", "pre", "post")) {
+						for (String key : List.of("body", "pre")) {
 							String expr = ann.getDetails().get(key);
 							if (expr != null) {
-								tryParse(expr, eClass);
+								tryParse(expr, eClass, Map.of());
 							}
+						}
+						String post = ann.getDetails().get("post");
+						if (post != null) {
+							Map<String, EClassifier> result = new LinkedHashMap<>();
+							result.put("result", op.getEType());
+							tryParse(post, eClass, result);
 						}
 					}
 
@@ -676,7 +689,7 @@ public class OclEngineImpl implements OclDelegateSupport {
 					EAnnotation classAnn = eClass.getEAnnotation(delegateUri);
 					if (classAnn != null) {
 						for (Map.Entry<String, String> detail : classAnn.getDetails().entrySet()) {
-							tryParse(detail.getValue(), eClass);
+							tryParse(detail.getValue(), eClass, Map.of());
 						}
 					}
 				}
@@ -685,12 +698,12 @@ public class OclEngineImpl implements OclDelegateSupport {
 	}
 
 	/**
-	 * Attempts to parse an expression, storing it in the cache on success.
-	 * Silently ignores parse failures.
+	 * Attempts to parse an expression with the given variables declared, storing the outcome
+	 * in the cache. Silently ignores parse failures.
 	 */
-	private void tryParse(String expression, EClass contextType) {
+	private void tryParse(String expression, EClass contextType, Map<String, EClassifier> variables) {
 		try {
-			parse(expression, contextType);
+			parse(expression, contextType, variables);
 		} catch (OclParseException e) {
 			// Silently ignore — will be reported at evaluation time
 		}
