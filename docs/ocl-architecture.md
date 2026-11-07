@@ -873,7 +873,10 @@ wrapping typed getters. JIT can inline to ~5 ns.
 1. **Property Accessor Cache:** Creates temp EObject per non-abstract EClass, pre-populates
    accessor entries. Cost: ~4 µs per package.
 2. **Expression Parse Cache:** Scans OCL `EAnnotation`s (derivation, initial, body, pre, post,
-   constraints) and pre-parses. Each annotated expression adds ~23 µs.
+   constraints) and pre-parses. Each annotated expression adds ~23 µs. Operations with
+   parameters are skipped: the invocation delegate parses them with the parameters declared,
+   which is another cache key, so a parse without them would only be cached for nobody (or
+   fill the failure cache, #420). `post` is parsed with `result` declared, like the delegate.
 3. Parse errors during warm-up are silently ignored — reported at evaluation time.
 
 ### 7.5 Future: OclAspectProvider
