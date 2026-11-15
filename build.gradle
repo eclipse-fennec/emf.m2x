@@ -4,6 +4,7 @@ plugins {
   id "org.sonarqube" version "6.3.1.5724"
   id 'jacoco'
   id 'java'
+  id 'org.geckoprojects.bnd.update'
 }
 
 // We need to define a repository for the root project, otherwise Jacoco dependencies cannot be resolved
@@ -61,6 +62,26 @@ tasks.register('sbom') {
   description = 'Writes the SBOMs of the m2x applications (see sbomBndruns).'
   group = 'export'
   dependsOn sbomTasks
+}
+
+// bnd update (org.gecko.bnd.update): reports only, nothing is changed.
+//   ./gradlew bndUpdates                    newer versions in the .mvn indexes, within the policy
+//   ./gradlew bndVulnerabilities \
+//     -PbndUpdateTrivy=<trivy.json> -PbndUpdateSbom=<sbom.cdx.json>
+//                                           for each library of the Trivy report of that SBOM:
+//                                           the smallest fixing version within the policy
+// Reports in build/bnd-update/. The policy is micro updates unless -PbndUpdateScope says
+// otherwise. Findings never fail the build here; the gate is the Trivy step in sbom.yml.
+bndUpdate {
+  scope = providers.gradleProperty('bndUpdateScope').orElse('micro')
+  format = providers.gradleProperty('bndUpdateFormat').orElse('markdown')
+  failOnFindings = false
+  if (providers.gradleProperty('bndUpdateTrivy').isPresent()) {
+    trivyReport = file(providers.gradleProperty('bndUpdateTrivy').get())
+  }
+  if (providers.gradleProperty('bndUpdateSbom').isPresent()) {
+    sbom = file(providers.gradleProperty('bndUpdateSbom').get())
+  }
 }
 
 subprojects {
