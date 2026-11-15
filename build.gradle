@@ -62,8 +62,8 @@ subprojects {
 // Sonar setup
 sonarqube {
   properties {
-    property "sonar.projectName", "fennec.codec"
-    property "sonar.projectKey", "eclipse-fennec_emf.codec"
+    property "sonar.projectName", "fennec.m2x"
+    property "sonar.projectKey", "eclipse-fennec_emf.m2x"
     property "sonar.organization", "eclipse-fennec"
     property "sonar.host.url", "https://sonarcloud.io"
     property "sonar.coverage.jacoco.xmlReportPaths", "${rootDir}/build/reports/jacoco/codeCoverageReport/codeCoverageReport.xml"
