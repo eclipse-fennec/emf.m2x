@@ -130,6 +130,10 @@ The repository root is a Gradle + BND workspace:
 # Run benchmarks
 ./gradlew org.eclipse.fennec.m2x.ocl.benchmark:perfTest
 ./gradlew org.eclipse.fennec.m2x.qvto.benchmark:perfTest
+
+# SBOM (CycloneDX) of all engines and of the OCL p2 content, to */generated/sbom/;
+# CI scans it with Trivy (.github/workflows/sbom.yml)
+./gradlew assemble sbom
 ```
 
 **Requirements:** Java 21, Gradle (bnd 7.4.0+ workspace)
