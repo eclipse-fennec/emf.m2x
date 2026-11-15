@@ -62,16 +62,6 @@ javac.target: 21
 		pretty = true; \
 		local = ${build}/templates
 		
--plugin.4.EMFCompare: \
- 	aQute.bnd.repository.p2.provider.P2Repository; \
- 	url = https://download.eclipse.org/modeling/emf/compare/updates/releases/latest/; \
- 	name = EMFCompare
- 	
--plugin.3.EclipseMDT-UML2: \
- 	aQute.bnd.repository.p2.provider.P2Repository; \
- 	url = https://download.eclipse.org/modeling/mdt/uml2/updates/releases/; \
- 	name = EclipseMDT-UML2
-
 # Enables `-export ...; type=p2` to produce an Eclipse p2 repository
 # (used by org.eclipse.fennec.m2x.ocl.ide.p2).
 -plugin.5.P2Export: \
