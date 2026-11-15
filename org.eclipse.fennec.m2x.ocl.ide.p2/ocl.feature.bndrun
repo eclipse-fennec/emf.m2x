@@ -37,3 +37,8 @@ Bundle-Vendor: Eclipse Foundation
 -runrequires: bnd.identity;id='org.eclipse.fennec.m2x.ocl.ide'
 -runfw: org.apache.felix.framework
 -runee: JavaSE-21
+
+# SBOM for `./gradlew sbom`: the exporter is included only once it has been fetched (see
+# cnf/sbom/plugin.bnd); resolve, tests and the p2 export ignore both lines.
+-include: ${if;${isfile;${workspace}/cnf/cache/sbom-exporter/org.gecko.bnd.sbom.jar};${workspace}/cnf/sbom/plugin.bnd}
+-sbom: level=medium, format=cyclonedx
