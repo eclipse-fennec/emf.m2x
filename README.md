@@ -132,7 +132,7 @@ The repository root is a Gradle + BND workspace:
 ./gradlew org.eclipse.fennec.m2x.qvto.benchmark:perfTest
 ```
 
-**Requirements:** Java 21, Gradle (bnd 7.2.1+ workspace)
+**Requirements:** Java 21, Gradle (bnd 7.4.0+ workspace)
 
 The per-bundle counts above are a snapshot, and the honest way to read them is with a date: **6,489 tests and 64 OSGi tests, 0 failures, as of 2026-09-01**. `./gradlew build` and `./gradlew testOSGi` are what produce that number — if it differs from the tables, the tables are the stale ones.
 
