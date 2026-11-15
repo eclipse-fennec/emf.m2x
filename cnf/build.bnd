@@ -33,7 +33,7 @@ Bundle-Copyright: Copyright (c) Contributors to the Eclipse Foundation.
 javac.source: 21
 javac.target: 21
 
--require-bnd "(version>=7.2.1)"
+-require-bnd "(version>=7.4.0)"
 
 -plugin.0.Central: \
     aQute.bnd.repository.maven.provider.MavenBndRepository; \

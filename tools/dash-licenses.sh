@@ -28,7 +28,7 @@
 set -euo pipefail
 
 # ---- defaults -------------------------------------------------------------
-BND_VERSION="${BND_VERSION:-7.4.0-SNAPSHOT}"
+BND_VERSION="${BND_VERSION:-7.4.0}"
 BND_SNAPSHOTS="${BND_SNAPSHOTS:-https://bndtools.jfrog.io/bndtools/libs-snapshot-local}"
 DASH_VERSION="${DASH_VERSION:-1.1.0}"
 DASH_RELEASES="${DASH_RELEASES:-https://repo.eclipse.org/content/repositories/dash-licenses}"
