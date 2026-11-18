@@ -10,11 +10,11 @@ maven/mavencentral/org.apache.felix/org.apache.felix.configadmin/1.9.26, Apache-
 maven/mavencentral/org.apache.felix/org.apache.felix.framework/7.0.5, Apache-2.0, approved, CQ23046
 maven/mavencentral/org.apache.felix/org.apache.felix.scr/2.2.6, Apache-2.0, approved, #15367
 maven/mavencentral/org.eclipse.emf/org.eclipse.emf.common/2.29.0, EPL-2.0, approved, modeling.emf
-maven/mavencentral/org.eclipse.emf/org.eclipse.emf.common/2.44.0, EPL-2.0, approved, modeling.emf
+maven/mavencentral/org.eclipse.emf/org.eclipse.emf.common/2.46.0, EPL-2.0, approved, modeling.emf
 maven/mavencentral/org.eclipse.emf/org.eclipse.emf.ecore.xmi/2.36.0, EPL-2.0, approved, modeling.emf
-maven/mavencentral/org.eclipse.emf/org.eclipse.emf.ecore.xmi/2.39.0, EPL-2.0, approved, modeling.emf
+maven/mavencentral/org.eclipse.emf/org.eclipse.emf.ecore.xmi/2.41.0, EPL-2.0, approved, modeling.emf
 maven/mavencentral/org.eclipse.emf/org.eclipse.emf.ecore/2.35.0, EPL-2.0, approved, modeling.emf
-maven/mavencentral/org.eclipse.emf/org.eclipse.emf.ecore/2.41.0, EPL-2.0, approved, modeling.emf
+maven/mavencentral/org.eclipse.emf/org.eclipse.emf.ecore/2.43.0, EPL-2.0, approved, modeling.emf
 maven/mavencentral/org.eclipse.fennec.emf/org.eclipse.fennec.emf.osgi.api/1.1.0-SNAPSHOT, EPL-2.0, approved, modeling.fennec
 maven/mavencentral/org.eclipse.fennec.emf/org.eclipse.fennec.emf.osgi.component.minimal/1.1.0-SNAPSHOT, EPL-2.0, approved, modeling.fennec
 maven/mavencentral/org.eclipse.fennec.emf/org.eclipse.fennec.emf.osgi.component/1.1.0-SNAPSHOT, EPL-2.0, approved, modeling.fennec
