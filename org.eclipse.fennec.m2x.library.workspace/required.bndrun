@@ -17,9 +17,9 @@
 	bnd.identity;id='org.eclipse.fennec.m2x.unit.registry'
 -runbundles: \
 	org.antlr.antlr4-runtime;version='[4.13.2,4.13.3)',\
-	org.eclipse.emf.common;version='[2.44.0,2.44.1)',\
-	org.eclipse.emf.ecore;version='[2.41.0,2.41.1)',\
-	org.eclipse.emf.ecore.xmi;version='[2.39.0,2.39.1)',\
+	org.eclipse.emf.common;version='[2.46.0,2.46.1)',\
+	org.eclipse.emf.ecore;version='[2.43.0,2.43.1)',\
+	org.eclipse.emf.ecore.xmi;version='[2.41.0,2.41.1)',\
 	org.eclipse.fennec.m2x.m2t.api;version=snapshot,\
 	org.eclipse.fennec.m2x.m2t.engine;version=snapshot,\
 	org.eclipse.fennec.m2x.m2t.model;version=snapshot,\
