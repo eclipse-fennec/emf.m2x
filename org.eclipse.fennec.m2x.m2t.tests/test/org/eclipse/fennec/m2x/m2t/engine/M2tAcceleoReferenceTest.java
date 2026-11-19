@@ -30,6 +30,7 @@ import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 import org.eclipse.fennec.m2x.m2t.api.M2tEngine;
 import org.eclipse.fennec.m2x.m2t.api.M2tParseException;
 import org.eclipse.fennec.m2x.m2t.api.M2tResult;
+import org.eclipse.fennec.m2x.m2t.engine.internal.M2tProtectedAreaMerger;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -100,7 +101,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("simple for — ClasseA ClasseB AbstractClass")
 		void forSimple() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testForSimple', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers)]\n" +
@@ -118,7 +119,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("for with separator — ClasseA/ClasseB/AbstractClass")
 		void forSeparator() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testForSeparator', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers) separator ('/')]\n" +
@@ -135,7 +136,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("for with before — before test ClasseA ClasseB AbstractClass")
 		void forBefore() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testForBefore', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers) before ('before test')]\n" +
@@ -152,7 +153,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("for with after — ClasseA ClasseB AbstractClass after test")
 		void forAfter() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testForAfter', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers) after ('after test')]\n" +
@@ -169,7 +170,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("for with guard — filters non-matching elements")
 		void forGuard() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testForGuard', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers) ? (cl.name.startsWith('C'))]\n" +
@@ -187,7 +188,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("for i variable — 1-based counter (Acceleo convention)")
 		void forIVariable() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testForI', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers)][i/][/for]\n" +
@@ -195,15 +196,16 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "testForI");
-			// 1-based counter with default separator \n between iterations
-			assertEquals("1\n2\n3", content);
+			// 1-based counter. No separator: the default "\n" is for the multi-line for
+			// block only (§8.4), and Acceleo's reference result testForI is "123" (#273).
+			assertEquals("123", content);
 		}
 
 		@Test
 		@DisplayName("for i in separator — separator uses current i value")
 		void forISeparator() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testForISeparator', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers) separator (i.toString())]yop[/for]\n" +
@@ -226,7 +228,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("if block matches one classifier")
 		void ifBlockMatchesOne() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testIf', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers)]\n" +
@@ -244,7 +246,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("if/else outputs for all classifiers")
 		void ifElseAllClassifiers() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testElse', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers)]\n" +
@@ -261,7 +263,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("if/elseif/else chain")
 		void ifElseIfElse() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EPackage)]\n" +
 					"[file ('testCompleteIf', false)]\n" +
 					"[for (cl : EClassifier | c.eClassifiers)]\n" +
@@ -285,7 +287,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("constant output in file block")
 		void constantOutput() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('test_generic_engine', false)]\n" +
 					"constant output\n" +
@@ -307,7 +309,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("explicit self.name in template")
 		void selfTemplate() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('self_template', false)]\n" +
 					"[self.name/]\n" +
@@ -322,7 +324,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("explicit self.name in query")
 		void selfQuery() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[query public pkgName(p : EPackage) : String = self.name/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('self_query', false)]\n" +
@@ -345,7 +347,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("let with variable binding")
 		void letSimple() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[let n : String = p.name]\n" +
@@ -363,7 +365,7 @@ class M2tAcceleoReferenceTest {
 		void letElse() throws M2tParseException {
 			// nsPrefix is null/empty → else branch
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[let prefix : String = p.nsPrefix]\n" +
@@ -383,7 +385,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("let with elselet chain")
 		void letElseLet() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (c : EClassifier | p.eClassifiers)]\n" +
@@ -411,7 +413,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("multi-template composition — format each classifier")
 		void multiTemplateComposition() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (c : EClassifier | p.eClassifiers)]\n" +
@@ -431,7 +433,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("template invocation with before/after/separator")
 		void templateInvocationWithSeparators() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[format(p.eClassifiers) separator (', ')/]\n" +
@@ -449,7 +451,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("query invocation from template")
 		void queryFromTemplate() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[query public upper(s : String) : String = s.toUpper()/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
@@ -472,7 +474,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("protected area in file block produces markers with hash")
 		void protectedAreaInFileBlock() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[protected ('my_area')]\n" +
@@ -482,16 +484,16 @@ class M2tAcceleoReferenceTest {
 					"[/template]\n";
 			M2tResult result = executeTemplate(mtl);
 			String content = getFileContent(result, "out");
-			assertTrue(content.contains("// [protected 'my_area'"), "start marker");
-			assertTrue(content.contains("default content"), "default body");
-			assertTrue(content.contains("// [/protected]"), "end marker");
+			// the exact layout: the end marker on its own line (#367)
+			assertEquals("// [protected 'my_area' " + M2tProtectedAreaMerger.contentHash("default content\n")
+					+ "]\ndefault content\n// [/protected]", content);
 		}
 
 		@Test
 		@DisplayName("protected area with dynamic id from expression")
 		void protectedAreaDynamicId() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (c : EClassifier | p.eClassifiers)]\n" +
@@ -515,7 +517,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("protected area inside for/if nesting")
 		void protectedAreaInsideForIf() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (c : EClassifier | p.eClassifiers)]\n" +
@@ -537,7 +539,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("protected area via template invocation")
 		void protectedAreaViaTemplateCall() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public protHelper(p : EPackage)]\n" +
 					"[protected ('helper_area')]\n" +
 					"helper default\n" +
@@ -558,7 +560,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("multiple protected areas in same file")
 		void multipleProtectedAreas() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"header\n" +
@@ -587,7 +589,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("protected area hash is consistent for same content")
 		void protectedAreaHashConsistency() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[protected ('area1')]\n" +
@@ -627,7 +629,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("template guard — true guard produces output")
 		void templateGuardTrue() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public guarded(p : EPackage) ? (p.name = 'target')]\n" +
 					"guarded output\n" +
 					"[/template]\n" +
@@ -645,7 +647,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("template guard — false guard produces no output")
 		void templateGuardFalse() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public guarded(p : EPackage) ? (p.name = 'noMatch')]\n" +
 					"should not appear\n" +
 					"[/template]\n" +
@@ -666,7 +668,7 @@ class M2tAcceleoReferenceTest {
 		void templateGuardAbstractCheck() throws M2tParseException {
 			// ClasseA and ClasseB are concrete, AbstractClass is abstract
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public concreteOnly(c : EClassifier) ? (c.oclIsKindOf(EClass) and not c.oclAsType(EClass).abstract)]\n" +
 					"[c.name/]\n" +
 					"[/template]\n" +
@@ -688,7 +690,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("template post-processing — trim()")
 		void templatePostTrim() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public trimmed(p : EPackage) post(trim())]\n" +
 					"   [p.name/]   \n" +
 					"[/template]\n" +
@@ -707,7 +709,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("template post-processing — toUpper()")
 		void templatePostToUpper() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public uppered(p : EPackage) post(toUpper())]\n" +
 					"[p.name/]\n" +
 					"[/template]\n" +
@@ -725,7 +727,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("template invocation with before/after")
 		void templateInvocationBeforeAfter() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public fmt(c : EClassifier)]\n" +
 					"[c.name/]\n" +
 					"[/template]\n" +
@@ -743,7 +745,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("template private visibility — only local access")
 		void privateTemplateLocalAccess() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template private secret(p : EPackage)]\n" +
 					"secret: [p.name/]\n" +
 					"[/template]\n" +
@@ -761,12 +763,12 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("protected visibility via extends")
 		void protectedVisibilityExtends() throws M2tParseException {
 			String baseMtl =
-					"[module base(Ecore)/]\n" +
+					"[module base(ecore)/]\n" +
 					"[template protected helper(p : EPackage)]\n" +
 					"protected: [p.name/]\n" +
 					"[/template]\n";
 			String childMtl =
-					"[module child(Ecore) extends base/]\n" +
+					"[module child(ecore) extends base/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[helper(p)/]\n" +
@@ -784,12 +786,12 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("protected NOT visible via imports")
 		void protectedNotVisibleViaImport() throws M2tParseException {
 			String libMtl =
-					"[module lib(Ecore)/]\n" +
+					"[module lib(ecore)/]\n" +
 					"[template protected helper(p : EPackage)]\n" +
 					"should not see\n" +
 					"[/template]\n";
 			String mainMtl =
-					"[module main(Ecore)/]\n" +
+					"[module main(ecore)/]\n" +
 					"[import lib/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
@@ -807,7 +809,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("override with super call — Acceleo pattern")
 		void overrideWithSuperCall() throws M2tParseException {
 			String baseMtl =
-					"[module base(Ecore)/]\n" +
+					"[module base(ecore)/]\n" +
 					"[template public render(p : EPackage)]\n" +
 					"[p.name/]\n" +
 					"[/template]\n" +
@@ -817,7 +819,7 @@ class M2tAcceleoReferenceTest {
 					"[/file]\n" +
 					"[/template]\n";
 			String childMtl =
-					"[module child(Ecore) extends base/]\n" +
+					"[module child(ecore) extends base/]\n" +
 					"[template public render(p : EPackage) overrides render]\n" +
 					"CHILD([super/])\n" +
 					"[/template]\n";
@@ -840,7 +842,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("substitute — replace occurrences")
 		void substituteOp() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['test'.substitute('es', 'se')/]\n" +
@@ -854,7 +856,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("index — 1-based substring position")
 		void indexOp() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['test'.index('es')/]\n" +
@@ -868,7 +870,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("first — first n characters")
 		void firstOp() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['hello'.first(3)/]\n" +
@@ -882,7 +884,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("last — last n characters")
 		void lastOp() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['hello'.last(3)/]\n" +
@@ -896,7 +898,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("strstr — contains check")
 		void strstrOp() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['test'.strstr('es')/]-['test'.strstr('xyz')/]\n" +
@@ -910,7 +912,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("strcmp — lexicographic comparison")
 		void strcmpOp() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[if ('test'.strcmp('test') = 0)]equal[/if]\n" +
@@ -924,7 +926,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("isAlpha / isAlphanum")
 		void isAlphaOps() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['abc'.isAlpha()/]-['abc1'.isAlpha()/]-['abc1'.isAlphanum()/]\n" +
@@ -938,7 +940,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("toUpperFirst / toLowerFirst")
 		void caseFirstOps() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['test'.toUpperFirst()/]-['TEST'.toLowerFirst()/]\n" +
@@ -952,7 +954,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("toUpper / toLower — M2T §8.3")
 		void caseConversionOps() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['Hello'.toUpper()/]-['Hello'.toLower()/]\n" +
@@ -966,7 +968,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("OCL String ops in M2T context — concat, size, substring")
 		void oclStringOpsInM2T() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"['hello'.concat(' world')/]-['hello'.size()/]-['hello'.substring(2, 4)/]\n" +
@@ -980,7 +982,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("OCL Collection ops in M2T context — size, first, includes")
 		void oclCollectionOpsInM2T() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[p.eClassifiers->size()/]-[p.eClassifiers->first().name/]-[p.eClassifiers->exists(c | c.name = 'ClasseA')/]\n" +
@@ -994,7 +996,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("OCL select/reject in M2T context")
 		void oclSelectRejectInM2T() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (c : EClassifier | p.eClassifiers->select(c | c.name.startsWith('C'))) separator (', ')]\n" +
@@ -1010,7 +1012,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("OCL collect in M2T context")
 		void oclCollectInM2T() throws M2tParseException {
 			String mtl =
-					"[module m(Ecore)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
 					"[for (n : String | p.eClassifiers->collect(c | c.name)) separator (', ')]\n" +
@@ -1033,13 +1035,13 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("namesake priority: local > extended > imported")
 		void namesakePriorityLocalFirst() throws M2tParseException {
 			String importedMtl =
-					"[module imported(Ecore)/]\n" +
+					"[module imported(ecore)/]\n" +
 					"[template public render(p : EPackage)]Imported[/template]\n";
 			String extendedMtl =
-					"[module extended(Ecore)/]\n" +
+					"[module extended(ecore)/]\n" +
 					"[template public render(p : EPackage)]Extended[/template]\n";
 			String localMtl =
-					"[module local(Ecore) extends extended/]\n" +
+					"[module local(ecore) extends extended/]\n" +
 					"[import imported/]\n" +
 					"[template public render(p : EPackage)]Local[/template]\n" +
 					"[template public main(p : EPackage)]\n" +
@@ -1071,7 +1073,7 @@ class M2tAcceleoReferenceTest {
 			assertNotNull(concreteClass);
 
 			String baseMtl =
-					"[module base(Ecore)/]\n" +
+					"[module base(ecore)/]\n" +
 					"[template public render(c : EClass)]Base: [c.name/][/template]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file ('out', false)]\n" +
@@ -1079,7 +1081,7 @@ class M2tAcceleoReferenceTest {
 					"[/file]\n" +
 					"[/template]\n";
 			String childMtl =
-					"[module child(Ecore) extends base/]\n" +
+					"[module child(ecore) extends base/]\n" +
 					"[template public render(c : EClass) overrides render ? (c.abstract)]Abstract: [c.name/][/template]\n";
 
 			Module baseMod = engine.parse(baseMtl, "base");
@@ -1099,13 +1101,13 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("external namesake resolution — extended preferred over imported")
 		void externalNamesakeExtendedPreferred() throws M2tParseException {
 			String importedMtl =
-					"[module imported(Ecore)/]\n" +
+					"[module imported(ecore)/]\n" +
 					"[template public helper(p : EPackage)]Imported[/template]\n";
 			String extendedMtl =
-					"[module extended(Ecore)/]\n" +
+					"[module extended(ecore)/]\n" +
 					"[template public helper(p : EPackage)]Extended[/template]\n";
 			String localMtl =
-					"[module local(Ecore) extends extended/]\n" +
+					"[module local(ecore) extends extended/]\n" +
 					"[import imported/]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
@@ -1125,7 +1127,7 @@ class M2tAcceleoReferenceTest {
 		@DisplayName("override chain with super — three-level")
 		void overrideChainWithSuper() throws M2tParseException {
 			String aMtl =
-					"[module a(Ecore)/]\n" +
+					"[module a(ecore)/]\n" +
 					"[template public render(p : EPackage)]A[/template]\n" +
 					"[template public main(p : EPackage)]\n" +
 					"[file ('out', false)]\n" +
@@ -1133,10 +1135,10 @@ class M2tAcceleoReferenceTest {
 					"[/file]\n" +
 					"[/template]\n";
 			String bMtl =
-					"[module b(Ecore) extends a/]\n" +
+					"[module b(ecore) extends a/]\n" +
 					"[template public render(p : EPackage) overrides render][super/]+B[/template]\n";
 			String cMtl =
-					"[module c(Ecore) extends b/]\n" +
+					"[module c(ecore) extends b/]\n" +
 					"[template public render(p : EPackage) overrides render][super/]+C[/template]\n";
 
 			Module aMod = engine.parse(aMtl, "a");

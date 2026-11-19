@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -213,6 +214,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -268,6 +271,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -544,6 +549,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -556,6 +563,10 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							}
 						}
 						top relation AttributeToColumn {
+							p : Package;
+							s : Schema;
+							c : Class;
+							t : Table;
 							an : String;
 							checkonly domain uml a : Attribute {
 								name = an
@@ -624,6 +635,10 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation AttributeToColumn {
+							p : Package;
+							s : Schema;
+							c : Class;
+							t : Table;
 							an : String;
 							checkonly domain uml a : Attribute {
 								name = an
@@ -678,6 +693,7 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -743,6 +759,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -807,8 +825,10 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
 							cn : String;
 							checkonly domain uml c : Class {
+								owningPackage = p,
 								name = cn
 							};
 							enforce domain rdbms s : Schema {
@@ -843,13 +863,13 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 					.filter(o -> "Schema".equals(o.eClass().getName()))
 					.toList();
 
-			// At least one Schema should have tables — ideally each has its correct one
-			int totalTables = schemas.stream()
-					.mapToInt(s -> getTables(s).size())
-					.sum();
-			assertTrue(totalTables >= 1,
-					"Tables should be nested inside Schemas via when-bound 's'. "
-					+ "Total tables found: " + totalTables);
+			// §7.2.3: the when call binds s to the Schema of c's own Package — each Table lands
+			// in the Schema of its Class's Package, not in whichever Schema came first (#349)
+			Map<String, List<String>> layout = new HashMap<>();
+			for (EObject schema : schemas) {
+				layout.put(getName(schema), getTables(schema).stream().map(t -> getName(t)).toList());
+			}
+			assertEquals(Map.of("HR", List.of("Employee"), "Finance", List.of("Account")), layout);
 		}
 
 		@Test
@@ -869,6 +889,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn
@@ -922,6 +944,8 @@ class QvtdEngineTraceTest extends AbstractQvtdEngineTest {
 							};
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class {
 								name = cn

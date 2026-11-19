@@ -24,7 +24,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Return expression to exit from the current operation (QVT v1.3 Section 8.2.1.2).
+ * Return expression to exit from the current operation (QVT v1.3 Section 8.2.2.16).
  * <!-- end-model-doc -->
  *
  * <p>

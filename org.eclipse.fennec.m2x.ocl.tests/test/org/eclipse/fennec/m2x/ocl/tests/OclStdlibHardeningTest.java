@@ -19,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.util.List;
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
@@ -124,7 +125,9 @@ class OclStdlibHardeningTest extends AbstractOclTest {
 
 	@Test
 	void ordinaryFormat_stillWorks() throws OclParseException {
-		assertEquals("x=1", eval("'x=%d'.format(Sequence{1})", createPerson("A", 1, 1.0, false)));
+		// QVT v1.3 §8.3.16.1: a single hole takes the value as it is — a Sequence is one value, not
+		// an argument list (#344)
+		assertEquals("x=1", eval("'x=%d'.format(1)", createPerson("A", 1, 1.0, false)));
 	}
 
 	@Test
@@ -222,13 +225,23 @@ class OclStdlibHardeningTest extends AbstractOclTest {
 	// ==== arity ====
 
 	@Test
-	void anOperationCalledWithTooFewArguments_isInvalid_notAnException() throws OclParseException {
+	void anOperationCalledWithTooFewArguments_isATypeError() {
 		EObject person = createPerson("A", 1, 1.0, false);
-		// Operations are resolved by name at evaluation time, so these parse and then have to
+		// The receivers' types are known, so the missing arguments are found when parsing (#378)
+		assertTypeError("Set{1}->includes()", person, "Set(Integer)::includes does not take 0 argument(s)");
+		assertTypeError("self.oclIsKindOf()", person, "Person::oclIsKindOf does not take 0 argument(s)");
+		assertTypeError("'abc'.substring()", person, "String::substring does not take 0 argument(s)");
+	}
+
+	@Test
+	void anOperationCalledWithTooFewArguments_onAValueOfUnknownType_isInvalid_notAnException()
+			throws OclParseException {
+		EObject person = createPerson("A", 1, 1.0, false);
+		// Bound only at evaluation, the receivers have no type when parsing: evaluation has to
 		// yield a value rather than throw out of evaluate()
-		assertNotEquals(null, eval("Set{1}->includes()", person));
-		assertNotEquals(null, eval("self.oclIsKindOf()", person));
-		assertNotEquals(null, eval("'abc'.substring()", person));
+		assertNotEquals(null, evalWith("v->includes()", person, Map.of("v", List.of(1L))));
+		assertNotEquals(null, evalWith("v.oclIsKindOf()", person, Map.of("v", person)));
+		assertNotEquals(null, evalWith("v.substring()", person, Map.of("v", "abc")));
 	}
 
 	// ==== helpers ====

@@ -16,7 +16,9 @@ package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -92,33 +94,35 @@ final class PreStateScanCollector {
 		OclEvaluator evaluator = new OclEvaluator(env, options, providers,
 				PropertyAccessorCache.getDefault());
 
+		Set<EStructuralFeature> preFeatures = new LinkedHashSet<>();
 		for (FeatureCallExp node : preNodes) {
-			Object value;
 			if (node instanceof PropertyCallExp pce) {
-				// Evaluate the source, then read the property
-				OclExpression sourceExpr = pce.getOwnedSource();
-				OclResult sourceResult = evaluator.evaluate(sourceExpr);
-				Object source = sourceResult.value();
-				if (source instanceof EObject eo) {
-					EStructuralFeature sf = pce.getReferredProperty();
-					if (sf != null) {
-						value = eo.eGet(sf);
-					} else {
-						value = null;
-					}
-				} else {
-					value = null;
+				// A property @pre is read per object at evaluation (#323): its source is evaluated in
+				// the post-state, and inside an iterator body it differs per element, so capturing
+				// one value for the AST node — with a source that could not even be evaluated here
+				// when it is the iterator variable — cannot work
+				if (pce.getReferredProperty() != null) {
+					preFeatures.add(pce.getReferredProperty());
 				}
 			} else {
 				// OperationCallExp@pre: evaluate the whole expression
 				OclResult result = evaluator.evaluate((OclExpression) node);
-				value = result.value();
+				builder.putPreValue(node, result.value());
 			}
-			builder.putPreValue(node, value);
 		}
 
-		// Collect pre-existing objects
+		// Collect pre-existing objects, and the pre-state of every @pre feature on each of them
 		collectPreExistingObjects(context, builder);
+		if (!preFeatures.isEmpty()) {
+			for (EObject object : builder.preExistingObjects()) {
+				for (EStructuralFeature feature : preFeatures) {
+					EStructuralFeature own = object.eClass().getEStructuralFeature(feature.getName());
+					if (own != null) {
+						builder.putFeatureValue(object, own, object.eGet(own));
+					}
+				}
+			}
+		}
 
 		return builder.build();
 	}

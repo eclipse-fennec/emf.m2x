@@ -82,7 +82,7 @@ class M2tSecurityHardeningTest {
 			M2tEngine engine = createEngine(config);
 
 			// Template 'main' calls 'recurse', which calls itself
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public recurse(c : EClass)]\n"
 					+ "X[recurse(c)/]\n"
 					+ "[/template]\n"
@@ -110,7 +110,7 @@ class M2tSecurityHardeningTest {
 			M2tEngine engine = createEngine(config);
 
 			// Non-recursive template chain: main -> helper
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public helper(c : EClass)]hello[/template]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[helper(c)/]\n"
@@ -136,7 +136,7 @@ class M2tSecurityHardeningTest {
 			M2tEngine engine = createEngine(config);
 
 			// For-loop over a sequence larger than the limit
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[for (i : Integer | Sequence{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})]\n"
 					+ "X\n"
@@ -162,7 +162,7 @@ class M2tSecurityHardeningTest {
 					.build();
 			M2tEngine engine = createEngine(config);
 
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[for (i : Integer | Sequence{1, 2, 3})]\n"
 					+ "X\n"
@@ -189,7 +189,7 @@ class M2tSecurityHardeningTest {
 			M2tEngine engine = createEngine(config);
 
 			// Template invocation with Set arguments — cross-product 3*3 = 9 > 5
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public helper(a : Integer, b : Integer)]([a/],[b/])[/template]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[helper(Sequence{1, 2, 3}, Sequence{4, 5, 6})/]\n"
@@ -214,7 +214,7 @@ class M2tSecurityHardeningTest {
 					.build();
 			M2tEngine engine = createEngine(config);
 
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public helper(a : Integer, b : Integer)]([a/],[b/])[/template]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[helper(Sequence{1, 2}, Sequence{3, 4})/]\n"
@@ -239,7 +239,7 @@ class M2tSecurityHardeningTest {
 					.build();
 			M2tEngine engine = createEngine(config);
 
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[file ('out.txt', false, 'UTF-8')]\n"
 					+ "before\n"
@@ -269,7 +269,7 @@ class M2tSecurityHardeningTest {
 					.build();
 			M2tEngine engine = createEngine(config);
 
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[file ('out.txt', false, 'UTF-8')]\n"
 					+ "[protected ('myId')]\n"
@@ -310,7 +310,7 @@ class M2tSecurityHardeningTest {
 			M2tEngine engine = createEngine(config);
 
 			// Each iteration emits "ABCDEFGHIJ" (10 chars), 50 char limit → exceeded after 5+ iterations
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[for (i : Integer | Sequence{1, 2, 3, 4, 5, 6, 7, 8, 9, 10})]\n"
 					+ "ABCDEFGHIJ\n"
@@ -336,7 +336,7 @@ class M2tSecurityHardeningTest {
 					.build();
 			M2tEngine engine = createEngine(config);
 
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "hello world\n"
 					+ "[/template]\n";
@@ -355,7 +355,7 @@ class M2tSecurityHardeningTest {
 					.build();
 			M2tEngine engine = createEngine(config);
 
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "hello world\n"
 					+ "[/template]\n";
@@ -377,7 +377,7 @@ class M2tSecurityHardeningTest {
 			M2tEngine engine = createEngine(M2tConfiguration.builder(oclConfig).timeoutMs(1).build());
 
 			// A million iterations of work: past a one-millisecond deadline long before the end
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[for (i : Integer | Sequence{1..1000000})]\n"
 					+ "[i.toString().toUpper()/]\n"
@@ -398,7 +398,7 @@ class M2tSecurityHardeningTest {
 			OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
 			M2tEngine engine = createEngine(M2tConfiguration.builder(oclConfig).timeoutMs(0).build());
 
-			Module m = engine.parse("[module m(Ecore)/]\n"
+			Module m = engine.parse("[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[for (i : Integer | Sequence{1..1000})][i/][/for]\n"
 					+ "[/template]\n", "test");

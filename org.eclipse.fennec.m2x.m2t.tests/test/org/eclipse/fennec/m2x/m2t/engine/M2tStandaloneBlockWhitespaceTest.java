@@ -92,7 +92,7 @@ class M2tStandaloneBlockWhitespaceTest {
 
 	private String generate(String body) throws M2tParseException {
 		String mtl = """
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[template public main(c : EClass)]
 				[file ('out', false)]
 				""" + body + """
@@ -179,14 +179,68 @@ class M2tStandaloneBlockWhitespaceTest {
 	}
 
 	@Test
-	@DisplayName("a single-line standalone block takes its line's newline with it")
-	void singleLineBlockConsumesItsNewline() throws M2tParseException {
-		// §8.4's other body rule, and Acceleo's testingIf: nothing of that line survives
-		// but the text the block itself produced.
-		assertEquals("A\nIN-LINEZ", generate("""
+	@DisplayName("a single-line standalone block that writes text keeps its line's newline")
+	void singleLineBlockKeepsItsNewline() throws M2tParseException {
+		// §8.4: the newline after the tail is a whitespace element of the enclosing body,
+		// "output as is". Only the line of a block that wrote nothing goes (#374, see
+		// singleLineBlockWithoutTextDropsItsLine).
+		assertEquals("A\nIN-LINE\nZ", generate("""
 				A
 				[if (c.name = 'Employee')]IN-LINE[/if]
 				Z
+				"""));
+	}
+
+	@Test
+	@DisplayName("a single-line standalone block that writes nothing leaves no empty line")
+	void singleLineBlockWithoutTextDropsItsLine() throws M2tParseException {
+		// Acceleo's testingIf: the line of a block that produced nothing is gone (#374)
+		assertEquals("A\nZ", generate("""
+				A
+				[if (c.name = 'Nobody')]IN-LINE[/if]
+				Z
+				"""));
+	}
+
+	@Test
+	@DisplayName("a multi-line for block separates its iterations with a newline by default")
+	void multiLineForHasNewlineSeparator() throws M2tParseException {
+		// §8.4: "In the case of a multi-line 'for block,' when a separator character is not
+		// specified, use 'new line' as the default separator" — Acceleo's testForSimple.
+		assertEquals("A\nname\nsalary\nZ", generate("""
+				A
+				[for (a : EAttribute | c.eAttributes)]
+				[a.name/]
+				[/for]
+				Z
+				"""));
+	}
+
+	@Test
+	@DisplayName("a single-line for block alone on its line has no default separator (#273)")
+	void singleLineForHasNoDefaultSeparator() throws M2tParseException {
+		// The default separator is a rule for the multi-line shape only. The single-line
+		// body "starts after the closing bracket of the block head and ends before the
+		// starting bracket of the block tail", and the iterations run together — Acceleo's
+		// testForI reference is "123". The newline after the tail stays, as the block wrote
+		// text (#374).
+		assertEquals("A\nnamesalary\nZ", generate("""
+				A
+				[for (a : EAttribute | c.eAttributes)][a.name/][/for]
+				Z
+				"""));
+	}
+
+	@Test
+	@DisplayName("an explicit separator applies to both shapes alike")
+	void explicitSeparatorAppliesToBothShapes() throws M2tParseException {
+		// The embedded single-line for keeps its line's newline (it is not standalone), the
+		// multi-line one spends the newline in front of its tail.
+		assertEquals("X: name, salary\nname, salary", generate("""
+				X: [for (a : EAttribute | c.eAttributes) separator (', ')][a.name/][/for]
+				[for (a : EAttribute | c.eAttributes) separator (', ')]
+				[a.name/]
+				[/for]
 				"""));
 	}
 }

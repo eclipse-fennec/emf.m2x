@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Body of a constructor operation (QVT v1.3 Section 8.2.2.8).
+ * Body of a constructor operation (QVT v1.3 Section 8.2.1.18).
  * <!-- end-model-doc -->
  *
  *

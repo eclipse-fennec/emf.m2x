@@ -27,7 +27,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * An imperative operation with body, context, and result parameters (QVT v1.3 Section 8.2.2.5).
+ * An imperative operation with body, context, and result parameters (QVT v1.3 Section 8.2.1.10).
  * <!-- end-model-doc -->
  *
  * <p>

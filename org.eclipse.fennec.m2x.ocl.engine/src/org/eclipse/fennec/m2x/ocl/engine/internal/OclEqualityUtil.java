@@ -53,7 +53,7 @@ public final class OclEqualityUtil {
 		}
 		// Numeric cross-type equality: Integer is subclass of Real (§11.4.2, §11.5.1)
 		if (left instanceof Number ln && right instanceof Number rn) {
-			return Double.compare(ln.doubleValue(), rn.doubleValue()) == 0;
+			return OclNumbers.equal(ln, rn);
 		}
 		// An enum literal and the value a generated model holds for it are one value (#133):
 		// EEnumLiteral.getInstance() is the Java enum constant for a generated package and the
@@ -88,7 +88,7 @@ public final class OclEqualityUtil {
 	 */
 	public static Object lookupKey(Object value) {
 		if (value instanceof Number number) {
-			return Double.valueOf(number.doubleValue());
+			return OclNumbers.key(number);
 		}
 		// The same bridge as in oclEquals, so that an enum literal and its generated constant
 		// land in the same bucket (#133)

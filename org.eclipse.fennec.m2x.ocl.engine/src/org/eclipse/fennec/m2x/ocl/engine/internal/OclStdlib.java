@@ -14,10 +14,14 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Formatter;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -32,7 +36,6 @@ import java.util.regex.PatternSyntaxException;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
 import org.eclipse.fennec.m2x.model.ocl.CollectionType;
@@ -41,8 +44,10 @@ import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
+import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 
 /**
  * OCL Standard Library operation dispatch.
@@ -67,6 +72,114 @@ class OclStdlib {
 	/** Sentinel for "operation not found" — distinct from null (OclVoid) and OclInvalid. */
 	static final Object NOT_FOUND = new Object();
 
+	/**
+	 * The answer to a call whose arguments do not fit the operation's signature (OCL v2.4
+	 * §8.3.7 OperationCallExp [1]/[2]). The result is {@code invalid}; the message is for the
+	 * evaluator to report as an ERROR (#314).
+	 */
+	record ArgumentError(String message) {
+	}
+
+	/** What a parameter of a predefined operation accepts. */
+	private enum Param {
+		/** Integer: a finite whole number. */
+		INTEGER("Integer"),
+		/** Real, Integer or UnlimitedNatural — the numbers an arithmetic operation takes. */
+		NUMBER("Integer or Real"),
+		STRING("String"),
+		BOOLEAN("Boolean");
+
+		private final String label;
+
+		Param(String label) {
+			this.label = label;
+		}
+
+		boolean accepts(Object value) {
+			return switch (this) {
+				case INTEGER -> OclNumbers.isInteger(value);
+				case NUMBER -> value instanceof Number || value instanceof OclUnlimitedNatural;
+				case STRING -> value instanceof String;
+				case BOOLEAN -> value instanceof Boolean;
+			};
+		}
+	}
+
+	private static final Param[] ONE_NUMBER = { Param.NUMBER };
+	private static final Param[] ONE_INTEGER = { Param.INTEGER };
+	private static final Param[] ONE_STRING = { Param.STRING };
+	private static final Param[] TWO_STRINGS = { Param.STRING, Param.STRING };
+	private static final Param[] ONE_BOOLEAN = { Param.BOOLEAN };
+
+	/**
+	 * Signatures of the predefined operations of the primitive types (OCL v2.4 §11.5) whose
+	 * arguments used to be coerced silently — {@code 1 + 'motorcycle'} was 1 (§7.4.5, #314).
+	 * Operations not listed here keep their own checks.
+	 */
+	private static final Map<String, Map<String, Param[]>> SIGNATURES = Map.of(
+			"Integer", Map.ofEntries(
+					Map.entry("+", ONE_NUMBER), Map.entry("-", ONE_NUMBER), Map.entry("*", ONE_NUMBER),
+					Map.entry("/", ONE_NUMBER), Map.entry("div", ONE_INTEGER), Map.entry("mod", ONE_INTEGER),
+					Map.entry("max", ONE_NUMBER), Map.entry("min", ONE_NUMBER),
+					Map.entry("<", ONE_NUMBER), Map.entry("<=", ONE_NUMBER),
+					Map.entry(">", ONE_NUMBER), Map.entry(">=", ONE_NUMBER)),
+			"Real", Map.ofEntries(
+					Map.entry("+", ONE_NUMBER), Map.entry("-", ONE_NUMBER), Map.entry("*", ONE_NUMBER),
+					Map.entry("/", ONE_NUMBER), Map.entry("max", ONE_NUMBER), Map.entry("min", ONE_NUMBER),
+					Map.entry("<", ONE_NUMBER), Map.entry("<=", ONE_NUMBER),
+					Map.entry(">", ONE_NUMBER), Map.entry(">=", ONE_NUMBER)),
+			"UnlimitedNatural", Map.of(
+					"max", ONE_NUMBER, "min", ONE_NUMBER,
+					"<", ONE_NUMBER, "<=", ONE_NUMBER, ">", ONE_NUMBER, ">=", ONE_NUMBER),
+			"Boolean", Map.of(
+					"and", ONE_BOOLEAN, "or", ONE_BOOLEAN, "xor", ONE_BOOLEAN, "implies", ONE_BOOLEAN),
+			"String", Map.ofEntries(
+					Map.entry("+", ONE_STRING), Map.entry("concat", ONE_STRING),
+					Map.entry("substring", new Param[] { Param.INTEGER, Param.INTEGER }),
+					Map.entry("indexOf", ONE_STRING), Map.entry("lastIndexOf", ONE_STRING),
+					Map.entry("at", ONE_INTEGER), Map.entry("equalsIgnoreCase", ONE_STRING),
+					Map.entry("startsWith", ONE_STRING), Map.entry("endsWith", ONE_STRING),
+					Map.entry("<", ONE_STRING), Map.entry("<=", ONE_STRING),
+					Map.entry(">", ONE_STRING), Map.entry(">=", ONE_STRING),
+					Map.entry("matches", ONE_STRING), Map.entry("replaceAll", TWO_STRINGS),
+					Map.entry("replaceFirst", TWO_STRINGS), Map.entry("substituteAll", TWO_STRINGS),
+					Map.entry("substituteFirst", TWO_STRINGS)));
+
+	private static String primitiveTypeName(Object source) {
+		if (source instanceof OclUnlimitedNatural) return "UnlimitedNatural";
+		if (OclNumbers.isInteger(source)) return "Integer";
+		if (OclNumbers.isReal(source)) return "Real";
+		if (source instanceof String) return "String";
+		if (source instanceof Boolean) return "Boolean";
+		return null;
+	}
+
+	/**
+	 * Checks a call on a primitive value against {@link #SIGNATURES}: as many arguments as the
+	 * operation has parameters, each of a conforming type. Unary minus takes none.
+	 *
+	 * @return the error, or {@code null} when the call fits or the operation is not listed
+	 */
+	private static ArgumentError checkSignature(String name, Object source, Object[] args) {
+		String typeName = primitiveTypeName(source);
+		Param[] params = typeName == null ? null : SIGNATURES.get(typeName).get(name);
+		if (params == null || ("-".equals(name) && args.length == 0)) {
+			return null;
+		}
+		String operation = typeName + "::" + name;
+		if (args.length != params.length) {
+			return new ArgumentError("Operation '" + operation + "' expects " + params.length
+					+ " argument(s), got " + args.length);
+		}
+		for (int i = 0; i < params.length; i++) {
+			if (!params[i].accepts(args[i])) {
+				return new ArgumentError("Argument " + (i + 1) + " of '" + operation + "' must be "
+						+ params[i].label + ", got " + args[i].getClass().getSimpleName());
+			}
+		}
+		return null;
+	}
+
 	private OclStdlib() {
 	}
 
@@ -83,6 +196,10 @@ class OclStdlib {
 	static Object dispatch(String name, Object source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
 		try {
+			ArgumentError mismatch = checkSignature(name, source, args);
+			if (mismatch != null) {
+				return mismatch;
+			}
 			return withinLimits(dispatchByType(name, source, args, options, locale), options);
 		} catch (ArrayIndexOutOfBoundsException wrongArity) {
 			// Operations are resolved by name at evaluation time, so `Set{1}->includes()` or
@@ -118,6 +235,11 @@ class OclStdlib {
 
 	private static Object dispatchByType(String name, Object source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
+		// QVT v1.3 §8.3.17: Integer::range(start, end) is called on the type (#344)
+		if ("range".equals(name) && args.length == 2 && source instanceof PrimitiveType type
+				&& "Integer".equals(type.getName())) {
+			return range(args[0], args[1], options);
+		}
 		// OclAny operations apply to all types (including null/invalid)
 		Object result = dispatchOclAny(name, source, args);
 		if (result != NOT_FOUND) {
@@ -131,23 +253,21 @@ class OclStdlib {
 		if (source instanceof Boolean b) {
 			return dispatchBoolean(name, b, args);
 		}
-		if (source instanceof Long l) {
-			return dispatchInteger(name, l, args, options);
+		if (OclNumbers.isInteger(source)) {
+			return dispatchInteger(name, (Number) source, args, options);
 		}
-		if (source instanceof Integer i) {
-			return dispatchInteger(name, (long) i, args, options);
-		}
-		if (source instanceof Double d) {
-			return dispatchReal(name, d, args);
-		}
-		if (source instanceof Float f) {
-			return dispatchReal(name, (double) f, args);
+		if (OclNumbers.isReal(source)) {
+			// NaN and the infinities a model's EDouble may hold are no Real values (§11.4.1, #322)
+			if (!OclNumbers.isFinite((Number) source)) {
+				return OclInvalid.INSTANCE;
+			}
+			return dispatchReal(name, OclNumbers.bigDecimal((Number) source), args);
 		}
 		if (source instanceof String s) {
 			return dispatchString(name, s, args, options, locale);
 		}
 		if (source instanceof Map<?, ?> m) {
-			return dispatchMap(name, m, args);
+			return dispatchMap(name, m, args, options);
 		}
 		if (source instanceof Collection<?> c) {
 			// Ordered collections: Sequence (plain List), OrderedSet — NOT Bag
@@ -158,7 +278,7 @@ class OclStdlib {
 				Object ordered = dispatchOrderedCollection(name, l, args);
 				if (ordered != NOT_FOUND) return ordered;
 			}
-			return dispatchCollection(name, c, args, options);
+			return dispatchCollection(name, c, args, options, locale);
 		}
 
 		return NOT_FOUND;
@@ -195,9 +315,11 @@ class OclStdlib {
 			case "oclType" -> oclType(source);
 			case "oclContainer" -> oclContainer(source);
 			case "oclContents" -> oclContents(source);
-			case "toString" -> source == null ? OclInvalid.INSTANCE : String.valueOf(source);
+			// §11.2.4: toString is not among the operations defined on invalid (#321)
+			case "toString" -> source == null || source == OclInvalid.INSTANCE
+					? OclInvalid.INSTANCE : OclValues.toText(source);
 			// QVT-O §8.3.3.1: Object::repr() — textual representation of any object
-			case "repr" -> String.valueOf(source);
+			case "repr" -> OclValues.repr(source);
 			// §8.4.4: stereotypedBy — UML-specific, not supported (P10-07)
 			case "stereotypedBy" -> OclInvalid.INSTANCE;
 			default -> NOT_FOUND;
@@ -214,8 +336,8 @@ class OclStdlib {
 		if (source == OclInvalid.INSTANCE) return LIBRARY.oclInvalid();
 		if (source instanceof OclUnlimitedNatural) return LIBRARY.unlimitedNatural();
 		if (source instanceof EObject eo) return eo.eClass();
-		if (source instanceof Long || source instanceof Integer) return LIBRARY.integer();
-		if (source instanceof Double || source instanceof Float) return LIBRARY.real();
+		if (OclNumbers.isInteger(source)) return LIBRARY.integer();
+		if (OclNumbers.isReal(source)) return LIBRARY.real();
 		if (source instanceof String) return LIBRARY.string();
 		if (source instanceof Boolean) return LIBRARY.booleanType();
 		if (source instanceof OclOrderedSet<?>) return createCollectionType(CollectionKind.ORDERED_SET);
@@ -232,6 +354,8 @@ class OclStdlib {
 	private static CollectionType createCollectionType(CollectionKind kind) {
 		CollectionType ct = OclFactory.eINSTANCE.createCollectionType();
 		ct.setKind(kind);
+		// The type is named after its kind, as the parser names Set(T) (#321)
+		ct.setName(kind.getName());
 		return ct;
 	}
 
@@ -293,12 +417,14 @@ class OclStdlib {
 		if (left instanceof OclType lt && right instanceof OclType rt) {
 			return Objects.equals(lt.getName(), rt.getName());
 		}
+		// OCL v2.4 §11.3.1: "True if self is the same object as object2" — object values are
+		// identities (Annex A.2.4), not structures; OclSet already hashes them by identity (#318)
 		if (left instanceof EObject le && right instanceof EObject re) {
-			return EcoreUtil.equals(le, re);
+			return le == re;
 		}
-		// Numeric cross-type equality: 5.0 = 5 → true (OCL v2.4 §11.5.1)
+		// Numeric cross-type equality: 5.0 = 5 → true (OCL v2.4 §11.5.1), exact beyond 2^53 (#317)
 		if (left instanceof Number ln && right instanceof Number rn) {
-			return Double.compare(ln.doubleValue(), rn.doubleValue()) == 0;
+			return OclNumbers.equal(ln, rn);
 		}
 		return Objects.equals(left, right);
 	}
@@ -388,20 +514,13 @@ class OclStdlib {
 		}
 		// Check primitive type match first
 		if (typeArg instanceof PrimitiveType pt) {
-			if (matchesPrimitiveType(source, pt.getName())) {
-				return true;
-			}
-			// Spec §11.5.1: UnlimitedNatural conforms to Integer conforms to Real
-			if (source instanceof OclUnlimitedNatural) {
-				return "Integer".equals(pt.getName()) || "Real".equals(pt.getName());
-			}
-			if (source instanceof Long || source instanceof Integer) {
-				return "Real".equals(pt.getName());
-			}
-			return false;
+			return conformsToPrimitive(source, pt.getName());
 		}
-		if (typeArg instanceof CollectionType) {
-			return source instanceof Collection<?>;
+		// §7.5.13: Set(T) does not conform to Bag(T), and Collection(T1) conforms to
+		// Collection(T2) only when T1 conforms to T2 — kind and elements both count (#321)
+		if (typeArg instanceof CollectionType ct) {
+			return source instanceof Collection<?> coll && collectionKindConforms(coll, ct.getKind())
+					&& (ct.getElementType() == null || allElementsConform(coll, ct.getElementType()));
 		}
 		EClassifier classifier = extractClassifier(typeArg);
 		if (classifier == null) {
@@ -423,6 +542,9 @@ class OclStdlib {
 		if (typeArg instanceof PrimitiveType pt) {
 			return matchesPrimitiveType(source, pt.getName());
 		}
+		if (typeArg instanceof CollectionType ct) {
+			return collectionIsTypeOf(source, ct);
+		}
 		EClassifier classifier = extractClassifier(typeArg);
 		if (classifier == null) {
 			return false;
@@ -434,17 +556,64 @@ class OclStdlib {
 				&& classifier.getInstanceClass().equals(source.getClass());
 	}
 
+	/**
+	 * Whether {@code source} is exactly of the predefined type {@code typeName}. A finite
+	 * integer is an Integer, never an UnlimitedNatural: UnlimitedNatural conforms to Integer,
+	 * not the reverse (§11.4.5), so only {@code *} is of type UnlimitedNatural (#321).
+	 */
 	static boolean matchesPrimitiveType(Object source, String typeName) {
 		return switch (typeName) {
-			case "Integer" -> source instanceof Long || source instanceof Integer;
-			case "Real" -> source instanceof Double || source instanceof Float;
+			case "Integer" -> OclNumbers.isInteger(source);
+			case "Real" -> OclNumbers.isReal(source);
 			case "String" -> source instanceof String;
 			case "Boolean" -> source instanceof Boolean;
-			case "UnlimitedNatural" -> source instanceof OclUnlimitedNatural
-					|| source instanceof Long || source instanceof Integer;
+			case "UnlimitedNatural" -> source instanceof OclUnlimitedNatural;
 			case "OclVoid" -> source == null;
 			default -> false;
 		};
+	}
+
+	/**
+	 * Whether {@code source} conforms to the predefined type {@code typeName} (§8.2.1, §11.4):
+	 * its exact type, or a supertype — Integer conforms to Real, UnlimitedNatural to Integer
+	 * and Real, everything to OclAny.
+	 */
+	static boolean conformsToPrimitive(Object source, String typeName) {
+		if ("OclAny".equals(typeName) || matchesPrimitiveType(source, typeName)) {
+			return true;
+		}
+		return switch (typeName) {
+			case "Real" -> OclNumbers.isInteger(source) || source instanceof OclUnlimitedNatural;
+			case "Integer" -> source instanceof OclUnlimitedNatural;
+			default -> false;
+		};
+	}
+
+	/**
+	 * {@code oclIsTypeOf} for a collection type: the exact kind ({@code Collection} is abstract,
+	 * no value is of that type) and the element type as the type of the elements. The dynamic
+	 * element type is the least common supertype of the elements; it equals {@code T} when all
+	 * elements conform to {@code T} and at least one is exactly of type {@code T}, or when the
+	 * collection is empty (#321).
+	 */
+	private static boolean collectionIsTypeOf(Object source, CollectionType type) {
+		if (!(source instanceof Collection<?> coll) || type.getKind() == CollectionKind.COLLECTION
+				|| !collectionKindConforms(coll, type.getKind())) {
+			return false;
+		}
+		EClassifier elementType = type.getElementType();
+		if (elementType == null || coll.isEmpty()) {
+			return true;
+		}
+		if (!allElementsConform(coll, elementType)) {
+			return false;
+		}
+		for (Object element : coll) {
+			if (element != null && Boolean.TRUE.equals(oclIsTypeOf(element, elementType))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static Object oclAsType(Object source, Object typeArg) {
@@ -454,7 +623,7 @@ class OclStdlib {
 		}
 		// Handle primitive types (PrimitiveType has no EClassifier)
 		if (typeArg instanceof PrimitiveType pt) {
-			return matchesPrimitiveType(source, pt.getName()) ? source : OclInvalid.INSTANCE;
+			return oclAsPrimitive(source, pt.getName());
 		}
 		// Handle collection types — check kind and element type conformance
 		if (typeArg instanceof CollectionType ct) {
@@ -473,6 +642,27 @@ class OclStdlib {
 			return OclInvalid.INSTANCE;
 		}
 		if (classifier.isInstance(source)) {
+			return source;
+		}
+		return OclInvalid.INSTANCE;
+	}
+
+	/**
+	 * {@code oclAsType} to a predefined type (§11.3.1): the value when it conforms, otherwise
+	 * invalid. Integer conforms to Real, so {@code 5.oclAsType(Real)} is the Real 5.0 (#321).
+	 * A non-negative Integer is accepted as an UnlimitedNatural, which is how Eclipse OCL
+	 * reads a multiplicity value; a negative one is invalid. {@code *} is not an Integer or
+	 * Real value (§11.4.5), so its cast to either is invalid.
+	 */
+	private static Object oclAsPrimitive(Object source, String typeName) {
+		if (matchesPrimitiveType(source, typeName) || "OclAny".equals(typeName)) {
+			return source;
+		}
+		if ("Real".equals(typeName) && OclNumbers.isInteger(source)) {
+			return OclNumbers.bigDecimal((Number) source);
+		}
+		if ("UnlimitedNatural".equals(typeName) && OclNumbers.isInteger(source)
+				&& OclNumbers.signum((Number) source) >= 0) {
 			return source;
 		}
 		return OclInvalid.INSTANCE;
@@ -530,7 +720,7 @@ class OclStdlib {
 				return true;
 			}
 			for (Object elem : coll) {
-				if (elem != null && !matchesPrimitiveType(elem, typeName)) {
+				if (elem != null && !conformsToPrimitive(elem, typeName)) {
 					return false;
 				}
 			}
@@ -601,7 +791,7 @@ class OclStdlib {
 
 	// --- Integer (OCL v2.4 Section 11.5) ---
 
-	private static Object dispatchInteger(String name, Long source, Object[] args,
+	private static Object dispatchInteger(String name, Number source, Object[] args,
 			OclEvaluationOptions options) {
 		// Guard: if arg is OclUnlimitedNatural, special-case comparison/max/min
 		if (args.length > 0 && args[0] instanceof OclUnlimitedNatural) {
@@ -614,86 +804,53 @@ class OclStdlib {
 				default -> NOT_FOUND;
 			};
 		}
+		if (args.length > 0 && args[0] instanceof Number n && !OclNumbers.isFinite(n)) {
+			return OclInvalid.INSTANCE; // NaN or an infinity from the model (#322)
+		}
+		// Integer arithmetic is exact: it continues in BigInteger where a long would overflow
+		// (§11.4.2, #322); with a Real argument the operation is Real's (Integer conforms to Real)
 		return switch (name) {
-			case "+" -> {
-				if (args.length == 0) yield source; // unary +
-				Object arg = args[0];
-				if (arg instanceof Double d) yield source + d;
-				yield source + asLong(arg);
-			}
-			case "-" -> {
-				if (args.length == 0) yield -source; // unary -
-				Object arg = args[0];
-				if (arg instanceof Double d) yield source - d;
-				yield source - asLong(arg);
-			}
-			case "*" -> {
-				Object arg = args[0];
-				if (arg instanceof Double d) yield source * d;
-				yield source * asLong(arg);
-			}
+			case "+" -> args.length == 0 ? source : OclNumbers.add(source, (Number) args[0]);
+			case "-" -> args.length == 0 ? OclNumbers.negate(source) : OclNumbers.subtract(source, (Number) args[0]);
+			case "*" -> OclNumbers.multiply(source, (Number) args[0]);
 			case "/" -> {
-				Object arg = args[0];
-				double divisor = arg instanceof Double d ? d : asLong(arg);
-				if (divisor == 0.0) yield OclInvalid.INSTANCE;
-				yield source / divisor; // always returns Real (Double)
+				Object quotient = OclNumbers.divide(source, (Number) args[0]);
+				yield quotient == null ? OclInvalid.INSTANCE : quotient;
 			}
 			case "div" -> {
-				long divisor = asLong(args[0]);
-				if (divisor == 0) yield OclInvalid.INSTANCE;
-				yield source / divisor;
+				BigInteger divisor = OclNumbers.bigInteger((Number) args[0]);
+				if (divisor.signum() == 0) yield OclInvalid.INSTANCE;
+				yield OclNumbers.integer(OclNumbers.bigInteger(source).divide(divisor));
 			}
 			case "mod" -> {
-				long divisor = asLong(args[0]);
-				if (divisor == 0) yield OclInvalid.INSTANCE;
-				yield source % divisor;
+				BigInteger divisor = OclNumbers.bigInteger((Number) args[0]);
+				if (divisor.signum() == 0) yield OclInvalid.INSTANCE;
+				yield OclNumbers.integer(OclNumbers.bigInteger(source).remainder(divisor));
 			}
-			case "abs" -> Math.abs(source);
+			case "abs" -> OclNumbers.abs(source);
 			case "max" -> {
-				Object arg = args[0];
-				if (arg instanceof Double d) yield Math.max(source, d);
-				yield Math.max(source, asLong(arg));
+				Number arg = (Number) args[0];
+				Number larger = OclNumbers.compare(source, arg) >= 0 ? source : arg;
+				yield OclNumbers.isReal(arg) ? OclNumbers.bigDecimal(larger) : larger;
 			}
 			case "min" -> {
-				Object arg = args[0];
-				if (arg instanceof Double d) yield Math.min(source, d);
-				yield Math.min(source, asLong(arg));
+				Number arg = (Number) args[0];
+				Number smaller = OclNumbers.compare(source, arg) <= 0 ? source : arg;
+				yield OclNumbers.isReal(arg) ? OclNumbers.bigDecimal(smaller) : smaller;
 			}
-			case "<" -> source < asNumber(args[0]).doubleValue();
-			case "<=" -> source <= asNumber(args[0]).doubleValue();
-			case ">" -> source > asNumber(args[0]).doubleValue();
-			case ">=" -> source >= asNumber(args[0]).doubleValue();
-			case "toReal" -> (double) source;
+			case "<" -> OclNumbers.compare(source, (Number) args[0]) < 0;
+			case "<=" -> OclNumbers.compare(source, (Number) args[0]) <= 0;
+			case ">" -> OclNumbers.compare(source, (Number) args[0]) > 0;
+			case ">=" -> OclNumbers.compare(source, (Number) args[0]) >= 0;
+			case "toReal" -> OclNumbers.bigDecimal(source);
 			case "toInteger" -> source;
 			case "floor" -> source;
 			case "ceiling" -> source;
 			case "round" -> source;
 			case "toString" -> source.toString();
-			case "range" -> {
-				long start, end;
-				if (args.length == 1 && args[0] instanceof Long e) {
-					// source.range(end) — source is start
-					start = source;
-					end = e;
-				} else if (args.length >= 2 && args[0] instanceof Long s && args[1] instanceof Long e) {
+			case "range" -> args.length == 1 ? range(source, args[0], options)
 					// source.range(start, end) — source ignored (§8.3.17 static-style)
-					start = s;
-					end = e;
-				} else {
-					yield OclInvalid.INSTANCE;
-				}
-				// Bounded like the literal form Sequence{1..n} (OclEvaluator), which this operation
-				// is the spelled-out version of — 1.range(2000000000) used to be an OOM (#182)
-				long size = end - start + 1;
-				if (size > options.maxCollectionSize()) {
-					yield OclInvalid.INSTANCE;
-				}
-				List<Object> result = new ArrayList<>();
-				for (long i = start; i <= end; i++) {
-					result.add(i);
-				}
-				yield result;
-			}
+					: range(args[0], args[1], options);
 			default -> NOT_FOUND;
 		};
 	}
@@ -712,31 +869,145 @@ class OclStdlib {
 	 * @return {@code true} if it belongs to a model object
 	 */
 	private static boolean belongsToAModel(Object source) {
-		return source instanceof EList<?>;
+		// A navigation yields an OclFeatureValue (#319); an EList still reaches here from a
+		// provider or a variable bound by the host
+		return source instanceof OclFeatureValue || source instanceof EList<?>;
 	}
 
 	/**
-	 * {@code String.format} with a bound on the size of the result.
-	 *
-	 * <p>A format string is data — from the expression or from the model — and the width field
-	 * of a specifier is an allocation request: {@code '%1$999999999s'.format('x')} asks for a
-	 * gigabyte of padding. The bound is enforced where the output is written, not by inspecting
-	 * the format string, because the specifier grammar has more than one spelling for a width
-	 * ({@code %9s}, {@code %1$9s}, {@code %<9s}, {@code %-9s}) and {@link Formatter} writes the
-	 * padding character by character into its {@link Appendable}. A sink that refuses to grow
-	 * past the limit therefore stops the call before the padding exists (#182).
-	 *
-	 * @return the formatted string, or {@code invalid} if the format string is malformed or
-	 *         the result would exceed the limit
+	 * {@code Integer::range(start, end)}: the Integers from start to end, an Integer of any size
+	 * (#322) as a bound. Bounded like the literal form Sequence{1..n} (OclEvaluator), which this
+	 * operation is the spelled-out version of — 1.range(2000000000) used to be an OOM (#182).
 	 */
-	private static Object formatBounded(String format, Object[] args, int maxSize) {
+	private static Object range(Object start, Object end, OclEvaluationOptions options) {
+		if (!OclNumbers.isInteger(start) || !OclNumbers.isInteger(end)) {
+			return OclInvalid.INSTANCE;
+		}
+		BigInteger first = OclNumbers.bigInteger((Number) start);
+		BigInteger last = OclNumbers.bigInteger((Number) end);
+		BigInteger size = last.subtract(first).add(BigInteger.ONE);
+		if (size.compareTo(BigInteger.valueOf(options.maxCollectionSize())) > 0) {
+			return OclInvalid.INSTANCE;
+		}
+		List<Object> result = new ArrayList<>();
+		for (BigInteger i = first; i.compareTo(last) <= 0; i = i.add(BigInteger.ONE)) {
+			result.add(OclNumbers.integer(i));
+		}
+		return result;
+	}
+
+	/**
+	 * A hole of a QVT-O format string: %(key), Java's argument index (n$ or <), flags, width,
+	 * .precision and the conversion — or %%.
+	 */
+	private static final Pattern FORMAT_HOLE = Pattern.compile(
+			"%(?:\\(([^)]*)\\))?(\\d+\\$|<)?([-#+ 0,(]*)(\\d+)?(?:\\.(\\d+))?([a-zA-Z%])");
+
+	/**
+	 * QVT v1.3 §8.3.16.1 {@code String::format(value)}: "The value, necessarily a tuple if more
+	 * than a hole, … Formatting an object (with %s) implies the invocation of Object::repr() … A
+	 * dictionary can be passed … holes have the syntax %(key)s". A single hole takes the value
+	 * as it is — a collection too; several holes take the parts of a tuple, or the elements of a
+	 * collection, in order. Numbers are written in the evaluation's locale, {@link Locale#ROOT}
+	 * without one, not the JVM's. Before #344 the value went to {@link Formatter} as varargs: a
+	 * tuple and a Dict were invalid, a collection was spread, and %f wrote "1,500000" under a
+	 * German JVM.
+	 *
+	 * <p>The width field of a hole is an allocation request: {@code '%999999999s'.format('x')}
+	 * asks for a gigabyte of padding. {@link Formatter} writes the padding character by
+	 * character into its {@link Appendable}, so a sink that refuses to grow past the limit stops
+	 * the call before the padding exists (#182).
+	 *
+	 * @return the formatted string, or {@code invalid} if a hole has no value, the format is
+	 *         malformed or the result would exceed the limit
+	 */
+	private static Object formatQvto(String format, Object value, int maxSize, Locale locale) {
+		Matcher hole = FORMAT_HOLE.matcher(format);
+		List<Object> positional = null;
+		int next = 0;
+		Object previous = null;
 		BoundedOutput out = new BoundedOutput(maxSize);
-		try (Formatter formatter = new Formatter(out)) {
-			formatter.format(format, args);
+		try (Formatter formatter = new Formatter(out, locale != null ? locale : Locale.ROOT)) {
+			int copiedUpTo = 0;
+			while (hole.find()) {
+				out.append(format, copiedUpTo, hole.start());
+				copiedUpTo = hole.end();
+				char conversion = hole.group(6).charAt(0);
+				if (conversion == '%') {
+					out.append('%');
+					continue;
+				}
+				Object argument;
+				if (hole.group(1) != null) {
+					if (!(value instanceof Map<?, ?> dict) || !dict.containsKey(hole.group(1))) {
+						return OclInvalid.INSTANCE;
+					}
+					argument = dict.get(hole.group(1));
+				} else if ("<".equals(hole.group(2))) {
+					argument = previous;
+				} else {
+					if (positional == null) {
+						positional = holeCount(format) > 1 ? partsOf(value)
+								: Collections.singletonList(value);
+					}
+					int index = hole.group(2) != null
+							? Integer.parseInt(hole.group(2).substring(0, hole.group(2).length() - 1)) - 1
+							: next++;
+					if (index < 0 || index >= positional.size()) {
+						return OclInvalid.INSTANCE;
+					}
+					argument = positional.get(index);
+				}
+				previous = argument;
+				String spec = "%" + hole.group(3) + (hole.group(4) != null ? hole.group(4) : "")
+						+ (hole.group(5) != null ? "." + hole.group(5) : "") + conversion;
+				formatter.format(spec, formatArgument(conversion, argument));
+				formatter.flush();
+			}
+			out.append(format, copiedUpTo, format.length());
 			return out.toString();
 		} catch (RuntimeException malformedOrTooLarge) {
 			return OclInvalid.INSTANCE;
 		}
+	}
+
+	/** The number of values the positional holes take: their count, or the highest n$. */
+	private static int holeCount(String format) {
+		Matcher hole = FORMAT_HOLE.matcher(format);
+		int sequential = 0;
+		int highest = 0;
+		while (hole.find()) {
+			if (hole.group(6).charAt(0) == '%' || hole.group(1) != null || "<".equals(hole.group(2))) {
+				continue;
+			}
+			if (hole.group(2) != null) {
+				highest = Math.max(highest, Integer.parseInt(hole.group(2).substring(0, hole.group(2).length() - 1)));
+			} else {
+				sequential++;
+			}
+		}
+		return Math.max(sequential, highest);
+	}
+
+	/** The values of several holes: the parts of a tuple or the elements of a collection, in order. */
+	private static List<Object> partsOf(Object value) {
+		if (value instanceof Map<?, ?> tuple) {
+			return new ArrayList<>(tuple.values());
+		}
+		if (value instanceof Collection<?> collection) {
+			return new ArrayList<>(collection);
+		}
+		return Collections.singletonList(value);
+	}
+
+	/** A value as the conversion takes it: %s the repr(), numbers as Java numbers. */
+	private static Object formatArgument(char conversion, Object argument) {
+		return switch (Character.toLowerCase(conversion)) {
+			case 's' -> OclValues.repr(argument);
+			case 'd', 'x', 'o' -> OclNumbers.isInteger(argument) ? OclNumbers.bigInteger((Number) argument) : argument;
+			case 'f', 'e', 'g' -> argument instanceof Number number ? OclNumbers.bigDecimal(number) : argument;
+			default -> argument;
+		};
 	}
 
 	/**
@@ -847,7 +1118,7 @@ class OclStdlib {
 
 	// --- Real (OCL v2.4 Section 11.5) ---
 
-	private static Object dispatchReal(String name, Double source, Object[] args) {
+	private static Object dispatchReal(String name, BigDecimal source, Object[] args) {
 		// Guard: if arg is OclUnlimitedNatural, arithmetic is invalid
 		if (args.length > 0 && args[0] instanceof OclUnlimitedNatural) {
 			return switch (name) {
@@ -859,44 +1130,52 @@ class OclStdlib {
 				default -> NOT_FOUND;
 			};
 		}
+		if (args.length > 0 && args[0] instanceof Number n && !OclNumbers.isFinite(n)) {
+			return OclInvalid.INSTANCE; // NaN or an infinity from the model (#322)
+		}
+		// Real is a BigDecimal: 0.1 + 0.2 = 0.3 (§11.4.1, #322)
 		return switch (name) {
-			case "+" -> {
-				if (args.length == 0) yield source;
-				yield source + asNumber(args[0]).doubleValue();
-			}
-			case "-" -> {
-				if (args.length == 0) yield -source;
-				yield source - asNumber(args[0]).doubleValue();
-			}
-			case "*" -> source * asNumber(args[0]).doubleValue();
+			case "+" -> args.length == 0 ? source : OclNumbers.add(source, (Number) args[0]);
+			case "-" -> args.length == 0 ? OclNumbers.negate(source) : OclNumbers.subtract(source, (Number) args[0]);
+			case "*" -> OclNumbers.multiply(source, (Number) args[0]);
 			case "/" -> {
-				double divisor = asNumber(args[0]).doubleValue();
-				if (divisor == 0.0) yield OclInvalid.INSTANCE;
-				yield source / divisor;
+				Object quotient = OclNumbers.divide(source, (Number) args[0]);
+				yield quotient == null ? OclInvalid.INSTANCE : quotient;
 			}
-			case "abs" -> Math.abs(source);
-			case "max" -> Math.max(source, asNumber(args[0]).doubleValue());
-			case "min" -> Math.min(source, asNumber(args[0]).doubleValue());
-			case "floor" -> (long) Math.floor(source);
-			case "ceiling" -> (long) Math.ceil(source);
-			case "round" -> (long) Math.round(source);
-			case "<" -> source < asNumber(args[0]).doubleValue();
-			case "<=" -> source <= asNumber(args[0]).doubleValue();
-			case ">" -> source > asNumber(args[0]).doubleValue();
-			case ">=" -> source >= asNumber(args[0]).doubleValue();
-			case "toInteger" -> (long) source.doubleValue();
+			case "abs" -> OclNumbers.abs(source);
+			case "max" -> OclNumbers.compare(source, (Number) args[0]) >= 0 ? source
+					: OclNumbers.bigDecimal((Number) args[0]);
+			case "min" -> OclNumbers.compare(source, (Number) args[0]) <= 0 ? source
+					: OclNumbers.bigDecimal((Number) args[0]);
+			case "floor" -> OclNumbers.floor(source);
+			case "ceiling" -> OclNumbers.ceiling(source);
+			case "round" -> OclNumbers.round(source);
+			case "<" -> OclNumbers.compare(source, (Number) args[0]) < 0;
+			case "<=" -> OclNumbers.compare(source, (Number) args[0]) <= 0;
+			case ">" -> OclNumbers.compare(source, (Number) args[0]) > 0;
+			case ">=" -> OclNumbers.compare(source, (Number) args[0]) >= 0;
+			case "toInteger" -> OclNumbers.integer(source.toBigInteger());
 			case "toReal" -> source;
-			case "toString" -> source.toString();
+			case "toString" -> OclNumbers.realToString(source);
 			default -> NOT_FOUND;
 		};
 	}
 
 	// --- String (OCL v2.4 Section 11.7) ---
 
+	private static final Pattern LEADING_OR_TRAILING_WHITE_SPACE =
+			Pattern.compile("^\\p{IsWhite_Space}+|\\p{IsWhite_Space}+$");
+
+	private static String stripWhiteSpace(String source) {
+		return LEADING_OR_TRAILING_WHITE_SPACE.matcher(source).replaceAll("");
+	}
+
 	private static Object dispatchString(String name, String source, Object[] args,
 			OclEvaluationOptions options, Locale locale) {
 		return switch (name) {
-			case "size" -> (long) source.length();
+			// §11.4.3: a String is a sequence of characters — Unicode code points, not the UTF-16
+			// units Java counts, so '😀'.size() is 1 (#329)
+			case "size" -> (long) source.codePointCount(0, source.length());
 			case "+" , "concat" -> {
 				String other = asString(args[0]);
 				// Checked before the allocation, not after: the sum is known
@@ -906,26 +1185,28 @@ class OclStdlib {
 				yield source + other;
 			}
 			case "substring" -> {
-				int lower = (int) asLong(args[0]);
-				int upper = (int) asLong(args[1]);
+				int lower = asIndex(args[0]);
+				int upper = asIndex(args[1]);
+				int size = source.codePointCount(0, source.length());
 				// OCL v2.5 §11.5.1: 1 <= lower AND lower <= upper AND upper <= size
-				if (lower < 1 || upper > source.length() || lower > upper) {
+				if (lower < 1 || upper > size || lower > upper) {
 					yield OclInvalid.INSTANCE;
 				}
-				yield source.substring(lower - 1, upper);
+				yield source.substring(source.offsetByCodePoints(0, lower - 1), source.offsetByCodePoints(0, upper));
 			}
 			case "toUpperCase", "toUpper" -> source.toUpperCase(locale);
 			case "toLowerCase", "toLower" -> source.toLowerCase(locale);
-			case "trim" -> source.trim();
+			// Any Unicode white space, not only the characters up to U+0020 (#344)
+			case "trim" -> stripWhiteSpace(source);
 			case "indexOf" -> {
 				// OCL v2.4 §11.5.3: "or zero if s is not a substring of self"
 				int idx = source.indexOf(asString(args[0]));
-				yield (long) (idx + 1); // 1-based, 0 if not found
+				yield idx < 0 ? 0L : (long) source.codePointCount(0, idx) + 1; // 1-based, 0 if not found
 			}
 			case "lastIndexOf" -> {
 				// Eclipse extension (not in OCL v2.4 spec), consistent with indexOf
 				int idx = source.lastIndexOf(asString(args[0]));
-				yield (long) (idx + 1); // 1-based, 0 if not found
+				yield idx < 0 ? 0L : (long) source.codePointCount(0, idx) + 1; // 1-based, 0 if not found
 			}
 			case "substituteAll" -> {
 				// Eclipse extension: literal (non-regex) replacement of all occurrences
@@ -957,32 +1238,25 @@ class OclStdlib {
 				yield tokens;
 			}
 			case "at" -> {
-				int idx = (int) asLong(args[0]);
-				if (idx < 1 || idx > source.length()) {
+				int idx = asIndex(args[0]);
+				if (idx < 1 || idx > source.codePointCount(0, source.length())) {
 					yield OclInvalid.INSTANCE;
 				}
-				yield String.valueOf(source.charAt(idx - 1));
+				yield Character.toString(source.codePointAt(source.offsetByCodePoints(0, idx - 1)));
 			}
 			case "characters" -> {
 				List<String> chars = new ArrayList<>(source.length());
-				for (int i = 0; i < source.length(); i++) {
-					chars.add(String.valueOf(source.charAt(i)));
-				}
+				source.codePoints().forEach(cp -> chars.add(Character.toString(cp)));
 				yield chars;
 			}
 			case "toInteger" -> {
-				try {
-					yield Long.parseLong(source.trim());
-				} catch (NumberFormatException e) {
-					yield OclInvalid.INSTANCE;
-				}
+				Number parsed = parseInteger(source);
+				yield parsed == null ? OclInvalid.INSTANCE : parsed;
 			}
 			case "toReal" -> {
-				try {
-					yield Double.parseDouble(source.trim());
-				} catch (NumberFormatException e) {
-					yield OclInvalid.INSTANCE;
-				}
+				// Decimal notation only: NaN, Infinity, 1f or 0x1p3 are no Real (§11.4.1, #322)
+				BigDecimal parsed = parseReal(source);
+				yield parsed == null ? OclInvalid.INSTANCE : parsed;
 			}
 			case "toBoolean" -> {
 				// Eclipse: exact match only, no trim/lowercase, non-"true" → false
@@ -1013,16 +1287,20 @@ class OclStdlib {
 				}
 				yield replaceBounded(source, pattern, asString(args[1]), false, options.maxStringLength());
 			}
-			case "equalsIgnoreCase" -> source.equalsIgnoreCase(asString(args[0]));
+			// §11.5.3 post: result = (self.toUpperCase() = s.toUpperCase()) — with the locale, so
+			// 'ß' equals 'SS' and the Turkish dotted I is told apart (#329)
+			case "equalsIgnoreCase" -> source.toUpperCase(locale).equals(asString(args[0]).toUpperCase(locale));
 			case "startsWith" -> source.startsWith(asString(args[0]));
 			case "endsWith" -> source.endsWith(asString(args[0]));
-			case "<" -> source.compareTo(asString(args[0])) < 0;
-			case "<=" -> source.compareTo(asString(args[0])) <= 0;
-			case ">" -> source.compareTo(asString(args[0])) > 0;
-			case ">=" -> source.compareTo(asString(args[0])) >= 0;
+			// §11.1/§11.5.3: Unicode collation in the locale of oclLocale, not code-point order (#329)
+			case "<" -> collate(source, asString(args[0]), locale) < 0;
+			case "<=" -> collate(source, asString(args[0]), locale) <= 0;
+			case ">" -> collate(source, asString(args[0]), locale) > 0;
+			case ">=" -> collate(source, asString(args[0]), locale) >= 0;
 			case "toString" -> source;
 			// QVT-O §8.3.16.2: length (deprecated synonym for size)
-			case "length" -> (long) source.length();
+			// Counted in code points, as size() is (#329, #344)
+			case "length" -> (long) source.codePointCount(0, source.length());
 			// QVT-O §8.3.16.3: substringBefore
 			case "substringBefore" -> {
 				int idx = source.indexOf(asString(args[0]));
@@ -1035,16 +1313,22 @@ class OclStdlib {
 				yield idx < 0 ? null : source.substring(idx + match.length());
 			}
 			// QVT-O §8.3.16.7: firstToUpper
+			// A code point, titlecased: ǆ → ǅ, and a character outside the BMP stays whole (#344)
 			case "firstToUpper" -> source.isEmpty() ? source
-					: Character.toUpperCase(source.charAt(0)) + source.substring(1);
+					: Character.toString(Character.toTitleCase(source.codePointAt(0)))
+					+ source.substring(Character.charCount(source.codePointAt(0)));
 			// QVT-O §8.3.16.8: lastToUpper
-			case "lastToUpper" -> source.isEmpty() ? source
-					: source.substring(0, source.length() - 1)
-					+ Character.toUpperCase(source.charAt(source.length() - 1));
-			// QVT-O §8.3.16.9: indexOf — 1-indexed, returns -1 if not found
-			// (Note: OCL indexOf returns 0 if not found; QVT-O version returns -1)
-			// QVT-O §8.3.16.13: normalizeSpace
-			case "normalizeSpace" -> source.trim().replaceAll("\\s+", " ");
+			case "lastToUpper" -> {
+				if (source.isEmpty()) {
+					yield source;
+				}
+				int last = source.offsetByCodePoints(source.length(), -1);
+				yield source.substring(0, last) + Character.toString(Character.toUpperCase(source.codePointAt(last)));
+			}
+			// QVT-O §8.3.16.9 indexOf: the OCL operation answers, 0 if not found (OCL v2.4 §11.4.3;
+			// QVT's "-1" is not taken over, the library being OCL's) (#344)
+			// QVT-O §8.3.16.13: normalizeSpace — any Unicode white space (#344)
+			case "normalizeSpace" -> stripWhiteSpace(source).replaceAll("\\p{IsWhite_Space}+", " ");
 			// QVT-O §8.3.16.14: replace (literal, all occurrences)
 			case "replace" -> source.replace(asString(args[0]), asString(args[1]));
 			// QVT-O §8.3.16.15: match (full-string regex)
@@ -1059,15 +1343,17 @@ class OclStdlib {
 					yield OclInvalid.INSTANCE;
 				}
 			}
-			// QVT-O §8.3.16.17: find — 1-indexed, returns -1 if not found
+			// QVT-O §8.3.16.17: find — the 1-based position in code points (#344), 0 if not found:
+			// the spec does not say; positions start at 1, indexOf answers 0 (OCL v2.4 §11.4.3) and
+			// so does Eclipse — decided with the user (#344)
 			case "find" -> {
 				int idx = source.indexOf(asString(args[0]));
-				yield (long) (idx < 0 ? -1 : idx + 1);
+				yield (long) (idx < 0 ? 0 : source.codePointCount(0, idx) + 1);
 			}
-			// QVT-O §8.3.16.18: rfind — 1-indexed from right, returns -1 if not found
+			// QVT-O §8.3.16.18: rfind — the position of the last occurrence, 0 if not found
 			case "rfind" -> {
 				int idx = source.lastIndexOf(asString(args[0]));
-				yield (long) (idx < 0 ? -1 : idx + 1);
+				yield (long) (idx < 0 ? 0 : source.codePointCount(0, idx) + 1);
 			}
 			// QVT-O §8.3.16.19: isQuoted
 			case "isQuoted" -> {
@@ -1093,23 +1379,9 @@ class OclStdlib {
 						|| "0".equals(lower) || "1".equals(lower);
 			}
 			// QVT-O §8.3.16.23: matchInteger
-			case "matchInteger" -> {
-				try {
-					Long.parseLong(source.trim());
-					yield true;
-				} catch (NumberFormatException e) {
-					yield false;
-				}
-			}
+			case "matchInteger" -> parseInteger(source) != null;
 			// QVT-O §8.3.16.24/25: matchFloat/matchReal
-			case "matchFloat", "matchReal" -> {
-				try {
-					Double.parseDouble(source.trim());
-					yield true;
-				} catch (NumberFormatException e) {
-					yield false;
-				}
-			}
+			case "matchFloat", "matchReal" -> parseReal(source) != null;
 			// QVT-O §8.3.16.26: matchIdentifier — letter first, then alphanumeric
 			case "matchIdentifier" -> {
 				if (source.isEmpty() || !Character.isLetter(source.charAt(0))) {
@@ -1132,28 +1404,11 @@ class OclStdlib {
 				yield null; // unparseable
 			}
 			// QVT-O §8.3.16.28: asInteger — returns null on failure (unlike OCL toInteger → invalid)
-			case "asInteger" -> {
-				try {
-					yield Long.parseLong(source.trim());
-				} catch (NumberFormatException e) {
-					yield null;
-				}
-			}
+			case "asInteger" -> parseInteger(source);
 			// QVT-O §8.3.16.29/30: asFloat/asReal — returns null on failure
-			case "asFloat", "asReal" -> {
-				try {
-					yield Double.parseDouble(source.trim());
-				} catch (NumberFormatException e) {
-					yield null;
-				}
-			}
+			case "asFloat", "asReal" -> parseReal(source);
 			// QVT-O §8.3.16.1 + §8.4.4: format / % — placeholder substitution
-			case "format", "%" -> {
-				// The width field of a format string is an allocation request, see formatBounded
-				Object arg = args[0];
-				Object[] formatArgs = arg instanceof Collection<?> c ? c.toArray() : new Object[] { arg };
-				yield formatBounded(source, formatArgs, options.maxStringLength());
-			}
+			case "format", "%" -> formatQvto(source, args[0], options.maxStringLength(), locale);
 			default -> NOT_FOUND;
 		};
 	}
@@ -1161,7 +1416,7 @@ class OclStdlib {
 	// --- Collection (OCL v2.4 Section 11.7) ---
 
 	private static Object dispatchCollection(String name, Collection<?> source, Object[] args,
-			OclEvaluationOptions options) {
+			OclEvaluationOptions options, Locale locale) {
 		return switch (name) {
 			case "size" -> (long) source.size();
 			case "isEmpty" -> source.isEmpty();
@@ -1179,7 +1434,7 @@ class OclStdlib {
 			case "count" -> source.stream().filter(e -> Boolean.TRUE.equals(oclEquals(e, args[0]))).count();
 			case "flatten" -> {
 				List<Object> flat = new ArrayList<>();
-				flatten(source, flat);
+				flattenInto(source, flat);
 				yield preserveCollectionKind(source, flat);
 			}
 			case "including" -> {
@@ -1256,24 +1511,49 @@ class OclStdlib {
 				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
 				// §11.7.2: Set->intersection(Set)→Set, Set->intersection(Bag)→Set
 				// §11.7.4: Bag->intersection(Bag)→Bag, Bag->intersection(Set)→Set
-				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
-					Set<Object> result = new OclSet<>(source);
-					result.retainAll(other);
-					yield result;
-				}
-				if (source instanceof OclBag<?> && other instanceof Set<?>) {
-					// Bag->intersection(Set) → Set
-					OclSet<Object> result = new OclSet<>();
+				// Membership is OCL equality (1 = 1.0, #317), never Java equals — retainAll and
+				// List.remove asked the argument's equals and lost Set{1}->intersection(Bag{1.0})
+				boolean uniqueSource = source instanceof Set<?> || source instanceof OclOrderedSet<?>;
+				if ((source instanceof Set<?> && !(source instanceof OclOrderedSet<?>))
+						|| (source instanceof OclBag<?> && isUniqueCollection(other))) {
+					Set<Object> lookup = asOclSet(other);
+					Set<Object> result = new OclSet<>();
 					for (Object e : source) {
-						if (oclContains(other, e)) {
-							result.add(e); // OclSet deduplicates
+						if (lookup.contains(e)) {
+							result.add(e);
 						}
 					}
 					yield result;
 				}
-				// Bag->intersection(Bag): frequency-based (min frequency)
-				// Other: frequency-based intersection
-				List<Object> remaining = new ArrayList<>(other);
+				// Bag->intersection(Bag) and the rest: frequency-based (min frequency)
+				Map<Object, Integer> remaining = frequencies(other);
+				List<Object> result;
+				if (source instanceof OclBag<?>) {
+					result = new OclBag<>();
+				} else if (uniqueSource) {
+					result = new OclOrderedSet<>();
+				} else {
+					result = new ArrayList<>();
+				}
+				for (Object e : source) {
+					if (takeOne(remaining, e)) {
+						result.add(e);
+					}
+				}
+				yield result;
+			}
+			case "-" -> {
+				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
+				// §11.7.2 Set - Set: elements of self not in s, by OCL equality (#317)
+				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
+					Set<Object> result = new OclSet<>(source);
+					for (Object o : other) {
+						result.remove(o); // OclSet.remove uses the OCL lookup key
+					}
+					yield result;
+				}
+				// Bag/Sequence/OrderedSet: frequency-based subtraction (subtract per occurrence)
+				Map<Object, Integer> toRemove = frequencies(other);
 				List<Object> result;
 				if (source instanceof OclBag<?>) {
 					result = new OclBag<>();
@@ -1283,31 +1563,9 @@ class OclStdlib {
 					result = new ArrayList<>();
 				}
 				for (Object e : source) {
-					if (remaining.remove(e)) {
+					if (!takeOne(toRemove, e)) {
 						result.add(e);
 					}
-				}
-				yield result;
-			}
-			case "-" -> {
-				if (!(args[0] instanceof Collection<?> other)) yield OclInvalid.INSTANCE;
-				if (source instanceof Set<?> && !(source instanceof OclOrderedSet<?>)) {
-					Set<Object> result = new OclSet<>(source);
-					result.removeAll(other);
-					yield result;
-				}
-				// Bag/Sequence: frequency-based subtraction (subtract per occurrence)
-				List<Object> toRemove = new ArrayList<>(other);
-				List<Object> result;
-				if (source instanceof OclBag<?>) {
-					result = new OclBag<>(source);
-				} else if (source instanceof OclOrderedSet<?>) {
-					result = new OclOrderedSet<>(source);
-				} else {
-					result = new ArrayList<>(source);
-				}
-				for (Object e : toRemove) {
-					result.remove(e);
 				}
 				yield result;
 			}
@@ -1344,30 +1602,34 @@ class OclStdlib {
 				yield preserveCollectionKind(source, filtered);
 			}
 			case "sum" -> {
-				long longSum = 0;
-				double doubleSum = 0;
-				boolean allLong = true;
+				// §11.7.1: elements of a type with '+'. Numbers add exactly (#322); Strings
+				// concatenate, as String is summable in Eclipse OCL with '' as its zero (#322)
+				boolean strings = !source.isEmpty() && source.stream().allMatch(String.class::isInstance);
+				if (strings) {
+					StringBuilder text = new StringBuilder();
+					for (Object e : source) {
+						text.append((String) e);
+					}
+					yield text.toString();
+				}
+				Number total = 0L;
 				for (Object e : source) {
-					if (e instanceof Long l) {
-						longSum += l;
-						doubleSum += l;
-					} else if (e instanceof Number n) {
-						doubleSum += n.doubleValue();
-						allLong = false;
-					} else {
+					if (!(e instanceof Number n) || !OclNumbers.isFinite(n)) {
 						yield OclInvalid.INSTANCE;
 					}
+					total = OclNumbers.add(total, n);
 				}
-				if (allLong) {
-					yield longSum;
-				}
-				yield doubleSum;
+				yield total;
 			}
 			case "max" -> {
+				// §11.7.1: elements of a type with max — numbers (UnlimitedNatural included) and,
+				// as in Eclipse OCL, Strings; Boolean has no max (#322)
 				Object max = null;
 				for (Object e : source) {
-					if (!(e instanceof Comparable)) yield OclInvalid.INSTANCE;
-					if (max == null || compareOcl(e, max) > 0) {
+					if (!hasMaxMin(e)) yield OclInvalid.INSTANCE;
+					if (e instanceof OclUnlimitedNatural) {
+						max = e;
+					} else if (max == null || (!(max instanceof OclUnlimitedNatural) && compareOcl(e, max, locale) > 0)) {
 						max = e;
 					}
 				}
@@ -1376,8 +1638,10 @@ class OclStdlib {
 			case "min" -> {
 				Object min = null;
 				for (Object e : source) {
-					if (!(e instanceof Comparable)) yield OclInvalid.INSTANCE;
-					if (min == null || compareOcl(e, min) < 0) {
+					if (!hasMaxMin(e)) yield OclInvalid.INSTANCE;
+					if (e instanceof OclUnlimitedNatural) {
+						if (min == null) min = e;
+					} else if (min == null || min instanceof OclUnlimitedNatural || compareOcl(e, min, locale) < 0) {
 						min = e;
 					}
 				}
@@ -1413,6 +1677,9 @@ class OclStdlib {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
+				if (!isList(source)) {
+					yield notAList(name, source);
+				}
 				@SuppressWarnings("unchecked")
 				var list = (Collection<Object>) source;
 				list.add(args[0]);
@@ -1423,8 +1690,12 @@ class OclStdlib {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
+				if (!isList(source)) {
+					yield notAList(name, source);
+				}
 				if (source instanceof List<?> list) {
-					list.removeIf(e -> Objects.equals(e, args[0]));
+					// §8.3.9.35 post reject(e = element): OCL equality, 1 = 1.0 (#317)
+					list.removeIf(e -> OclEqualityUtil.oclEquals(e, args[0]));
 				}
 				yield null; // returns Void
 			}
@@ -1432,6 +1703,9 @@ class OclStdlib {
 			case "removeAt" -> {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
+				if (!isList(source)) {
+					yield notAList(name, source);
 				}
 				if (source instanceof List<?> list && args[0] instanceof Long idx) {
 					int i = idx.intValue() - 1; // 1-based to 0-based
@@ -1446,6 +1720,9 @@ class OclStdlib {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
+				if (!isList(source)) {
+					yield notAList(name, source);
+				}
 				if (source instanceof List<?> list && !list.isEmpty()) {
 					yield list.remove(0);
 				}
@@ -1455,6 +1732,9 @@ class OclStdlib {
 			case "removeLast" -> {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
+				}
+				if (!isList(source)) {
+					yield notAList(name, source);
 				}
 				if (source instanceof List<?> list && !list.isEmpty()) {
 					yield list.remove(list.size() - 1);
@@ -1466,8 +1746,11 @@ class OclStdlib {
 				if (belongsToAModel(source)) {
 					yield OclInvalid.INSTANCE; // #182: not through an expression
 				}
+				if (!isList(source)) {
+					yield notAList(name, source);
+				}
 				if (args[0] instanceof Collection<?> toRemove && source instanceof List<?> list) {
-					list.removeIf(e -> toRemove.stream().anyMatch(r -> Objects.equals(e, r)));
+					list.removeIf(e -> toRemove.stream().anyMatch(r -> OclEqualityUtil.oclEquals(e, r)));
 				}
 				yield null; // returns Void
 			}
@@ -1482,7 +1765,9 @@ class OclStdlib {
 					int pos = 0;
 					for (Object e : source) {
 						if (pos++ > 0) out.append(sep);
-						out.append(String.valueOf(e));
+						// A Real as OCL writes it (1.0e10 → 10000000000.0), null as nothing, as
+						// QVT-O's string concatenation reads it (#343)
+						out.append(e == null ? "" : OclValues.toText(e));
 					}
 					out.append(end);
 				} catch (OutputLimitExceeded tooLarge) {
@@ -1494,6 +1779,21 @@ class OclStdlib {
 		};
 	}
 
+	/**
+	 * Whether a collection is a QVT-O List — a Sequence, as List is its alias (D26) — the only
+	 * collection the mutating operations change: "Collections are immutable" (QVT v1.3 §8.3.11.2).
+	 */
+	private static boolean isList(Collection<?> source) {
+		return source instanceof List<?> && !(source instanceof OclBag<?>) && !(source instanceof OclOrderedSet<?>);
+	}
+
+	private static ArgumentError notAList(String operation, Collection<?> source) {
+		String kind = source instanceof OclOrderedSet<?> ? "an OrderedSet"
+				: source instanceof OclBag<?> ? "a Bag" : "a Set";
+		return new ArgumentError("'" + operation + "' changes a List, and " + kind
+				+ " is immutable (QVT v1.3 §8.3.11.2)");
+	}
+
 	// --- Ordered Collection: Sequence, OrderedSet (OCL v2.4 Section 11.7.3/11.7.4) ---
 
 	private static Object dispatchOrderedCollection(String name, List<?> source, Object[] args) {
@@ -1501,7 +1801,7 @@ class OclStdlib {
 			case "first" -> source.isEmpty() ? OclInvalid.INSTANCE : source.get(0);
 			case "last" -> source.isEmpty() ? OclInvalid.INSTANCE : source.get(source.size() - 1);
 			case "at" -> {
-				int idx = (int) asLong(args[0]);
+				int idx = asIndex(args[0]);
 				if (idx < 1 || idx > source.size()) yield OclInvalid.INSTANCE;
 				yield source.get(idx - 1); // 1-based
 			}
@@ -1548,7 +1848,21 @@ class OclStdlib {
 				yield result;
 			}
 			case "insertAt" -> {
-				int idx = (int) asLong(args[0]);
+				// QVT v1.3 §8.3.9.26: List::insertAt(object, index) : Void modifies the list. Told
+				// from OCL's insertAt(index, object) : Sequence by the index — an Integer in the
+				// second place and none in the first; with two Integers OCL's form is meant (#343)
+				if (!OclNumbers.isInteger(args[0]) && OclNumbers.isInteger(args[1])) {
+					if (!isList(source)) {
+						yield notAList(name, source);
+					}
+					int at = asIndex(args[1]);
+					if (at < 1 || at > source.size() + 1) yield OclInvalid.INSTANCE;
+					@SuppressWarnings("unchecked")
+					var list = (List<Object>) source;
+					list.add(at - 1, args[0]);
+					yield null; // returns Void
+				}
+				int idx = asIndex(args[0]);
 				if (idx < 1 || idx > source.size() + 1) yield OclInvalid.INSTANCE;
 				if (source instanceof OclOrderedSet<?>) {
 					OclOrderedSet<Object> result = new OclOrderedSet<>(source);
@@ -1562,8 +1876,8 @@ class OclStdlib {
 				yield result;
 			}
 			case "subSequence", "subOrderedSet" -> {
-				int lower = (int) asLong(args[0]);
-				int upper = (int) asLong(args[1]);
+				int lower = asIndex(args[0]);
+				int upper = asIndex(args[1]);
 				if (lower < 1 || upper > source.size() || lower > upper) {
 					yield OclInvalid.INSTANCE;
 				}
@@ -1576,17 +1890,23 @@ class OclStdlib {
 
 	// --- Map (OCL v2.5) ---
 
-	private static Object dispatchMap(String name, Map<?, ?> source, Object[] args) {
+	private static Object dispatchMap(String name, Map<?, ?> source, Object[] args, OclEvaluationOptions options) {
 		return switch (name) {
 			case "size" -> (long) source.size();
 			case "isEmpty" -> source.isEmpty();
 			case "notEmpty" -> !source.isEmpty();
-			case "includes" -> source.containsKey(args[0]);
-			case "excludes" -> !source.containsKey(args[0]);
-			case "includesValue" -> source.containsValue(args[0]);
-			case "excludesValue" -> !source.containsValue(args[0]);
-			case "get", "at" -> source.get(args[0]);
-			case "keys" -> new OclSet<>(source.keySet());
+			// Keys are found by OCL equality, so a Dict(Real) answers get(1) for the key 1.0 (#317)
+			case "includes" -> dictKey(source, args[0]) != NOT_FOUND;
+			case "excludes" -> dictKey(source, args[0]) == NOT_FOUND;
+			case "includesValue" -> source.values().stream().anyMatch(v -> OclEqualityUtil.oclEquals(v, args[0]));
+			case "excludesValue" -> source.values().stream().noneMatch(v -> OclEqualityUtil.oclEquals(v, args[0]));
+			case "get", "at" -> {
+				Object key = dictKey(source, args[0]);
+				yield key == NOT_FOUND ? null : source.get(key);
+			}
+			// OCL v2.5 Map::keys() : Set(K); QVT v1.3 §8.3.8.8 Dict::keys() : List(KeyT) "Returns a
+			// new list of keys" — a Dict is OCL's Map (D26), so the QVT-O engine says which (#343)
+			case "keys" -> options.qvtCollections() ? new ArrayList<>(source.keySet()) : new OclSet<>(source.keySet());
 			case "values" -> new ArrayList<>(source.values());
 			case "including" -> {
 				Map<Object, Object> result = new LinkedHashMap<>(source);
@@ -1595,7 +1915,7 @@ class OclStdlib {
 			}
 			case "excluding" -> {
 				Map<Object, Object> result = new LinkedHashMap<>(source);
-				result.remove(args[0]);
+				result.remove(dictKey(source, args[0]));
 				yield result;
 			}
 			case "union" -> {
@@ -1606,11 +1926,12 @@ class OclStdlib {
 			}
 			case "toString" -> source.toString();
 			// QVT-O §8.3.8.2: Dict::hasKey(k) — check key existence
-			case "hasKey" -> source.containsKey(args[0]);
+			case "hasKey" -> dictKey(source, args[0]) != NOT_FOUND;
 			// QVT-O §8.3.8.3: Dict::defaultget(k, default) — get with fallback
 			case "defaultget" -> {
-				Object val = source.get(args[0]);
-				yield val != null && source.containsKey(args[0]) ? val : args[1];
+				// The default "if the key does not exist" — not for a key whose value is null (#343)
+				Object key = dictKey(source, args[0]);
+				yield key == NOT_FOUND ? args[1] : source.get(key);
 			}
 			// QVT-O §8.3.8.4: Dict::put(k, v) — mutable insert/update
 			case "put" -> {
@@ -1619,7 +1940,8 @@ class OclStdlib {
 				}
 				@SuppressWarnings("unchecked")
 				var mutableMap = (Map<Object, Object>) source;
-				mutableMap.put(args[0], args[1]);
+				Object existing = dictKey(source, args[0]);
+				mutableMap.put(existing == NOT_FOUND ? args[0] : existing, args[1]);
 				yield null; // returns Void
 			}
 			// QVT-O §8.3.8.5: Dict::clear() — mutable remove all
@@ -1634,20 +1956,117 @@ class OclStdlib {
 		};
 	}
 
-	private static int compareOcl(Object a, Object b) {
+	/**
+	 * The key of the Dict that is OCL-equal to {@code key} — the key itself on a hash hit,
+	 * otherwise the one {@code oclEquals} matches — or {@link #NOT_FOUND} (#317).
+	 */
+	private static Object dictKey(Map<?, ?> dict, Object key) {
+		if (dict.containsKey(key)) {
+			return key;
+		}
+		for (Object candidate : dict.keySet()) {
+			if (OclEqualityUtil.oclEquals(candidate, key)) {
+				return candidate;
+			}
+		}
+		return NOT_FOUND;
+	}
+
+	// --- String helpers ---
+
+	/**
+	 * Compares two strings by the Unicode Collation Algorithm in the given locale (OCL v2.4
+	 * §11.1: "Comparison of strings … conforms to the Unicode Collation algorithm"; §11.5.3:
+	 * "using the locale defined by looking up oclLocale", #329). A {@link Collator} is not
+	 * thread-safe, so each call takes its own instance; equal strings by the collator that
+	 * differ in their code points are ordered by those, so the order stays total.
+	 */
+	static int collate(String left, String right, Locale locale) {
+		int byCollation = Collator.getInstance(locale).compare(left, right);
+		return byCollation != 0 ? byCollation : left.compareTo(right);
+	}
+
+	/** {@link OclCollectionUtil#compareOcl} with strings collated in the given locale. */
+	static int compareOcl(Object a, Object b, Locale locale) {
+		if (a instanceof String left && b instanceof String right) {
+			return collate(left, right, locale);
+		}
 		return OclCollectionUtil.compareOcl(a, b);
 	}
 
+	// --- Number helpers ---
+
+	/** Whether a collection element supports {@code max}/{@code min} (§11.7.1). */
+	private static boolean hasMaxMin(Object element) {
+		return element instanceof OclUnlimitedNatural || element instanceof String
+				|| (element instanceof Number n && OclNumbers.isFinite(n));
+	}
+
+	/** An OCL Integer from its decimal text, or {@code null} — exact beyond 64 bits (#322). */
+	private static Number parseInteger(String text) {
+		try {
+			return OclNumbers.integer(new BigInteger(text.trim()));
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
+	/**
+	 * An OCL Real from its decimal text, or {@code null}. {@code BigDecimal} reads exactly the
+	 * decimal notations, so the Java-only spellings {@code NaN}, {@code Infinity}, {@code 1f} and
+	 * {@code 0x1p3} that {@code Double.parseDouble} took are refused (#322).
+	 */
+	private static BigDecimal parseReal(String text) {
+		try {
+			return OclNumbers.real(new BigDecimal(text.trim()));
+		} catch (NumberFormatException e) {
+			return null;
+		}
+	}
+
 	// --- Collection helpers ---
+
+	private static boolean isUniqueCollection(Collection<?> collection) {
+		return collection instanceof Set<?> || collection instanceof OclOrderedSet<?>;
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Set<Object> asOclSet(Collection<?> collection) {
+		return collection instanceof OclSet<?> set ? (Set<Object>) set : new OclSet<>(collection);
+	}
+
+	/** Counts the elements of a collection per OCL value (lookup key, #317). */
+	private static Map<Object, Integer> frequencies(Collection<?> collection) {
+		Map<Object, Integer> counts = new HashMap<>();
+		for (Object e : collection) {
+			counts.merge(OclEqualityUtil.lookupKey(e), 1, Integer::sum);
+		}
+		return counts;
+	}
+
+	/** Takes one occurrence of {@code element}'s value from the counts; false if none is left. */
+	private static boolean takeOne(Map<Object, Integer> counts, Object element) {
+		Object key = OclEqualityUtil.lookupKey(element);
+		Integer count = counts.get(key);
+		if (count == null) {
+			return false;
+		}
+		if (count == 1) {
+			counts.remove(key);
+		} else {
+			counts.put(key, count - 1);
+		}
+		return true;
+	}
 
 	private static Collection<Object> preserveCollectionKind(Collection<?> source, List<Object> elements) {
 		return OclCollectionUtil.preserveCollectionKind(source, elements);
 	}
 
-	private static void flatten(Collection<?> source, List<Object> result) {
+	static void flattenInto(Collection<?> source, List<Object> result) {
 		for (Object element : source) {
 			if (element instanceof Collection<?> nested) {
-				flatten(nested, result);
+				flattenInto(nested, result);
 			} else {
 				result.add(element);
 			}
@@ -1660,15 +2079,16 @@ class OclStdlib {
 		return value instanceof Boolean b ? b : false;
 	}
 
-	private static long asLong(Object value) {
-		if (value instanceof Long l) return l;
-		if (value instanceof Integer i) return i;
-		if (value instanceof Number n) return n.longValue();
-		return 0L;
-	}
-
-	private static Number asNumber(Object value) {
-		return value instanceof Number n ? n : 0L;
+	/**
+	 * A position argument as a Java index. A value outside the {@code int} range becomes
+	 * {@code -1}, which every caller treats as out of range — a cast would wrap 2^32 + 1 to 1.
+	 */
+	private static int asIndex(Object value) {
+		if (value instanceof Number n && OclNumbers.isInteger(n)) {
+			BigInteger position = OclNumbers.bigInteger(n);
+			return position.bitLength() < 32 ? position.intValue() : -1;
+		}
+		return -1;
 	}
 
 	private static String asString(Object value) {

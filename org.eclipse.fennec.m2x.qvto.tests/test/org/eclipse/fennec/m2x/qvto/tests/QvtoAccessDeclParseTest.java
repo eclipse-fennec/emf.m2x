@@ -32,7 +32,8 @@ class QvtoAccessDeclParseTest extends AbstractQvtoParserTest {
 	void accessDecl_atUnitLevel_createsModuleImport() throws QvtoParseException {
 		OperationalTransformation t = parse("""
 				access MyLib;
-				transformation T(inout m : ecore::EPackage) {}
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE) {}
 				""");
 		assertEquals("T", t.getName());
 		// inline library creates implicit access + standalone access = need to find the standalone one
@@ -47,7 +48,8 @@ class QvtoAccessDeclParseTest extends AbstractQvtoParserTest {
 	@Test
 	void accessDecl_insideTransformationBody_createsModuleImport() throws QvtoParseException {
 		OperationalTransformation t = parse("""
-				transformation T(inout m : ecore::EPackage) {
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE) {
 				    access MyLib;
 				    query hello() : String = 'hi';
 				}
@@ -63,7 +65,8 @@ class QvtoAccessDeclParseTest extends AbstractQvtoParserTest {
 	@Test
 	void accessDecl_withModuleKind_parsesCorrectly() throws QvtoParseException {
 		OperationalTransformation t = parse("""
-				transformation T(inout m : ecore::EPackage) {
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE) {
 				    access library MyLib;
 				}
 				""");
@@ -78,7 +81,8 @@ class QvtoAccessDeclParseTest extends AbstractQvtoParserTest {
 	@Test
 	void accessDecl_multipleModules_createsMultipleImports() throws QvtoParseException {
 		OperationalTransformation t = parse("""
-				transformation T(inout m : ecore::EPackage) {
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE) {
 				    access Lib1, Lib2;
 				}
 				""");
@@ -102,7 +106,8 @@ class QvtoAccessDeclParseTest extends AbstractQvtoParserTest {
 	void moduleRef_withSignature_inHeaderAccess_parsesCorrectly() throws QvtoParseException {
 		// §8.4.7: <moduleref> ::= <scoped_identifier> <simple_signature>?
 		OperationalTransformation t = parse("""
-				transformation T(inout m : ecore::EPackage)
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE)
 				    access MyLib(in x : String) {}
 				""");
 		ModuleImport imp = t.getModuleImport().stream()
@@ -117,7 +122,8 @@ class QvtoAccessDeclParseTest extends AbstractQvtoParserTest {
 	void moduleRef_withSignature_inStandaloneAccess_parsesCorrectly() throws QvtoParseException {
 		// §8.4.7: standalone access_decl with parameterized moduleref
 		OperationalTransformation t = parse("""
-				transformation T(inout m : ecore::EPackage) {
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE) {
 				    access MyLib(in x : String);
 				}
 				""");
@@ -133,7 +139,8 @@ class QvtoAccessDeclParseTest extends AbstractQvtoParserTest {
 	void moduleRef_withSignature_inExtends_parsesCorrectly() throws QvtoParseException {
 		// §8.4.7: extends with parameterized moduleref
 		OperationalTransformation t = parse("""
-				transformation T(inout m : ecore::EPackage)
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE)
 				    extends Base(in x : Integer) {}
 				""");
 		ModuleImport imp = t.getModuleImport().stream()
@@ -148,7 +155,8 @@ class QvtoAccessDeclParseTest extends AbstractQvtoParserTest {
 	void moduleRef_withoutSignature_stillWorks() throws QvtoParseException {
 		// Regression: moduleref without signature must still work
 		OperationalTransformation t = parse("""
-				transformation T(inout m : ecore::EPackage)
+				modeltype ECORE uses 'http://www.eclipse.org/emf/2002/Ecore';
+				transformation T(inout m : ECORE)
 				    access MyLib {}
 				""");
 		ModuleImport imp = t.getModuleImport().stream()

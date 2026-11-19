@@ -16,10 +16,15 @@ package org.eclipse.fennec.m2x.ocl.fingerprint;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.eclipse.emf.ecore.EAttribute;
+import java.util.Map;
+
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
@@ -31,6 +36,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
+import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -116,6 +122,39 @@ class FingerprintExpressionCacheTest {
 				"one added attribute is a different model version");
 	}
 
+	@Test
+	@DisplayName("a failure on one version is not the verdict on the next (#420)")
+	void failureIsKeptPerVersion() throws Exception {
+		EPackage v1 = bookPackage(false);
+		EPackage v2 = withChapterClass(bookPackage(true));
+		OclExpressionCache shared = fingerprintCache();
+		String expression = "self.oclIsKindOf(Chapter)";
+
+		assertThrows(OclParseException.class,
+				() -> engine(v1, shared).parse(expression, (EClass) v1.getEClassifier("Book")),
+				"v1 has no Chapter");
+		assertThrows(OclParseException.class,
+				() -> engine(v1, shared).parse(expression, (EClass) v1.getEClassifier("Book")),
+				"and the remembered failure says so again");
+		assertNotNull(engine(v2, shared).parse(expression, (EClass) v2.getEClassifier("Book")),
+				"v2 has it: same nsURI and text, but another fingerprint, so it is parsed");
+	}
+
+	@Test
+	@DisplayName("parses with variables are kept per version as well")
+	void variablesAreKeptPerVersion() throws Exception {
+		EPackage v1 = bookPackage(false);
+		EPackage v2 = bookPackage(true);
+		OclExpressionCache shared = fingerprintCache();
+		Map<String, EClassifier> variables = Map.of("limit", EcorePackage.Literals.EINT);
+
+		engine(v1, shared).parse("self.pages > limit", (EClass) v1.getEClassifier("Book"), variables);
+		long afterFirst = shared.size();
+		engine(v2, shared).parse("self.pages > limit", (EClass) v2.getEClassifier("Book"), variables);
+
+		assertEquals(afterFirst + 1, shared.size(), "another version, another entry");
+	}
+
 	// --- helpers ---
 
 	private static OclExpressionCache fingerprintCache() {
@@ -137,6 +176,14 @@ class FingerprintExpressionCacheTest {
 			book.getEStructuralFeatures().add(attribute("chapters"));
 		}
 		ePackage.getEClassifiers().add(book);
+		return ePackage;
+	}
+
+	/** Adds a class {@code Chapter}, so that a type name resolves in this version only. */
+	private static EPackage withChapterClass(EPackage ePackage) {
+		EClass chapter = EcoreFactory.eINSTANCE.createEClass();
+		chapter.setName("Chapter");
+		ePackage.getEClassifiers().add(chapter);
 		return ePackage;
 	}
 

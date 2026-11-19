@@ -30,12 +30,37 @@ import org.eclipse.emf.common.util.Diagnostic;
  *
  * @param diagnostics collected diagnostics during execution, never {@code null}
  * @param enforced {@code true} if enforce was executed, {@code false} for check-only
+ * @param modelChanged whether the run created, modified or deleted anything in the target model —
+ *        "Execution of a transformation should return a Boolean status to indicate whether any
+ *        changes were made to target models" (§7.7, #353); always {@code false} for check-only
  * @author Data In Motion Consulting
  * @since 1.0
  */
 public record QvtdExecutionResult(
 		List<Diagnostic> diagnostics,
-		boolean enforced) {
+		boolean enforced,
+		boolean modelChanged) {
+
+	/**
+	 * The diagnostic code of a relation that does not hold (§7.10.1): a WARNING naming the
+	 * relation, the direction and the binding it found no match for. It does not fail the
+	 * execution — {@link #isSuccess()} stays {@code true} — but the models are not consistent
+	 * (#348).
+	 */
+	public static final int INCONSISTENCY = 1;
+
+	/** The diagnostic source of the QVT-R engine. */
+	public static final String SOURCE = "org.eclipse.fennec.m2x.qvtd.engine";
+
+	/**
+	 * A result that reports no change of the target model.
+	 *
+	 * @param diagnostics collected diagnostics during execution
+	 * @param enforced {@code true} if enforce was executed
+	 */
+	public QvtdExecutionResult(List<Diagnostic> diagnostics, boolean enforced) {
+		this(diagnostics, enforced, false);
+	}
 
 	/**
 	 * Compact constructor: validates and makes diagnostics unmodifiable.
@@ -54,13 +79,16 @@ public record QvtdExecutionResult(
 	}
 
 	/**
-	 * Returns {@code true} if all relations hold across the models.
+	 * Returns {@code true} if the execution succeeded and found no relation that does not hold.
 	 *
-	 * <p>In check-only mode this indicates full consistency. In enforce mode
-	 * this indicates the transformation completed without consistency violations.
+	 * <p>In check-only mode every relation is checked in every direction (§7.9, §7.10.1). In
+	 * enforce mode the domains of the target model that are only checked are (§7.2.3) — and, with
+	 * {@link QvtdExecutionContext#withPostCheck()}, every direction once enforcing is done.
+	 * An inconsistency is a WARNING with the code {@link #INCONSISTENCY} (#348).
 	 */
 	public boolean isConsistent() {
-		return isSuccess();
+		return isSuccess() && diagnostics.stream()
+				.noneMatch(d -> d.getCode() == INCONSISTENCY && SOURCE.equals(d.getSource()));
 	}
 
 	/**

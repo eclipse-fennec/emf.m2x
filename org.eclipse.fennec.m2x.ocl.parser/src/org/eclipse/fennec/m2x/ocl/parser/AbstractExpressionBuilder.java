@@ -14,12 +14,19 @@
  */
 package org.eclipse.fennec.m2x.ocl.parser;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.eclipse.emf.ecore.EAnnotation;
@@ -28,12 +35,16 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.ETypedElement;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.CallExp;
 import org.eclipse.fennec.m2x.model.ocl.CollectionItem;
@@ -48,24 +59,32 @@ import org.eclipse.fennec.m2x.model.ocl.IntegerLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.InvalidLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.IterateExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
+import org.eclipse.fennec.m2x.model.ocl.LetExp;
 import org.eclipse.fennec.m2x.model.ocl.MapLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.MapLiteralPart;
+import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.NullLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
+import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.RealLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.TupleLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.TupleLiteralPart;
+import org.eclipse.fennec.m2x.model.ocl.TuplePart;
+import org.eclipse.fennec.m2x.model.ocl.TupleType;
 import org.eclipse.fennec.m2x.model.ocl.TypeExp;
 import org.eclipse.fennec.m2x.model.ocl.UnlimitedNaturalLiteralExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclLibrarySignatures;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Shared OCL expression building logic for use by both OCL and M2T parsers.
@@ -99,7 +118,7 @@ public class AbstractExpressionBuilder {
 	 * answer — reporting a miss, choosing a placeholder, setting a type on an expression.
 	 *
 	 * <p>The scope it holds is what the unit declares: {@code modeltype} / typed models /
-	 * {@code [module m(Ecore)]} / a Complete OCL {@code import}, plus the aliases such a
+	 * {@code [module m(ecore)]} / a Complete OCL {@code import}, plus the aliases such a
 	 * document introduces. OCL v2.4 §9.3 resolves a simple name in the context namespace and
 	 * what is imported into it, not in every package the JVM happens to know — until #158 a
 	 * scan of the whole registry did the latter, and which name resolved depended on what else
@@ -108,12 +127,23 @@ public class AbstractExpressionBuilder {
 	private final OclNameResolver names;
 
 	private OclEnvironment environment;
+	/** Implicit iterators pushed for a body, awaiting {@link #buildImplicitIterator}. */
+	private final Deque<Variable> pushedImplicitIterators = new ArrayDeque<>();
 
 	/**
 	 * Held, not inherited: this class is a helper beside the visitors, and each of those already
 	 * extends the ANTLR visitor generated for its grammar. See {@link ParseDiagnostics}.
 	 */
 	private final ParseDiagnostics diagnostics = new ParseDiagnostics();
+
+	/** The library operations this language knows: OCL's, and what QVT-O or MTL add (#378). */
+	private OclLibrarySignatures signatures = OclLibrarySignatures.OCL;
+
+	/**
+	 * What the type checker found wrong (#378): an expression whose types are known and do not
+	 * fit. Each is a parse error as well; kept here too, so a caller can tell them apart.
+	 */
+	private final List<Resource.Diagnostic> typeFindings = new ArrayList<>();
 
 	/**
 	 * Creates a new expression builder for the given context type.
@@ -148,6 +178,154 @@ public class AbstractExpressionBuilder {
 	}
 
 	/**
+	 * Returns what the type checker found: expressions whose types are known and do not fit
+	 * (OCL v2.4 §8.3, GAP-3, #378).
+	 *
+	 * @return the findings, in the order they occurred, never {@code null}
+	 */
+	public List<Resource.Diagnostic> getTypeFindings() {
+		return Collections.unmodifiableList(typeFindings);
+	}
+
+	/**
+	 * Records a type error at the current position: a parse error, and a type finding.
+	 *
+	 * @param message the message, phrased for an expression author
+	 */
+	public void addTypeFinding(String message) {
+		typeFindings.add(diagnostics.at(message));
+		addError(message);
+	}
+
+	/**
+	 * Records a type error at the node it is about — the condition that is no Boolean, the
+	 * argument that does not fit — rather than at the cursor, which by the time a node is typed
+	 * stands on the last of its parts. Falls back to the cursor for a node this builder was not
+	 * told the position of.
+	 *
+	 * @param message the message, phrased for an expression author
+	 * @param at the node the error is about, may be {@code null}
+	 */
+	public void addTypeFinding(String message, EObject at) {
+		int[] start = at != null ? nodeStarts.get(at) : null;
+		if (start == null) {
+			addTypeFinding(message);
+			return;
+		}
+		ParseDiagnostic diagnostic = new ParseDiagnostic(message, start[0], start[1]);
+		typeFindings.add(diagnostic);
+		if (diagnosticSink != null) {
+			diagnosticSink.accept(diagnostic);
+		} else {
+			diagnostics.addError(message, start[0], start[1]);
+		}
+	}
+
+	/** Where each node the host built begins, line and column, for placing a type error (#378). */
+	private final Map<EObject, int[]> nodeStarts = new IdentityHashMap<>();
+
+	/**
+	 * Tells this builder where a node the host just built begins — the host's {@code visit} is
+	 * the one place where the parse tree and the node are both in hand.
+	 *
+	 * @param node what the visit built; anything but an {@code EObject} is ignored
+	 * @param line 1-based line
+	 * @param column 0-based column
+	 */
+	public void recordNode(Object node, int line, int column) {
+		if (node instanceof EObject eObject) {
+			nodeStarts.putIfAbsent(eObject, new int[] { line, column });
+		}
+	}
+
+	/**
+	 * Tells this builder where a node the host just built begins.
+	 *
+	 * @param node what the visit built
+	 * @param context the parse tree it was built from
+	 */
+	public void recordNode(Object node, ParserRuleContext context) {
+		if (context != null && context.getStart() != null) {
+			recordNode(node, context.getStart().getLine(), context.getStart().getCharPositionInLine());
+		}
+	}
+
+	/**
+	 * Sets the library operations of the language being parsed — OCL's and what the language
+	 * adds to them.
+	 *
+	 * @param signatures the library, must not be {@code null}
+	 */
+	public void useSignatures(OclLibrarySignatures signatures) {
+		this.signatures = Objects.requireNonNull(signatures, "signatures must not be null");
+	}
+
+	/**
+	 * A feature declared in the unit being parsed: what a Complete OCL {@code def:} adds to a
+	 * classifier (OCL v2.4 §12.5), a QVT-O helper or query (§8.2.1.12).
+	 *
+	 * @param owner the classifier the feature belongs to; {@code null} for an operation of the
+	 *            unit itself, which an implicit call reaches from anywhere in it
+	 * @param name the feature name
+	 * @param parameterNames the parameter names of an operation, {@code null} for an attribute
+	 * @param parameterTypes the parameter types of an operation, {@code null} for an attribute
+	 * @param minArguments how many arguments a call needs at least — fewer than the parameters
+	 *            where some have a default value
+	 * @param type the declared type
+	 */
+	public record Definition(EClassifier owner, String name, List<String> parameterNames,
+			List<EClassifier> parameterTypes, int minArguments, EClassifier type) {
+
+		/**
+		 * A definition every parameter of which has to be passed.
+		 *
+		 * @param owner the classifier the feature belongs to
+		 * @param name the feature name
+		 * @param parameterNames the parameter names, {@code null} for an attribute
+		 * @param parameterTypes the parameter types, {@code null} for an attribute
+		 * @param type the declared type
+		 */
+		public Definition(EClassifier owner, String name, List<String> parameterNames,
+				List<EClassifier> parameterTypes, EClassifier type) {
+			this(owner, name, parameterNames, parameterTypes, parameterTypes == null ? 0 : parameterTypes.size(),
+					type);
+		}
+
+		boolean isOperation() {
+			return parameterTypes != null;
+		}
+
+		boolean appliesTo(EClassifier receiver) {
+			EClassifier o = OclTypeRules.normalize(owner);
+			EClassifier r = OclTypeRules.normalize(receiver);
+			return r == o || r instanceof EClass rc && o instanceof EClass oc && oc.isSuperTypeOf(rc);
+		}
+
+		boolean takes(int arguments) {
+			return arguments >= minArguments && arguments <= parameterTypes.size();
+		}
+	}
+
+	/** The features the document's {@code def:}s add, known before any expression is built. */
+	private final List<Definition> definitions = new ArrayList<>();
+
+	/**
+	 * Makes the features of a document's {@code def:}s known, so that a call of a defined
+	 * operation has its declared type and its arguments are checked against its parameters
+	 * (#324, #378). A document collects them before it builds a single expression.
+	 *
+	 * @param defined the definitions
+	 */
+	public void declareDefinitions(Collection<Definition> defined) {
+		definitions.addAll(Objects.requireNonNull(defined, "defined must not be null"));
+	}
+
+	/** @return the library operations of the language being parsed */
+	public OclLibrarySignatures signatures() {
+		return signatures;
+	}
+
+	/**
 	 * Tells this builder where the visitor currently is, so that a problem it finds is reported
 	 * at a place rather than at line 0.
 	 *
@@ -169,7 +347,48 @@ public class AbstractExpressionBuilder {
 	 * @param message the message, phrased for a template or expression author
 	 */
 	public void addError(String message) {
-		diagnostics.addError(message);
+		if (diagnosticSink != null) {
+			diagnosticSink.accept(diagnostics.at(message));
+		} else {
+			diagnostics.addError(message);
+		}
+	}
+
+	/** Where errors go instead of this builder's own list, if a host collects them itself. */
+	private Consumer<Resource.Diagnostic> diagnosticSink;
+
+	/**
+	 * Hands every error this builder finds to the host's own collection instead of keeping it —
+	 * for a host that builds its expressions itself and uses this builder for the shared OCL
+	 * nodes, as QVT-O does (#378).
+	 *
+	 * @param sink receives each error, positioned at this builder's cursor
+	 */
+	public void setDiagnosticSink(Consumer<Resource.Diagnostic> sink) {
+		this.diagnosticSink = Objects.requireNonNull(sink, "sink must not be null");
+	}
+
+	/**
+	 * Tells this builder where the host is, by line and column.
+	 *
+	 * @param line 1-based line
+	 * @param column 0-based column
+	 */
+	public void positionAt(int line, int column) {
+		diagnostics.positionAt(line, column);
+	}
+
+	/** Whether a name is a variable in scope, for a host that keeps its own variables. */
+	private Predicate<String> variableInScope;
+
+	/**
+	 * Lets a host that keeps its own variables say which names are in scope — a name in a type
+	 * position that is a variable of the host is left to evaluation (#378).
+	 *
+	 * @param inScope answers whether a name is a variable in scope
+	 */
+	public void setVariableLookup(Predicate<String> inScope) {
+		this.variableInScope = Objects.requireNonNull(inScope, "inScope must not be null");
 	}
 
 	// ==================== State Accessors ====================
@@ -225,24 +444,45 @@ public class AbstractExpressionBuilder {
 	 * Registers an alias name for the {@code self} variable (G-10: §12.12.5 form [B]).
 	 */
 	public void registerSelfAlias(String alias) {
-		Variable selfVar = environment.lookup("self").orElseThrow();
-		Variable aliasVar = FACTORY.createVariable();
-		aliasVar.setName(alias);
-		aliasVar.setType(selfVar.getType());
-		this.environment = this.environment.nested(aliasVar);
+		// The alias denotes self itself, so the expression refers to the variable evaluation
+		// binds. A variable of its own name was never bound: every form-[B] invariant evaluated
+		// to "Unresolved variable" (#324)
+		this.environment = this.environment.alias(alias, environment.lookup("self").orElseThrow());
+	}
+
+	/**
+	 * Declares a variable the expression may refer to and evaluation will bind: a parameter of
+	 * the operation whose body, pre- or postcondition this is, or {@code result} in a
+	 * postcondition (OCL v2.4 §12.2.1 {@code parameterVariable}, {@code resultVariable}, #324).
+	 * Declared, the name is a variable — not an unresolved name the parser might read as a
+	 * property of an implicit source.
+	 *
+	 * @param name the variable name
+	 * @param type its type, {@code null} if unknown
+	 */
+	public void declareVariable(String name, EClassifier type) {
+		this.environment = this.environment.nested(createVariable(name, type, null));
 	}
 
 	// ==================== Literal Builders ====================
 
 	public IntegerLiteralExp buildIntegerLiteral(String text) {
 		IntegerLiteralExp exp = FACTORY.createIntegerLiteralExp();
-		exp.setIntegerSymbol(Long.parseLong(text));
+		try {
+			exp.setIntegerSymbol(Long.parseLong(text));
+		} catch (NumberFormatException e) {
+			// The literal is held as an ELong; larger Integers are reached by arithmetic or
+			// toInteger(), which are unbounded (#322). Said in words, not as Java's message
+			addError("Integer literal out of range (64 bit): " + text);
+		}
+		exp.setType(LIBRARY.integer());
 		return exp;
 	}
 
 	public RealLiteralExp buildRealLiteral(String text) {
 		RealLiteralExp exp = FACTORY.createRealLiteralExp();
 		exp.setRealSymbol(Double.parseDouble(text));
+		exp.setType(LIBRARY.real());
 		return exp;
 	}
 
@@ -258,26 +498,33 @@ public class AbstractExpressionBuilder {
 			sb.append(unescapeString(text.substring(1, text.length() - 1)));
 		}
 		exp.setStringSymbol(sb.toString());
+		exp.setType(LIBRARY.string());
 		return exp;
 	}
 
 	public BooleanLiteralExp buildBooleanLiteral(boolean value) {
 		BooleanLiteralExp exp = FACTORY.createBooleanLiteralExp();
 		exp.setBooleanSymbol(value);
+		exp.setType(LIBRARY.booleanType());
 		return exp;
 	}
 
 	public NullLiteralExp buildNullLiteral() {
-		return FACTORY.createNullLiteralExp();
+		NullLiteralExp exp = FACTORY.createNullLiteralExp();
+		exp.setType(LIBRARY.oclVoid());
+		return exp;
 	}
 
 	public InvalidLiteralExp buildInvalidLiteral() {
-		return FACTORY.createInvalidLiteralExp();
+		InvalidLiteralExp exp = FACTORY.createInvalidLiteralExp();
+		exp.setType(LIBRARY.oclInvalid());
+		return exp;
 	}
 
 	public UnlimitedNaturalLiteralExp buildUnlimitedNaturalLiteral() {
 		UnlimitedNaturalLiteralExp exp = FACTORY.createUnlimitedNaturalLiteralExp();
 		exp.setUnlimitedNaturalSymbol(-1L);
+		exp.setType(LIBRARY.unlimitedNatural());
 		return exp;
 	}
 
@@ -348,25 +595,119 @@ public class AbstractExpressionBuilder {
 	public VariableExp createVariableExp(Variable variable) {
 		VariableExp exp = FACTORY.createVariableExp();
 		exp.setReferredVariable(variable);
-		exp.setType(variable.getType());
+		// A variable without a declared type is used with the type of its initial value. The
+		// variable itself keeps none: under specStrict an undeclared let type is an error (#326)
+		EClassifier type = variable.getType();
+		if (type == null && variable.getOwnedInit() != null) {
+			type = copyType(variable.getOwnedInit().getType());
+		}
+		exp.setType(type);
 		return exp;
 	}
 
 	// ==================== Implicit Operation Call ====================
 
 	/**
-	 * Builds an implicit operation call (unqualified, source is self).
+	 * Builds an implicit operation call — an unqualified {@code op(args)}. Its source is the
+	 * innermost implicit iterator that has the operation, otherwise {@code self} (OCL v2.4
+	 * §9.3.35 [D] {@code lookupImplicitSourceForOperation}, §7.4.7
+	 * {@code aCollection->collect(oclAsType(String))}, #320).
 	 */
 	public OperationCallExp buildImplicitOperationCall(String opName,
 			List<OclExpression> args, boolean isPre) {
 		OperationCallExp exp = FACTORY.createOperationCallExp();
 		exp.setIsImplicit(true);
 		exp.setIsPre(isPre);
-		VariableExp selfRef = createVariableExp(environment.lookup("self").orElseThrow());
-		exp.setOwnedSource(selfRef);
+		Variable source = implicitSourceForOperation(opName);
+		exp.setOwnedSource(createVariableExp(source));
 		exp.getOwnedArguments().addAll(args);
 		resolveOperation(exp, opName);
 		return exp;
+	}
+
+	/**
+	 * Checks the qualifier of {@code source.Type::feature} (OCL v2.4 §9.3.36 [3]/[4], §9.3.35
+	 * [I]/[J], §7.5.8): it must name a classifier, and the source must conform to it. Before,
+	 * the qualifier was dropped unread, so {@code self.Nonsense::name} evaluated (#325).
+	 *
+	 * @param source the source expression, whose static type may be unknown
+	 * @param qualifier the qualifying path
+	 */
+	public void checkQualifier(OclExpression source, List<String> qualifier) {
+		EClassifier qualifierType = names.findClassifier(qualifier);
+		if (qualifierType == null) {
+			addError("Unknown type (" + String.join("::", qualifier) + ")");
+			return;
+		}
+		EClassifier sourceType = source.getType();
+		if (sourceType instanceof EClass sourceClass && qualifierType instanceof EClass qualifierClass
+				&& !qualifierClass.isSuperTypeOf(sourceClass)) {
+			addError("The source type " + sourceClass.getName() + " does not conform to "
+					+ qualifierClass.getName() + " (" + String.join("::", qualifier) + ")");
+		}
+	}
+
+	/**
+	 * Checks the qualifier of an unqualified-source call {@code Type::op(args)} (§9.3.35 [G]).
+	 * Ecore has no static operations, so the only reading Fennec has is a qualified call on
+	 * {@code self} (§7.5.8): the qualifier must be a classifier the context class conforms to.
+	 * An unknown type or an unrelated classifier is an error instead of a silent call on
+	 * {@code self} (#325).
+	 *
+	 * @param qualifier the qualifying path
+	 * @param opName the operation name, for the message
+	 */
+	public void checkStaticQualifier(List<String> qualifier, String opName) {
+		EClassifier qualifierType = names.findClassifier(qualifier);
+		String path = String.join("::", qualifier);
+		if (qualifierType == null) {
+			addError("Unknown type (" + path + ")");
+		} else if (!(qualifierType instanceof EClass qualifierClass && contextType instanceof EClass contextClass
+				&& qualifierClass.isSuperTypeOf(contextClass))) {
+			addError("'" + path + "::" + opName + "' is no static operation: Ecore has none, and "
+					+ path + " is not a supertype of the context");
+		}
+	}
+
+	/** The OclAny operations (§11.3.1), which every type has. */
+	private static final Set<String> OCL_ANY_OPERATIONS = Set.of("=", "<>", "oclIsKindOf", "oclIsTypeOf",
+			"oclAsType", "oclIsUndefined", "oclIsInvalid", "oclIsNew", "oclIsInState", "oclType", "oclAsSet",
+			"toString", "oclLocale");
+
+	/**
+	 * The variable an unqualified operation call applies to. A candidate of a known class
+	 * qualifies when the class has an operation of that name; an OclAny operation fits every
+	 * candidate. A candidate whose type the parser does not know — the iterator over a collection
+	 * literal, say — qualifies unless the context class itself has an operation of that name:
+	 * the call cannot be decided statically then, and the context class is the one place known
+	 * to answer it.
+	 */
+	private Variable implicitSourceForOperation(String opName) {
+		Variable self = environment.lookup("self").orElseThrow();
+		boolean selfHasIt = contextType instanceof EClass contextClass && hasOperationNamed(contextClass, opName);
+		for (Variable candidate : environment.lookupImplicitSources()) {
+			EClassifier type = candidate.getType();
+			if (OCL_ANY_OPERATIONS.contains(opName)) {
+				return candidate;
+			}
+			if (type instanceof EClass eClass) {
+				if (hasOperationNamed(eClass, opName)) {
+					return candidate;
+				}
+			} else if (!selfHasIt) {
+				return candidate;
+			}
+		}
+		return self;
+	}
+
+	private static boolean hasOperationNamed(EClass eClass, String opName) {
+		for (EOperation op : eClass.getEAllOperations()) {
+			if (opName.equals(op.getName())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ==================== Collection Literal ====================
@@ -375,10 +716,30 @@ public class AbstractExpressionBuilder {
 			List<CollectionLiteralPart> parts) {
 		CollectionLiteralExp exp = FACTORY.createCollectionLiteralExp();
 		exp.setKind(resolveCollectionKind(kindText));
+		// §8.3.7 CollectionLiteralExp [1] / §9.3.10 [1]: "In a literal the collection type may
+		// not be Collection" — Collection(T) stays valid as a type (#326)
+		if (exp.getKind() == CollectionKind.COLLECTION) {
+			addError("'Collection' is abstract and has no literal; use Set, OrderedSet, Bag or Sequence");
+		}
 		if (parts != null) {
 			exp.getOwnedParts().addAll(parts);
 		}
+		// Typed by its kind, so that an iterator over it has a result type too (#378); the
+		// element type where every part has the same one, unknown otherwise (no common
+		// supertype computation here — that is the type checker's, GAP-3)
+		exp.setType(collectionType(exp.getKind(), commonPartType(exp.getOwnedParts())));
 		return exp;
+	}
+
+	private EClassifier commonPartType(List<CollectionLiteralPart> parts) {
+		List<EClassifier> types = new ArrayList<>();
+		for (CollectionLiteralPart part : parts) {
+			types.add(part instanceof CollectionItem item && item.getOwnedItem() != null
+					? item.getOwnedItem().getType()
+					: part instanceof CollectionRange ? LIBRARY.integer() : null);
+		}
+		// §8.3.7 CollectionLiteralExp: the element type is the common supertype of the parts
+		return copyType(OclTypeRules.commonSuperType(types));
 	}
 
 	public CollectionItem buildCollectionItem(OclExpression item) {
@@ -397,9 +758,26 @@ public class AbstractExpressionBuilder {
 	// ==================== Tuple Literal ====================
 
 	public TupleLiteralExp buildTupleLiteral(List<TupleLiteralPart> parts) {
+		// §8.3.7 TupleLiteralExp [2]: part->isUnique(attribute.name) (#326)
+		rejectDuplicateNames("tuple part", parts.stream().map(TupleLiteralPart::getName).toList());
 		TupleLiteralExp exp = FACTORY.createTupleLiteralExp();
 		exp.getOwnedParts().addAll(parts);
+		exp.setType(tupleType(parts));
 		return exp;
+	}
+
+	/** §8.3.7 TupleLiteralExp: a tuple type of the parts' names and types. */
+	private TupleType tupleType(List<TupleLiteralPart> parts) {
+		TupleType type = FACTORY.createTupleType();
+		for (TupleLiteralPart part : parts) {
+			TuplePart typePart = FACTORY.createTuplePart();
+			typePart.setName(part.getName());
+			EClassifier partType = part.getType() != null ? part.getType()
+					: part.getOwnedInit() != null ? part.getOwnedInit().getType() : null;
+			typePart.setType(copyType(partType));
+			type.getOwnedParts().add(typePart);
+		}
+		return type;
 	}
 
 	public TupleLiteralPart buildTupleLiteralPart(String name, EClassifier type,
@@ -408,6 +786,10 @@ public class AbstractExpressionBuilder {
 		part.setName(name);
 		if (type != null) {
 			part.setType(type);
+			// §8.3.7 TupleLiteralPart [1]: the initial value conforms to the declared type
+			checkDeclaredType("tuple part", name, type, init);
+		} else if (init != null && init.getType() != null) {
+			part.setType(copyType(init.getType()));
 		}
 		part.setOwnedInit(init);
 		return part;
@@ -420,7 +802,22 @@ public class AbstractExpressionBuilder {
 		if (parts != null) {
 			exp.getOwnedParts().addAll(parts);
 		}
+		exp.setType(mapType(exp.getOwnedParts()));
 		return exp;
+	}
+
+	/** A map type of the common supertypes of the keys and of the values. */
+	private MapType mapType(List<MapLiteralPart> parts) {
+		List<EClassifier> keyTypes = new ArrayList<>();
+		List<EClassifier> valueTypes = new ArrayList<>();
+		for (MapLiteralPart part : parts) {
+			keyTypes.add(part.getOwnedKey() != null ? part.getOwnedKey().getType() : null);
+			valueTypes.add(part.getOwnedValue() != null ? part.getOwnedValue().getType() : null);
+		}
+		MapType type = FACTORY.createMapType();
+		type.setKeyType(copyType(OclTypeRules.commonSuperType(keyTypes)));
+		type.setValueType(copyType(OclTypeRules.commonSuperType(valueTypes)));
+		return type;
 	}
 
 	public MapLiteralPart buildMapLiteralPart(OclExpression key, OclExpression value) {
@@ -454,7 +851,7 @@ public class AbstractExpressionBuilder {
 	public IteratorExp buildImplicitCollect(OclExpression source, String propName,
 			boolean isSafe, boolean isPre, CollectionType sourceColType) {
 		Variable iterVar = FACTORY.createVariable();
-		iterVar.setName("_implicit");
+		iterVar.setName(nextImplicitName());
 		if (sourceColType.getElementType() != null) {
 			iterVar.setType(copyType(sourceColType.getElementType()));
 		}
@@ -490,8 +887,13 @@ public class AbstractExpressionBuilder {
 	/**
 	 * Builds a dot operation call (e.g. {@code source.op(args)}).
 	 */
-	public OperationCallExp buildDotOperationCall(OclExpression source, String opName,
+	public OclExpression buildDotOperationCall(OclExpression source, String opName,
 			List<OclExpression> args, boolean isSafe, boolean isPre) {
+		// §7.6.2: "collection.propertyname(par1, par2, …)" and
+		// "collection->collect(propertyname(par1, par2, …))" are identical (#320)
+		if (source.getType() instanceof CollectionType || source instanceof CollectionLiteralExp) {
+			return buildImplicitOperationCollect(source, opName, args, isSafe, isPre);
+		}
 		OperationCallExp exp = FACTORY.createOperationCallExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
@@ -499,6 +901,53 @@ public class AbstractExpressionBuilder {
 		exp.getOwnedArguments().addAll(args);
 		resolveOperation(exp, opName);
 		return exp;
+	}
+
+	/**
+	 * Builds the implicit collect of an operation called with a dot on a collection (§7.6.2).
+	 * The arguments are evaluated once per element, in the scope of the call.
+	 */
+	private IteratorExp buildImplicitOperationCollect(OclExpression source, String opName,
+			List<OclExpression> args, boolean isSafe, boolean isPre) {
+		Variable iterVar = FACTORY.createVariable();
+		iterVar.setName(nextImplicitName());
+		EClassifier elementType = source.getType() instanceof CollectionType colType
+				? colType.getElementType() : null;
+		if (elementType != null) {
+			iterVar.setType(copyType(elementType));
+		}
+		OperationCallExp bodyExp = FACTORY.createOperationCallExp();
+		bodyExp.setOwnedSource(createVariableExp(iterVar));
+		bodyExp.setIsSafe(isSafe);
+		bodyExp.setIsPre(isPre);
+		bodyExp.getOwnedArguments().addAll(args);
+		resolveOperation(bodyExp, opName);
+
+		IteratorExp collectExp = FACTORY.createIteratorExp();
+		collectExp.setOwnedSource(source);
+		collectExp.setName("collect");
+		collectExp.getOwnedIterators().add(iterVar);
+		collectExp.setOwnedBody(bodyExp);
+		return collectExp;
+	}
+
+	/**
+	 * A name for a parser-created implicit iterator that differs from every one in scope. At
+	 * evaluation variables are found by name, so two nested {@code _implicit} iterators hid the
+	 * outer one from the inner body (#320). The outermost keeps the plain name.
+	 */
+	/**
+	 * A name for the iterator variable of an iterate that declares none (§9.3.26, #320).
+	 *
+	 * @return a name distinct from every implicit iterator in scope
+	 */
+	public String implicitIteratorName() {
+		return nextImplicitName();
+	}
+
+	private String nextImplicitName() {
+		int depth = environment.implicitIteratorDepth();
+		return depth == 0 ? "_implicit" : "_implicit" + depth;
 	}
 
 	// ==================== Iterator / Iterate / Collection Ops ====================
@@ -518,17 +967,77 @@ public class AbstractExpressionBuilder {
 		exp.getOwnedIterators().addAll(iterVars);
 		exp.setOwnedBody(body);
 
-		EClassifier elementType = inferElementType(source);
-		if (elementType != null) {
-			switch (iterName) {
-				case "select", "reject", "sortedBy", "closure":
-					exp.setType(elementType);
-					break;
-				default:
-					break;
-			}
+		EClassifier resultType = iteratorResultType(iterName, source, body);
+		if (resultType != null) {
+			exp.setType(resultType);
 		}
+		checkConditionBody(iterName, body);
 		return exp;
+	}
+
+	/** The iterators whose body is a condition (§11.9). */
+	private static final Set<String> BOOLEAN_BODY_ITERATORS = Set.of("select", "reject", "forAll", "exists", "any",
+			"one");
+
+	/** Records a condition body known not to be a Boolean (§11.9: "body : Boolean"). */
+	private void checkConditionBody(String iterName, OclExpression body) {
+		EClassifier bodyType = body != null ? body.getType() : null;
+		if (BOOLEAN_BODY_ITERATORS.contains(iterName) && !OclTypeRules.conformsTo(bodyType, LIBRARY.booleanType())) {
+			addTypeFinding("The body of " + iterName + " is a " + OclTypeRules.nameOf(bodyType) + ", not a Boolean", body);
+		}
+	}
+
+	/**
+	 * The type of a predefined iterator's result, OCL v2.4 §11.9: {@code select}/{@code reject}
+	 * keep the source's collection kind; {@code sortedBy} and {@code closure} answer an ordered
+	 * collection for an ordered source and a unique one for a unique source; {@code collect} a
+	 * Bag of the flattened body type (a Sequence for an ordered source), {@code collectNested}
+	 * the same without flattening; {@code any} the element type; the quantifiers Boolean. Before,
+	 * the selecting iterators were typed with the source's element type and the collecting ones
+	 * not at all, so a dot after them navigated the element instead of collecting (#320, #378).
+	 *
+	 * @return the result type, or {@code null} where the source's collection type is unknown
+	 */
+	private EClassifier iteratorResultType(String iterName, OclExpression source, OclExpression body) {
+		switch (iterName) {
+			case "forAll", "exists", "one", "isUnique":
+				return LIBRARY.booleanType();
+			case "any":
+				return inferElementType(source);
+			default:
+				break;
+		}
+		if (!(source.getType() instanceof CollectionType sourceType)) {
+			return null;
+		}
+		CollectionKind kind = sourceType.getKind();
+		boolean ordered = kind == CollectionKind.SEQUENCE || kind == CollectionKind.ORDERED_SET;
+		boolean unique = kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET;
+		EClassifier element = inferElementType(source);
+		EClassifier bodyType = body != null ? body.getType() : null;
+		return switch (iterName) {
+			case "select", "reject" -> collectionType(kind, element);
+			case "sortedBy" -> collectionType(unique ? CollectionKind.ORDERED_SET : CollectionKind.SEQUENCE, element);
+			case "closure" -> collectionType(ordered ? CollectionKind.ORDERED_SET : CollectionKind.SET, element);
+			case "collect" -> collectionType(ordered ? CollectionKind.SEQUENCE : CollectionKind.BAG,
+					bodyType instanceof CollectionType nested ? copyType(nested.getElementType()) : copyType(bodyType));
+			case "collectNested" -> collectionType(ordered ? CollectionKind.SEQUENCE : CollectionKind.BAG,
+					copyType(bodyType));
+			default -> null;
+		};
+	}
+
+	private CollectionType collectionType(CollectionKind kind, EClassifier elementType) {
+		CollectionType type = switch (kind) {
+			case SET -> FACTORY.createSetType();
+			case ORDERED_SET -> FACTORY.createOrderedSetType();
+			case BAG -> FACTORY.createBagType();
+			case SEQUENCE -> FACTORY.createSequenceType();
+			default -> FACTORY.createCollectionType();
+		};
+		type.setKind(kind);
+		type.setElementType(elementType);
+		return type;
 	}
 
 	/**
@@ -561,6 +1070,10 @@ public class AbstractExpressionBuilder {
 		exp.getOwnedIterators().add(iterVar);
 		exp.setOwnedResult(accumulator);
 		exp.setOwnedBody(body);
+		// §8.3.7 IterateExp [1]: the type of the iterate is the type of the result variable
+		if (accumulator != null && accumulator.getType() != null) {
+			exp.setType(copyType(accumulator.getType()));
+		}
 		return exp;
 	}
 
@@ -597,23 +1110,22 @@ public class AbstractExpressionBuilder {
 		markArrowCall(exp);
 
 		EClassifier elementType = inferElementType(source);
-		Variable iterVar = FACTORY.createVariable();
-		iterVar.setName("_implicit");
-		if (elementType != null) {
-			iterVar.setType(elementType);
+		Variable iterVar = pushedImplicitIterators.pollFirst();
+		if (iterVar == null) {
+			iterVar = FACTORY.createVariable();
+			iterVar.setName("_implicit");
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
 		}
 		exp.getOwnedIterators().add(iterVar);
 		exp.setOwnedBody(body);
 
-		if (elementType != null) {
-			switch (iterName) {
-				case "select", "reject", "sortedBy", "closure":
-					exp.setType(elementType);
-					break;
-				default:
-					break;
-			}
+		EClassifier resultType = iteratorResultType(iterName, source, body);
+		if (resultType != null) {
+			exp.setType(resultType);
 		}
+		checkConditionBody(iterName, body);
 		return exp;
 	}
 
@@ -627,11 +1139,13 @@ public class AbstractExpressionBuilder {
 	public Variable pushImplicitIteratorEnv(OclExpression source) {
 		EClassifier elementType = inferElementType(source);
 		Variable iterVar = FACTORY.createVariable();
-		iterVar.setName("_implicit");
+		iterVar.setName(nextImplicitName());
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
 		this.environment = this.environment.nestedImplicit(iterVar);
+		// The iterator the body refers to is the one the expression declares (#320)
+		pushedImplicitIterators.addFirst(iterVar);
 		return iterVar;
 	}
 
@@ -660,12 +1174,252 @@ public class AbstractExpressionBuilder {
 		} else {
 			ifExp.setOwnedElse(elseExp);
 		}
+		typeIf(ifExp);
 		return ifExp;
+	}
+
+	/**
+	 * Types an {@code if} from its branches, the nested ones of an elseif chain first (§8.3.7
+	 * IfExp: the common supertype of then and else), and records a condition known not to be
+	 * a Boolean (IfExp [1]).
+	 */
+	private void typeIf(IfExp ifExp) {
+		if (ifExp.getOwnedElse() instanceof IfExp nested && nested.getType() == null) {
+			typeIf(nested);
+		}
+		EClassifier condition = ifExp.getOwnedCondition() != null ? ifExp.getOwnedCondition().getType() : null;
+		if (!isCondition(condition)) {
+			addTypeFinding("The condition of an if is a " + OclTypeRules.nameOf(condition) + ", not a Boolean",
+					ifExp.getOwnedCondition());
+		}
+		EClassifier thenType = ifExp.getOwnedThen() != null ? ifExp.getOwnedThen().getType() : null;
+		EClassifier elseType = ifExp.getOwnedElse() != null ? ifExp.getOwnedElse().getType() : null;
+		EClassifier type = OclTypeRules.commonSuperType(thenType, elseType);
+		if (type != null) {
+			ifExp.setType(copyType(type));
+		}
+	}
+
+	/**
+	 * Types an OCL node a host built itself, by the rules the {@code build…} methods of this class
+	 * apply, and reports what is known not to fit (#378). For a host such as QVT-O that constructs
+	 * the shared OCL nodes on its own; a node that already has a type keeps it.
+	 *
+	 * @param node the node, its parts already typed
+	 */
+	public void typeNode(OclExpression node) {
+		switch (node) {
+			case IntegerLiteralExp literal -> setIfUntyped(literal, LIBRARY.integer());
+			case RealLiteralExp literal -> setIfUntyped(literal, LIBRARY.real());
+			case StringLiteralExp literal -> setIfUntyped(literal, LIBRARY.string());
+			case BooleanLiteralExp literal -> setIfUntyped(literal, LIBRARY.booleanType());
+			case UnlimitedNaturalLiteralExp literal -> setIfUntyped(literal, LIBRARY.unlimitedNatural());
+			case NullLiteralExp literal -> setIfUntyped(literal, LIBRARY.oclVoid());
+			case InvalidLiteralExp literal -> setIfUntyped(literal, LIBRARY.oclInvalid());
+			case EnumLiteralExp literal -> setIfUntyped(literal,
+					literal.getReferredLiteral() != null ? literal.getReferredLiteral().getEEnum() : null);
+			case IfExp ifExp -> typeIf(ifExp);
+			case LetExp letExp -> typeLet(letExp);
+			case IterateExp iterate -> {
+				if (iterate.getOwnedResult() != null) {
+					setIfUntyped(iterate, copyType(iterate.getOwnedResult().getType()));
+				}
+			}
+			case IteratorExp iterator -> {
+				setIfUntyped(iterator, iteratorResultType(iterator.getName(), iterator.getOwnedSource(),
+						iterator.getOwnedBody()));
+				checkConditionBody(iterator.getName(), iterator.getOwnedBody());
+			}
+			case CollectionLiteralExp literal -> setIfUntyped(literal,
+					collectionType(literal.getKind(), commonPartType(literal.getOwnedParts())));
+			case TupleLiteralExp literal -> setIfUntyped(literal, tupleType(literal.getOwnedParts()));
+			case MapLiteralExp literal -> setIfUntyped(literal, mapType(literal.getOwnedParts()));
+			default -> {
+				// what this builder does not build, the host types itself
+			}
+		}
+	}
+
+	private void setIfUntyped(OclExpression node, EClassifier type) {
+		if (node.getType() == null && type != null) {
+			node.setType(type);
+		}
+	}
+
+	/**
+	 * Whether a value of this type may stand as a condition: a Boolean, and where the language
+	 * allows implicit conditions also an element or a collection (QVT-O §8.4.5(2)).
+	 */
+	private boolean isCondition(EClassifier type) {
+		if (OclTypeRules.conformsTo(type, LIBRARY.booleanType())) {
+			return true;
+		}
+		EClassifier normalized = OclTypeRules.normalize(type);
+		return implicitConditions && (normalized instanceof EClass || normalized instanceof CollectionType);
+	}
+
+	/** Whether an operation of a model class may come from a unit this one imports. */
+	private boolean openOperationScope;
+
+	/**
+	 * Says that the unit imports others, whose operations on model classes this builder does not
+	 * know: a call on a model class that matches no library signature is then left to the
+	 * evaluator instead of being an error (#378).
+	 *
+	 * @param open whether operations of imported units may be called
+	 */
+	public void setOpenOperationScope(boolean open) {
+		this.openOperationScope = open;
+	}
+
+	/** Whether an element or a collection may stand as a condition (QVT-O §8.4.5(2)). */
+	private boolean implicitConditions;
+
+	/**
+	 * Allows an element or a collection as a condition — QVT-O compares an element with
+	 * {@code null} and a collection by its size (§8.4.5(2), #378).
+	 *
+	 * @param allowed whether such conditions are allowed
+	 */
+	public void setImplicitConditions(boolean allowed) {
+		this.implicitConditions = allowed;
+	}
+
+	/**
+	 * Types a {@code let}: the type of its body (§8.3.7 LetExp). The four languages build the
+	 * expression themselves and hand it here once it is complete.
+	 *
+	 * @param letExp the let expression, the outermost of a chain of them
+	 */
+	public void typeLet(LetExp letExp) {
+		if (letExp.getOwnedIn() instanceof LetExp nested && nested.getType() == null) {
+			typeLet(nested);
+		}
+		if (letExp.getOwnedIn() != null && letExp.getOwnedIn().getType() != null) {
+			letExp.setType(copyType(letExp.getOwnedIn().getType()));
+		}
 	}
 
 	/**
 	 * Creates a variable with optional type, suitable for let bindings or iterator vars.
 	 */
+	private void rejectDuplicateNames(String what, List<String> declared) {
+		Set<String> seen = new HashSet<>();
+		for (String name : declared) {
+			if (!seen.add(name)) {
+				addError("Duplicate " + what + " '" + name + "'");
+			}
+		}
+	}
+
+	/**
+	 * Rejects a variable that hides one already in scope (OCL v2.4 §9.3.41 [1]
+	 * {@code env.lookup(varName).oclIsUndefined()}, §9.3.25 [A] for iterator variables). The
+	 * spec's {@code lookup} searches the enclosing scopes as well, so shadowing is an error —
+	 * deliberately stricter than Eclipse OCL, which only looks at the innermost scope (#326).
+	 * The parser's own {@code _implicit} iterators are exempt; they never appear in source.
+	 */
+	public void rejectShadowing(String what, String name) {
+		if (name != null && !name.startsWith("_implicit") && environment.lookup(name).isPresent()) {
+			addError("Variable name already used: '" + name + "' (" + what + " hides a variable in scope)");
+		}
+	}
+
+	/**
+	 * Checks that a literal initial value conforms to a declared type (OCL v2.4 §8.3.7
+	 * Variable [1], TupleLiteralPart [1], IterateExp [2]). Only literals carry a type the
+	 * parser knows for certain; anything else waits for the type checker (GAP-3, #326).
+	 */
+	public void checkDeclaredType(String what, String name, EClassifier declared, OclExpression init) {
+		String literalType = literalTypeName(init);
+		if (literalType == null && init != null && !OclTypeRules.conformsTo(init.getType(), declared)) {
+			addTypeFinding("The " + what + " '" + name + "' is declared as " + OclTypeRules.nameOf(declared)
+					+ " but initialized with a " + OclTypeRules.nameOf(init.getType()), init);
+			return;
+		}
+		if (literalType == null || declared == null || conformsToDeclared(literalType, declared)) {
+			return;
+		}
+		addError("The " + what + " '" + name + "' is declared as " + declared.getName()
+				+ " but initialized with a " + literalType);
+	}
+
+	/** The predefined type of a literal, or {@code null} when the expression is no such literal. */
+	private static String literalTypeName(OclExpression init) {
+		if (init instanceof IntegerLiteralExp) return "Integer";
+		if (init instanceof RealLiteralExp) return "Real";
+		if (init instanceof StringLiteralExp) return "String";
+		if (init instanceof BooleanLiteralExp) return "Boolean";
+		if (init instanceof UnlimitedNaturalLiteralExp) return "UnlimitedNatural";
+		return null;
+	}
+
+	private static boolean conformsToDeclared(String literalType, EClassifier declared) {
+		if (declared instanceof AnyType || !(declared instanceof PrimitiveType)) {
+			// OclAny takes everything; a collection, tuple or model type never takes a primitive
+			// literal, except that an Ecore data type may wrap one — left to the type checker
+			return declared instanceof AnyType || !(declared instanceof CollectionType
+					|| declared instanceof TupleType || declared instanceof EClass);
+		}
+		String target = declared.getName();
+		return switch (literalType) {
+			case "Integer" -> "Integer".equals(target) || "Real".equals(target);
+			case "UnlimitedNatural" -> "UnlimitedNatural".equals(target) || "Integer".equals(target)
+					|| "Real".equals(target);
+			default -> literalType.equals(target);
+		};
+	}
+
+	/**
+	 * Creates the variables of an iterator and checks their names: none may hide a variable in
+	 * scope, and no two may be the same (§9.3.25 [A], #326).
+	 *
+	 * @param names the declared names
+	 * @param types the declared types, {@code null} where none was declared
+	 * @return the variables, in order
+	 */
+	public List<Variable> declareIteratorVariables(List<String> names, List<EClassifier> types) {
+		List<Variable> variables = new ArrayList<>();
+		Set<String> seen = new HashSet<>();
+		for (int i = 0; i < names.size(); i++) {
+			String name = names.get(i);
+			rejectShadowing("iterator variable", name);
+			if (!seen.add(name)) {
+				addError("Variable name already used: '" + name + "' (iterator variable)");
+			}
+			variables.add(createVariable(name, types.get(i), null));
+		}
+		return variables;
+	}
+
+	/**
+	 * Creates the iterator and result variables of iterate after §9.3.26 and §8.3.7: the names
+	 * hide nothing in scope and differ from each other, and a literal initial value conforms
+	 * to the declared result type (#326).
+	 *
+	 * @return the iterator variable and the accumulator, in that order
+	 */
+	public List<Variable> declareIterateVariables(String iterName, EClassifier iterType, String accName,
+			EClassifier accType, OclExpression accInit) {
+		rejectShadowing("iterator variable", iterName);
+		rejectShadowing("accumulator", accName);
+		if (accName.equals(iterName)) {
+			addError("Variable name already used: '" + accName + "' (accumulator)");
+		}
+		checkDeclaredType("accumulator", accName, accType, accInit);
+		return List.of(createVariable(iterName, iterType, null), createVariable(accName, accType, accInit));
+	}
+
+	/**
+	 * Creates a let variable after §9.3.41: the name hides nothing in scope, and a literal
+	 * initial value conforms to the declared type (#326).
+	 */
+	public Variable declareLetVariable(String name, EClassifier type, OclExpression init) {
+		rejectShadowing("let variable", name);
+		checkDeclaredType("let variable", name, type, init);
+		return createVariable(name, type, init);
+	}
+
 	public Variable createVariable(String name, EClassifier type, OclExpression init) {
 		Variable var = FACTORY.createVariable();
 		var.setName(name);
@@ -748,6 +1502,8 @@ public class AbstractExpressionBuilder {
 	}
 
 	public OclType buildTupleType(List<String> partNames, List<EClassifier> partTypes) {
+		// §8.2.2 TupleType [2]: part names are unique (#326)
+		rejectDuplicateNames("tuple part", partNames);
 		var type = FACTORY.createTupleType();
 		for (int i = 0; i < partNames.size(); i++) {
 			var part = FACTORY.createTuplePart();
@@ -789,6 +1545,14 @@ public class AbstractExpressionBuilder {
 			// reported switches strict resolution on (#153).
 			if (strictPropertyResolution && !names.isDefinedProperty(propName)) {
 				addError("Unknown property (" + eClass.getName() + "::" + propName + ")");
+			}
+			// a def: attribute of the type has its declared type (§12.5, #378)
+			for (Definition definition : definitions) {
+				if (!definition.isOperation() && definition.name().equals(propName) && definition.appliesTo(eClass)
+						&& definition.type() != null) {
+					exp.setType(copyType(definition.type()));
+					break;
+				}
 			}
 		}
 		exp.setReferredProperty(unresolvedProperty(propName));
@@ -891,10 +1655,127 @@ public class AbstractExpressionBuilder {
 					}
 				}
 			}
+			if (bestMatch != null && bestMatch.getEParameters().size() != argCount) {
+				// §8.3.7 OperationCallExp [2]: "exactly as many arguments as the referred operation
+				// has parameters". The class has operations of this name, none of this arity —
+				// calling the first one anyway dropped or invented arguments silently (#314)
+				addError("Operation " + eClass.getName() + "::" + opName + " expects "
+						+ bestMatch.getEParameters().size() + " argument(s), got " + argCount);
+				return;
+			}
 			if (bestMatch != null) {
 				exp.setReferredOperation(bestMatch);
 			}
 		}
+		typeOperationCall(exp);
+	}
+
+	/**
+	 * Types an operation call: a metamodel operation by its declared type, a library operation
+	 * by its signature (§11). An arrow on a single object applies to the object as a set
+	 * (§7.5.3). A library operation whose arguments are known not to fit any signature of that
+	 * name is a finding.
+	 */
+	private void typeOperationCall(OperationCallExp exp) {
+		if (exp.getReferredOperation() instanceof EOperation operation) {
+			// §8.3.7 OperationCallExp [1]: each argument conforms to its parameter
+			for (int i = 0; i < operation.getEParameters().size() && i < exp.getOwnedArguments().size(); i++) {
+				EParameter parameter = operation.getEParameters().get(i);
+				EClassifier argument = exp.getOwnedArguments().get(i).getType();
+				if (!OclTypeRules.conformsTo(argument, typeOf(parameter))) {
+					addTypeFinding("Argument " + (i + 1) + " of " + operation.getName() + " is a "
+							+ OclTypeRules.nameOf(argument) + ", but the parameter '" + parameter.getName() + "' is a "
+							+ OclTypeRules.nameOf(typeOf(parameter)), exp.getOwnedArguments().get(i));
+				}
+			}
+			exp.setType(typeOf(operation));
+			return;
+		}
+		EClassifier receiver = exp.getOwnedSource() != null ? exp.getOwnedSource().getType() : null;
+		if (typeDefinedOperationCall(exp, receiver)) {
+			return;
+		}
+		if (exp.isIsArrow() && receiver != null && !(OclTypeRules.normalize(receiver) instanceof CollectionType)
+				&& !(OclTypeRules.normalize(receiver) instanceof MapType)) {
+			receiver = collectionType(CollectionKind.SET, copyType(receiver));
+		}
+		OclLibrarySignatures.Resolution resolution = signatures.resolve(receiver, exp.getName(),
+				exp.getOwnedArguments());
+		if (resolution.type() != null) {
+			exp.setType(copyType(resolution.type()));
+		}
+		boolean mayBeImported = openOperationScope && OclTypeRules.normalize(receiver) instanceof EClass;
+		if (resolution.problem() != null && !mayBeImported) {
+			// at the first argument that does not fit; a wrong number of them is the call's
+			int argument = resolution.argument();
+			addTypeFinding(resolution.problem(), argument >= 0 ? exp.getOwnedArguments().get(argument) : null);
+		}
+	}
+
+	/**
+	 * Types a call of an operation a {@code def:} defines for the receiver's type, and checks its
+	 * arguments against the declared parameters (§8.3.7 OperationCallExp [1], #324).
+	 *
+	 * @return whether a definition of that name and arity applies
+	 */
+	private boolean typeDefinedOperationCall(OperationCallExp exp, EClassifier receiver) {
+		boolean unitLevel = exp.isIsImplicit() || exp.getOwnedSource() == null;
+		boolean named = false;
+		for (Definition definition : definitions) {
+			if (!definition.isOperation() || !definition.name().equals(exp.getName())) {
+				continue;
+			}
+			// QVT-O §8.2.1.10: a contextual operation "can be invoked either as a non-contextual
+			// operation (self is the first argument of the call expression) or as an operation of
+			// the context class"
+			boolean selfAsArgument = definition.owner() != null && unitLevel
+					&& exp.getOwnedArguments().size() == definition.parameterTypes().size() + 1
+					&& definition.appliesTo(exp.getOwnedArguments().get(0).getType());
+			boolean applies = definition.owner() == null ? unitLevel
+					: selfAsArgument || receiver != null && definition.appliesTo(receiver);
+			if (!applies) {
+				continue;
+			}
+			named = true;
+			int offset = selfAsArgument ? 1 : 0;
+			if (!definition.takes(exp.getOwnedArguments().size() - offset)) {
+				continue;
+			}
+			for (int i = offset; i < exp.getOwnedArguments().size(); i++) {
+				EClassifier argument = exp.getOwnedArguments().get(i).getType();
+				EClassifier parameter = definition.parameterTypes().get(i - offset);
+				if (!OclTypeRules.conformsTo(argument, parameter)) {
+					addTypeFinding("Argument " + (i + 1) + " of " + definition.name() + " is a "
+							+ OclTypeRules.nameOf(argument) + ", but the parameter '" + definition.parameterNames().get(i - offset)
+							+ "' is a " + OclTypeRules.nameOf(parameter), exp.getOwnedArguments().get(i));
+				}
+			}
+			if (definition.type() != null) {
+				exp.setType(copyType(definition.type()));
+			}
+			return true;
+		}
+		// a feature of the unit of that name, only not of this arity: whether an overload with
+		// defaults or of an imported unit takes the call is the evaluator's to find out
+		return named;
+	}
+
+	/**
+	 * The type of a typed element of a metamodel: its type, or a collection of it where it is
+	 * many-valued — ordered and unique as declared (§8.3.7 PropertyCallExp, OperationCallExp).
+	 *
+	 * @param element the property, operation or parameter
+	 * @return the type, {@code null} where the element has none
+	 */
+	public EClassifier typeOf(ETypedElement element) {
+		EClassifier type = element.getEType();
+		if (type == null || !element.isMany()) {
+			return type;
+		}
+		CollectionKind kind = element.isOrdered()
+				? element.isUnique() ? CollectionKind.ORDERED_SET : CollectionKind.SEQUENCE
+				: element.isUnique() ? CollectionKind.SET : CollectionKind.BAG;
+		return collectionType(kind, type);
 	}
 
 	/**
@@ -926,7 +1807,8 @@ public class AbstractExpressionBuilder {
 		}
 		Variable referred = varExp.getReferredVariable();
 		String name = referred == null ? null : referred.getName();
-		if (name != null && environment.lookup(name).isEmpty()) {
+		if (name != null && environment.lookup(name).isEmpty()
+				&& (variableInScope == null || !variableInScope.test(name))) {
 			addError("Unknown type (" + name + ")");
 		}
 	}
@@ -947,10 +1829,13 @@ public class AbstractExpressionBuilder {
 		return names.findClassifier(segments);
 	}
 
+	/**
+	 * Resolves an unqualified name as a property of an implicit source: the implicit iterators
+	 * and iterator variables from the innermost scope outward, then {@code self} (OCL v2.4
+	 * §9.4.1 [10], §7.8 "the most inner scope", #320).
+	 */
 	public OclExpression resolveImplicitProperty(String name) {
-		Optional<Variable> implicitIter = environment.lookupImplicitIterator();
-		if (implicitIter.isPresent()) {
-			Variable iterVar = implicitIter.get();
+		for (Variable iterVar : environment.lookupImplicitSources()) {
 			EStructuralFeature feature = resolveFeatureOnType(iterVar.getType(), name);
 			if (feature != null) {
 				PropertyCallExp exp = FACTORY.createPropertyCallExp();
@@ -1013,6 +1898,7 @@ public class AbstractExpressionBuilder {
 		}
 		EnumLiteralExp exp = FACTORY.createEnumLiteralExp();
 		exp.setReferredLiteral(literal);
+		exp.setType(literal.getEEnum());
 		return exp;
 	}
 
@@ -1047,8 +1933,11 @@ public class AbstractExpressionBuilder {
 			return null;
 		}
 		EClassifier type = source.getType();
-		if (type instanceof CollectionType colType && colType.getElementType() != null) {
-			return copyType(colType.getElementType());
+		if (type instanceof CollectionType colType) {
+			// A collection whose element type is unknown has elements of unknown type — not
+			// elements of its own collection type, which turned an iterator over tuples into a
+			// collection and t.year into an implicit collect over a tuple (#378)
+			return colType.getElementType() != null ? copyType(colType.getElementType()) : null;
 		}
 		return type;
 	}
@@ -1147,8 +2036,10 @@ public class AbstractExpressionBuilder {
 	 * @return the unescaped identifier text
 	 */
 	public static String extractEscapedIdentifier(String rawText) {
+		// §9.3.4 [B]: the characters between the quotes are StringChars, with the escapes of a
+		// string literal (_'\''); a doubled quote stays accepted for compatibility (#325)
 		String inner = rawText.substring(2, rawText.length() - 1);
-		return inner.replace("''", "'");
+		return unescapeString(inner.replace("''", "\\'"));
 	}
 
 	// ==================== Internal Helpers ====================

@@ -27,10 +27,14 @@ import java.util.Set;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EOperation;
+import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.m2x.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.Helper;
+import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
+import org.eclipse.fennec.m2x.model.qvtoperational.ImportKind;
 import org.eclipse.fennec.m2x.model.qvtoperational.Library;
 import org.eclipse.fennec.m2x.model.qvtoperational.Module;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
@@ -38,6 +42,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.LinkDiagnostics;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
@@ -164,6 +169,83 @@ public class QvtoLinker {
 				failures.add(failure.getMessage(), policy.parserSupport().positionOf(imp), failure);
 			}
 		}
+		resolveOverrides(module, failures);
+	}
+
+	/**
+	 * §8.2.1.10: an operation "may override an existing imperative operation defined in a higher
+	 * level of the inheritance tree. In this case, the name of the overriding operation must be
+	 * the same as the overridden operation and the signature must be compliant (same number of
+	 * parameters, and the type of each parameter of the overriding operation should comply with
+	 * the type of the corresponding parameter in the overridden operation)". The overridden
+	 * operation is what {@code ImperativeOperation.overridden} names — "an operation of an
+	 * imported transformation or library". Known only now, with the imported module in hand
+	 * (#347, #378).
+	 */
+	private void resolveOverrides(Module module, LinkDiagnostics failures) {
+		for (ModuleImport imp : module.getModuleImport()) {
+			Module base = imp.getImportedModule();
+			if (imp.getKind() != ImportKind.EXTENSION || base == null || isLinkerStub(base)) {
+				continue;
+			}
+			for (ImperativeOperation operation : operationsOf(module)) {
+				for (ImperativeOperation inherited : operationsOf(base)) {
+					if (overrides(operation, inherited)) {
+						operation.setOverridden(inherited);
+						checkCompliance(operation, inherited, failures);
+					}
+				}
+			}
+		}
+	}
+
+	/** Same kind, name, context and number of parameters: the one takes the other's place. */
+	private static boolean overrides(ImperativeOperation operation, ImperativeOperation inherited) {
+		return operation != inherited && operation.eClass() == inherited.eClass()
+				&& operation.getName() != null && operation.getName().equals(inherited.getName())
+				&& sameType(contextType(operation), contextType(inherited))
+				&& parameters(operation).size() == parameters(inherited).size();
+	}
+
+	private void checkCompliance(ImperativeOperation operation, ImperativeOperation inherited,
+			LinkDiagnostics failures) {
+		List<EParameter> own = parameters(operation);
+		List<EParameter> theirs = parameters(inherited);
+		for (int i = 0; i < own.size(); i++) {
+			if (!OclTypeRules.conformsTo(own.get(i).getEType(), theirs.get(i).getEType())) {
+				failures.add("Operation '" + operation.getName() + "' overrides the one of " + inherited.getEContainingClass().getName()
+						+ ", but its parameter '" + own.get(i).getName() + "' is a " + OclTypeRules.nameOf(own.get(i).getEType())
+						+ ", which does not comply with " + OclTypeRules.nameOf(theirs.get(i).getEType()) + " (§8.2.1.10)",
+						policy.parserSupport().positionOf(operation), null);
+			}
+		}
+	}
+
+	private static List<ImperativeOperation> operationsOf(Module module) {
+		List<ImperativeOperation> operations = new ArrayList<>();
+		for (EClassifier classifier : module.getEClassifiers()) {
+			if (classifier instanceof EClass moduleClass) {
+				for (EOperation operation : moduleClass.getEOperations()) {
+					if (operation instanceof ImperativeOperation imperative) {
+						operations.add(imperative);
+					}
+				}
+			}
+		}
+		return operations;
+	}
+
+	private static EClassifier contextType(ImperativeOperation operation) {
+		return operation.getContext() != null ? operation.getContext().getEType() : null;
+	}
+
+	/** The parameters of an operation, without its results. */
+	private static List<EParameter> parameters(ImperativeOperation operation) {
+		return operation.getEParameters().stream().filter(p -> !operation.getResult().contains(p)).toList();
+	}
+
+	private static boolean sameType(EClassifier a, EClassifier b) {
+		return a == b || a != null && b != null && OclTypeRules.normalize(a) == OclTypeRules.normalize(b);
 	}
 
 	private void linkImport(ModuleImport imp, Module stub, String qualifiedName,

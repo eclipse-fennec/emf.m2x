@@ -92,12 +92,19 @@ class QvtoE2eInoutMappingTest extends AbstractQvtoEngineTest {
 
 	@Test
 	void inout_calledMultipleTimes() throws Exception {
-		// inout mappings modify self — calling multiple times accumulates changes
+		// §8.1.11.2: "A candidate mapping execution is suppressed to avoid creating a trace-record
+		// whose context-parameter, in-parameters, invoked-mapping and executed-mapping fields
+		// duplicate another" — also for a mapping without result; Eclipse answers it from the trace
+		// as well (#334). A helper is what runs again on every call.
 		QvtoExecutionResult result = execute("""
 				transformation test() {
 				    intermediate class Counter { count : Integer; }
 				    mapping inout Counter::bump() {
 				        self.count := self.count + 1;
+				    }
+				    helper Counter::add() : Integer {
+				        self.count := self.count + 1;
+				        return self.count;
 				    }
 				    main() {
 				        var c := object Counter { count := 0; };
@@ -105,11 +112,15 @@ class QvtoE2eInoutMappingTest extends AbstractQvtoEngineTest {
 				        c.map bump();
 				        c.map bump();
 				        log('count:' + c.count.repr());
+				        c.add();
+				        c.add();
+				        log('helper:' + c.count.repr());
 				    }
 				}
 				""");
 		assertSuccess(result);
-		assertLogged(result, "count:3");
+		assertLogged(result, "count:1");
+		assertLogged(result, "helper:3");
 	}
 
 	// ---- inout parameter (non-context) ----

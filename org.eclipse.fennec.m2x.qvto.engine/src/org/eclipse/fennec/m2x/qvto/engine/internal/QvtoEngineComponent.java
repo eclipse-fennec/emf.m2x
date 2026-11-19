@@ -14,9 +14,12 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
+import java.util.Map;
+
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxLibrary;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEngine;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 import org.eclipse.fennec.m2x.qvto.engine.QvtoConfigurationHelper;
@@ -26,6 +29,8 @@ import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
 import org.osgi.service.component.annotations.Reference;
+import org.osgi.service.component.annotations.ReferenceCardinality;
+import org.osgi.service.component.annotations.ReferencePolicy;
 import org.osgi.service.component.annotations.ReferenceScope;
 import org.osgi.service.component.annotations.ServiceScope;
 import org.osgi.service.metatype.annotations.Designate;
@@ -74,11 +79,34 @@ import org.osgi.service.metatype.annotations.Designate;
  * either there or the component waits — there is no later moment at which an optional one
  * could be re-bound without rebuilding the engine.
  *
+ * <p>Blackbox libraries are the opposite case, and bound the opposite way (#269): a dynamic
+ * reference of cardinality {@code 0..n}, through bind and unbind methods. Every
+ * {@code QvtoBlackboxLibrary} service is bound as it comes and dropped as it goes — a dynamic
+ * multiple reference binds new services without the greedy option (Declarative Services
+ * 112.3.7) — and the engine is never restarted for it; each link and each run reads the
+ * libraries bound at that moment. Unlike units, a transformation does not only name a
+ * library: QVT-O calls into it by module name, so the engine needs to know the libraries it
+ * has, not only to look one up. Standard DS configuration narrows and orders the binding:
+ * <pre>
+ * "DefaultQvtoEngine": {
+ *   "qvto.blackboxEnabled": true,
+ *   "qvto.allowedBlackboxModules": ["my.lib.StringUtils"],
+ *   "blackboxes.target": "(blackbox.group=reporting)",
+ *   "blackboxes.cardinality.minimum": 1
+ * }
+ * </pre>
+ * {@code blackboxes.cardinality.minimum} keeps the engine unavailable until that many libraries
+ * are bound — the way to make a deployment wait for its libraries rather than fail an import
+ * that arrives first. Binding grants nothing by itself: libraries are consulted only with
+ * {@code qvto.blackboxEnabled}, and only for the modules the allow-list permits.
+ *
  * @since 1.0
  */
 @Designate(ocd = QvtoEngineConfiguration.class)
 @Component(name = "DefaultQvtoEngine", service = QvtoEngine.class, scope = ServiceScope.PROTOTYPE, configurationPolicy = ConfigurationPolicy.OPTIONAL)
 public class QvtoEngineComponent extends QvtoEngineImpl {
+
+	private final QvtoServiceBlackboxRegistry blackboxes;
 
 	@Activate
 	public QvtoEngineComponent(
@@ -89,7 +117,37 @@ public class QvtoEngineComponent extends QvtoEngineImpl {
 					target = "(" + QvtoServiceUnitResolver.RESOLVER_KIND + "=discovery)")
 			QvtoUnitResolver unitDiscovery,
 			@Reference(name = "fingerprints") FingerprintService fingerprints) {
-		super(QvtoConfigurationHelper.from(config, oclEngine, unitDiscovery, resourceSet),
+		this(config, resourceSet, oclEngine, unitDiscovery, fingerprints,
+				new QvtoServiceBlackboxRegistry());
+	}
+
+	private QvtoEngineComponent(QvtoEngineConfiguration config, ResourceSet resourceSet,
+			OclEngine oclEngine, QvtoUnitResolver unitDiscovery, FingerprintService fingerprints,
+			QvtoServiceBlackboxRegistry blackboxes) {
+		super(QvtoConfigurationHelper.from(config, oclEngine, unitDiscovery, resourceSet, blackboxes),
 				new UnitPackager(fingerprints));
+		this.blackboxes = blackboxes;
+	}
+
+	/**
+	 * Binds a blackbox library service.
+	 *
+	 * @param library    the library
+	 * @param properties its service properties, for its ranking
+	 */
+	@Reference(name = "blackboxes", service = QvtoBlackboxLibrary.class,
+			cardinality = ReferenceCardinality.MULTIPLE, policy = ReferencePolicy.DYNAMIC,
+			unbind = "removeBlackbox")
+	void addBlackbox(QvtoBlackboxLibrary library, Map<String, Object> properties) {
+		blackboxes.add(library, properties);
+	}
+
+	/**
+	 * Unbinds a blackbox library service.
+	 *
+	 * @param library the library
+	 */
+	void removeBlackbox(QvtoBlackboxLibrary library) {
+		blackboxes.remove(library);
 	}
 }

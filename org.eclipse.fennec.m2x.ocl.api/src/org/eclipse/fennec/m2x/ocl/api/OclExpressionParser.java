@@ -15,7 +15,9 @@
 package org.eclipse.fennec.m2x.ocl.api;
 
 import java.util.List;
+import java.util.Map;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
@@ -49,6 +51,25 @@ public interface OclExpressionParser {
 	OclExpression parse(String expression, EClassifier contextType) throws OclParseException;
 
 	/**
+	 * Parses an OCL expression with variables in scope that evaluation will bind — the
+	 * parameters of an operation whose body this is, {@code result} in a postcondition (OCL v2.4
+	 * §12.2.1). A declared name is a variable; undeclared, the parser may read it as a property
+	 * of an implicit source.
+	 *
+	 * <p>The default ignores the declarations, for parsers that predate them.
+	 *
+	 * @param expression the OCL expression text
+	 * @param contextType the {@code EClassifier} that defines the type of {@code self}
+	 * @param variables name and type of each variable in scope; a {@code null} type is unknown
+	 * @return the parsed expression AST with types resolved
+	 * @throws OclParseException if the expression contains syntax or type errors
+	 */
+	default OclExpression parse(String expression, EClassifier contextType, Map<String, EClassifier> variables)
+			throws OclParseException {
+		return parse(expression, contextType);
+	}
+
+	/**
 	 * Parses a Complete OCL document, producing a list of constraints.
 	 *
 	 * @param oclDocument the Complete OCL document text
@@ -68,5 +89,21 @@ public interface OclExpressionParser {
 	default List<Constraint> parseDocument(String oclDocument, ResourceSet resourceSet)
 			throws OclParseException {
 		return parseDocument(oclDocument);
+	}
+
+	/**
+	 * Checks the types of a parsed expression (OCL v2.4 §8.3.7): what {@code parse} reports as
+	 * type errors, for an expression that may not have come from it — built by hand, loaded from
+	 * a stored unit.
+	 *
+	 * <p>The default has no type checker and says so.
+	 *
+	 * @param expression the expression
+	 * @param contextType the {@code EClassifier} that defines the type of {@code self}
+	 * @return one ERROR per type that is known and does not fit; empty if the expression is valid
+	 * @throws UnsupportedOperationException if this parser has no type checker
+	 */
+	default List<Diagnostic> validate(OclExpression expression, EClassifier contextType) {
+		throw new UnsupportedOperationException("This parser has no type checker");
 	}
 }

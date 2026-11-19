@@ -1,6 +1,6 @@
 # Fennec M2M — Benchmark Results
 
-Date: 2026-08-09, re-run 2026-08-28 (§5)
+Date: 2026-08-09, re-run 2026-08-28 (§5) and 2026-10-31 (§6)
 Platform: Linux 6.17.0-1030-oem / 6.17.0-1032-oem, Java 21
 Machine: mark-dell
 
@@ -200,6 +200,36 @@ Compiled units are not a performance feature and were not built as one: they buy
 a storable form and a resolver-free Execute. Their run-time cost is a one-time compile at two to
 three times a parse and a sub-2-ms load; their run-time saving is zero for a unit without imports
 and grows with the import closure that Execute no longer has to resolve.
+
+## 6. Re-run after the spec audit (2026-10-31)
+
+Same machine. Between 2026-08-28 and 2026-10-31 the four engines went through the
+section-by-section spec audit (OCL, QVT-O, QVT-R, MTL) and the static typing of GAP-3. Measured
+A/B against commit `940b4ec` (the §5 state) in a second worktree, the two alternating, three runs
+each — the absolute numbers of one run move with the machine, the Eclipse reference by up to a
+factor of two.
+
+**OCL, QVT-R, M2T: no regression.** OCL parse, parse+eval and eval are within noise of §5 —
+the typing pass costs nothing measurable there. QVT-R `execute(ast)` is 126 ms (§5: 141 ms),
+M2T moves between runs in both directions.
+
+**QVT-O execution had regressed by 35–40 %**, in two steps, found by bisecting:
+
+| Step | Commit | Cause | Fix |
+|---|---|---|---|
+| 160 → 188 ms | `20ba3ca` (#297, deferred assignments) | every assignment walked its right-hand side (`eAllContents`) to learn whether it involves a late resolve | the answer is a property of the AST: asked once per assignment node, remembered per execution |
+| 191 → 240 ms | `ec05c1f` (#385, models lent to `parallelTransform()`) | every assignment searched the contents of every model — the growing out model included — for a lending that almost never exists | only lent models are searched, none when nothing is lent |
+
+With both fixes:
+
+| QVT-O (200 iter × 100 elem) | §5 state | before the fix | with the fix | Eclipse |
+|---|---|---|---|---|
+| execute, plain | 155–172 ms | 210–238 ms | 156–168 ms | 178–182 ms |
+| parse, plain | 66–70 ms | 78–90 ms | 74–82 ms | 149–164 ms |
+
+Parsing stays about 15 % slower than in §5: that is the static typing of #402/#403 (type
+checking every expression while it is built), the price of the parse errors it reports, and still
+half of Eclipse's parse time.
 
 ## 4. How to Reproduce
 

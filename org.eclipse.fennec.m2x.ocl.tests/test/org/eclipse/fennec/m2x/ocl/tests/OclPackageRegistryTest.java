@@ -230,13 +230,24 @@ class OclPackageRegistryTest {
 		}
 
 		@Test
-		@DisplayName("a bound variable in a type position is left to evaluation")
+		@DisplayName("a bound variable of unknown type in a type position is left to evaluation")
 		void aBoundVariableInATypePositionIsAccepted() throws OclParseException {
-			// The check is about names that resolve nowhere. Whether a *bound* value may serve
-			// as a type is a question about the value, and belongs to evaluation.
+			// The check is about names that resolve nowhere. Whether a *bound* value of unknown
+			// type may serve as a type is a question about the value, and belongs to evaluation:
+			// v is bound only at evaluation, so x has no type when parsing (#378)
 			OclParserSupport parser = new OclParserSupport();
 
-			assertNotNull(parser.parse("Sequence{1}->exists(x | self.oclIsKindOf(x))", bookClass));
+			assertNotNull(parser.parse("v->exists(x | self.oclIsKindOf(x))", bookClass));
+		}
+
+		@Test
+		@DisplayName("a bound variable whose type is known and no type is a type error")
+		void aBoundVariableOfAKnownNonTypeInATypePosition_isATypeError() {
+			// x is an Integer: oclIsKindOf takes a type (§11.2.5), and an Integer is none (#378)
+			OclParseException failure = assertThrows(OclParseException.class,
+					() -> new OclParserSupport().parse("Sequence{1}->exists(x | self.oclIsKindOf(x))", bookClass));
+			assertTrue(messagesOf(failure).stream().anyMatch(m -> m.contains("No operation Book::oclIsKindOf(Integer)")),
+					() -> "" + messagesOf(failure));
 		}
 
 		private static List<String> messagesOf(OclParseException failure) {

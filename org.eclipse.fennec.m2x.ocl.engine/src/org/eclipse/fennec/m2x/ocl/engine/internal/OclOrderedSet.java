@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.ocl.engine.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.UnaryOperator;
 
@@ -64,6 +65,22 @@ public class OclOrderedSet<E> extends ArrayList<E> {
 
 	public OclOrderedSet(int initialCapacity) {
 		super(initialCapacity);
+	}
+
+	/**
+	 * Creates an OrderedSet from elements that may already be known to be distinct by OCL
+	 * equality — the objects of a unique reference, which EMF keeps distinct by identity. Those
+	 * are neither checked nor hashed here; the lookup keys are built when a containment check
+	 * first needs them (#319). Otherwise the elements are added one by one, as by
+	 * {@link #OclOrderedSet(Collection)}.
+	 */
+	OclOrderedSet(Collection<? extends E> elements, boolean alreadyDistinct) {
+		super(alreadyDistinct ? elements : List.of());
+		if (!alreadyDistinct) {
+			for (E e : elements) {
+				add(e);
+			}
+		}
 	}
 
 	@Override

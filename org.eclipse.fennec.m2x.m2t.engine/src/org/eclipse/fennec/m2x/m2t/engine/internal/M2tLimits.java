@@ -14,9 +14,11 @@
  */
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
+import java.util.Map;
 import java.util.Objects;
 
 import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
+import org.eclipse.fennec.m2x.m2t.api.ProtectedAreaDelimiter;
 
 /**
  * What one generation is allowed to do: the ceilings of the M2T threat model (T-1 to T-6).
@@ -31,6 +33,7 @@ import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
  * @param maxCrossProductSize maximum cross-product size (T-3)
  * @param timeoutMs execution timeout of one generation in milliseconds, zero for none (#261)
  * @param protectedAreaEnabled whether protected area markers are honoured (T-6)
+ * @param protectedAreaDelimiters the comment syntax of protected-area markers by file extension (#367)
  * @author Data In Motion Consulting
  * @since 1.0
  */
@@ -40,7 +43,12 @@ public record M2tLimits(
 		int maxForIterations,
 		int maxCrossProductSize,
 		long timeoutMs,
-		boolean protectedAreaEnabled) {
+		boolean protectedAreaEnabled,
+		Map<String, ProtectedAreaDelimiter> protectedAreaDelimiters) {
+
+	public M2tLimits {
+		protectedAreaDelimiters = protectedAreaDelimiters == null ? Map.of() : Map.copyOf(protectedAreaDelimiters);
+	}
 
 	/**
 	 * The limits of an engine configuration.
@@ -52,7 +60,7 @@ public record M2tLimits(
 		Objects.requireNonNull(config, "config must not be null");
 		return new M2tLimits(config.maxDiagnostics(), config.maxTemplateDepth(),
 				config.maxForIterations(), config.maxCrossProductSize(), config.timeoutMs(),
-				config.protectedAreaEnabled());
+				config.protectedAreaEnabled(), config.protectedAreaDelimiters());
 	}
 
 	/**
@@ -61,6 +69,6 @@ public record M2tLimits(
 	 * @return the default limits
 	 */
 	public static M2tLimits defaults() {
-		return new M2tLimits(10_000, 1_000, 1_000_000, 1_000_000, M2tConfiguration.DEFAULT_TIMEOUT_MS, true);
+		return new M2tLimits(10_000, 1_000, 1_000_000, 1_000_000, M2tConfiguration.DEFAULT_TIMEOUT_MS, true, Map.of());
 	}
 }

@@ -24,7 +24,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Variable initialization expression: var x := value (QVT v1.3 Section 8.2.1.10).
+ * Variable initialization expression: var x := value (QVT v1.3 Section 8.2.2.10).
  * <!-- end-model-doc -->
  *
  * <p>

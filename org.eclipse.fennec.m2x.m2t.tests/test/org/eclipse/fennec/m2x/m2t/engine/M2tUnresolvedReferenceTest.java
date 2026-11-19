@@ -64,7 +64,7 @@ class M2tUnresolvedReferenceTest {
 	void unresolvedExtends_failsAndGeneratesNothing() throws M2tParseException {
 		M2tEngine engine = engine(UnresolvedReferenceMode.FAIL);
 		Module module = engine.parse("""
-				[module child(Ecore) extends missing/]
+				[module child(ecore) extends missing/]
 				[template public main(c : EClass)][file ('out', false)]body:[c.name/][/file][/template]
 				""", "child");
 		M2tResult result = engine.execute(module, M2tContext.of(input));
@@ -77,7 +77,7 @@ class M2tUnresolvedReferenceTest {
 	void unresolvedImport_failsAndGeneratesNothing() throws M2tParseException {
 		M2tEngine engine = engine(UnresolvedReferenceMode.FAIL);
 		Module module = engine.parse("""
-				[module child(Ecore)/]
+				[module child(ecore)/]
 				[import missing/]
 				[template public main(c : EClass)][file ('out', false)]body:[c.name/][/file][/template]
 				""", "child");
@@ -90,7 +90,7 @@ class M2tUnresolvedReferenceTest {
 	void unresolvedInvocation_failsAndGeneratesNothing() throws M2tParseException {
 		M2tEngine engine = engine(UnresolvedReferenceMode.FAIL);
 		Module module = engine.parse("""
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[template public main(c : EClass)][file ('out', false)][missingTemplate(c)/][/file][/template]
 				""", "m");
 		M2tResult result = engine.execute(module, M2tContext.of(input));
@@ -102,7 +102,7 @@ class M2tUnresolvedReferenceTest {
 	void unresolvedOverride_failsAndGeneratesNothing() throws M2tParseException {
 		M2tEngine engine = engine(UnresolvedReferenceMode.FAIL);
 		Module module = engine.parse("""
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[template public render(c : EClass) overrides missingBase]x[/template]
 				[template public main(c : EClass)][file ('out', false)][c.render()/][/file][/template]
 				""", "m");
@@ -117,7 +117,7 @@ class M2tUnresolvedReferenceTest {
 	void warnMode_generatesDespiteUnresolvedExtends() throws M2tParseException {
 		M2tEngine engine = engine(UnresolvedReferenceMode.WARN);
 		Module module = engine.parse("""
-				[module child(Ecore) extends missing/]
+				[module child(ecore) extends missing/]
 				[template public main(c : EClass)][file ('out', false)]body:[c.name/][/file][/template]
 				""", "child");
 		M2tResult result = engine.execute(module, M2tContext.of(input));
@@ -128,7 +128,7 @@ class M2tUnresolvedReferenceTest {
 	void warnMode_stillReportsTheUnresolvedNameFromLink() throws M2tParseException {
 		M2tEngine engine = engine(UnresolvedReferenceMode.WARN);
 		Module module = engine.parse("""
-				[module child(Ecore) extends missing/]
+				[module child(ecore) extends missing/]
 				[template public main(c : EClass)][file ('out', false)]x[/file][/template]
 				""", "child");
 		assertTrue(engine.link(module).stream()
@@ -142,11 +142,11 @@ class M2tUnresolvedReferenceTest {
 	void resolvedModuleSet_generatesAsBefore() throws M2tParseException {
 		M2tEngine engine = engine(UnresolvedReferenceMode.FAIL);
 		Module base = engine.parse("""
-				[module base(Ecore)/]
+				[module base(ecore)/]
 				[template public render(c : EClass)]base:[c.name/][/template]
 				""", "base");
 		Module child = engine.parse("""
-				[module child(Ecore) extends base/]
+				[module child(ecore) extends base/]
 				[template public main(c : EClass)][file ('out', false)][c.render()/][/file][/template]
 				""", "child");
 		engine.link(base, child);
@@ -160,11 +160,11 @@ class M2tUnresolvedReferenceTest {
 	void soundModuleInABrokenLinkSet_stillGenerates() throws M2tParseException {
 		M2tEngine engine = engine(UnresolvedReferenceMode.FAIL);
 		Module sound = engine.parse("""
-				[module sound(Ecore)/]
+				[module sound(ecore)/]
 				[template public main(c : EClass)][file ('out', false)]sound:[c.name/][/file][/template]
 				""", "sound");
 		Module broken = engine.parse("""
-				[module broken(Ecore) extends missing/]
+				[module broken(ecore) extends missing/]
 				[template public main(c : EClass)][file ('other', false)]broken[/file][/template]
 				""", "broken");
 		engine.link(sound, broken);

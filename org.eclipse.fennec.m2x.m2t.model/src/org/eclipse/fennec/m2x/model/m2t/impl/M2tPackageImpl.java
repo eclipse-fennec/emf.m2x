@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.model.m2t.impl;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EDataType;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
@@ -27,6 +28,7 @@ import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.InitSection;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
 import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
@@ -156,6 +158,13 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 	 * <!-- end-user-doc -->
 	 * @generated
 	 */
+	private EClass inlineExpressionEClass = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
 	private EClass textExpressionEClass = null;
 
 	/**
@@ -192,6 +201,13 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 	 * @generated
 	 */
 	private EEnum visibilityKindEEnum = null;
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	private EDataType bodyEDataType = null;
 
 	/**
 	 * Creates an instance of the model <b>Package</b>, registered with
@@ -722,7 +738,7 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 	 * @generated
 	 */
 	@Override
-	public EReference getFileBlock_UniqId() {
+	public EReference getFileBlock_AppendExpr() {
 		return (EReference)fileBlockEClass.getEStructuralFeatures().get(2);
 	}
 
@@ -732,8 +748,18 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 	 * @generated
 	 */
 	@Override
-	public EReference getFileBlock_Charset() {
+	public EReference getFileBlock_UniqId() {
 		return (EReference)fileBlockEClass.getEStructuralFeatures().get(3);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getFileBlock_Charset() {
+		return (EReference)fileBlockEClass.getEStructuralFeatures().get(4);
 	}
 
 	/**
@@ -774,6 +800,26 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 	@Override
 	public EReference getTraceBlock_ModelElement() {
 		return (EReference)traceBlockEClass.getEStructuralFeatures().get(0);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EClass getInlineExpression() {
+		return inlineExpressionEClass;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public EReference getInlineExpression_Expression() {
+		return (EReference)inlineExpressionEClass.getEStructuralFeatures().get(0);
 	}
 
 	/**
@@ -952,6 +998,16 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 	 * @generated
 	 */
 	@Override
+	public EDataType getBody() {
+		return bodyEDataType;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public M2tFactory getM2tFactory() {
 		return (M2tFactory)getEFactoryInstance();
 	}
@@ -1032,6 +1088,7 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 		fileBlockEClass = createEClass(FILE_BLOCK);
 		createEReference(fileBlockEClass, FILE_BLOCK__FILE_URL);
 		createEAttribute(fileBlockEClass, FILE_BLOCK__OPEN_MODE);
+		createEReference(fileBlockEClass, FILE_BLOCK__APPEND_EXPR);
 		createEReference(fileBlockEClass, FILE_BLOCK__UNIQ_ID);
 		createEReference(fileBlockEClass, FILE_BLOCK__CHARSET);
 
@@ -1040,6 +1097,9 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 
 		traceBlockEClass = createEClass(TRACE_BLOCK);
 		createEReference(traceBlockEClass, TRACE_BLOCK__MODEL_ELEMENT);
+
+		inlineExpressionEClass = createEClass(INLINE_EXPRESSION);
+		createEReference(inlineExpressionEClass, INLINE_EXPRESSION__EXPRESSION);
 
 		textExpressionEClass = createEClass(TEXT_EXPRESSION);
 		createEAttribute(textExpressionEClass, TEXT_EXPRESSION__VALUE);
@@ -1063,6 +1123,9 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 		// Create enums
 		openModeKindEEnum = createEEnum(OPEN_MODE_KIND);
 		visibilityKindEEnum = createEEnum(VISIBILITY_KIND);
+
+		// Create data types
+		bodyEDataType = createEDataType(BODY);
 	}
 
 	/**
@@ -1110,6 +1173,7 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 		fileBlockEClass.getESuperTypes().add(this.getBlock());
 		protectedAreaBlockEClass.getESuperTypes().add(this.getBlock());
 		traceBlockEClass.getESuperTypes().add(this.getBlock());
+		inlineExpressionEClass.getESuperTypes().add(this.getTemplateExpression());
 		textExpressionEClass.getESuperTypes().add(this.getTemplateExpression());
 		templateInvocationEClass.getESuperTypes().add(this.getTemplateExpression());
 		queryInvocationEClass.getESuperTypes().add(this.getTemplateExpression());
@@ -1127,7 +1191,7 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 		initEAttribute(getModuleElement_Visibility(), this.getVisibilityKind(), "visibility", "public", 0, 1, ModuleElement.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getModuleElement_Module(), this.getModule(), this.getModule_OwnedModuleElement(), "module", null, 0, 1, ModuleElement.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
-		initEClass(blockEClass, Block.class, "Block", IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEClass(blockEClass, Block.class, "Block", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getBlock_Body(), this.getTemplateExpression(), null, "body", null, 0, -1, Block.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getBlock_Init(), this.getInitSection(), null, "init", null, 0, 1, Block.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
@@ -1173,6 +1237,7 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 		initEClass(fileBlockEClass, FileBlock.class, "FileBlock", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getFileBlock_FileUrl(), theOclPackage.getOclExpression(), null, "fileUrl", null, 1, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getFileBlock_OpenMode(), this.getOpenModeKind(), "openMode", "overwrite", 0, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getFileBlock_AppendExpr(), theOclPackage.getOclExpression(), null, "appendExpr", null, 0, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getFileBlock_UniqId(), theOclPackage.getOclExpression(), null, "uniqId", null, 0, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getFileBlock_Charset(), theOclPackage.getOclExpression(), null, "charset", null, 0, 1, FileBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
@@ -1181,6 +1246,9 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 
 		initEClass(traceBlockEClass, TraceBlock.class, "TraceBlock", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEReference(getTraceBlock_ModelElement(), theOclPackage.getOclExpression(), null, "modelElement", null, 1, 1, TraceBlock.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+
+		initEClass(inlineExpressionEClass, InlineExpression.class, "InlineExpression", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
+		initEReference(getInlineExpression_Expression(), theOclPackage.getOclExpression(), null, "expression", null, 1, 1, InlineExpression.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 
 		initEClass(textExpressionEClass, TextExpression.class, "TextExpression", !IS_ABSTRACT, !IS_INTERFACE, IS_GENERATED_INSTANCE_CLASS);
 		initEAttribute(getTextExpression_Value(), ecorePackage.getEString(), "value", null, 1, 1, TextExpression.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
@@ -1210,6 +1278,9 @@ public class M2tPackageImpl extends EPackageImpl implements M2tPackage {
 		addEEnumLiteral(visibilityKindEEnum, VisibilityKind.PUBLIC);
 		addEEnumLiteral(visibilityKindEEnum, VisibilityKind.PRIVATE);
 		addEEnumLiteral(visibilityKindEEnum, VisibilityKind.PROTECTED);
+
+		// Initialize data types
+		initEDataType(bodyEDataType, Object.class, "Body", IS_SERIALIZABLE, !IS_GENERATED_INSTANCE_CLASS);
 
 		// Create resource
 		createResource(eNS_URI);

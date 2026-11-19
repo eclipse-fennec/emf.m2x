@@ -19,9 +19,11 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
+import org.eclipse.fennec.m2x.model.qvtoperational.DirectionKind;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModelParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.Status;
@@ -63,8 +65,30 @@ final class QvtoTransformationOperations {
 	/**
 	 * §8.3.6.2: Asynchronous execution of a transformation instance
 	 * using virtual threads.
+	 *
+	 * <p>§8.1.3.3: "The Models passed to nested transformation calls by … parallelTransform()
+	 * may not be modified after the call". A model another transformation started this way still
+	 * uses is refused, unless both only read it, and the transformation does not run; the models
+	 * this one gets are lent to it — the caller may not modify them until it ends (#385).
+	 *
+	 * @param caller the evaluator of the transformation that calls parallelTransform()
 	 */
-	static Status handleParallelTransform(QvtoTransformationInstance instance) {
+	static Status handleParallelTransform(QvtoTransformationInstance instance, QvtoEvaluator caller) {
+		String name = instance.getTransformation().getName();
+		QvtoExtentManager extents = caller.extentManager();
+		for (var binding : instance.getModelBindings().entrySet()) {
+			boolean writes = binding.getKey().getKind() != DirectionKind.IN;
+			Optional<String> inTheWay = extents.conflictingUse(binding.getValue(), writes);
+			if (inTheWay.isPresent()) {
+				String model = extents.getParameterName(binding.getValue());
+				String message = "parallelTransform() of '" + name + "' refused: the model"
+						+ (model != null ? " '" + model + "'" : "") + " is in use by the running transformation '"
+						+ inTheWay.get() + "', and a model passed to a nested transformation may not be modified"
+						+ " until it ends (§8.1.3.3)";
+				caller.addError(message);
+				return QvtoStatusHelper.failed(new IllegalStateException(message));
+			}
+		}
 		Executor executor = instance.getEngine().parallelExecutor();
 		CompletableFuture<Status> future = CompletableFuture.supplyAsync(() -> {
 			try {
@@ -79,6 +103,9 @@ final class QvtoTransformationOperations {
 				return QvtoStatusHelper.failed(e);
 			}
 		}, executor);
+		for (var binding : instance.getModelBindings().entrySet()) {
+			extents.lend(binding.getValue(), name, binding.getKey().getKind() != DirectionKind.IN, future);
+		}
 		return QvtoStatusHelper.pending(future);
 	}
 

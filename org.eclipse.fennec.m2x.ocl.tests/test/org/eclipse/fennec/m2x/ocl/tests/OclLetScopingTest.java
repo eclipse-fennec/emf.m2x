@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
@@ -107,19 +108,21 @@ class OclLetScopingTest extends AbstractOclTest {
 	// --- Variable shadowing ---
 
 	@Test
-	void let_shadowsOuterVariable() throws OclParseException {
-		// Inner 'x' should shadow outer 'x'
-		assertEquals(10, eval(
-				"let x: Integer = 5 in let x: Integer = 10 in x", self));
+	void let_shadowingOuterVariable_isAParseError() {
+		// OCL v2.4 §9.3.41 [1]: env.lookup(varName).oclIsUndefined() — lookup includes the enclosing
+		// scopes, so a let variable may not hide another (#326; stricter than Eclipse)
+		assertThrows(OclParseException.class,
+				() -> eval("let x: Integer = 5 in let x: Integer = 10 in x", self));
 	}
 
 	@Test
-	void let_shadowDoesNotAffectOuter() throws OclParseException {
-		// After inner scope, outer x should still be accessible
-		// But in OCL, let defines a single in-body, so we can't test "after"
-		// Instead test that outer is still used correctly before shadowing
+	void let_siblingScopesMayReuseName_butNestedMayNot() throws OclParseException {
+		// OCL v2.4 §9.3.41 [1]: env.lookup(varName).oclIsUndefined() — lookup includes the enclosing
+		// scopes, so a let variable may not hide another (#326; stricter than Eclipse)
 		assertEquals(15, eval(
-				"let x: Integer = 5 in x + (let x: Integer = 10 in x)", self));
+				"(let x: Integer = 5 in x) + (let x: Integer = 10 in x)", self));
+		assertThrows(OclParseException.class,
+				() -> eval("let x: Integer = 5 in x + (let x: Integer = 10 in x)", self));
 	}
 
 	// --- Multi-variable let (comma-separated) ---

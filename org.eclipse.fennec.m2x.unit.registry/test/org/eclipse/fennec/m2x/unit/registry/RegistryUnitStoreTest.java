@@ -153,14 +153,14 @@ class RegistryUnitStoreTest {
 	@Test
 	void sources_liveBesideCompiledUnits_toldApartByKind() throws Exception {
 		UnitKey sourceKey = store.put("m2t", new TextSource("gen.Books",
-				URI.createURI("mem:/gen/Books.mtl"), "[module Books(Ecore)/]"));
+				URI.createURI("mem:/gen/Books.mtl"), "[module Books(ecore)/]"));
 		UnitKey compiledKey = store.put(compiledTemplate("gen.Books"));
 
 		assertEquals(List.of(sourceKey), store.versions("m2t", "gen.Books", UnitKind.SOURCE));
 		assertEquals(List.of(compiledKey), store.versions("m2t", "gen.Books", UnitKind.COMPILED));
 		StoredSource text = assertInstanceOf(StoredSource.class,
 				store.get(UnitKey.of("m2t", "gen.Books", UnitKind.SOURCE)).orElseThrow());
-		assertEquals("[module Books(Ecore)/]", text.source());
+		assertEquals("[module Books(ecore)/]", text.source());
 	}
 
 	@Test
@@ -175,8 +175,8 @@ class RegistryUnitStoreTest {
 
 	@Test
 	void remove_takesOneVersionOrAll() throws Exception {
-		UnitKey v1 = store.put("m2t", new TextSource("gen.Books", URI.createURI("mem:/a"), "[module Books(Ecore)/]"));
-		UnitKey v2 = store.put("m2t", new TextSource("gen.Books", URI.createURI("mem:/b"), "[module Books(Ecore)/] "));
+		UnitKey v1 = store.put("m2t", new TextSource("gen.Books", URI.createURI("mem:/a"), "[module Books(ecore)/]"));
+		UnitKey v2 = store.put("m2t", new TextSource("gen.Books", URI.createURI("mem:/b"), "[module Books(ecore)/] "));
 
 		assertTrue(store.remove(v1));
 		assertEquals(List.of(v2), store.versions("m2t", "gen.Books", UnitKind.SOURCE));

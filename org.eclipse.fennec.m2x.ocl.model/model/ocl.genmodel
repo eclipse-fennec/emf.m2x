@@ -146,6 +146,7 @@
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//Constraint/name"/>
       <genFeatures createChild="false" ecoreFeature="ecore:EAttribute ocl.ecore#//Constraint/kind"/>
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference ocl.ecore#//Constraint/specification"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference ocl.ecore#//Constraint/messageExpression"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//Constraint/contextClassifier"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//Constraint/contextOperation"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference ocl.ecore#//Constraint/contextProperty"/>

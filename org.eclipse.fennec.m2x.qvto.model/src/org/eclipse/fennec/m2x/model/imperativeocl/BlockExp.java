@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A block of sequentially executed expressions (QVT v1.3 Section 8.2.1.2).
+ * A block of sequentially executed expressions (QVT v1.3 Section 8.2.2.2).
  * <!-- end-model-doc -->
  *
  * <p>

@@ -95,10 +95,13 @@ class OclCollectionIncludesExcludesModelTest extends AbstractOclTest {
 	// --- including ---
 
 	@Test
-	void including_newPerson() throws OclParseException {
-		// including adds to the collection (size + 1)
-		assertEquals(4, eval(
+	void including_existingEmployee_keepsOrderedSetSize() throws OclParseException {
+		// employees is unique and ordered, so the navigation is an OrderedSet (OCL v2.4 §7.5.3,
+		// §7.5.11): including an element it already has adds nothing (#319)
+		assertEquals(3, eval(
 				"self.employees->including(self.employees->first())->size()", company));
+		assertEquals(4, eval(
+				"self.employees->asSequence()->including(self.employees->first())->size()", company));
 	}
 
 	// --- includes on implicit collect result ---

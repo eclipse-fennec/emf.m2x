@@ -16,7 +16,6 @@ package org.eclipse.fennec.m2x.m2t.engine;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -194,7 +193,7 @@ class M2tGuardCoverageTest {
 	class EntryPoints {
 
 		@Test
-		@DisplayName("a module without a main template says so")
+		@DisplayName("a module without a main template says so in the result, not by an exception")
 		void moduleWithoutMainTemplate() throws Exception {
 			M2tEngine engine = engine(UnaryOperator.identity());
 			Module module = engine.parse("""
@@ -202,11 +201,13 @@ class M2tGuardCoverageTest {
 					[template public helper(c : EClass)]nothing[/template]
 					""", "gen");
 
-			IllegalStateException failure = assertThrows(IllegalStateException.class,
-					() -> engine.execute(module,
-							M2tContext.of(EcoreFactory.eINSTANCE.createEClass())));
+			// #369: a generation that cannot start is a result with an ERROR, as every other one
+			M2tResult result = engine.execute(module, M2tContext.of(EcoreFactory.eINSTANCE.createEClass()));
 
-			assertTrue(failure.getMessage().contains("main"), failure::getMessage);
+			assertFalse(result.isSuccess());
+			assertTrue(result.generatedFiles().isEmpty());
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("main")),
+					() -> "diagnostics: " + result.diagnostics());
 		}
 	}
 

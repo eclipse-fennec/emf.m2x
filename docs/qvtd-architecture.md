@@ -11,11 +11,11 @@ Direct QVT-R interpretation engine (D33 — no QVT-C lowering). Implements QVT v
 
 | Module | Purpose |
 |--------|---------|
-| `org.eclipse.fennec.m2x.qvtd.model` | EMF metamodel (3 EPackages) |
+| `org.eclipse.fennec.m2x.qvtd.model` | EMF metamodel (2 EPackages: qvtrelation, qvttemplate; qvtbase lives in `qvt.model`, D40) |
 | `org.eclipse.fennec.m2x.qvtd.api` | Public API interfaces |
 | `org.eclipse.fennec.m2x.qvtd.parser` | ANTLR4 parser, CST→AST |
 | `org.eclipse.fennec.m2x.qvtd.engine` | Direct interpretation engine |
-| `org.eclipse.fennec.m2x.qvtd.tests` | Spec-conformance tests (160 tests) |
+| `org.eclipse.fennec.m2x.qvtd.tests` | Spec-conformance tests (§9) |
 
 ## 2. Metamodel (D34)
 
@@ -23,8 +23,8 @@ Three EPackages following the spec structure:
 
 | EPackage | Classifiers | Key Types |
 |----------|-------------|-----------|
-| `qvtbase` | 7 | `Transformation`, `TypedModel`, `Domain`, `Pattern`, `Predicate`, `Rule`, `Function` |
-| `qvtrelation` | 8 | `RelationalTransformation`, `Relation`, `RelationDomain`, `DomainPattern`, `RelationCallExp`, `RelationImplementation`, `Key`, `OppositePropertyCallExp` |
+| `qvtbase` | 9 | `Transformation`, `TypedModel`, `Domain`, `Pattern`, `Predicate`, `Rule`, `Function`, `FunctionParameter`, `Tag` |
+| `qvtrelation` | 8 | `RelationalTransformation`, `Relation`, `RelationDomain`, `DomainPattern`, `RelationCallExp`, `RelationImplementation`, `RelationDomainAssignment`, `Key` |
 | `qvttemplate` | 3 | `TemplateExp`, `ObjectTemplateExp` (+`PropertyTemplateItem`), `CollectionTemplateExp` |
 
 **Key relationships:**
@@ -34,13 +34,29 @@ Three EPackages following the spec structure:
 - `DomainPattern` extends `Pattern`, has `templateExpression : TemplateExp`
 - `ObjectTemplateExp` has `bindsTo : Variable`, `referredClass : EClass`, `part : PropertyTemplateItem[*]`
 
+**Deliberate deviations from the spec metamodel** (Ecore has no multiple inheritance from the
+MOF classes the spec names):
+- `Transformation` extends only `EPackage`, not `Class`. Its queries (`Function`) live in a
+  synthetic `EClass` named `_queries` inside the transformation (DR-D22).
+- `FunctionParameter` extends only `EParameter`, not `Variable`.
+- `RelationImplementation.impl` is a synthetic `EOperation` that the transformation does not
+  contain. The engine resolves it at run time to the operation that the `implementedby` clause
+  names (D39, #282).
+
+`Rule.overrides` is set by the parser, after the rules an extending transformation inherits are
+merged. An overrides clause naming no rule of the transformation is a positioned parse error (#356).
+
+`CollectionTemplateExp.referredCollectionType` and the parameter and result types of a query are
+the OCL `CollectionType` itself, kind and element type included (#354). The compiled unit carries
+it as a satellite.
+
 ## 3. API
 
 | Interface/Class | Purpose |
 |-----------------|---------|
-| `QvtdEngine` | Main engine interface: `parse()`, `execute()` |
+| `QvtdEngine` | Main engine interface: `parse()` (one transformation, by name where a unit holds several), `parseAll()`, `execute()` |
 | `QvtdConfiguration` | Engine config: OCL config, blackbox registry, package registry (D42 — the single place applying the `EPackage.Registry.INSTANCE` fallback) |
-| `QvtdExecutionContext` | Execution mode (enforce/checkOnly), model extents, target model |
+| `QvtdExecutionContext` | Execution mode (enforce/checkOnly), model extents, target model, `withPostCheck()` |
 | `QvtdExecutionResult` | Diagnostics, success flag |
 | `QvtdModelExtent` | Wraps `Resource` contents for a typed model |
 | `QvtdBlackboxRegistry` | Registry for blackbox libraries (GAP-9, GAP-12) |
@@ -63,8 +79,13 @@ describes it in full.
 
 **Dependencies (#139).** `compile(source, unitName, UnitCompileOptions)` resolves every `import`
 through the configured unit resolvers (D29 gate and allow-list as in `execute()`) and binds by the
-dependency mode. QVT-R binds an import by *merging* the imported relations into the importer
-(§7.11.1.1, `QvtdLinker.merge`) — afterwards nothing refers to the imported unit. Hence:
+dependency mode. An import only makes names visible (§7.1.1, #360); QVT-R binds it by *copying* what
+the importer takes from it into the importer (`QvtdLinker.merge`): the base an `extends` names
+(§7.11.1.1, `QvtrParserSupport.inherit`) and each relation a call names, as a non-top relation with a
+`qvtr.imported` annotation. Calls, bases and overrides the parser could not resolve because the unit
+imports others wait on the transformation (`qvtr.pendingCalls`, `qvtr.extends`) and are an error if
+still open after binding (`QvtdLinker.unresolved`). Afterwards nothing refers to the imported unit.
+Hence:
 
 - **embed** — the dependency is compiled and merged at compile time, and the name is struck from the
   `qvtr.imports` annotation. The merged rules *are* the embedding; no unit is attached under
@@ -86,14 +107,21 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 
 **Architecture:** Two-visitor composition pattern (like QVT-O):
 - `QvtrUnitBuilder` — Main CST→AST visitor. 2-pass for transformation-level constructs:
+  - Pass 0: Imports — a quoted URI the package registry knows is a metamodel (alias, `::Sub`,
+    `::*`), anything else a unit name for the link phase (§7.13.1, #360)
   - Pass 1: Build all transformations, typed models, relations, domains, templates
-  - Pass 2: Resolve `extends` inheritance (rule merging with `EcoreUtil.copy()`)
+  - Pass 2: Resolve `extends` inheritance (rule merging with `EcoreUtil.copy()`); a base, call or
+    `overrides` that is not in the unit is left for the link phase when the unit imports others
 - `QvtrExpressionBuilder` — OCL expression visitor, delegates to `AbstractExpressionBuilder` (shared with OCL/QVT-O parsers)
 
 **Key grammar extensions beyond OCL:**
 - `transformationDef`, `modelDecl`, `keyDecl`, `relation`, `domain`
 - `objectTemplate`, `collectionTemplate`, `propertyTemplate`
-- `whenClause`, `whereClause`, `queryDef`
+- `whenClause`, `whereClause` (a `predicate` is an expression or a template, #361), `queryDef`
+- `importDecl` with alias, URI, path and wildcard; `transformationId` as `pathName` (#360)
+- an own `identifier` rule: `import` is reserved, `abstract`/`opposite`/`default_values` are names;
+  `_key` is read as `key` (deprecated, §7.13.2); `QvtrErrorListener` folds the identifier tokens of
+  an expectation set into `identifier`
 - `optionalMultiplicity` (`[?]`) — Eclipse extension (GAP-5)
 - `implementedby` clause on domains (GAP-12)
 
@@ -106,7 +134,10 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 | `qvtr.optional` | `DomainPattern` | Marks `[?]` optional root variable |
 | `qvtr.extends` | `RelationalTransformation` | Stores base transformation name |
 | `qvtr.implementedby.args` | `RelationImplementation` | Stores argument expression references |
-| `qvtr.imports` | `RelationalTransformation` | Names of imported units still to merge; struck by `compile()` under `embed` |
+| `qvtr.imports` | `RelationalTransformation` | Names of imported units still to bind; struck by `compile()` under `embed` |
+| `qvtr.pendingCalls` | `RelationalTransformation` | Calls of relations an import may declare: references to the `RelationCallExp`s, details the called names (#360) |
+| `qvtr.imported` | `Relation` | A relation copied in because the importer calls it; not top-level (#360) |
+| `qvtr.warnings` | `RelationalTransformation` | Parse warnings (deprecated `_key`), reported as WARNING by a run (#361) |
 
 ## 5. Engine
 
@@ -118,7 +149,7 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 | `QvtrEvaluator` | Core evaluator: relation execution, domain classification, when/where-clauses |
 | `QvtrEnforcer` | Target domain enforcement (§7.10.2), key-based identity (§7.4), property enforcement |
 | `QvtrBlackboxBridge` | Blackbox library invocation (§7.8), `implementedby` delegation (§7.11.3.6), M-R5 security |
-| `QvtrQueryEvaluator` | Query resolution (§7.11.4), where-clause variable pre-computation |
+| `QvtrQueryEvaluator` | Query resolution (§7.11.1.5 Function), where-clause variable pre-computation |
 | `QvtrOclCallback` | Functional interface: breaks circular deps between helpers and evaluator |
 | `QvtrPatternMatcher` | Pattern matching: object/collection templates, variable binding |
 | `QvtrEvalEnvironment` | Variable scope stack (push/pop) |
@@ -128,15 +159,19 @@ metamodels are recorded as for every language (QVT-O architecture §4.w).
 ### 5.2 Execution Flow
 
 1. **`execute(transformation, context)`** → `QvtrEvaluator.execute()`
-2. For each **top relation** (skip abstract, skip overridden):
-   a. Evaluate the when-clause's **relation calls** → pre-bindings (RelationCallExp → trace lookup)
+2. Order the top relations (`QvtrRelationOrder`, #349): each runs after the relations its
+   when clause calls. A when call to a non-top relation depends on the top relations whose where
+   clauses invoke it. Relations that depend on each other form a component, which runs until it
+   adds no trace record. The result does not depend on the order of declaration (§7.2.2).
+3. For each **top relation** (skip abstract — §7.11.1.4 "never matched directly"). An overridden relation runs, but a binding that an overriding relation applies to is left to it: its when clause and the patterns of its non-target domains match the binding's roots (decided in #356). A top-level overriding relation covers the binding in its own run. Any other one, and every one reached through a where call, is invoked with the roots. An abstract relation reached for a binding no override applies to is an ERROR:
+   a. Evaluate the when-clause's **relation calls** → one pre-binding per matching trace (RelationCallExp → trace lookup)
    b. **Classify domains**: source vs. target (based on `isEnforceable()` + target model)
    c. **Match source domains** → list of binding maps
    d. For each source binding:
-      - Check **optional null** (`[?]`) → skip if root variable is null
+      - Check **optional null** (`[?]`) → record the trace and skip the rest if the root variable is null
       - Evaluate the **remaining when-predicates** against this binding → skip the binding if one is false
       - **Pre-compute where bindings** (query calls, computed values)
-      - **Enforce target domain** (or check-only verify)
+      - **Enforce target domain** (or check-only verify) → skip the binding if that reported an ERROR
       - Record **trace**
       - Evaluate **where-clause** (may invoke non-top relations)
 
@@ -156,38 +191,83 @@ the style of the spec's own `UmlToRdb` example.
 ### 5.3 Domain Classification (§7.10)
 
 ```
-if (!checkOnly && rd.isIsEnforceable() && isTargetModel(rd.getTypedModel()))
-    → targetDomain
-else
-    → sourceDomain
+check-only run (or post-check)  → every model domain in turn is direction k, the others are sources
+enforce run:
+  enforce domain of the target model        → targetDomain (enforced)
+  else a domain of the target model         → checked direction k (§7.2.3, reported, not enforced)
+  every other model domain                  → sourceDomain
 ```
 
-For **in-place** transformations (GAP-7): same TypedModel can appear in both source and target. `isIsEnforceable()` distinguishes `enforce` from `checkonly` domains.
+For **in-place** transformations (GAP-7): the same TypedModel can appear in both source and target. If an `enforce` domain is in the target model, a `checkonly` domain of the same model stays a source domain.
+
+§7.7: "Execution proceeds as if the source and target models are distinct". When a relation has two domains on the target model, the evaluator copies the target model before the run (`EcoreUtil.Copier`). Source domains match the copy (`QvtrExtentManager.matchingSources`), and enforcing writes the model itself; before enforcing, objects of the copy in a binding are replaced by their originals. A run therefore never sees its own output as source (#353). The copy is dropped once the run is done, so a post-check sees the model as it is.
+
+**Changed status** (§7.7, #353): `QvtdExecutionResult.modelChanged()`. An `EContentAdapter` on the roots of the target model notes every change in an existing tree, and a comparison of the roots before and after notes roots that were added or removed.
+
+### 5.3.1 Checking (§7.9, §7.10.1, #348)
+
+`checkDirection` checks one direction k. For every binding of the when clause and the other domains
+that satisfies the when condition, there must be a match of domain k for which the where
+condition holds. In checking, relation calls in `where` are evaluated as checks by `relationHolds`:
+the called relation holds if some joint binding of its domains extends the arguments. A binding
+without such a match is reported as a WARNING with code `QvtdExecutionResult.INCONSISTENCY`, naming
+relation, direction and binding. `isSuccess()` stays true and `isConsistent()` becomes false.
+A binding that holds is traced, so relations whose when clause depends on it are checked as well.
+Empty models hold vacuously and report nothing.
+
+An enforce run checks only the domains of the target model that are not enforced (§7.2.3).
+`QvtdExecutionContext.withPostCheck()` adds a check of every relation in every direction once
+enforcing is done.
 
 ### 5.4 Enforcement (§7.10.2)
 
 Extracted into `QvtrEnforcer` for testability and separation of concerns.
 
-1. Try **match** target domain against existing elements
+1. Try **match** target domain against existing elements: the first match that also satisfies the where predicates it binds the variables of (§7.10.2, #351)
 2. Apply **default value assignments** (§7.11.3.7) for unbound variables
-3. Try **`implementedby`** (§7.11.3.6) via `QvtrBlackboxBridge` — delegate to `RelationImplementationProvider` or blackbox registry
+3. Try **`implementedby`** (§7.11.3.6) via `QvtrBlackboxBridge` — only when the target does not match yet: invoke the named operation through a `RelationImplementationProvider` or the blackbox registry, then re-match; still no match is an error (#282)
 4. If no match → **create** via `ObjectTemplateExp`:
    a. Check already-bound variable (e.g. from when-clause or shared variable)
-   b. Look up by **Key** (`key T { prop1, prop2 }`) — identity-based find-or-create (§7.4)
-   c. Look up by **bound variables** (`findByBoundVariables()`) — for in-place (§7.7)
-   d. **Instantiate** (`EcoreUtil.create()`) + set features from template
+   b. Look up by **Key** (§7.4, #350): every key of the class or a superclass (`isSuperTypeOf`; the
+      keys of the most specific class take precedence) that the template gives a value for each
+      part of. A part whose value is an object template takes the object it binds or enforces; an
+      `opposite(C::p)` part matches the candidate held by the owner's `p`. One complete key match
+      selects the object. A part whose value cannot be determined is an ERROR.
+   c. **Instantiate** (`EcoreUtil.create()`) + set features from template. Without a key nothing
+      else identifies an object — the earlier selection by bound variables took over foreign
+      objects and is gone (decided in #350).
 5. For `CollectionTemplateExp` (GAP-1): create collection members
+6. Every object created for the domain that no container holds becomes a root of the target extent —
+   also a container created by a nested template that holds the object through an opposite (#351).
+
+**Clashes** (§7.10.2, #351): a run-local register remembers which relation set a single-valued
+feature of an object. A different value for the same feature in the same run is an ERROR, and the
+first value stays. Values the object had before the run are modified, not a clash.
+
+**where** (§7.2.1, #351): a where predicate that reads only what the sources bind and is false is an
+ERROR, and nothing is created for that binding. A where predicate that is false after enforcing is an
+ERROR.
+
+**Deletion** (§7.10.2, #352): after all relations ran, each binding of an enforced target domain that
+no trace of its relation holds marks the objects bound to the domain's template variables — root and
+nested. Those that no trace of any relation holds are deleted, together with the references the target
+model holds to them. Never in a check, never towards a checkonly domain, never outside the target
+model, and not at all when the trace limit cut the trace. `QvtdConfiguration.deleteUnmatched(false)`
+switches it off.
 
 ### 5.4.1 Blackbox Bridge (§7.8)
 
 Extracted into `QvtrBlackboxBridge` for testability and security centralization (M-R5).
 
-- `invokeImplementedBy()` — searches `RelationImplementationProvider`s first (D39 hybrid), then falls back to blackbox registry
+- `invokeImplementedBy()` — asks `RelationImplementationProvider`s for the operation the clause names (D39 hybrid), then the blackbox registry; arguments are the clause's, i.e. the domains' root objects; unserved is an error, never a silent fallback to QVT-R enforcement (#282)
+- `evaluateBlackboxQuery()` reports an unserved query once per run with the reason (#283)
+- A relation with `implementedby` that goes beyond the §7.8 restrictions (domains not primitive or simple templates, when/where defining variables) gets one positioned WARNING per run from `QvtrEvaluator` — "should" in the spec, and the check before and after the operation keeps the general form safe (#287)
 - `evaluateBlackboxQuery()` — delegates query calls without body to registered libraries
 - `isBlackboxAllowed()` — enforces `allowedBlackboxModules` allow-list
 - All blackbox access gated by `config.blackboxEnabled()` (disabled by default)
+- Under OSGi the libraries come from `DefaultQvtdEngine`'s dynamic `0..n` reference `blackboxes` (bind and unbind methods, #269): no restart when a library comes or goes, each run reads what is bound, the higher `service.ranking` wins a name; `blackboxes.target` and `blackboxes.cardinality.minimum` narrow the set and make the engine wait for it. A whiteboard on purpose — the engine selects libraries by operation name, so it has to know them all
 
-### 5.4.2 Query Evaluation (§7.11.4)
+### 5.4.2 Query Evaluation (§7.11.1.5)
 
 Extracted into `QvtrQueryEvaluator` for testability.
 
@@ -199,16 +279,27 @@ Extracted into `QvtrQueryEvaluator` for testability.
 ### 5.5 Pattern Matching
 
 `QvtrPatternMatcher.matchDomain()`:
-- Iterates `DomainPattern.templateExpression`
+- Iterates `DomainPattern.templateExpression`. Several templates of one domain are matched jointly, as the cross product of their roots: each pattern extends the bindings of the ones before it (§7.11.3.3, #355)
 - For `ObjectTemplateExp`: bind root variable, match `PropertyTemplateItem` values
-- For `CollectionTemplateExp`: match collection members with `++` rest-variable
+- A variable bound to `null` counts as bound: `name = n, kind = n` does not match a null name with a kind (#355)
+- A nested template on a single-valued reference matches only an object of its class or a subclass (§7.10.3.2)
+- `opposite(C::p)` for a `p` without an eOpposite: the owners are the instances of `C` in the object's model whose `p` holds it (§7.3). Enforcing adds the object to the owner's `p` (#355)
+- Variables with an initializer are bound to its value before matching — a fixed value that constrains the match (decided in #357)
+- For `CollectionTemplateExp` (§7.11.2.3, #354): the members match distinct elements — a variable, an object template or `_` each consumes one — and the rest is bound to the elements they leave. Without a rest, nothing may be left. For a Sequence or OrderedSet, the members are the head of the sequence, in order. For a Set or OrderedSet, the values must be unique. The template's `where` filters the bindings, and a single-valued property is a singleton collection (§7.11.2.4)
 - **Optional `[?]`** (GAP-5): if no instances match, bind root to `null` (vacuous match)
 - Returns `List<Map<String, Object>>` — all valid binding combinations
 
 ### 5.6 Traces (§7.2.1)
 
 - `QvtrTraceManager` stores `TraceRecord(relation, Map<String, Object>)` per execution
-- `RelationCallExp` in **when-clause** → trace lookup (the called relation must have matching trace)
+- `RelationCallExp` in **when-clause** → trace lookup (the called relation must have a matching
+  trace). Every matching trace gives a binding: arguments that are already bound select the
+  records, and unbound ones are bound from each of them (§7.2.3, #349).
+- A trace is recorded only for a binding the relation holds for. If the target could not be
+  enforced (an ERROR during enforcement), no trace is recorded and no when clause can count on
+  it. A `[?]` root bound to null holds and is traced, for top and non-top relations alike.
+- Equal records are kept once; `size()` grows only with a new binding, which ends the fixpoint
+  of a cycle.
 - `RelationCallExp` in **where-clause** → invokes non-top relation with pre-bindings
 
 ### 5.7 OCL Integration (D36)
@@ -221,25 +312,25 @@ Extracted into `QvtrQueryEvaluator` for testability.
 
 | Feature | Spec Reference | Implementation |
 |---------|---------------|----------------|
-| Top relations | §7.10.1 | Iterate + execute |
+| Top relations | §7.10.1, §7.2.2 | Dependency order, fixpoint for cycles (`QvtrRelationOrder`) |
 | Non-top relations | §7.10.2 | Via where-clause `RelationCallExp` |
-| When-clause | §7.2.1 | Predicate eval + trace lookup |
+| When-clause | §7.2.1 | Predicate eval + trace lookup, one binding per matching trace |
 | Where-clause | §7.2.1 | Predicate eval + relation invocation |
-| Checkonly domains | §7.10 | Match-only, no enforcement |
-| Enforce domains | §7.10.2 | Find-or-create via templates |
-| Key-based identity | §7.4, §7.13.4 | `enforceObjectTemplate()` key lookup |
+| Checkonly domains | §7.9, §7.10.1, §7.2.3 | Every direction checked; violations are `INCONSISTENCY` warnings, `isConsistent()` false |
+| Enforce domains | §7.10.2 | Find-or-create via templates, clash detection, deletion of what no binding requires |
+| Key-based identity | §7.4, §7.13.4 | `findByKey()`: all keys of the class and its superclasses, template and opposite parts |
 | Object templates | §7.11.2 | Full property matching + binding |
-| Collection templates | §7.11.2 | Member matching with `++` rest |
-| Primitive domains | §7.11.3.10 | Variable binding only |
-| Abstract relations | §7.11.3.2 | `isAbstract` skip + `overrides` |
+| Collection templates | §7.11.2.3, §7.11.2.4 | Disjoint members, rest, Sequence head, uniqueness, where, singleton for single-valued properties; kind rules checked by the parser |
+| Primitive domains | §7.13.4 | Variable binding only |
+| Abstract relations | §7.11.1.4 | `isAbstract` skip; `overrides` replaces the base per binding where the overriding conditions hold, also for where calls |
 | Blackbox queries | §7.11.3.6 | `QvtdBlackboxRegistry` |
 | Transformation extends | §7.11.1.1 | Rule merging with copy |
 | `implementedby` | §7.11.3.6 | `RelationImplementation` + blackbox |
-| In-place transforms | §7.7 | `isEnforceable()` + variable lookup |
+| In-place transforms | §7.7 | Source domains match a copy of the state before the run; `modelChanged()` status |
 | Optional `[?]` | Eclipse ext. | `DomainPattern` EAnnotation, null binding |
 | Default values | §7.11.3 | `default_values { ... }` assignment |
 | Opposite properties | §7.11.2 | `opposite(T::prop)` in templates |
-| Binding validation | §7.5 | `QvtrBindingValidator` — post-parse static analysis |
+| Binding validation | §7.5 | `QvtrBindingValidator` — post-parse static analysis; a declaration binds only with an initializer; per-direction check before an enforce run (`QvtrParserSupport.unboundInDirection`) |
 | Standard Library | §7.12 | OCL standard library (spec: "no additional operation") |
 
 ### 6.1 Binding Validation (§7.5)
@@ -265,7 +356,7 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 
 | Gap | Feature | Reason | Target |
 |-----|---------|--------|--------|
-| GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution | Phase 5 |
+| GAP-13 | Change propagation (§7.6) | Semantically ≡ full re-execution, which deletes what no binding requires; incremental execution is an optimisation | Phase 5 |
 | GAP-6 | QVT-O `refined` — stub resolution | Parser + Provider-Brücke ✅ (Phase 4b). Runtime Stub-Auflösung (`OT.refined` → echte RT) + Trace-Semantik ausstehend | Phase 5 |
 
 ## 8. Design Decisions
@@ -296,5 +387,9 @@ Violations are reported as `QvtdParseException` with `Resource.Diagnostic` entri
 | `QvtrEnforcerTest` | Unit tests: enforcement, key lookup, feature resolution | 12 |
 | `QvtrQueryEvaluatorTest` | Unit tests: query resolution, body/blackbox evaluation | 8 |
 | `QvtrBlackboxBridgeTest` | Unit tests: allow-list, blackbox delegation | 6 |
+| `QvtdConcreteSyntaxTest` | §7.13.2/§7.13.4: one accepted and one rejected form per production | 41 |
+| `QvtdAbstractSyntaxMappingTest` | §7.13.7: the AST each construct maps to | 11 |
+| `QvtdCommentTest` | §7.13.3: comments, nested paragraph comments | 4 |
 
-**Total: 160 tests, 0 failures, 2 @Disabled**
+**Total (2026-10-31): 320 tests, 0 failures, 9 @Disabled** — each disabled test names the issue
+that will enable it (#360, #361).

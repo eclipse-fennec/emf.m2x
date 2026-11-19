@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Try-catch expression for exception handling (QVT v1.3 Section 8.2.1.8).
+ * Try-catch expression for exception handling (QVT v1.3 Section 8.2.2.13).
  * <!-- end-model-doc -->
  *
  * <p>

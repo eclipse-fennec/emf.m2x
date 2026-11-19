@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Object expression for inline object creation in mapping bodies (QVT v1.3 Section 8.2.2.18).
+ * Object expression for inline object creation in mapping bodies (QVT v1.3 Section 8.2.1.24).
  * <!-- end-model-doc -->
  *
  * <p>

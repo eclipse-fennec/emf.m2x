@@ -95,17 +95,15 @@ class OclCollectionEqualityCrossTypeTest extends AbstractOclTest {
 
 	@Test
 	void set_withInvalid_equality() throws OclParseException {
-		// OCL v2.5: invalid = invalid yields invalid, so element comparison fails
-		// → collections containing invalid cannot be equal (element match fails)
-		// TODO: verify against Eclipse — may need to be assertInvalid instead of false
-		assertEquals(false, eval("Set{1, invalid, 3} = Set{invalid, 3, 1}", self));
+		// OCL v2.4 §11.7.1 [1]: "A collection cannot contain invalid values" — the literal is
+		// already invalid, and so is the comparison (#316; Eclipse answers invalid as well)
+		assertInvalid("Set{1, invalid, 3} = Set{invalid, 3, 1}", self);
 	}
 
 	@Test
 	void sequence_withInvalid_equality() throws OclParseException {
-		// OCL v2.5: invalid = invalid yields invalid, so positional comparison fails
-		// TODO: verify against Eclipse — may need to be assertInvalid instead of false
-		assertEquals(false, eval("Sequence{1, invalid, 3} = Sequence{1, invalid, 3}", self));
+		// OCL v2.4 §11.7.1 [1]: a collection literal with an invalid part is invalid (#316)
+		assertInvalid("Sequence{1, invalid, 3} = Sequence{1, invalid, 3}", self);
 	}
 
 	// === Empty collections of different types ===

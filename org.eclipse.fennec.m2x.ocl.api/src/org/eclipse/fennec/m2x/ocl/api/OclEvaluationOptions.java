@@ -41,7 +41,9 @@ public record OclEvaluationOptions(
 		int maxStringLength,
 		boolean customOperationsEnabled,
 		List<OclOperationProvider> additionalProviders,
-		boolean useEMFTypes) {
+		boolean useEMFTypes,
+		boolean specStrict,
+		boolean qvtCollections) {
 
 	/**
 	 * Controls how {@code null} values are handled during navigation.
@@ -96,6 +98,11 @@ public record OclEvaluationOptions(
 	 *        returned as {@link org.eclipse.emf.common.util.EList} and top-level {@link java.util.Map}
 	 *        results as {@link org.eclipse.emf.common.util.EMap}
 	 *        (see <a href="https://github.com/eclipse-fennec/emf.m2x/issues/4">issue #4</a>)
+	 * @param specStrict when {@code true}, the few places where the OCL v2.4 text and the
+	 *        Eclipse OCL default disagree follow the specification text; see
+	 *        {@link #withSpecStrict(boolean)}
+	 * @param qvtCollections when {@code true}, the operations QVT-O's standard library defines
+	 *        differently from OCL's answer as QVT-O does; see {@link #withQvtCollections(boolean)}
 	 */
 	public OclEvaluationOptions {
 		Objects.requireNonNull(nullHandling, "nullHandling must not be null");
@@ -129,7 +136,7 @@ public record OclEvaluationOptions(
 		return new OclEvaluationOptions(NullHandling.STRICT, ErrorRecovery.FAIL_FAST,
 				DEFAULT_MAX_DEPTH, null,
 				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
-				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false);
+				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false, false, false);
 	}
 
 	/**
@@ -142,7 +149,7 @@ public record OclEvaluationOptions(
 		return new OclEvaluationOptions(NullHandling.LENIENT, ErrorRecovery.COLLECT_ERRORS,
 				DEFAULT_MAX_DEPTH, null,
 				DEFAULT_MAX_COLLECTION_SIZE, DEFAULT_MAX_CLOSURE_ITERATIONS, DEFAULT_MAX_REGEX_LENGTH,
-				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false);
+				DEFAULT_MAX_STRING_LENGTH, false, List.of(), false, false, false);
 	}
 
 	/**
@@ -265,6 +272,45 @@ public record OclEvaluationOptions(
 	public OclEvaluationOptions withUseEMFTypes(boolean useEMFTypes) {
 		return toBuilder().useEMFTypes(useEMFTypes).build();
 	}
+
+	/**
+	 * Returns a copy with the given {@code specStrict} flag.
+	 *
+	 * <p>Where the OCL v2.4 text and the Eclipse OCL default disagree, Fennec follows Eclipse by
+	 * default and the specification text when this flag is set (#316, #326):
+	 * <ul>
+	 *   <li>{@code any} without a matching element: {@code null} by default (Eclipse, OMG issue
+	 *       18504), {@code invalid} when strict (§11.9.1);</li>
+	 *   <li>{@code one} and {@code isUnique} stop at the first decisive element by default;
+	 *       when strict they evaluate every body and answer {@code invalid} if any body is
+	 *       invalid (§11.9.1);</li>
+	 *   <li>a decreasing range {@code Sequence{5..3}} is empty with a WARNING by default,
+	 *       {@code invalid} with an ERROR when strict (§8.3.7 CollectionRange [2]).</li>
+	 * </ul>
+	 *
+	 * @param specStrict whether to follow the specification text where Eclipse differs
+	 * @return new options with the given flag
+	 */
+	public OclEvaluationOptions withSpecStrict(boolean specStrict) {
+		return toBuilder().specStrict(specStrict).build();
+	}
+
+	/**
+	 * Returns a copy with the given {@code qvtCollections} flag.
+	 *
+	 * <p>QVT-O's {@code Dict} is OCL's {@code Map} and its {@code List} OCL's {@code Sequence}
+	 * (D26), and both languages evaluate with this library. Where QVT v1.3 §8.3 defines an
+	 * operation differently from OCL, the QVT-O engine sets this flag (#343):
+	 * <ul>
+	 *   <li>{@code keys()}: {@code Set(K)} in OCL v2.5, {@code List(KeyT)} in QVT-O (§8.3.8.8).</li>
+	 * </ul>
+	 *
+	 * @param qvtCollections whether QVT-O's definitions apply
+	 * @return new options with the given flag
+	 */
+	public OclEvaluationOptions withQvtCollections(boolean qvtCollections) {
+		return toBuilder().qvtCollections(qvtCollections).build();
+	}
 	/**
 	 * Returns a builder holding these options, for a copy that changes more than one of them.
 	 *
@@ -295,6 +341,8 @@ public record OclEvaluationOptions(
 		private boolean customOperationsEnabled;
 		private List<OclOperationProvider> additionalProviders;
 		private boolean useEMFTypes;
+		private boolean specStrict;
+		private boolean qvtCollections;
 
 		private Builder(OclEvaluationOptions options) {
 			this.nullHandling = options.nullHandling();
@@ -308,6 +356,8 @@ public record OclEvaluationOptions(
 			this.customOperationsEnabled = options.customOperationsEnabled();
 			this.additionalProviders = options.additionalProviders();
 			this.useEMFTypes = options.useEMFTypes();
+			this.specStrict = options.specStrict();
+			this.qvtCollections = options.qvtCollections();
 		}
 
 		/**
@@ -412,12 +462,30 @@ public record OclEvaluationOptions(
 		}
 
 		/**
+		 * @param specStrict whether to follow the specification text where Eclipse differs
+		 * @return this builder
+		 */
+		public Builder specStrict(boolean specStrict) {
+			this.specStrict = specStrict;
+			return this;
+		}
+
+		/**
+		 * @param qvtCollections whether QVT-O's definitions of the collection operations apply
+		 * @return this builder
+		 */
+		public Builder qvtCollections(boolean qvtCollections) {
+			this.qvtCollections = qvtCollections;
+			return this;
+		}
+
+		/**
 		 * @return the options
 		 */
 		public OclEvaluationOptions build() {
 			return new OclEvaluationOptions(nullHandling, errorRecovery, maxDepth, timeout,
 					maxCollectionSize, maxClosureIterations, maxRegexLength, maxStringLength,
-					customOperationsEnabled, additionalProviders, useEMFTypes);
+					customOperationsEnabled, additionalProviders, useEMFTypes, specStrict, qvtCollections);
 		}
 	}
 }

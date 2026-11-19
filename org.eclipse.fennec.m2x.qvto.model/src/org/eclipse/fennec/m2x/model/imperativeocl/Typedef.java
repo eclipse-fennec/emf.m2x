@@ -28,7 +28,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Typedef: a named type alias with optional condition constraint (QVT v1.3 Section 8.2.1.12).
+ * Typedef: a named type alias with optional condition constraint (QVT v1.3 Section 8.2.2.23).
  * <!-- end-model-doc -->
  *
  * <p>

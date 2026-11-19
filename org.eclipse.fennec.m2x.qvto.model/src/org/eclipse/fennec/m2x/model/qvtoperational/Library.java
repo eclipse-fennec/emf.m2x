@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A library module providing reusable helpers and operations (QVT v1.3 Section 8.2.2.13).
+ * A library module providing reusable helpers and operations (QVT v1.3 Section 8.2.1.2).
  * <!-- end-model-doc -->
  *
  *

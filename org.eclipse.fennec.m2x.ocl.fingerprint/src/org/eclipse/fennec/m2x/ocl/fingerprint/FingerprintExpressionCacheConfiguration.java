@@ -30,4 +30,7 @@ public @interface FingerprintExpressionCacheConfiguration {
 
 	@AttributeDefinition(name = "Max Size", description = "Entries kept before the least recently used is dropped")
 	int maxSize() default 1024;
+
+	@AttributeDefinition(name = "Max Failures", description = "Parse failures kept, in an LRU of their own so broken expressions cannot displace working ones; 0 keeps none")
+	int maxFailures() default 256;
 }

@@ -24,7 +24,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Imperative iterate expression with explicit target variable (QVT v1.3 Section 8.2.1.5).
+ * Imperative iterate expression with explicit target variable (QVT v1.3 Section 8.2.2.7).
  * <!-- end-model-doc -->
  *
  * <p>

@@ -51,7 +51,10 @@ final class OclCollectionUtil {
 	@SuppressWarnings("unchecked")
 	static int compareOcl(Object a, Object b) {
 		if (a instanceof Number na && b instanceof Number nb) {
-			return Double.compare(na.doubleValue(), nb.doubleValue());
+			if (!OclNumbers.isFinite(na) || !OclNumbers.isFinite(nb)) {
+				return Double.compare(na.doubleValue(), nb.doubleValue());
+			}
+			return OclNumbers.compare(na, nb); // exact beyond 2^53 and for BigDecimal (#317, #322)
 		}
 		if (a instanceof Comparable<?> ca && b != null && a.getClass() == b.getClass()) {
 			return ((Comparable<Object>) ca).compareTo(b);

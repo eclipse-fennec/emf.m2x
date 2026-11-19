@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 
@@ -113,14 +114,28 @@ class OclLetComplexTest extends AbstractOclTest {
 	@Test
 	void let_filteredCollection() throws OclParseException {
 		assertEquals(2, eval(
-				"let married : Sequence(Person) = self.employees->select(e | e.isMarried) in " +
+				"let married : OrderedSet(Person) = self.employees->select(e | e.isMarried) in " +
 				"married->size()", company));
+	}
+
+	@Test
+	void let_declaredWithAKindTheInitialValueIsNot_isATypeError() {
+		// employees is an OrderedSet, and select keeps the kind (§11.9.1): an OrderedSet does not
+		// conform to a Sequence (§8.2.1), so the declaration is wrong (§8.3.7 Variable [1], #378)
+		assertTypeError("let married : Sequence(Person) = self.employees->select(e | e.isMarried) in married->size()",
+				company, "The let variable 'married' is declared as Sequence(Person) but initialized with a OrderedSet(Person)");
+	}
+
+	@Test
+	void let_declaredAsASupertypeKind_isFine() throws OclParseException {
+		assertEquals(2, eval("let married : Collection(Person) = self.employees->select(e | e.isMarried) in "
+				+ "married->size()", company));
 	}
 
 	@Test
 	void let_filteredNames() throws OclParseException {
 		Object result = eval(
-				"let married : Sequence(Person) = self.employees->select(e | e.isMarried) in " +
+				"let married : OrderedSet(Person) = self.employees->select(e | e.isMarried) in " +
 				"married.name->sortedBy(n | n)", company);
 		assertEquals(List.of("Alice", "Carol"), result);
 	}
@@ -158,9 +173,10 @@ class OclLetComplexTest extends AbstractOclTest {
 	// --- Let shadowing outer scope ---
 
 	@Test
-	void let_shadowsSelf() throws OclParseException {
-		// Inner let shadows the outer variable name
-		assertEquals(10, eval(
+	void let_shadowingOuterVariable_isAParseError() {
+		// OCL v2.4 §9.3.41 [1]: env.lookup(varName).oclIsUndefined() — lookup includes the enclosing
+		// scopes, so a let variable may not hide another (#326; stricter than Eclipse)
+		assertThrows(OclParseException.class, () -> eval(
 				"let x : Integer = 5 in " +
 				"let x : Integer = 10 in x", alice));
 	}

@@ -127,7 +127,7 @@ class QvtdEngineBasicTest extends AbstractQvtdEngineTest {
 		}
 
 		@Test
-		@DisplayName("Check-only: empty models — no bindings, warning expected")
+		@DisplayName("Check-only: empty models — vacuously consistent, nothing reported")
 		void checkOnlyEmptyModels() throws QvtdParseException {
 			String source = """
 					transformation PackageToSchema(uml : simpleuml, rdbms : simplerdbms) {
@@ -146,9 +146,11 @@ class QvtdEngineBasicTest extends AbstractQvtdEngineTest {
 			QvtdExecutionResult result = executeCheckOnly(source,
 					Map.of("uml", emptyExtent(), "rdbms", emptyExtent()));
 
-			assertNotNull(result);
-			// Empty models — no bindings to check, should still succeed (vacuously true)
-			// or warn about no matches
+			// Empty models: no Package, so nothing PackageToSchema requires — vacuously consistent,
+			// and nothing to report (710-P02b)
+			assertTrue(result.isSuccess(), "" + result.diagnostics());
+			assertTrue(result.isConsistent());
+			assertEquals(List.of(), result.diagnostics());
 		}
 	}
 

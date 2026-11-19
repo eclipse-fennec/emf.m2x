@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -23,6 +24,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -44,20 +46,17 @@ import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EValidator;
 import org.eclipse.emf.ecore.resource.ResourceSet;
+import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
+import org.eclipse.fennec.m2x.model.compiled.UnitNature;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
+import org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
-import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
-import org.eclipse.fennec.m2x.unit.api.PreparedContext;
-import org.eclipse.fennec.m2x.unit.api.Unit;
-import org.eclipse.fennec.m2x.unit.api.UnitBinder;
-import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
-import org.eclipse.fennec.m2x.model.compiled.UnitNature;
-import org.eclipse.fennec.m2x.model.ocl.CompleteOclDocument;
-import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
-import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.ocl.api.CompleteOclContribution;
+import org.eclipse.fennec.m2x.ocl.api.OclCacheKey;
+import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
@@ -66,10 +65,15 @@ import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclParseResult;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefEntry;
 import org.eclipse.fennec.m2x.ocl.engine.internal.DefRegistry.DefKey;
+import org.eclipse.fennec.m2x.unit.api.PreparedContext;
+import org.eclipse.fennec.m2x.unit.api.Unit;
+import org.eclipse.fennec.m2x.unit.api.UnitBinder;
+import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
 
 /**
  * Plain Java implementation of the {@link OclEngine} facade.
@@ -106,6 +110,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 	private final Map<DefKey, DefEntry> defProperties = new ConcurrentHashMap<>();
 	private final Map<DefKey, DefEntry> deriveProperties = new ConcurrentHashMap<>();
 	private final Map<DefKey, DefEntry> documentBodies = new ConcurrentHashMap<>();
+	/** The pre- and postconditions documents state, per operation (#323). */
+	private final Map<EOperation, List<Constraint>> documentConditions = new ConcurrentHashMap<>();
 	private final Map<EClassifier, List<Constraint>> documentInvariants = new ConcurrentHashMap<>();
 	private volatile OclEvaluationOptions delegateOptions;
 
@@ -141,9 +147,10 @@ public class OclEngineImpl implements OclDelegateSupport {
 	/**
 	 * Creates a new engine with the given parser and optional expression cache.
 	 *
-	 * <p>When a cache is provided, {@link #parse(String, EClassifier)} will
-	 * check the cache before parsing and store results after parsing. The cache
-	 * can be shared across multiple engine instances.
+	 * <p>When a cache is provided, both {@code parse} methods check the cache before
+	 * parsing and store the outcome after parsing — the AST, or the failure, which the
+	 * next call with the same key rethrows without parsing again. The cache can be shared
+	 * across multiple engine instances.
 	 *
 	 * @param parser the OCL expression parser, must not be {@code null}
 	 * @param cache the expression cache, or {@code null} for no caching
@@ -156,17 +163,38 @@ public class OclEngineImpl implements OclDelegateSupport {
 
 	@Override
 	public OclExpression parse(String expression, EClassifier contextType) throws OclParseException {
-		if (expressionCache != null) {
-			OclExpression cached = expressionCache.get(expression, contextType);
-			if (cached != null) {
-				return cached;
-			}
+		return parse(expression, contextType, Map.of());
+	}
+
+	@Override
+	public OclExpression parse(String expression, EClassifier contextType, Map<String, EClassifier> variables)
+			throws OclParseException {
+		Objects.requireNonNull(variables, "variables must not be null");
+		if (expressionCache == null || contextType == null) {
+			return parseUncached(expression, contextType, variables);
 		}
-		OclExpression parsed = parser.parse(expression, contextType);
-		if (expressionCache != null) {
-			expressionCache.put(expression, contextType, parsed);
+		OclCacheKey key = OclCacheKey.of(expression, contextType, variables);
+		Optional<OclParseResult> cached = expressionCache.lookup(key);
+		if (cached.isPresent()) {
+			return switch (cached.get()) {
+				case OclParseResult.Parsed parsed -> parsed.expression();
+				case OclParseResult.Failed failed -> throw failed.toException();
+			};
 		}
-		return parsed;
+		try {
+			OclExpression parsed = parseUncached(expression, contextType, variables);
+			expressionCache.store(key, new OclParseResult.Parsed(parsed));
+			return parsed;
+		} catch (OclParseException e) {
+			expressionCache.store(key, OclParseResult.Failed.of(e));
+			throw e;
+		}
+	}
+
+	private OclExpression parseUncached(String expression, EClassifier contextType,
+			Map<String, EClassifier> variables) throws OclParseException {
+		return variables.isEmpty() ? parser.parse(expression, contextType)
+				: parser.parse(expression, contextType, variables);
 	}
 
 	@Override
@@ -203,7 +231,17 @@ public class OclEngineImpl implements OclDelegateSupport {
 		Set<DefKey> derivations = new LinkedHashSet<>();
 		Set<DefKey> bodies = new LinkedHashSet<>();
 		List<Constraint> invariants = new ArrayList<>();
+		List<Constraint> conditions = new ArrayList<>();
 		for (Constraint c : constraints) {
+			// pre: and post: are checked where the operation runs through the invocation
+			// delegate, next to the annotation's own (OCL v2.4 §12.7, #323)
+			if ((c.getKind() == ConstraintKind.PRE || c.getKind() == ConstraintKind.POST)
+					&& c.getContextOperation() != null && c.getSpecification() != null) {
+				documentConditions.computeIfAbsent(c.getContextOperation(),
+						key -> Collections.synchronizedList(new ArrayList<>())).add(c);
+				conditions.add(c);
+				continue;
+			}
 			// inv: feeds the document validator (#204) — EMF's Diagnostician reaches it through
 			// OclDocumentValidator, never through the annotation-driven delegates
 			if (c.getKind() == ConstraintKind.INV && c.getContextClassifier() != null
@@ -262,12 +300,30 @@ public class OclEngineImpl implements OclDelegateSupport {
 				}
 			}
 		}
-		return new LoadedDefs(keys, providers, derivations, bodies, invariants);
+		return new LoadedDefs(keys, providers, derivations, bodies, invariants, conditions);
 	}
 
 	/** What one Complete OCL document put into effect, so that it can be taken out again. */
 	private record LoadedDefs(Set<DefKey> properties, List<OclOperationProvider> providers,
-			Set<DefKey> derivations, Set<DefKey> bodies, List<Constraint> invariants) {
+			Set<DefKey> derivations, Set<DefKey> bodies, List<Constraint> invariants,
+			List<Constraint> conditions) {
+	}
+
+	@Override
+	public List<OclExpression> documentConditions(EOperation operation, ConstraintKind kind) {
+		List<Constraint> registered = documentConditions.get(operation);
+		if (registered == null) {
+			return List.of();
+		}
+		List<OclExpression> result = new ArrayList<>();
+		synchronized (registered) {
+			for (Constraint c : registered) {
+				if (c.getKind() == kind) {
+					result.add(c.getSpecification());
+				}
+			}
+		}
+		return result;
 	}
 
 	private OclOperationProvider registerDefOperation(EClassifier ctx, String opName,
@@ -290,7 +346,10 @@ public class OclEngineImpl implements OclDelegateSupport {
 		// Use AnyType as return type placeholder — actual type is determined at runtime
 		AnyType returnType = OclStandardLibrary.INSTANCE.oclAny();
 
-		OclOperation op = new OclOperation(opName, ownerType, List.of(), returnType, impl);
+		// One parameter per declared one, so that defs of the same name and different arity are
+		// told apart by the dispatcher (#324); their types are not checked at the call (GAP-3)
+		List<EClassifier> parameterTypes = Collections.nCopies(paramNames.size(), returnType);
+		OclOperation op = new OclOperation(opName, ownerType, parameterTypes, returnType, impl);
 		OclOperationProvider provider = () -> List.of(op);
 		defProviders.add(provider);
 		return provider;
@@ -339,12 +398,8 @@ public class OclEngineImpl implements OclDelegateSupport {
 	public List<Diagnostic> validate(OclExpression expression, EClassifier contextType) {
 		Objects.requireNonNull(expression, "expression must not be null");
 		Objects.requireNonNull(contextType, "contextType must not be null");
-		// An empty list is what a valid expression answers, so a stub returning one told every
-		// caller that whatever they handed in was fine (#186). Until the type checker of GAP-3
-		// exists, saying so is the only honest answer.
-		throw new UnsupportedOperationException(
-				"Type checking of a parsed expression is not implemented (GAP-3). Parsing already "
-						+ "reports what it can resolve; there is nothing further to validate yet.");
+		// The parser holds the type rules, as it applies them while it builds (GAP-3, #378)
+		return parser.validate(expression, contextType);
 	}
 
 	// --- Extension: Complete OCL Documents ---
@@ -377,6 +432,12 @@ public class OclEngineImpl implements OclDelegateSupport {
 		defProviders.removeAll(loaded.providers());
 		loaded.derivations().forEach(deriveProperties::remove);
 		loaded.bodies().forEach(documentBodies::remove);
+		for (Constraint condition : loaded.conditions()) {
+			List<Constraint> registered = documentConditions.get(condition.getContextOperation());
+			if (registered != null) {
+				registered.remove(condition);
+			}
+		}
 		for (Constraint invariant : loaded.invariants()) {
 			List<Constraint> registered = documentInvariants.get(invariant.getContextClassifier());
 			if (registered != null) {
@@ -421,6 +482,12 @@ public class OclEngineImpl implements OclDelegateSupport {
 		defProviders.removeAll(loaded.providers());
 		loaded.derivations().forEach(deriveProperties::remove);
 		loaded.bodies().forEach(documentBodies::remove);
+		for (Constraint condition : loaded.conditions()) {
+			List<Constraint> registered = documentConditions.get(condition.getContextOperation());
+			if (registered != null) {
+				registered.remove(condition);
+			}
+		}
 		for (Constraint invariant : loaded.invariants()) {
 			List<Constraint> registered = documentInvariants.get(invariant.getContextClassifier());
 			if (registered != null) {
@@ -545,7 +612,10 @@ public class OclEngineImpl implements OclDelegateSupport {
 	 *       for all structural features (LambdaMetafactory accessors for generated models).</li>
 	 *   <li><b>Expression parse cache:</b> If an {@link OclExpressionCache} is configured,
 	 *       scans all EAnnotations with the Fennec OCL delegate URI and pre-parses
-	 *       OCL expressions (derivation, initial, body, pre, post, constraint names).</li>
+	 *       OCL expressions (derivation, initial, body, pre, post, constraint names).
+	 *       Operations with parameters are skipped: the invocation delegate parses their
+	 *       expressions with the parameters declared, which is a different cache key. A
+	 *       {@code post} is parsed with {@code result} declared, as the delegate does.</li>
 	 * </ol>
 	 *
 	 * <p>Parse errors during warm-up are silently ignored — they will be reported
@@ -586,22 +656,32 @@ public class OclEngineImpl implements OclDelegateSupport {
 						for (String key : List.of("derivation", "initial")) {
 							String expr = ann.getDetails().get(key);
 							if (expr != null) {
-								tryParse(expr, eClass);
+								tryParse(expr, eClass, Map.of());
 							}
 						}
 					}
 
-					// 3. Expression parse warm-up (body, pre, post on operations)
+					// 3. Expression parse warm-up (body, pre, post on operations). Only operations
+					// without parameters: the invocation delegate parses with the parameters
+					// declared, so a parse without them is cached under a key nobody asks for —
+					// and, failing, would only fill the failure cache (#420). The key must match
+					// the delegate's: body and pre without variables, post with `result`.
 					for (EOperation op : eClass.getEOperations()) {
 						EAnnotation ann = op.getEAnnotation(delegateUri);
-						if (ann == null) {
+						if (ann == null || !op.getEParameters().isEmpty()) {
 							continue;
 						}
-						for (String key : List.of("body", "pre", "post")) {
+						for (String key : List.of("body", "pre")) {
 							String expr = ann.getDetails().get(key);
 							if (expr != null) {
-								tryParse(expr, eClass);
+								tryParse(expr, eClass, Map.of());
 							}
+						}
+						String post = ann.getDetails().get("post");
+						if (post != null) {
+							Map<String, EClassifier> result = new LinkedHashMap<>();
+							result.put("result", op.getEType());
+							tryParse(post, eClass, result);
 						}
 					}
 
@@ -609,7 +689,7 @@ public class OclEngineImpl implements OclDelegateSupport {
 					EAnnotation classAnn = eClass.getEAnnotation(delegateUri);
 					if (classAnn != null) {
 						for (Map.Entry<String, String> detail : classAnn.getDetails().entrySet()) {
-							tryParse(detail.getValue(), eClass);
+							tryParse(detail.getValue(), eClass, Map.of());
 						}
 					}
 				}
@@ -618,12 +698,12 @@ public class OclEngineImpl implements OclDelegateSupport {
 	}
 
 	/**
-	 * Attempts to parse an expression, storing it in the cache on success.
-	 * Silently ignores parse failures.
+	 * Attempts to parse an expression with the given variables declared, storing the outcome
+	 * in the cache. Silently ignores parse failures.
 	 */
-	private void tryParse(String expression, EClass contextType) {
+	private void tryParse(String expression, EClass contextType, Map<String, EClassifier> variables) {
 		try {
-			parse(expression, contextType);
+			parse(expression, contextType, variables);
 		} catch (OclParseException e) {
 			// Silently ignore — will be reported at evaluation time
 		}
@@ -746,7 +826,9 @@ public class OclEngineImpl implements OclDelegateSupport {
 				config.maxStringLength(),
 				config.customOperationsEnabled(),
 				List.of(),
-				config.useEMFTypes());
+				config.useEMFTypes(),
+				config.specStrict(),
+				false);
 	}
 
 	/**
@@ -768,6 +850,11 @@ public class OclEngineImpl implements OclDelegateSupport {
 				return l.intValue();
 			}
 			return value;
+		}
+		// A Real is exact inside the evaluation (#322) and leaves the engine as the Double EMF
+		// users expect; an Integer beyond 64 bits stays a BigInteger
+		if (value instanceof BigDecimal decimal) {
+			return decimal.doubleValue();
 		}
 		if (value instanceof OclBag<?> bag) {
 			OclBag<Object> narrowed = new OclBag<>();

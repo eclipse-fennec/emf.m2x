@@ -30,7 +30,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A model type declaration binding a name to one or more metamodel packages (QVT v1.3 Section 8.2.2.14).
+ * A model type declaration binding a name to one or more metamodel packages (QVT v1.3 Section 8.2.1.6).
  * <!-- end-model-doc -->
  *
  * <p>

@@ -22,6 +22,7 @@ import java.util.Objects;
 import java.util.function.Function;
 
 import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EStructuralFeature;
@@ -29,6 +30,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 
 /**
  * Storage and resolution of intermediate properties (§8.1.10, §8.2.1.14).
@@ -134,12 +136,14 @@ class QvtoIntermediatePropertyStore {
 						Collection<Object> list =
 								(Collection<Object>) target.eGet(feature);
 						if (defaultValue instanceof Collection<?> coll) {
-							list.addAll((Collection<Object>) coll);
+							for (Object item : coll) {
+								list.add(toFeatureValue(feature, item));
+							}
 						} else {
-							list.add(defaultValue);
+							list.add(toFeatureValue(feature, defaultValue));
 						}
 					} else {
-						target.eSet(feature, defaultValue);
+						target.eSet(feature, toFeatureValue(feature, defaultValue));
 					}
 				}
 			}
@@ -225,5 +229,14 @@ class QvtoIntermediatePropertyStore {
 		}
 		// Fallback: name-based comparison for cross-package identity
 		return contextClass.getName().equals(targetClass.getName());
+	}
+
+	/**
+	 * A number as the attribute's own instance class: the engine computes an Integer as Long
+	 * (BigInteger beyond 64 bits) and a Real as BigDecimal, and an attribute typed after its
+	 * declaration wants its type's (#404).
+	 */
+	private static Object toFeatureValue(EStructuralFeature feature, Object value) {
+		return feature instanceof EAttribute attribute ? OclValues.toEcore(value, attribute.getEAttributeType()) : value;
 	}
 }

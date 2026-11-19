@@ -23,7 +23,6 @@ import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionContext;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -39,11 +38,13 @@ class QvtoRuntimeDiagnosticPositionTest extends AbstractQvtoEngineTest {
 	@Test
 	@DisplayName("a problem while running is reported at all")
 	void runtimeDiagnosticIsForwarded() throws QvtoParseException {
+		// The extent holds no EPackage, so ![EPackage] is null (§8.2.2.7) and navigating it is
+		// the problem. It used to be ![EClass], which found nothing only because of #298.
 		var transformation = engine.parse("""
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
 				transformation T(inout m : ECORE);
 				main() {
-				    var c := m.rootObjects()![EClass];
+				    var c := m.rootObjects()![EPackage];
 				    log(c.eSuperTypes->first().name);
 				}
 				""", "positions");
@@ -59,13 +60,35 @@ class QvtoRuntimeDiagnosticPositionTest extends AbstractQvtoEngineTest {
 	}
 
 	@Test
-	@Disabled("#116: the position does not arrive yet — QVT-O's builders are driven by direct "
-			+ "calls rather than visit(ParseTree), so the recording anchors are incomplete and no "
-			+ "node of the expression is in the position map")
+	@DisplayName("an invalid arising while running is reported where it arises")
+	void invalidOriginIsForwarded() throws QvtoParseException {
+		// eSuperTypes of a fresh EClass is empty, so first() is invalid (OCL v2.4 §11.7.2) —
+		// the value is right, and the run says where it came from (#304)
+		var transformation = engine.parse("""
+				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
+				transformation T(inout m : ECORE);
+				main() {
+				    var c := m.rootObjects()![EClass];
+				    log(c.eSuperTypes->first().name);
+				}
+				""", "positions");
+
+		BasicQvtoModelExtent extent = new BasicQvtoModelExtent(
+				EcorePackage.eINSTANCE.getEFactoryInstance().create(EcorePackage.Literals.ECLASS));
+		QvtoExecutionResult result = engine.execute(transformation,
+				QvtoExecutionContext.of(extent));
+
+		assertTrue(result.isSuccess(), () -> "a warning, not an error: " + messages(result));
+		assertTrue(result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains("'first' on an empty")),
+				() -> "the origin of the invalid has to be reported: " + messages(result));
+	}
+
+	@Test
 	@DisplayName("a problem while running names the unit, the line and the column")
 	void runtimeDiagnosticCarriesItsPosition() throws QvtoParseException {
 		// eSuperTypes of a fresh EClass is empty, so first() has nothing — the expression on
-		// line 5 is the one that goes wrong, and the message has to say so.
+		// line 5 is the one that goes wrong, and the message has to say so (#304).
 		var transformation = engine.parse("""
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
 				transformation T(inout m : ECORE);

@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
@@ -38,11 +39,15 @@ import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.ETypedElement;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
 import org.eclipse.fennec.m2x.model.imperativeocl.Typedef;
+import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
@@ -72,6 +77,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
 
 /**
  * Visitor that transforms module-level ANTLR4 parse tree nodes into QVT-O EMF AST nodes.
@@ -111,6 +117,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private record PendingExtension(MappingOperation mapping, String kind, String name) {}
 
+	/** An {@code @extent} of a mapping parameter, resolved once the model parameters are known. */
+	private record PendingExtentLocation(MappingParameter parameter, Token extent) {}
+
 	private final EPackage.Registry packageRegistry;
 	private final List<Resource.Diagnostic> diagnostics = new ArrayList<>();
 	/** Module-local type names from {@code typedef}, shared with the expression builder. */
@@ -120,6 +129,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoEnvironment environment;
 	private QvtoExpressionBuilder expressionBuilder;
 	private final List<PendingExtension> pendingExtensions = new ArrayList<>();
+	private final List<PendingExtentLocation> pendingExtentLocations = new ArrayList<>();
 	private final Map<String, Module> importedModuleStubs = new HashMap<>();
 
 	/**
@@ -127,6 +137,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 * places what it cannot resolve here (#264).
 	 */
 	private final Map<EObject, SourcePosition> importPositions = new IdentityHashMap<>();
+	/** The positions the builders of earlier operations recorded (#116). */
+	private final Map<EObject, SourcePosition> earlierPositions = new IdentityHashMap<>();
+	/** The signatures of the unit's helpers and queries, known before any body is built (#378). */
+	private final List<AbstractExpressionBuilder.Definition> definitions = new ArrayList<>();
+	/** The declared result type of each mapping, by name, known before any body is built. */
+	private final Map<String, List<EClassifier>> mappingResults = new HashMap<>();
 	/** What this unit knows so far, shared with every expression builder it creates. */
 	private final QvtoScope scope;
 	private String intermediatePackageUri;
@@ -135,7 +151,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
-		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, declaredPackages);
+		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, declaredPackages, definitions,
+				mappingResults);
 		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry, scope);
 	}
 
@@ -209,6 +226,13 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 						break;
 					}
 				}
+				if (mp.getEType() == null) {
+					// §8.2.1.5: "The type of a ModelParameter is a ModelType or Collection of a
+					// ModelType" — before, any other name left the parameter silently untyped
+					diagnostics.add(new ParseDiagnostic("Model parameter '" + mp.getName() + "' has the type '"
+							+ typeName + "', which is no model type of the transformation (§8.2.1.5)",
+							ParseDiagnostic.UNKNOWN_POSITION, ParseDiagnostic.UNKNOWN_POSITION));
+				}
 				mp.getEAnnotations().remove(ann);
 			}
 		}
@@ -251,6 +275,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 				}
 			}
 			preCreateIntermediateClassShells(topLevelElements, transformation);
+			collectOperationSignatures(topLevelElements);
 		}
 
 		// Second pass: imports and top-level module elements
@@ -268,6 +293,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Resolve deferred mapping extensions for top-level module elements
 		if (hasTopLevelModuleElements && transformation != null) {
 			resolvePendingExtensions(transformation);
+			resolvePendingExtentLocations(transformation);
 			// §8.4: Resolve opposite properties
 			resolveOppositeProperties(transformation);
 		}
@@ -307,12 +333,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		for (QvtOParser.ModuleUsageContext usageCtx : ctx.moduleUsage()) {
 			processModuleUsage(transformation, usageCtx);
 		}
-		if (ctx.transformationRefine() != null) {
+		if (!ctx.transformationRefine().isEmpty()) {
 			// §8.4.7: <transformation_refine> ::= 'refines' <moduleref>
 			// Create a stub Transformation with the name set (D40).
 			// The engine replaces this stub with the real QVT-R Transformation
-			// loaded via QvtdEngine.
-			QvtOParser.ModuleRefContext refCtx = ctx.transformationRefine().moduleRef();
+			// loaded via QvtdEngine. It may stand beside access/extends (§8.2.1.1, #346).
+			QvtOParser.ModuleRefContext refCtx = ctx.transformationRefine(0).moduleRef();
 			String refinedName = moduleRefNameText(refCtx.moduleRefName());
 			Transformation stub = QvtbaseFactory.eINSTANCE.createTransformation();
 			stub.setName(refinedName);
@@ -331,6 +357,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// §8.2.1.3: Pre-pass — create IC shells so forward-references resolve
 		preCreateIntermediateClassShells(ctx.moduleElement(), transformation);
 		preRegisterTypedefs(ctx.moduleElement());
+		collectOperationSignatures(ctx.moduleElement());
 
 		// Module elements
 		for (QvtOParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
@@ -339,6 +366,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Resolve deferred mapping extensions (disjuncts, inherits, merges)
 		resolvePendingExtensions(transformation);
+		resolvePendingExtentLocations(transformation);
 
 		// §8.4: Resolve opposite properties across all intermediate classes
 		resolveOppositeProperties(transformation);
@@ -360,6 +388,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// §8.2.1.3: Pre-pass — create IC shells so forward-references resolve
 		preCreateIntermediateClassShells(ctx.moduleElement(), library);
+		collectOperationSignatures(ctx.moduleElement());
 
 		// Module elements
 		for (QvtOParser.ModuleElementContext elemCtx : ctx.moduleElement()) {
@@ -368,6 +397,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Resolve deferred mapping extensions (disjuncts, inherits, merges)
 		resolvePendingExtensions(library);
+		resolvePendingExtentLocations(library);
 
 		return library;
 	}
@@ -410,6 +440,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		} else if (ctx.DOUBLE_QUOTED_STRING() != null) {
 			String text = ctx.DOUBLE_QUOTED_STRING().getText();
 			modelType.setConformanceKind(text.substring(1, text.length() - 1));
+		} else {
+			// §8.2.1.6: "The default value is effective" (#337)
+			modelType.setConformanceKind("effective");
 		}
 
 		// Package references: resolve metamodel packages
@@ -591,22 +624,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// Init section
 		if (ctx.initSection() != null) {
-			for (QvtOParser.StatementContext stmtCtx : ctx.initSection().block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getInitSection().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.initSection().block())) {
+				body.getInitSection().add(expr);
 			}
 		}
 
 		// Population section (main body between init and end)
 		if (ctx.populationSection() != null) {
 			// §8.2.1.19: Explicit population keyword — content goes into body.content
-			for (QvtOParser.StatementContext stmtCtx : ctx.populationSection().block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getContent().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.populationSection().block())) {
+				body.getContent().add(expr);
 			}
 		} else if (ctx.statementList() != null) {
 			for (QvtOParser.StatementContext stmtCtx : ctx.statementList().statement()) {
@@ -619,11 +646,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		// End section
 		if (ctx.endSection() != null) {
-			for (QvtOParser.StatementContext stmtCtx : ctx.endSection().block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getEndSection().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.endSection().block())) {
+				body.getEndSection().add(expr);
 			}
 		}
 
@@ -646,10 +670,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		// Signature
 		buildSimpleSignature(helper, ctx.simpleSignature());
 
-		// Return type
-		if (ctx.typeExpression() != null) {
-			EClassifier returnType = expressionBuilder.resolveTypeExpression(ctx.typeExpression());
-			setReturnType(helper, returnType);
+		// Results: a type, a named result, or several — "When more than one result is declared in
+		// the signature of a helper operation … returns a tuple" (§8.2.1.12, #346)
+		if (ctx.resultList() != null) {
+			buildResults(helper, ctx.resultList());
 		}
 
 		// Body
@@ -658,11 +682,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 		if (ctx.block() != null) {
 			OperationBody body = QVTO.createOperationBody();
-			for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getContent().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.block())) {
+				body.getContent().add(expr);
 			}
 			helper.setBody(body);
 		} else if (ctx.expression() != null) {
@@ -691,35 +712,15 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		buildSimpleSignature(query, ctx.simpleSignature());
 
 		// §8.4: query supports resultList (single or multi-result)
-		for (QvtOParser.ResultParamContext rCtx : ctx.resultList().resultParam()) {
-			VarParameter resultParam = QVTO.createVarParameter();
-			if (rCtx instanceof QvtOParser.NamedResultContext named) {
-				resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
-						named.qvtoIdentifier()));
-				EClassifier type = expressionBuilder.resolveTypeExpression(named.typeExpression());
-				if (type != null) {
-					setParameterType(resultParam, type);
-				}
-			} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
-				resultParam.setName("result");
-				EClassifier type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
-				if (type != null) {
-					setParameterType(resultParam, type);
-				}
-			}
-			query.getResult().add(resultParam);
-		}
+		buildResults(query, ctx.resultList());
 
 		QvtoEnvironment savedEnv = this.environment;
 		setupOperationEnvironment(query);
 
 		if (ctx.block() != null) {
 			OperationBody body = QVTO.createOperationBody();
-			for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getContent().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.block())) {
+				body.getContent().add(expr);
 			}
 			query.setBody(body);
 		} else if (ctx.expression() != null) {
@@ -732,6 +733,28 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = savedEnv;
 		updateExpressionBuilder();
 		return query;
+	}
+
+	/** The result parameters of a helper or query: named, or the implicit 'result'. */
+	private void buildResults(ImperativeOperation operation, QvtOParser.ResultListContext resultList) {
+		for (QvtOParser.ResultParamContext rCtx : resultList.resultParam()) {
+			VarParameter resultParam = QVTO.createVarParameter();
+			if (rCtx instanceof QvtOParser.NamedResultContext named) {
+				resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
+						named.qvtoIdentifier()));
+				EClassifier type = expressionBuilder.resolveTypeExpression(named.typeSpec().typeExpression());
+				if (type != null) {
+					setParameterType(resultParam, type);
+				}
+			} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
+				resultParam.setName("result");
+				EClassifier type = expressionBuilder.resolveTypeExpression(unnamed.typeSpec().typeExpression());
+				if (type != null) {
+					setParameterType(resultParam, type);
+				}
+			}
+			operation.getResult().add(resultParam);
+		}
 	}
 
 	// ==================== Constructor ====================
@@ -754,11 +777,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			setupOperationEnvironment(constructor);
 
 			var body = QVTO.createConstructorBody();
-			for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-				OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-				if (expr != null) {
-					body.getContent().add(expr);
-				}
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.block())) {
+				body.getContent().add(expr);
 			}
 			constructor.setBody(body);
 
@@ -782,10 +802,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		QvtoEnvironment savedEnv = this.environment;
 		setupOperationEnvironment(entry);
 
+		// main(); declares the entry without a body (§8.4 <entry>, #346)
 		OperationBody body = QVTO.createOperationBody();
-		for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-			OclExpression expr = expressionBuilder.buildStatement(stmtCtx);
-			if (expr != null) {
+		if (ctx.block() != null) {
+			for (OclExpression expr : expressionBuilder.blockContents(ctx.block())) {
 				body.getContent().add(expr);
 			}
 		}
@@ -922,6 +942,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 						intermPkg.getEClassifiers().add(shell);
 					}
 				}
+				// §8.4.8.1: "First, a type definition existing at the level of the current module
+				// … is searched" — before the model types (#346). A class keeps its shell; a data
+				// type's shell is replaced later, and is found through its package
+				if (!isDataType) {
+					localTypes.putIfAbsent(name, intermPkg.getEClassifier(name));
+				}
 			}
 		}
 	}
@@ -993,6 +1019,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			intermPkg.getEClassifiers().add(intermediateClass);
 		}
 
+		intermediateClass.setAbstract(isAbstract(ctx));
+
 		// Resolve intermediate class supertypes (extends clause)
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
@@ -1048,6 +1076,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					exceptionClass.getESuperTypes().add(superClass);
 				}
 			}
+		}
+		// §8.3.1.4: Exception is "the base class of all exceptions" — exception E; extends it, and
+		// so carries its reason (#340)
+		if (exceptionClass.getESuperTypes().isEmpty()
+				&& QvtoStandardLibraryTypes.lookup("Exception") instanceof EClass base) {
+			exceptionClass.getESuperTypes().add(base);
 		}
 
 		// Features: properties and operations
@@ -1231,7 +1265,14 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	/**
 	 * Processes an intermediate class inside a specific package (metamodel block).
 	 */
-	private void processIntermediateClassInPackage(
+	/** §8.4.6: an abstract class — the keyword before 'class', not a class named so (#346). */
+	private static boolean isAbstract(QvtOParser.IntermediateClassDefContext ctx) {
+		return ctx.children.stream()
+				.takeWhile(child -> !"class".equals(child.getText()))
+				.anyMatch(child -> "abstract".equals(child.getText()));
+	}
+
+		private void processIntermediateClassInPackage(
 			QvtOParser.IntermediateClassDefContext ctx, Module module, EPackage targetPkg) {
 		String className = QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier());
 
@@ -1241,6 +1282,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			intermediateClass.setName(className);
 			targetPkg.getEClassifiers().add(intermediateClass);
 		}
+		intermediateClass.setAbstract(isAbstract(ctx));
 
 		if (ctx.typeList() != null) {
 			for (QvtOParser.TypeExpressionContext typeCtx : ctx.typeList().typeExpression()) {
@@ -1290,6 +1332,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					exceptionClass.getESuperTypes().add(superClass);
 				}
 			}
+		}
+		// §8.3.1.4: Exception is "the base class of all exceptions" — exception E; extends it, and
+		// so carries its reason (#340)
+		if (exceptionClass.getESuperTypes().isEmpty()
+				&& QvtoStandardLibraryTypes.lookup("Exception") instanceof EClass base) {
+			exceptionClass.getESuperTypes().add(base);
 		}
 
 		for (QvtOParser.ClassifierFeatureContext featureCtx : ctx.classifierFeature()) {
@@ -1422,11 +1470,30 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 			feature = ref;
 		} else {
-			// EAttribute: default to EJAVA_OBJECT (as before)
-			EAttribute attr = EcoreFactory.eINSTANCE.createEAttribute();
-			attr.setName(featureName);
-			attr.setEType(EcorePackage.Literals.EJAVA_OBJECT);
-			feature = attr;
+			EClassifier declared = expressionBuilder.resolveTypeExpression(featureCtx.typeExpression());
+			EClassifier elementType = declared instanceof CollectionType collection ? collection.getElementType()
+					: declared;
+			if (elementType instanceof EClass targetClass) {
+				// a class-typed property holds objects: a reference, as an attribute cannot have a
+				// class type (Ecore); not contained, as 'composes' was not written
+				EReference ref = EcoreFactory.eINSTANCE.createEReference();
+				ref.setName(featureName);
+				ref.setEType(targetClass);
+				feature = ref;
+			} else {
+				EAttribute attr = EcoreFactory.eINSTANCE.createEAttribute();
+				attr.setName(featureName);
+				attr.setEType(attributeType(elementType));
+				feature = attr;
+			}
+			if (declared instanceof CollectionType collection && featureCtx.multiplicity() == null) {
+				// a collection-typed property is a multi-valued feature of its element type, as a
+				// module property is since #339
+				feature.setUpperBound(ETypedElement.UNBOUNDED_MULTIPLICITY);
+				CollectionKind kind = collection.getKind();
+				feature.setOrdered(kind == CollectionKind.SEQUENCE || kind == CollectionKind.ORDERED_SET);
+				feature.setUnique(kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET);
+			}
 		}
 
 		// Multiplicity
@@ -1496,6 +1563,30 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	/**
+	 * The Ecore type an intermediate attribute of the declared type has (§8.1.10, #404): the one
+	 * whose instance class is what the engine computes with — Integer unbounded (#322), Real a
+	 * BigDecimal, Boolean null by default (#339) — so a written value fits and reads back as the
+	 * same OCL value. A data type of a metamodel or of the module stays itself; what has no Ecore
+	 * counterpart (UnlimitedNatural, tuples, Dict, OclAny, an unknown type) stays EJavaObject,
+	 * which the type rules read as unknown.
+	 */
+	private static EClassifier attributeType(EClassifier declared) {
+		if (declared instanceof PrimitiveType primitive) {
+			return switch (primitive.getName()) {
+				case "String" -> EcorePackage.Literals.ESTRING;
+				case "Boolean" -> EcorePackage.Literals.EBOOLEAN_OBJECT;
+				case "Integer" -> EcorePackage.Literals.EBIG_INTEGER;
+				case "Real" -> EcorePackage.Literals.EBIG_DECIMAL;
+				default -> EcorePackage.Literals.EJAVA_OBJECT;
+			};
+		}
+		if (declared instanceof EDataType && !(declared instanceof OclType)) {
+			return declared;
+		}
+		return EcorePackage.Literals.EJAVA_OBJECT;
+	}
+
+	/**
 	 * §8.4: Processes a classifier_operation (method declaration) inside an intermediate class.
 	 * Creates an EOperation on the EClass. Declaration only — no body execution (like Eclipse).
 	 */
@@ -1522,11 +1613,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					featureCtx.simpleSignature().paramList().param()) {
 				EParameter eParam =
 						EcoreFactory.eINSTANCE.createEParameter();
-				eParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
-						paramCtx.qvtoIdentifier()));
+				eParam.setName(paramName(paramCtx, op.getEParameters().size()));
 
 				EClassifier paramType = expressionBuilder.resolveTypeExpression(
-						paramCtx.typeExpression());
+						paramCtx.typeSpec().typeExpression());
 				if (paramType != null && !(paramType instanceof OclType)) {
 					eParam.setEType(paramType);
 				} else if (paramType instanceof PrimitiveType pt) {
@@ -1715,7 +1805,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 
 	private ModelParameter buildModelParameter(QvtOParser.ModelParamContext ctx) {
 		ModelParameter param = QVTO.createModelParameter();
-		param.setKind(resolveDirection(ctx.directionKind().getText()));
+		// §8.2.1.15: "The default direction kind is in" — library L(SRC) (§8.1.4, #346)
+		param.setKind(ctx.directionKind() != null ? resolveDirection(ctx.directionKind().getText()) : DirectionKind.IN);
 
 		// §8.1.1, §8.2.1.5: Check if typeSpec wraps a CollectionType around a ModelType
 		// e.g. 'in many : Sequence(SRC)' → collectionKind=SEQUENCE, inner type name='SRC'
@@ -1757,36 +1848,79 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		if (sigCtx.inputParams != null) {
 			for (QvtOParser.ParamContext paramCtx : sigCtx.inputParams.param()) {
 				MappingParameter param = QVTO.createMappingParameter();
-				param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
-				EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
+				param.setName(paramName(paramCtx, operation.getEParameters().size()));
+				setDefaultValue(param, paramCtx);
+				// §8.2.1.12: the direction decides what the caller sees afterwards (#336)
+				if (paramCtx.directionKind() != null) {
+					param.setKind(resolveDirection(paramCtx.directionKind().getText()));
+				}
+				EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeSpec().typeExpression());
 				if (type != null) {
 					setParameterType(param, type);
 				}
+				recordExtentLocation(param, paramCtx.typeSpec());
 				operation.getEParameters().add(param);
 			}
 		}
 
-		// Result parameters (§8.4: named 'r : Type' or unnamed 'Type' → implicit 'result')
+		// Result parameters (§8.4: named 'r : Type' or unnamed 'Type' → implicit 'result').
+		// A mapping's results are mapping parameters (§8.2.1.16), out, and may name the extent
+		// their object is created in.
 		if (sigCtx.resultList() != null) {
 			for (QvtOParser.ResultParamContext rCtx : sigCtx.resultList().resultParam()) {
-				VarParameter resultParam = QVTO.createVarParameter();
+				MappingParameter resultParam = QVTO.createMappingParameter();
+				resultParam.setKind(DirectionKind.OUT);
+				QvtOParser.TypeSpecContext typeSpec;
 				if (rCtx instanceof QvtOParser.NamedResultContext named) {
 					resultParam.setName(QvtoExpressionBuilder.qvtoIdentifierText(
 							named.qvtoIdentifier()));
-					EClassifier type = expressionBuilder.resolveTypeExpression(named.typeExpression());
-					if (type != null) {
-						setParameterType(resultParam, type);
-					}
-				} else if (rCtx instanceof QvtOParser.UnnamedResultContext unnamed) {
+					typeSpec = named.typeSpec();
+				} else {
 					resultParam.setName("result");
-					EClassifier type = expressionBuilder.resolveTypeExpression(unnamed.typeExpression());
-					if (type != null) {
-						setParameterType(resultParam, type);
-					}
+					typeSpec = ((QvtOParser.UnnamedResultContext) rCtx).typeSpec();
 				}
+				EClassifier type = expressionBuilder.resolveTypeExpression(typeSpec.typeExpression());
+				if (type != null) {
+					setParameterType(resultParam, type);
+				}
+				recordExtentLocation(resultParam, typeSpec);
 				operation.getResult().add(resultParam);
 			}
 		}
+	}
+
+	/** §8.2.1.16: remembers {@code T@extent} to be resolved against the model parameters. */
+	private void recordExtentLocation(MappingParameter param, QvtOParser.TypeSpecContext typeSpec) {
+		if (typeSpec.qvtoIdentifier() != null) {
+			pendingExtentLocations.add(new PendingExtentLocation(param, typeSpec.qvtoIdentifier().getStart()));
+		}
+	}
+
+	/**
+	 * §8.2.1.16: resolves each {@code @extent} of a mapping parameter to the model parameter of
+	 * that name. A name that is none of them is an error, as an unknown type is.
+	 */
+	private void resolvePendingExtentLocations(Module module) {
+		for (PendingExtentLocation pending : pendingExtentLocations) {
+			String name = pending.extent().getText();
+			ModelParameter extent = null;
+			if (module instanceof OperationalTransformation transformation) {
+				for (ModelParameter mp : transformation.getModelParameter()) {
+					if (name.equals(mp.getName())) {
+						extent = mp;
+						break;
+					}
+				}
+			}
+			if (extent != null) {
+				pending.parameter().setExtent(extent);
+			} else {
+				diagnostics.add(new ParseDiagnostic("Unknown extent '" + name
+						+ "': not a model parameter of the transformation",
+						pending.extent().getLine(), pending.extent().getCharPositionInLine()));
+			}
+		}
+		pendingExtentLocations.clear();
 	}
 
 	private void buildSimpleSignature(
@@ -1797,8 +1931,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 		for (QvtOParser.ParamContext paramCtx : sigCtx.paramList().param()) {
 			VarParameter param = QVTO.createVarParameter();
-			param.setName(QvtoExpressionBuilder.qvtoIdentifierText(paramCtx.qvtoIdentifier()));
-			EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeExpression());
+			param.setName(paramName(paramCtx, operation.getEParameters().size()));
+			setDefaultValue(param, paramCtx);
+			if (paramCtx.directionKind() != null) {
+				param.setKind(resolveDirection(paramCtx.directionKind().getText()));
+			}
+			EClassifier type = expressionBuilder.resolveTypeExpression(paramCtx.typeSpec().typeExpression());
 			if (type != null) {
 				setParameterType(param, type);
 			}
@@ -1873,17 +2011,6 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 	}
 
-	private void setReturnType(
-			ImperativeOperation operation,
-			EClassifier type) {
-		VarParameter resultParam = QVTO.createVarParameter();
-		resultParam.setName("result");
-		if (type != null) {
-			setParameterType(resultParam, type);
-		}
-		operation.getResult().add(resultParam);
-	}
-
 	private void setParameterType(VarParameter param, EClassifier type) {
 		if (type != null && !(type instanceof OclType)) {
 			param.setEType(type);
@@ -1896,7 +2023,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void setFeatureType(ContextualProperty prop, EClassifier type) {
-		if (type != null && !(type instanceof OclType)) {
+		if (type instanceof CollectionType collectionType) {
+			// A collection-typed property is a multi-valued feature of its element type: an
+			// assignment flattens into it and drops nulls (§8.2.2.11). Before #339 it was left
+			// untyped and single-valued.
+			prop.setUpperBound(ETypedElement.UNBOUNDED_MULTIPLICITY);
+			CollectionKind kind = collectionType.getKind();
+			prop.setOrdered(kind == CollectionKind.SEQUENCE || kind == CollectionKind.ORDERED_SET);
+			prop.setUnique(kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET);
+			setFeatureType(prop, collectionType.getElementType());
+		} else if (type != null && !(type instanceof OclType)) {
 			prop.setEType(type);
 		}
 	}
@@ -1951,6 +2087,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private void applyQualifier(OperationalTransformation transformation, String qualifier) {
 		if ("blackbox".equals(qualifier)) {
 			transformation.setIsBlackbox(true);
+		} else if ("abstract".equals(qualifier)) {
+			// The metamodel has no feature for it; kept for the well-formedness check of §8.2.1.1
+			// ("No entry operation should be defined") (#347)
+			EcoreUtil.setAnnotation(transformation, QvtoParserSupport.QUALIFIER_ANNOTATION, "abstract", "true");
 		}
 	}
 
@@ -1970,6 +2110,7 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 */
 	Map<EObject, SourcePosition> getNodePositions() {
 		Map<EObject, SourcePosition> positions = new IdentityHashMap<>(importPositions);
+		positions.putAll(earlierPositions);
 		if (expressionBuilder != null) {
 			positions.putAll(expressionBuilder.getNodePositions());
 		}
@@ -1991,6 +2132,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private EPackage resolvePackageRef(QvtOParser.PackageRefContext ctx) {
+		// §8.4 <uri> ::= <STRING>, in either quote style (#337)
+		String uri = ctx.uri() != null ? ctx.uri().getText().substring(1, ctx.uri().getText().length() - 1) : null;
 		if (ctx.pathName() != null) {
 			List<String> segments = new ArrayList<>();
 			for (var id : ctx.pathName().qvtoIdentifier()) {
@@ -1998,12 +2141,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			}
 			String name = String.join("::", segments);
 
-			// Try nsURI from STRING_LITERAL in parens
-			if (ctx.STRING_LITERAL() != null) {
-				String nsURI = ctx.STRING_LITERAL().getText();
-				nsURI = nsURI.substring(1, nsURI.length() - 1);
+			// Try the nsURI in parens
+			if (uri != null) {
 				if (packageRegistry != null) {
-					EPackage pkg = packageRegistry.getEPackage(nsURI);
+					EPackage pkg = packageRegistry.getEPackage(uri);
 					if (pkg != null) {
 						return pkg;
 					}
@@ -2019,12 +2160,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 					}
 				}
 			}
-		} else if (ctx.STRING_LITERAL() != null) {
-			String nsURI = ctx.STRING_LITERAL().getText();
-			nsURI = nsURI.substring(1, nsURI.length() - 1);
-			if (packageRegistry != null) {
-				return packageRegistry.getEPackage(nsURI);
-			}
+		} else if (uri != null && packageRegistry != null) {
+			return packageRegistry.getEPackage(uri);
 		}
 		return null;
 	}
@@ -2072,6 +2209,22 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		return moduleClass;
 	}
 
+	/**
+	 * A parameter's name, or for an unnamed one — constructor Column::Column(String, String)
+	 * (§8.1.8) — a synthetic name by its position, which no script can write (#346).
+	 */
+	private static String paramName(QvtOParser.ParamContext ctx, int index) {
+		return ctx.qvtoIdentifier() != null ? QvtoExpressionBuilder.qvtoIdentifierText(ctx.qvtoIdentifier())
+				: "_param" + (index + 1);
+	}
+
+	/** §8.4 <init_part>: the value an omitted argument takes (#346). */
+	private void setDefaultValue(VarParameter param, QvtOParser.ParamContext ctx) {
+		if (ctx.defaultValue != null) {
+			param.setOwnedInit((OclExpression) expressionBuilder.visit(ctx.defaultValue));
+		}
+	}
+
 	private DirectionKind resolveDirection(String text) {
 		return switch (text) {
 			case "out" -> DirectionKind.OUT;
@@ -2089,6 +2242,82 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 * {@code String} is Ecore's {@code EString}, and a variable declared with the alias
 	 * has to end up with a usable type either way.
 	 */
+	/**
+	 * Collects the signatures of the helpers and queries before any body is built, so that a call
+	 * of one — also one further down — has the declared result type and its arguments are checked
+	 * against the parameters (§8.2.1.12, #345, #378). The types are resolved again when the
+	 * operation is built; what that reports is reported there, once.
+	 */
+	private void collectOperationSignatures(List<QvtOParser.ModuleElementContext> elements) {
+		updateExpressionBuilder();
+		int reported = diagnostics.size();
+		for (QvtOParser.ModuleElementContext element : elements) {
+			QvtOParser.ScopedNameContext name;
+			QvtOParser.SimpleSignatureContext signature;
+			QvtOParser.ResultListContext results;
+			if (element.helperDef() != null) {
+				name = element.helperDef().scopedName();
+				signature = element.helperDef().simpleSignature();
+				results = element.helperDef().resultList();
+			} else if (element.queryDef() != null) {
+				name = element.queryDef().scopedName();
+				signature = element.queryDef().simpleSignature();
+				results = element.queryDef().resultList();
+			} else {
+				if (element.mappingDef() != null) {
+					collectMappingResult(element.mappingDef());
+				}
+				continue;
+			}
+			String fullName = expressionBuilder.scopedNameText(name);
+			int colon = fullName.lastIndexOf("::");
+			EClassifier owner = colon >= 0 ? expressionBuilder.resolveContextType(name) : null;
+			if (colon >= 0 && owner == null) {
+				continue; // a context that does not resolve: nothing to check calls against
+			}
+			List<String> parameterNames = new ArrayList<>();
+			List<EClassifier> parameterTypes = new ArrayList<>();
+			int required = 0;
+			if (signature != null && signature.paramList() != null) {
+				for (QvtOParser.ParamContext param : signature.paramList().param()) {
+					parameterNames.add(paramName(param, parameterNames.size()));
+					parameterTypes.add(expressionBuilder.resolveTypeExpression(param.typeSpec().typeExpression()));
+					if (param.defaultValue == null) {
+						required = parameterNames.size();
+					}
+				}
+			}
+			EClassifier type = null;
+			if (results != null && results.resultParam().size() == 1) {
+				QvtOParser.ResultParamContext result = results.resultParam().get(0);
+				QvtOParser.TypeSpecContext typeSpec = result instanceof QvtOParser.NamedResultContext named
+						? named.typeSpec() : ((QvtOParser.UnnamedResultContext) result).typeSpec();
+				type = expressionBuilder.resolveTypeExpression(typeSpec.typeExpression());
+			}
+			definitions.add(new AbstractExpressionBuilder.Definition(owner,
+					colon >= 0 ? fullName.substring(colon + 2) : fullName, parameterNames, parameterTypes, required, type));
+		}
+		// reported again where each operation is built
+		diagnostics.subList(reported, diagnostics.size()).clear();
+		updateExpressionBuilder();
+	}
+
+	/** The result type a mapping declares, for typing a call of it (§8.2.1.16, #378). */
+	private void collectMappingResult(QvtOParser.MappingDefContext mapping) {
+		String fullName = expressionBuilder.scopedNameText(mapping.scopedName());
+		int colon = fullName.lastIndexOf("::");
+		String name = colon >= 0 ? fullName.substring(colon + 2) : fullName;
+		QvtOParser.ResultListContext results = mapping.mappingSignature().resultList();
+		EClassifier type = null;
+		if (results != null && results.resultParam().size() == 1) {
+			QvtOParser.ResultParamContext result = results.resultParam().get(0);
+			QvtOParser.TypeSpecContext typeSpec = result instanceof QvtOParser.NamedResultContext named
+					? named.typeSpec() : ((QvtOParser.UnnamedResultContext) result).typeSpec();
+			type = expressionBuilder.resolveTypeExpression(typeSpec.typeExpression());
+		}
+		mappingResults.computeIfAbsent(name, k -> new ArrayList<>()).add(type);
+	}
+
 	private void preRegisterTypedefs(List<QvtOParser.ModuleElementContext> elements) {
 		for (QvtOParser.ModuleElementContext elemCtx : elements) {
 			if (elemCtx.typedefDecl() == null) {
@@ -2125,6 +2354,12 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void updateExpressionBuilder() {
+		// Every operation gets a builder of its own; what the previous one recorded is kept — only
+		// the last builder's positions reached the engine, so a run-time diagnostic of every
+		// operation but the last had no position (#116)
+		if (this.expressionBuilder != null) {
+			earlierPositions.putAll(this.expressionBuilder.getNodePositions());
+		}
 		this.expressionBuilder = new QvtoExpressionBuilder(this.environment, this.packageRegistry, scope);
 	}
 

@@ -19,16 +19,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.api.OclParseException;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngines;
 import org.eclipse.fennec.m2x.ocl.engine.OclLruExpressionCache;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
@@ -146,6 +152,43 @@ class OclWarmUpTest {
 		engine.warmUp(pkg);
 
 		assertTrue(cache.size() > 0, "Cache should contain pre-parsed body expression");
+	}
+
+	@Test
+	void warmUp_skipsOperationsWithParameters() {
+		EPackage pkg = createPackageWithOperationBody();
+		EClass cls = (EClass) pkg.getEClassifier("Calculator");
+		EOperation op = cls.getEOperations().get(0);
+		op.getEParameters().add(parameter("factor"));
+		op.getEAnnotation(DELEGATE_URI).getDetails().put("body", "self.value * factor");
+		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
+		OclEngine engine = OclEngines.create(parser, cache);
+
+		engine.warmUp(pkg);
+
+		assertEquals(0, cache.size(),
+				"parsed without its parameter, the body would be cached under a key the delegate never asks for");
+	}
+
+	@Test
+	void warmUp_parsesOperationExpressionsUnderTheDelegatesKey() throws OclParseException {
+		EPackage pkg = createPackageWithOperationBody();
+		EClass cls = (EClass) pkg.getEClassifier("Calculator");
+		EOperation op = cls.getEOperations().get(0);
+		op.getEAnnotation(DELEGATE_URI).getDetails().put("post", "result = self.value * 2");
+		OclLruExpressionCache cache = OclLruExpressionCache.ofSize(256);
+		OclEngine engine = OclEngines.create(parser, cache);
+
+		engine.warmUp(pkg);
+		long missesAfterWarmUp = cache.missCount();
+		// what OclInvocationDelegateFactory asks for: body without variables, post with result
+		Map<String, EClassifier> withResult = new HashMap<>();
+		withResult.put("result", op.getEType());
+		engine.parse("self.value * 2", cls, Map.of());
+		engine.parse("result = self.value * 2", cls, withResult);
+
+		assertEquals(missesAfterWarmUp, cache.missCount(), "both are hits");
+		assertEquals(2, cache.size());
 	}
 
 	@Test
@@ -289,7 +332,7 @@ class OclWarmUpTest {
 		valueAttr.setEType(EcorePackage.Literals.EINT);
 		cls.getEStructuralFeatures().add(valueAttr);
 
-		org.eclipse.emf.ecore.EOperation op = EcoreFactory.eINSTANCE.createEOperation();
+		EOperation op = EcoreFactory.eINSTANCE.createEOperation();
 		op.setName("doubled");
 		op.setEType(EcorePackage.Literals.EINT);
 
@@ -301,5 +344,12 @@ class OclWarmUpTest {
 		cls.getEOperations().add(op);
 		pkg.getEClassifiers().add(cls);
 		return pkg;
+	}
+
+	private static EParameter parameter(String name) {
+		EParameter parameter = EcoreFactory.eINSTANCE.createEParameter();
+		parameter.setName(name);
+		parameter.setEType(EcorePackage.Literals.EINT);
+		return parameter;
 	}
 }

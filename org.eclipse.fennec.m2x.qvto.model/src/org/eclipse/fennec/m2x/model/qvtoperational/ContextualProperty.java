@@ -28,7 +28,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * An intermediate or contextual property attached to a class at transformation time (QVT v1.3 Section 8.2.2.16).
+ * An intermediate or contextual property attached to a class at transformation time (QVT v1.3 Section 8.2.1.14).
  * <!-- end-model-doc -->
  *
  * <p>

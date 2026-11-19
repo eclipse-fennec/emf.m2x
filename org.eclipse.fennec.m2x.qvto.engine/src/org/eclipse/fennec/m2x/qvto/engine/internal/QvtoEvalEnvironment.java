@@ -41,6 +41,13 @@ import org.eclipse.emf.ecore.EStructuralFeature;
 public class QvtoEvalEnvironment {
 
 	private final Deque<Map<String, Object>> scopeStack = new ArrayDeque<>();
+	/**
+	 * The stack size at which each open frame began. A frame is the scope chain of one operation
+	 * call: QVT v1.3 §8.2.1.17 "An operation body defines a scope that is contained in the scope
+	 * of the operation definition" — lexical, so a callee sees its own scopes and the root scope
+	 * (module properties, model parameters, this), never its caller's locals (#383).
+	 */
+	private final Deque<Integer> frameBases = new ArrayDeque<>();
 	private Map<String, Object> cachedSnapshot;
 	private boolean snapshotDirty = true;
 
@@ -80,6 +87,36 @@ public class QvtoEvalEnvironment {
 		}
 		scopeStack.push(scope);
 		snapshotDirty = true;
+	}
+
+	/**
+	 * Opens the frame of an operation call: a new scope whose outer scopes are only the root
+	 * scope, not the caller's (§8.2.1.17, #383).
+	 */
+	public void pushFrame() {
+		frameBases.push(scopeStack.size());
+		pushScope();
+	}
+
+	/**
+	 * Closes the frame {@link #pushFrame()} opened, with any scope still open in it.
+	 */
+	public void popFrame() {
+		int base = frameBases.pop();
+		while (scopeStack.size() > base) {
+			popScope();
+		}
+	}
+
+	/** How many of the innermost scopes the current frame has; all of them outside a frame. */
+	private int frameDepth() {
+		Integer base = frameBases.peek();
+		return base == null ? scopeStack.size() : scopeStack.size() - base;
+	}
+
+	/** The root scope, when a frame hides the scopes between it and the frame. */
+	private Map<String, Object> rootBehindFrame() {
+		return frameBases.isEmpty() ? null : scopeStack.peekLast();
 	}
 
 	/**
@@ -131,13 +168,23 @@ public class QvtoEvalEnvironment {
 			snapshotDirty = true;
 			return;
 		}
+		int visible = frameDepth();
 		for (Map<String, Object> scope : scopeStack) {
+			if (visible-- <= 0) {
+				break;
+			}
 			if (scope == current) continue; // already checked
 			if (scope.containsKey(name)) {
 				scope.put(name, value);
 				snapshotDirty = true;
 				return;
 			}
+		}
+		Map<String, Object> root = rootBehindFrame();
+		if (root != null && root.containsKey(name)) {
+			root.put(name, value);
+			snapshotDirty = true;
+			return;
 		}
 		// Not found — define in current scope
 		current.put(name, value);
@@ -157,14 +204,19 @@ public class QvtoEvalEnvironment {
 		if (current.containsKey(name)) {
 			return current.get(name);
 		}
-		// Slow path: walk remaining scopes
+		// Slow path: walk the remaining scopes of the frame, then the root
+		int visible = frameDepth();
 		for (Map<String, Object> scope : scopeStack) {
+			if (visible-- <= 0) {
+				break;
+			}
 			if (scope == current) continue; // already checked
 			if (scope.containsKey(name)) {
 				return scope.get(name);
 			}
 		}
-		return null;
+		Map<String, Object> root = rootBehindFrame();
+		return root != null ? root.get(name) : null;
 	}
 
 	/**
@@ -180,14 +232,19 @@ public class QvtoEvalEnvironment {
 		if (current.containsKey(name)) {
 			return true;
 		}
-		// Slow path: walk remaining scopes
+		// Slow path: walk the remaining scopes of the frame, then the root
+		int visible = frameDepth();
 		for (Map<String, Object> scope : scopeStack) {
+			if (visible-- <= 0) {
+				break;
+			}
 			if (scope == current) continue; // already checked
 			if (scope.containsKey(name)) {
 				return true;
 			}
 		}
-		return false;
+		Map<String, Object> root = rootBehindFrame();
+		return root != null && root.containsKey(name);
 	}
 
 	/**
@@ -211,7 +268,13 @@ public class QvtoEvalEnvironment {
 		boolean foundResult = false;
 		boolean foundSelf = false;
 
+		// The current frame only: a caller's object expression or result is not this
+		// operation's implicit target (§8.2.1.17, #383)
+		int visible = frameDepth();
 		for (Map<String, Object> scope : scopeStack) {
+			if (visible-- <= 0) {
+				break;
+			}
 			if (!foundObjectExp && scope.containsKey("_objectExp")) {
 				objectExpVal = scope.get("_objectExp");
 				foundObjectExp = true;
@@ -263,9 +326,13 @@ public class QvtoEvalEnvironment {
 			return cachedSnapshot;
 		}
 		Map<String, Object> result = new LinkedHashMap<>();
-		// Walk from outermost to innermost so inner scopes override
+		Map<String, Object> root = rootBehindFrame();
+		if (root != null) {
+			result.putAll(root);
+		}
+		// Walk from outermost to innermost so inner scopes override — the current frame only
 		Object[] scopes = scopeStack.toArray();
-		for (int i = scopes.length - 1; i >= 0; i--) {
+		for (int i = frameDepth() - 1; i >= 0; i--) {
 			@SuppressWarnings("unchecked")
 			Map<String, Object> scope = (Map<String, Object>) scopes[i];
 			result.putAll(scope);

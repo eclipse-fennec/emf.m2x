@@ -151,16 +151,17 @@ class OclCollectionScalingTest extends AbstractOclTest {
 		}
 
 		@Test
-		@DisplayName("negative zero and positive zero stay two elements")
-		void signedZeroIsNotCollapsed() {
-			// The other direction: Double.compare(-0.0, 0.0) is not 0, so they are two
-			// distinct elements — even though -0.0 == 0.0 in plain Java arithmetic.
+		@DisplayName("negative zero and positive zero are one element")
+		void signedZeroIsOneValue() {
+			// A Real is the mathematical value (OCL v2.4 §11.4.1): -0.0 = 0.0, so a set holds
+			// it once. Before #322 values were compared as doubles with Double.compare, which
+			// keeps the two apart.
 			OclSet<Double> set = new OclSet<>();
 
 			assertTrue(set.add(-0.0));
-			assertTrue(set.add(0.0));
+			assertFalse(set.add(0.0));
 
-			assertEquals(2, set.size());
+			assertEquals(1, set.size());
 		}
 
 		@Test

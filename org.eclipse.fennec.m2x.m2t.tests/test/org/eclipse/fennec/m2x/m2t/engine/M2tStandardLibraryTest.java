@@ -89,7 +89,7 @@ class M2tStandardLibraryTest {
 		// Parse the OCL expression and wrap in an inline let block
 		try {
 			@SuppressWarnings("unused")
-			OclExpression expr = engine.parse("[module m(UML)/]\n[template public main(c : EClass)]\n[file ('out.txt', false, 'UTF-8')]\n[" + oclExpr + "/]\n[/file]\n[/template]\n", "test")
+			OclExpression expr = engine.parse("[module m(ecore)/]\n[template public main(c : EClass)]\n[file ('out.txt', false, 'UTF-8')]\n[" + oclExpr + "/]\n[/file]\n[/template]\n", "test")
 					.getOwnedModuleElement().stream()
 					.filter(e -> e instanceof Template)
 					.map(e -> (Template) e)
@@ -104,7 +104,7 @@ class M2tStandardLibraryTest {
 		// Simpler approach: use the parser to build the full module
 		try {
 			Module m = engine.parse(
-					"[module m(UML)/]\n" +
+					"[module m(ecore)/]\n" +
 					"[template public main(c : EClass)]\n" +
 					"[file ('out.txt', false, 'UTF-8')]\n" +
 					"[" + oclExpr + "/]\n" +
@@ -145,9 +145,15 @@ class M2tStandardLibraryTest {
 		}
 
 		@Test
-		@DisplayName("replaces all occurrences")
-		void replacesAllOccurrences() {
-			assertEquals("b-b-b", eval("'a-a-a'.substitute('a', 'b')"));
+		@DisplayName("replaces the first occurrence (§8.3.1 \"substring r\", as Acceleo, #373)")
+		void replacesFirstOccurrence() {
+			assertEquals("b-a-a", eval("'a-a-a'.substitute('a', 'b')"));
+		}
+
+		@Test
+		@DisplayName("substituteAll replaces every occurrence")
+		void substituteAllReplacesAllOccurrences() {
+			assertEquals("b-b-b", eval("'a-a-a'.substituteAll('a', 'b')"));
 		}
 	}
 

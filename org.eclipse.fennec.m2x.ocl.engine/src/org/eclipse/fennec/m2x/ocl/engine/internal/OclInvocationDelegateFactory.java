@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,13 +27,16 @@ import java.util.function.Supplier;
 import org.eclipse.emf.common.util.BasicEList;
 import org.eclipse.emf.common.util.ECollections;
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.emf.ecore.InternalEObject;
+import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
 import org.eclipse.fennec.m2x.model.ocl.FeatureCallExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -111,9 +115,8 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 				Map<String, Object> variables = bindArguments(arguments);
 				OclContext context = OclContext.of(target, variables);
 
-				// 1. Evaluate precondition if present
-				if (pre != null) {
-					OclExpression preExpr = getParsedPre();
+				// 1. Evaluate the preconditions: the annotation's and those of registered documents
+				for (OclExpression preExpr : conditions(ConstraintKind.PRE)) {
 					Object preResult = engine.evaluate(preExpr, context, engine.getDelegateOptions());
 					if (!Boolean.TRUE.equals(preResult)) {
 						throw new IllegalStateException(
@@ -121,11 +124,14 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 					}
 				}
 
-				// 2. Pre-scan postcondition for @pre nodes and capture pre-state
+				// 2. Pre-scan the postconditions for @pre nodes and capture pre-state
+				List<OclExpression> postconditions = conditions(ConstraintKind.POST);
 				PreStateSnapshot snapshot = PreStateSnapshot.EMPTY;
-				if (post != null) {
-					OclExpression postExpr = getParsedPost();
-					List<FeatureCallExp> preNodes = PreStateScanCollector.findPreNodes(postExpr);
+				if (!postconditions.isEmpty()) {
+					List<FeatureCallExp> preNodes = new ArrayList<>();
+					for (OclExpression postExpr : postconditions) {
+						preNodes.addAll(PreStateScanCollector.findPreNodes(postExpr));
+					}
 					snapshot = PreStateScanCollector.capturePreState(
 							preNodes, context, engine.getDelegateOptions(),
 							engine.getOperationProviders(engine.getDelegateOptions()));
@@ -144,25 +150,27 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 				// OclSet — none of which implement EList. Wrap so callers of the
 				// generated EMF accessor receive a valid (unmodifiable) EList.
 				if (operation.isMany() && result != null && !(result instanceof EList<?>)) {
-					if (result instanceof Collection<?> col) {
-						result = ECollections.unmodifiableEList(new BasicEList<>(col));
-					} else {
-						result = ECollections.unmodifiableEList(
-								new BasicEList<>(List.of(result)));
+					List<Object> elements = new ArrayList<>();
+					for (Object element : result instanceof Collection<?> col ? col : List.of(result)) {
+						elements.add(OclValues.toEcore(element, operation.getEType()));
 					}
+					result = ECollections.unmodifiableEList(new BasicEList<>(elements));
+				} else if (!operation.isMany()) {
+					// A number has the operation type's instance class (#322)
+					result = OclValues.toEcore(result, operation.getEType());
 				}
 
-				// 4. Evaluate postcondition if present
-				if (post != null) {
-					OclExpression postExpr = getParsedPost();
-					// Bind 'result' variable for postcondition
+				// 4. Evaluate the postconditions, with 'result' bound
+				if (!postconditions.isEmpty()) {
 					Map<String, Object> postVars = new LinkedHashMap<>(variables);
 					postVars.put("result", result);
 					OclContext postContext = OclContext.of(target, postVars);
-					Object postResult = engine.evaluatePostcondition(postExpr, postContext, snapshot);
-					if (!Boolean.TRUE.equals(postResult)) {
-						throw new IllegalStateException(
-								"Postcondition violated for operation: " + operation.getName());
+					for (OclExpression postExpr : postconditions) {
+						Object postResult = engine.evaluatePostcondition(postExpr, postContext, snapshot);
+						if (!Boolean.TRUE.equals(postResult)) {
+							throw new IllegalStateException(
+									"Postcondition violated for operation: " + operation.getName());
+						}
 					}
 				}
 
@@ -171,6 +179,22 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 				throw new InvocationTargetException(e,
 						"OCL invocation failed for " + operation.getName() + ": " + e.getMessage());
 			}
+		}
+
+		/**
+		 * The preconditions or postconditions to check: the annotation's, then those registered
+		 * Complete OCL documents state for this operation (OCL v2.4 §12.7, #323).
+		 */
+		private List<OclExpression> conditions(ConstraintKind kind) throws OclParseException {
+			List<OclExpression> result = new ArrayList<>();
+			if (kind == ConstraintKind.PRE && pre != null) {
+				result.add(getParsedPre());
+			}
+			if (kind == ConstraintKind.POST && post != null) {
+				result.add(getParsedPost());
+			}
+			result.addAll(engine.documentConditions(operation, kind));
+			return result;
 		}
 
 		private Map<String, Object> bindArguments(EList<?> arguments) {
@@ -185,15 +209,31 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 		}
 
 		private OclExpression getParsedBody() throws OclParseException {
-			return parseLazily(body, () -> parsedBody, expr -> parsedBody = expr);
+			return parseLazily(body, false, () -> parsedBody, expr -> parsedBody = expr);
 		}
 
 		private OclExpression getParsedPre() throws OclParseException {
-			return parseLazily(pre, () -> parsedPre, expr -> parsedPre = expr);
+			return parseLazily(pre, false, () -> parsedPre, expr -> parsedPre = expr);
 		}
 
 		private OclExpression getParsedPost() throws OclParseException {
-			return parseLazily(post, () -> parsedPost, expr -> parsedPost = expr);
+			return parseLazily(post, true, () -> parsedPost, expr -> parsedPost = expr);
+		}
+
+		/**
+		 * The variables evaluation binds for this operation: its parameters, and {@code result}
+		 * in the postcondition (OCL v2.4 §12.2.1, #324). Declared to the parser, a parameter
+		 * name is that parameter — undeclared it could read as a property of an iterator.
+		 */
+		private Map<String, EClassifier> declaredVariables(boolean withResult) {
+			Map<String, EClassifier> variables = new LinkedHashMap<>();
+			for (EParameter parameter : operation.getEParameters()) {
+				variables.put(parameter.getName(), parameter.getEType());
+			}
+			if (withResult) {
+				variables.put("result", operation.getEType());
+			}
+			return variables;
 		}
 
 		/**
@@ -201,14 +241,14 @@ public class OclInvocationDelegateFactory implements EOperation.Internal.Invocat
 		 * Parses the OCL source string on first access and caches the result.
 		 * The {@code fieldReader} re-reads the volatile field inside the synchronized block.
 		 */
-		private OclExpression parseLazily(String source, Supplier<OclExpression> fieldReader,
+		private OclExpression parseLazily(String source, boolean withResult, Supplier<OclExpression> fieldReader,
 				Consumer<OclExpression> setter) throws OclParseException {
 			OclExpression result = fieldReader.get();
 			if (result == null) {
 				synchronized (this) {
 					result = fieldReader.get();
 					if (result == null) {
-						result = engine.parse(source, operation.getEContainingClass());
+						result = engine.parse(source, operation.getEContainingClass(), declaredVariables(withResult));
 						setter.accept(result);
 					}
 				}

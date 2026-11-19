@@ -15,10 +15,13 @@
 package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -60,16 +63,31 @@ public class QvtrTraceManager {
 		public TraceRecord {
 			Objects.requireNonNull(relation);
 			Objects.requireNonNull(bindings);
-			bindings = Map.copyOf(bindings);
+			// Not Map.copyOf: a [?] root without a match is bound to null, and the relation holds
+			// for that binding too (#349)
+			bindings = Collections.unmodifiableMap(new HashMap<>(bindings));
 		}
 	}
 
 	private final Map<String, List<TraceRecord>> tracesByRelation = new HashMap<>();
+	/**
+	 * Every record once: a relation that runs again for a binding it already holds for adds
+	 * nothing, which is how the evaluator sees that a cycle of relations has reached its
+	 * fixpoint (#349).
+	 */
+	private final Set<TraceRecord> known = new HashSet<>();
+
+	/** Records held across all relations — what {@code maxTraceRecords} bounds. */
+	private int recorded;
 
 	/**
-	 * Creates a trace manager with the given per-relation record limit.
+	 * Creates a trace manager with the given record limit.
 	 *
-	 * @param maxTraceRecords maximum records per relation (M-R8)
+	 * <p>The limit bounds the whole trace, as QVT-O's does (#284). It guards memory against a
+	 * transformation that grows its trace with the model, and a bound per relation does not do
+	 * that: a transformation with many relations could hold that many times the limit.
+	 *
+	 * @param maxTraceRecords maximum records across all relations (M-R8)
 	 */
 	public QvtrTraceManager(int maxTraceRecords) {
 		this.maxTraceRecords = maxTraceRecords;
@@ -78,27 +96,44 @@ public class QvtrTraceManager {
 	/**
 	 * Records a trace entry for a successful relation execution.
 	 *
+	 * <p>Past {@code maxTraceRecords} the entry is dropped and {@code false} returned; the caller
+	 * reports that (#284). The trace stops growing there, so a when-clause may miss what was
+	 * executed afterwards.
+	 *
 	 * @param relation the relation that was executed
 	 * @param bindings the complete variable bindings (source + target)
+	 * @return {@code true} if the entry was recorded, {@code false} if the limit dropped it
 	 */
-	public void record(Relation relation, Map<String, Object> bindings) {
+	public boolean record(Relation relation, Map<String, Object> bindings) {
 		String key = relation.getName();
 		List<TraceRecord> traces = tracesByRelation.computeIfAbsent(key, k -> new ArrayList<>());
-		int size = traces.size();
-		if (size >= maxTraceRecords) {
-			if (size == maxTraceRecords) {
-				LOG.log(Level.WARNING,
-						"Relation ''{0}'' reached trace record limit ({1}) — further records dropped, results may be unreliable",
-						new Object[]{key, maxTraceRecords});
-			}
-			return;
+		TraceRecord record = new TraceRecord(relation, bindings);
+		if (known.contains(record)) {
+			return true;
 		}
+		if (recorded >= maxTraceRecords) {
+			return false;
+		}
+		int size = traces.size();
 		if (size == TRACE_WARN_THRESHOLD) {
 			LOG.log(Level.WARNING,
 					"Relation ''{0}'' has accumulated {1} trace records — possible memory issue",
 					new Object[]{key, size});
 		}
-		traces.add(new TraceRecord(relation, bindings));
+		traces.add(record);
+		known.add(record);
+		recorded++;
+		return true;
+	}
+
+	/**
+	 * The number of distinct records, which grows only when a relation holds for a binding it
+	 * did not hold for before (#349).
+	 *
+	 * @return the number of records
+	 */
+	public int size() {
+		return recorded;
 	}
 
 	/**
@@ -177,7 +212,20 @@ public class QvtrTraceManager {
 	/**
 	 * Clears all trace records.
 	 */
+	/**
+	 * Every record of this run, in the order they were recorded.
+	 *
+	 * @return the records
+	 */
+	public List<TraceRecord> records() {
+		List<TraceRecord> all = new ArrayList<>();
+		tracesByRelation.values().forEach(all::addAll);
+		return all;
+	}
+
 	public void clear() {
 		tracesByRelation.clear();
+		known.clear();
+		recorded = 0;
 	}
 }

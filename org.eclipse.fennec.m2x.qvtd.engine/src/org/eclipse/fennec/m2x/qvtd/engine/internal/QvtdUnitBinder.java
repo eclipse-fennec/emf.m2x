@@ -39,9 +39,9 @@ import org.eclipse.fennec.m2x.unit.api.UnitBinder;
 import org.eclipse.fennec.m2x.unit.api.UnitPrepareException;
 
 /**
- * Binds a loaded QVT-R unit: every import the manifest lists as a dependency is merged the way
- * the linker merges it (§7.11.1.1) and struck from the import declaration, so that nothing asks
- * for it again (#140).
+ * Binds a loaded QVT-R unit: every import the manifest lists as a dependency is bound the way
+ * the linker binds it — its base inherited, its called relations copied in (#360) — and struck
+ * from the import declaration, so that nothing asks for it again (#140).
  *
  * <p>QVT-R addresses blackbox operations by name across all registered libraries, and a
  * {@code QvtdBlackboxLibrary} declares no operations — so a requirement can be checked only for
@@ -119,6 +119,11 @@ final class QvtdUnitBinder implements UnitBinder {
 						+ "', which is not among the loaded dependencies");
 			}
 			QvtdLinker.merge(transformation, (RelationalTransformation) dependency.getUnit());
+		}
+		List<QvtdLinker.Unresolved> open = QvtdLinker.unresolved(transformation);
+		if (!open.isEmpty()) {
+			throw new UnitPrepareException("'" + unit.getManifest().getQualifiedName() + "': "
+					+ open.stream().map(QvtdLinker.Unresolved::message).toList());
 		}
 		EAnnotation imports = transformation.getEAnnotation(QvtrParserSupport.IMPORTS_ANNOTATION);
 		if (imports != null) {

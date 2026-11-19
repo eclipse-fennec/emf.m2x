@@ -17,7 +17,10 @@ package org.eclipse.fennec.m2x.m2t.api;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
 
@@ -77,6 +80,7 @@ public final class M2tConfiguration {
 	private final int maxCrossProductSize;
 	private final long maxOutputSize;
 	private final boolean protectedAreaEnabled;
+	private final Map<String, ProtectedAreaDelimiter> protectedAreaDelimiters;
 	private final List<M2tUnitResolver> unitResolvers;
 	private final boolean unitResolverEnabled;
 	private final boolean discoverUnitResolvers;
@@ -101,6 +105,7 @@ public final class M2tConfiguration {
 		this.maxCrossProductSize = builder.maxCrossProductSize;
 		this.maxOutputSize = builder.maxOutputSize;
 		this.protectedAreaEnabled = builder.protectedAreaEnabled;
+		this.protectedAreaDelimiters = Map.copyOf(builder.protectedAreaDelimiters);
 		this.unitResolvers = List.copyOf(builder.unitResolvers);
 		this.unitResolverEnabled = builder.unitResolverEnabled;
 		this.discoverUnitResolvers = builder.discoverUnitResolvers;
@@ -259,6 +264,49 @@ public final class M2tConfiguration {
 	}
 
 	/**
+	 * The comment syntax of protected-area markers per file extension (MOFM2T §7.2, #367),
+	 * the extension without its dot and in lower case. Defaults: {@code java} → {@code //},
+	 * {@code xml} and {@code html} → {@code <!-- -->}, {@code py} → {@code #}, {@code sql} →
+	 * {@code --}; any other file gets {@link ProtectedAreaDelimiter#LINE_SLASHES}.
+	 *
+	 * @return the delimiters by extension, never {@code null}
+	 */
+	public Map<String, ProtectedAreaDelimiter> protectedAreaDelimiters() {
+		return protectedAreaDelimiters;
+	}
+
+	/**
+	 * The delimiter for the markers of a protected area in the given file.
+	 *
+	 * @param filePath the generated file, or {@code null} for output outside a file block
+	 * @return the delimiter for its extension, else {@link ProtectedAreaDelimiter#LINE_SLASHES}
+	 */
+	public ProtectedAreaDelimiter protectedAreaDelimiter(String filePath) {
+		return delimiterFor(protectedAreaDelimiters, filePath);
+	}
+
+	/**
+	 * The delimiter for a file among the given ones by extension.
+	 *
+	 * @param delimiters the delimiters by lower-case extension
+	 * @param filePath the generated file, or {@code null}
+	 * @return the delimiter for its extension, else {@link ProtectedAreaDelimiter#LINE_SLASHES}
+	 */
+	public static ProtectedAreaDelimiter delimiterFor(Map<String, ProtectedAreaDelimiter> delimiters, String filePath) {
+		if (filePath != null) {
+			int slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+			int dot = filePath.lastIndexOf('.');
+			if (dot > slash) {
+				ProtectedAreaDelimiter configured = delimiters.get(filePath.substring(dot + 1).toLowerCase(Locale.ROOT));
+				if (configured != null) {
+					return configured;
+				}
+			}
+		}
+		return ProtectedAreaDelimiter.LINE_SLASHES;
+	}
+
+	/**
 	 * Creates a builder that uses the given OCL engine.
 	 *
 	 * @param oclEngine the engine to evaluate template expressions with, must not be
@@ -377,6 +425,12 @@ public final class M2tConfiguration {
 		private int maxCrossProductSize = DEFAULT_MAX_CROSS_PRODUCT_SIZE;
 		private long maxOutputSize = DEFAULT_MAX_OUTPUT_SIZE;
 		private boolean protectedAreaEnabled = true;
+		private final Map<String, ProtectedAreaDelimiter> protectedAreaDelimiters = new HashMap<>(Map.of(
+				"java", ProtectedAreaDelimiter.LINE_SLASHES,
+				"xml", ProtectedAreaDelimiter.XML,
+				"html", ProtectedAreaDelimiter.XML,
+				"py", ProtectedAreaDelimiter.HASH,
+				"sql", ProtectedAreaDelimiter.DOUBLE_DASH));
 		private final List<M2tUnitResolver> unitResolvers = new ArrayList<>();
 		private boolean unitResolverEnabled;
 		private boolean discoverUnitResolvers;
@@ -653,6 +707,21 @@ public final class M2tConfiguration {
 
 		public Builder protectedAreaEnabled(boolean enabled) {
 			this.protectedAreaEnabled = enabled;
+			return this;
+		}
+
+		/**
+		 * Sets the comment syntax of protected-area markers in files with the given extension,
+		 * replacing the default for it (#367).
+		 *
+		 * @param extension the file extension, with or without its dot, in any case
+		 * @param delimiter the comment syntax, must not be {@code null}
+		 * @return this builder
+		 */
+		public Builder protectedAreaDelimiter(String extension, ProtectedAreaDelimiter delimiter) {
+			Objects.requireNonNull(extension, "extension must not be null");
+			String key = (extension.startsWith(".") ? extension.substring(1) : extension).toLowerCase(Locale.ROOT);
+			protectedAreaDelimiters.put(key, Objects.requireNonNull(delimiter, "delimiter must not be null"));
 			return this;
 		}
 

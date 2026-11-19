@@ -42,6 +42,7 @@ import org.eclipse.fennec.m2x.m2t.parser.M2tWhitespaceNormalizer;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
+import org.eclipse.fennec.m2x.ocl.api.OclOperationException;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -104,7 +105,7 @@ class M2tHardeningTest {
 		@Test
 		@DisplayName("execute — null context throws NPE")
 		void executeNullContext() throws M2tParseException {
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(e : EClass)]\n"
 					+ "hello\n"
 					+ "[/template]\n";
@@ -165,37 +166,34 @@ class M2tHardeningTest {
 	class StandardLibraryNullSafety {
 
 		@Test
-		@DisplayName("Operations return non-null for null self")
-		void operationsHandleNullSelf() {
-			M2tStandardLibrary lib = new M2tStandardLibrary();
-			List<OclOperation> ops = lib.getOperations();
-			OclOperation substitute = ops.stream()
-					.filter(op -> "substitute".equals(op.name()))
-					.findFirst().orElseThrow();
-			Object result = substitute.implementation().apply(null, new Object[] { "a", "b" });
-			assertEquals("", result);
+		@DisplayName("a null self rejects the call instead of answering '' (#373)")
+		void operationsRejectNullSelf() {
+			OclOperation substitute = operation("substitute");
+			OclOperationException rejected = assertThrows(OclOperationException.class,
+					() -> substitute.implementation().apply(null, new Object[] { "a", "b" }));
+			assertEquals("Null source for operation 'substitute'", rejected.getMessage());
 		}
 
 		@Test
-		@DisplayName("first(n) with negative n returns empty string")
+		@DisplayName("first(n) with negative n rejects the call (#373)")
 		void firstNegativeN() {
-			M2tStandardLibrary lib = new M2tStandardLibrary();
-			OclOperation first = lib.getOperations().stream()
-					.filter(op -> "first".equals(op.name()))
-					.findFirst().orElseThrow();
-			Object result = first.implementation().apply("hello", new Object[] { -1 });
-			assertEquals("", result);
+			OclOperationException rejected = assertThrows(OclOperationException.class,
+					() -> operation("first").implementation().apply("hello", new Object[] { -1L }));
+			assertEquals("Negative length -1 for operation 'first'", rejected.getMessage());
 		}
 
 		@Test
-		@DisplayName("last(n) with negative n returns empty string")
+		@DisplayName("last(n) with negative n rejects the call (#373)")
 		void lastNegativeN() {
-			M2tStandardLibrary lib = new M2tStandardLibrary();
-			OclOperation last = lib.getOperations().stream()
-					.filter(op -> "last".equals(op.name()))
+			OclOperationException rejected = assertThrows(OclOperationException.class,
+					() -> operation("last").implementation().apply("hello", new Object[] { -1L }));
+			assertEquals("Negative length -1 for operation 'last'", rejected.getMessage());
+		}
+
+		private OclOperation operation(String name) {
+			return new M2tStandardLibrary().getOperations().stream()
+					.filter(op -> name.equals(op.name()))
 					.findFirst().orElseThrow();
-			Object result = last.implementation().apply("hello", new Object[] { -1 });
-			assertEquals("", result);
 		}
 	}
 
@@ -264,7 +262,7 @@ class M2tHardeningTest {
 		@Test
 		@DisplayName("OCL evaluation error produces ERROR diagnostic, not exception")
 		void oclErrorProducesErrorDiagnostic() throws M2tParseException {
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[c.nonExistentProperty/]\n"
 					+ "[/template]\n";
@@ -272,10 +270,12 @@ class M2tHardeningTest {
 			M2tResult result = assertDoesNotThrow(
 					() -> engine.execute(m, M2tContext.of(testClass)));
 			assertNotNull(result);
-			// OCL evaluation error should be ERROR severity
+			// OCL evaluation error should be ERROR severity — OCL reports the unknown property
+			// itself now instead of throwing out of evaluate() (#327)
 			assertTrue(result.diagnostics().stream()
 					.anyMatch(d -> d.getSeverity() == Diagnostic.ERROR
-							&& d.getMessage().contains("OCL evaluation error")));
+							&& d.getMessage().contains("Unknown property 'nonExistentProperty'")),
+					result.diagnostics()::toString);
 			assertFalse(result.isSuccess(), "OCL error should mark result as not successful");
 		}
 	}
@@ -287,7 +287,7 @@ class M2tHardeningTest {
 		@Test
 		@DisplayName("SOURCE_ID is 'm2t.engine' on all diagnostics")
 		void diagnosticsHaveSourceId() throws M2tParseException {
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[c.nonExistentProperty/]\n"
 					+ "[/template]\n";
@@ -308,7 +308,7 @@ class M2tHardeningTest {
 			M2tEngine limitedEngine = M2tEngines.create(limitConfig);
 
 			// Template with many errors — each OCL expression fails
-			String src = "[module m(Ecore)/]\n"
+			String src = "[module m(ecore)/]\n"
 					+ "[template public main(c : EClass)]\n"
 					+ "[c.a/][c.b/][c.c/][c.d/][c.e/]\n"
 					+ "[/template]\n";

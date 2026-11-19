@@ -14,6 +14,7 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -28,6 +29,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
@@ -110,12 +112,14 @@ public class OclSettingDelegateFactory implements EStructuralFeature.Internal.Se
 				}
 				if (eStructuralFeature.isMany() && result != null && !(result instanceof EList<?>)) {
 					if (result instanceof Collection<?> col) {
-						result = ECollections.unmodifiableEList(new BasicEList<>(col));
+						result = ECollections.unmodifiableEList(new BasicEList<>(toEcore(col, eStructuralFeature)));
 					} else {
-						result = ECollections.unmodifiableEList(new BasicEList<>(List.of(result)));
+						result = ECollections.unmodifiableEList(new BasicEList<>(
+								List.of(OclValues.toEcore(result, eStructuralFeature.getEType()))));
 					}
 				}
-				return result;
+				// A number has the feature's instance class — an EFloat is a Float, not a Double (#322)
+				return eStructuralFeature.isMany() ? result : OclValues.toEcore(result, eStructuralFeature.getEType());
 			} catch (IllegalStateException e) {
 				// already descriptive (invalid result or below) — do not double-wrap
 				throw e;
@@ -145,5 +149,13 @@ public class OclSettingDelegateFactory implements EStructuralFeature.Internal.Se
 			}
 			return result;
 		}
+	}
+
+	private static List<Object> toEcore(Collection<?> values, EStructuralFeature feature) {
+		List<Object> converted = new ArrayList<>(values.size());
+		for (Object value : values) {
+			converted.add(OclValues.toEcore(value, feature.getEType()));
+		}
+		return converted;
 	}
 }

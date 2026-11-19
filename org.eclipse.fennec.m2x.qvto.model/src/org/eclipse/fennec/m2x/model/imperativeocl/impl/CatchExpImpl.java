@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.model.imperativeocl.impl;
 
 import java.util.Collection;
 
+import org.eclipse.emf.common.notify.Notification;
 import org.eclipse.emf.common.notify.NotificationChain;
 
 import org.eclipse.emf.common.util.EList;
@@ -23,6 +24,8 @@ import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.InternalEObject;
+
+import org.eclipse.emf.ecore.impl.ENotificationImpl;
 
 import org.eclipse.emf.ecore.util.EObjectContainmentEList;
 import org.eclipse.emf.ecore.util.EObjectResolvingEList;
@@ -32,6 +35,7 @@ import org.eclipse.fennec.m2x.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclPackage;
 
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
 
 /**
  * <!-- begin-user-doc -->
@@ -43,6 +47,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
  * <ul>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.CatchExpImpl#getBody <em>Body</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.CatchExpImpl#getException <em>Exception</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.imperativeocl.impl.CatchExpImpl#getExceptionVariable <em>Exception Variable</em>}</li>
  * </ul>
  *
  * @generated
@@ -67,6 +72,16 @@ public class CatchExpImpl extends ImperativeExpressionImpl implements CatchExp {
 	 * @ordered
 	 */
 	protected EList<EClassifier> exception;
+
+	/**
+	 * The cached value of the '{@link #getExceptionVariable() <em>Exception Variable</em>}' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getExceptionVariable()
+	 * @generated
+	 * @ordered
+	 */
+	protected Variable exceptionVariable;
 
 	/**
 	 * <!-- begin-user-doc -->
@@ -119,10 +134,57 @@ public class CatchExpImpl extends ImperativeExpressionImpl implements CatchExp {
 	 * @generated
 	 */
 	@Override
+	public Variable getExceptionVariable() {
+		return exceptionVariable;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public NotificationChain basicSetExceptionVariable(Variable newExceptionVariable, NotificationChain msgs) {
+		Variable oldExceptionVariable = exceptionVariable;
+		exceptionVariable = newExceptionVariable;
+		if (eNotificationRequired()) {
+			ENotificationImpl notification = new ENotificationImpl(this, Notification.SET, ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE, oldExceptionVariable, newExceptionVariable);
+			if (msgs == null) msgs = notification; else msgs.add(notification);
+		}
+		return msgs;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setExceptionVariable(Variable newExceptionVariable) {
+		if (newExceptionVariable != exceptionVariable) {
+			NotificationChain msgs = null;
+			if (exceptionVariable != null)
+				msgs = ((InternalEObject)exceptionVariable).eInverseRemove(this, EOPPOSITE_FEATURE_BASE - ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE, null, msgs);
+			if (newExceptionVariable != null)
+				msgs = ((InternalEObject)newExceptionVariable).eInverseAdd(this, EOPPOSITE_FEATURE_BASE - ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE, null, msgs);
+			msgs = basicSetExceptionVariable(newExceptionVariable, msgs);
+			if (msgs != null) msgs.dispatch();
+		}
+		else if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE, newExceptionVariable, newExceptionVariable));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public NotificationChain eInverseRemove(InternalEObject otherEnd, int featureID, NotificationChain msgs) {
 		switch (featureID) {
 			case ImperativeOclPackage.CATCH_EXP__BODY:
 				return ((InternalEList<?>)getBody()).basicRemove(otherEnd, msgs);
+			case ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE:
+				return basicSetExceptionVariable(null, msgs);
 		}
 		return super.eInverseRemove(otherEnd, featureID, msgs);
 	}
@@ -139,6 +201,8 @@ public class CatchExpImpl extends ImperativeExpressionImpl implements CatchExp {
 				return getBody();
 			case ImperativeOclPackage.CATCH_EXP__EXCEPTION:
 				return getException();
+			case ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE:
+				return getExceptionVariable();
 		}
 		return super.eGet(featureID, resolve, coreType);
 	}
@@ -160,6 +224,9 @@ public class CatchExpImpl extends ImperativeExpressionImpl implements CatchExp {
 				getException().clear();
 				getException().addAll((Collection<? extends EClassifier>)newValue);
 				return;
+			case ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE:
+				setExceptionVariable((Variable)newValue);
+				return;
 		}
 		super.eSet(featureID, newValue);
 	}
@@ -178,6 +245,9 @@ public class CatchExpImpl extends ImperativeExpressionImpl implements CatchExp {
 			case ImperativeOclPackage.CATCH_EXP__EXCEPTION:
 				getException().clear();
 				return;
+			case ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE:
+				setExceptionVariable((Variable)null);
+				return;
 		}
 		super.eUnset(featureID);
 	}
@@ -194,6 +264,8 @@ public class CatchExpImpl extends ImperativeExpressionImpl implements CatchExp {
 				return body != null && !body.isEmpty();
 			case ImperativeOclPackage.CATCH_EXP__EXCEPTION:
 				return exception != null && !exception.isEmpty();
+			case ImperativeOclPackage.CATCH_EXP__EXCEPTION_VARIABLE:
+				return exceptionVariable != null;
 		}
 		return super.eIsSet(featureID);
 	}

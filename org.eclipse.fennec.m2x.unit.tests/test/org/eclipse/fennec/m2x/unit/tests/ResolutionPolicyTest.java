@@ -43,8 +43,8 @@ import org.junit.jupiter.api.Test;
  */
 class ResolutionPolicyTest {
 
-	private static final String TEXT = "[module base(Ecore)/]\n";
-	private static final String OTHER_TEXT = "[module base(Ecore)/]\n[template public t(c : EClass)][/template]\n";
+	private static final String TEXT = "[module base(ecore)/]\n";
+	private static final String OTHER_TEXT = "[module base(ecore)/]\n[template public t(c : EClass)][/template]\n";
 
 	@Test
 	void noSource_hasIt_isEmpty() {

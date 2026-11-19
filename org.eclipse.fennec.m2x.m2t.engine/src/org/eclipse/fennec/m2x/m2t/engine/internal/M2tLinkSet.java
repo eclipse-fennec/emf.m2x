@@ -18,8 +18,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
@@ -35,18 +37,22 @@ import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
  * @param modules the modules this generation runs against, the entry module included
  * @param indentation standalone invocation indentation (MOFM2T §8.4)
  * @param positions where each expression node stood in its template (#116)
+ * @param conditionalNewlines single-line stand-alone blocks, whose line break is written only
+ *            when they produce text (MOFM2T §8.4, #374)
  * @author Data In Motion Consulting
  * @since 1.0
  */
 public record M2tLinkSet(
 		Collection<Module> modules,
 		Map<TemplateInvocation, String> indentation,
-		Map<EObject, SourcePosition> positions) {
+		Map<EObject, SourcePosition> positions,
+		Set<Block> conditionalNewlines) {
 
 	public M2tLinkSet {
 		Objects.requireNonNull(modules, "modules must not be null");
 		indentation = indentation == null ? Map.of() : indentation;
 		positions = positions == null ? Map.of() : positions;
+		conditionalNewlines = conditionalNewlines == null ? Set.of() : conditionalNewlines;
 	}
 
 	/**
@@ -56,7 +62,7 @@ public record M2tLinkSet(
 	 * @return the link set
 	 */
 	public static M2tLinkSet of(Collection<Module> modules) {
-		return new M2tLinkSet(modules, Map.of(), Map.of());
+		return new M2tLinkSet(modules, Map.of(), Map.of(), Set.of());
 	}
 
 	/**

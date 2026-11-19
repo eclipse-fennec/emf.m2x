@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Assignment expression: left := value (QVT v1.3 Section 8.2.1.1).
+ * Assignment expression: left := value (QVT v1.3 Section 8.2.2.11).
  * <!-- end-model-doc -->
  *
  * <p>

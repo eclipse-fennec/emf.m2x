@@ -38,6 +38,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
  * <ul>
  *   <li>{@link org.eclipse.fennec.m2x.model.m2t.impl.FileBlockImpl#getFileUrl <em>File Url</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.m2t.impl.FileBlockImpl#getOpenMode <em>Open Mode</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.m2t.impl.FileBlockImpl#getAppendExpr <em>Append Expr</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.m2t.impl.FileBlockImpl#getUniqId <em>Uniq Id</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.m2t.impl.FileBlockImpl#getCharset <em>Charset</em>}</li>
  * </ul>
@@ -74,6 +75,16 @@ public class FileBlockImpl extends BlockImpl implements FileBlock {
 	 * @ordered
 	 */
 	protected OpenModeKind openMode = OPEN_MODE_EDEFAULT;
+
+	/**
+	 * The cached value of the '{@link #getAppendExpr() <em>Append Expr</em>}' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getAppendExpr()
+	 * @generated
+	 * @ordered
+	 */
+	protected OclExpression appendExpr;
 
 	/**
 	 * The cached value of the '{@link #getUniqId() <em>Uniq Id</em>}' containment reference.
@@ -188,6 +199,51 @@ public class FileBlockImpl extends BlockImpl implements FileBlock {
 	 * @generated
 	 */
 	@Override
+	public OclExpression getAppendExpr() {
+		return appendExpr;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public NotificationChain basicSetAppendExpr(OclExpression newAppendExpr, NotificationChain msgs) {
+		OclExpression oldAppendExpr = appendExpr;
+		appendExpr = newAppendExpr;
+		if (eNotificationRequired()) {
+			ENotificationImpl notification = new ENotificationImpl(this, Notification.SET, M2tPackage.FILE_BLOCK__APPEND_EXPR, oldAppendExpr, newAppendExpr);
+			if (msgs == null) msgs = notification; else msgs.add(notification);
+		}
+		return msgs;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setAppendExpr(OclExpression newAppendExpr) {
+		if (newAppendExpr != appendExpr) {
+			NotificationChain msgs = null;
+			if (appendExpr != null)
+				msgs = ((InternalEObject)appendExpr).eInverseRemove(this, EOPPOSITE_FEATURE_BASE - M2tPackage.FILE_BLOCK__APPEND_EXPR, null, msgs);
+			if (newAppendExpr != null)
+				msgs = ((InternalEObject)newAppendExpr).eInverseAdd(this, EOPPOSITE_FEATURE_BASE - M2tPackage.FILE_BLOCK__APPEND_EXPR, null, msgs);
+			msgs = basicSetAppendExpr(newAppendExpr, msgs);
+			if (msgs != null) msgs.dispatch();
+		}
+		else if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, M2tPackage.FILE_BLOCK__APPEND_EXPR, newAppendExpr, newAppendExpr));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public OclExpression getUniqId() {
 		return uniqId;
 	}
@@ -282,6 +338,8 @@ public class FileBlockImpl extends BlockImpl implements FileBlock {
 		switch (featureID) {
 			case M2tPackage.FILE_BLOCK__FILE_URL:
 				return basicSetFileUrl(null, msgs);
+			case M2tPackage.FILE_BLOCK__APPEND_EXPR:
+				return basicSetAppendExpr(null, msgs);
 			case M2tPackage.FILE_BLOCK__UNIQ_ID:
 				return basicSetUniqId(null, msgs);
 			case M2tPackage.FILE_BLOCK__CHARSET:
@@ -302,6 +360,8 @@ public class FileBlockImpl extends BlockImpl implements FileBlock {
 				return getFileUrl();
 			case M2tPackage.FILE_BLOCK__OPEN_MODE:
 				return getOpenMode();
+			case M2tPackage.FILE_BLOCK__APPEND_EXPR:
+				return getAppendExpr();
 			case M2tPackage.FILE_BLOCK__UNIQ_ID:
 				return getUniqId();
 			case M2tPackage.FILE_BLOCK__CHARSET:
@@ -323,6 +383,9 @@ public class FileBlockImpl extends BlockImpl implements FileBlock {
 				return;
 			case M2tPackage.FILE_BLOCK__OPEN_MODE:
 				setOpenMode((OpenModeKind)newValue);
+				return;
+			case M2tPackage.FILE_BLOCK__APPEND_EXPR:
+				setAppendExpr((OclExpression)newValue);
 				return;
 			case M2tPackage.FILE_BLOCK__UNIQ_ID:
 				setUniqId((OclExpression)newValue);
@@ -348,6 +411,9 @@ public class FileBlockImpl extends BlockImpl implements FileBlock {
 			case M2tPackage.FILE_BLOCK__OPEN_MODE:
 				setOpenMode(OPEN_MODE_EDEFAULT);
 				return;
+			case M2tPackage.FILE_BLOCK__APPEND_EXPR:
+				setAppendExpr((OclExpression)null);
+				return;
 			case M2tPackage.FILE_BLOCK__UNIQ_ID:
 				setUniqId((OclExpression)null);
 				return;
@@ -370,6 +436,8 @@ public class FileBlockImpl extends BlockImpl implements FileBlock {
 				return fileUrl != null;
 			case M2tPackage.FILE_BLOCK__OPEN_MODE:
 				return openMode != OPEN_MODE_EDEFAULT;
+			case M2tPackage.FILE_BLOCK__APPEND_EXPR:
+				return appendExpr != null;
 			case M2tPackage.FILE_BLOCK__UNIQ_ID:
 				return uniqId != null;
 			case M2tPackage.FILE_BLOCK__CHARSET:

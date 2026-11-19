@@ -66,8 +66,15 @@ public final class QvtdConfiguration {
 	 */
 	public static final long DEFAULT_TIMEOUT_MS = 30_000;
 
+	/**
+	 * Default ceiling on the trace records of one run, across all relations — the same as
+	 * QVT-O's (#284).
+	 */
+	public static final int DEFAULT_MAX_TRACE_RECORDS = 1_000_000;
+
 	private final long timeoutMs;
 	private final int maxTraceRecords;
+	private final boolean deleteUnmatched;
 
 	private QvtdConfiguration(Builder builder) {
 		this.oclConfiguration = builder.oclConfiguration;
@@ -87,6 +94,7 @@ public final class QvtdConfiguration {
 		this.maxBindings = builder.maxBindings;
 		this.timeoutMs = builder.timeoutMs;
 		this.maxTraceRecords = builder.maxTraceRecords;
+		this.deleteUnmatched = builder.deleteUnmatched;
 	}
 
 	/**
@@ -237,11 +245,21 @@ public final class QvtdConfiguration {
 	}
 
 	/**
-	 * Returns the maximum number of trace records per relation (M-R8).
-	 * Defaults to 100,000.
+	 * Returns the maximum number of trace records one run may hold, across all relations (M-R8).
+	 * Defaults to {@value #DEFAULT_MAX_TRACE_RECORDS}.
 	 */
 	public int maxTraceRecords() {
 		return maxTraceRecords;
+	}
+
+	/**
+	 * Whether an enforce run deletes the target objects that no valid binding requires
+	 * (§7.10.2, #352). Defaults to {@code true}.
+	 *
+	 * @return {@code true} if unmatched target objects are deleted
+	 */
+	public boolean deleteUnmatched() {
+		return deleteUnmatched;
 	}
 
 	/**
@@ -311,7 +329,8 @@ public final class QvtdConfiguration {
 		private int maxRelationDepth = 200;
 		private int maxBindings = 10_000;
 		private long timeoutMs = DEFAULT_TIMEOUT_MS;
-		private int maxTraceRecords = 100_000;
+		private int maxTraceRecords = DEFAULT_MAX_TRACE_RECORDS;
+		private boolean deleteUnmatched = true;
 
 		private Builder(OclConfiguration oclConfiguration) {
 			this.oclConfiguration = Objects.requireNonNull(oclConfiguration, "oclConfiguration must not be null");
@@ -518,14 +537,27 @@ public final class QvtdConfiguration {
 		}
 
 		/**
-		 * Sets the maximum number of trace records per relation (M-R8).
-		 * Defaults to 100,000.
+		 * Sets the maximum number of trace records one run may hold, across all relations (M-R8).
+		 * Reaching it is reported as an error (#284). Defaults to
+		 * {@value QvtdConfiguration#DEFAULT_MAX_TRACE_RECORDS}.
 		 */
 		public Builder maxTraceRecords(int max) {
 			if (max <= 0) {
 				throw new IllegalArgumentException("maxTraceRecords must be positive: " + max);
 			}
 			this.maxTraceRecords = max;
+			return this;
+		}
+
+		/**
+		 * Sets whether an enforce run deletes the target objects that no valid binding requires.
+		 * §7.10.2 deletes them — "delete the objects bound to the variables of domain k" when no
+		 * source binding makes the relation hold for them — so a re-execution after a change in
+		 * the source equals a fresh one (§7.6). {@code false} keeps everything the target model
+		 * held, e.g. objects a user added by hand. Defaults to {@code true} (#352).
+		 */
+		public Builder deleteUnmatched(boolean delete) {
+			this.deleteUnmatched = delete;
 			return this;
 		}
 

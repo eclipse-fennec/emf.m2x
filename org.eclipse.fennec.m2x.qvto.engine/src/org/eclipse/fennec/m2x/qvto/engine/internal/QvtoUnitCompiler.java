@@ -30,9 +30,9 @@ import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.compiled.BlackboxRequirement;
 import org.eclipse.fennec.m2x.model.compiled.CompiledFactory;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
-import org.eclipse.fennec.m2x.model.compiled.UnitNature;
 import org.eclipse.fennec.m2x.model.compiled.DependencyEntry;
 import org.eclipse.fennec.m2x.model.compiled.DependencyMode;
+import org.eclipse.fennec.m2x.model.compiled.UnitNature;
 import org.eclipse.fennec.m2x.model.qvtoperational.BlackboxOperationDescriptor;
 import org.eclipse.fennec.m2x.model.qvtoperational.Module;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
@@ -43,9 +43,9 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoParseException;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.unit.api.UnitCompileOptions;
 import org.eclipse.fennec.m2x.unit.api.UnitResolutionException;
-import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 import org.eclipse.fennec.m2x.unit.compile.SignatureFingerprint;
 import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
+import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
 
 /**
  * Compile for QVT-O: parse → resolve → package (§4 of the compiled-unit concept, #139).

@@ -77,6 +77,7 @@
     <genClasses ecoreClass="imperativeocl.ecore#//CatchExp">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//CatchExp/body"/>
       <genFeatures notify="false" createChild="false" propertySortChoices="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//CatchExp/exception"/>
+      <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//CatchExp/exceptionVariable"/>
     </genClasses>
     <genClasses ecoreClass="imperativeocl.ecore#//InstantiationExp">
       <genFeatures property="None" children="true" createChild="true" ecoreFeature="ecore:EReference imperativeocl.ecore#//InstantiationExp/argument"/>

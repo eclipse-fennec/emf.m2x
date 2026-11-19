@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Resolve expression to find previously created trace records (QVT v1.3 Section 8.2.2.19).
+ * Resolve expression to find previously created trace records (QVT v1.3 Section 8.2.1.22).
  * <!-- end-model-doc -->
  *
  * <p>

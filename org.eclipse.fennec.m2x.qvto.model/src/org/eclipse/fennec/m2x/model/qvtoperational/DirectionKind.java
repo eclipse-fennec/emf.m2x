@@ -28,7 +28,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * and utility methods for working with them.
  * <!-- end-user-doc -->
  * <!-- begin-model-doc -->
- * Direction of a parameter or model extent: in, inout, or out (QVT v1.3 Section 8.2.2).
+ * Direction of a parameter or model extent: in, inout, or out (QVT v1.3 Section 8.2.1.8).
  * <!-- end-model-doc -->
  * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getDirectionKind()
  * @model

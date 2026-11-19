@@ -16,17 +16,23 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.SequencedSet;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.common.util.TreeIterator;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
@@ -44,7 +50,6 @@ import org.eclipse.fennec.m2x.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ComputeExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ForExp;
-import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeExpression;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.InstantiationExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.LogExp;
@@ -57,23 +62,33 @@ import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.util.ImperativeOclSwitch;
-import org.eclipse.fennec.m2x.model.ocl.AnyType;
+import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2x.model.ocl.CollectionLiteralExp;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.IfExp;
 import org.eclipse.fennec.m2x.model.ocl.IteratorExp;
+import org.eclipse.fennec.m2x.model.ocl.MapType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.model.ocl.OclPackage;
+import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
-import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.model.ocl.PropertyCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
+import org.eclipse.fennec.m2x.model.ocl.util.OclSwitch;
 import org.eclipse.fennec.m2x.model.qvtoperational.Constructor;
 import org.eclipse.fennec.m2x.model.qvtoperational.ConstructorBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
+import org.eclipse.fennec.m2x.model.qvtoperational.DirectionKind;
+import org.eclipse.fennec.m2x.model.qvtoperational.Helper;
 import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingCallExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
+import org.eclipse.fennec.m2x.model.qvtoperational.MappingParameter;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModelParameter;
+import org.eclipse.fennec.m2x.model.qvtoperational.ModelType;
 import org.eclipse.fennec.m2x.model.qvtoperational.ObjectExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationBody;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
@@ -86,9 +101,9 @@ import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
-import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
@@ -98,6 +113,7 @@ import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.Cont
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.FatalAssertionException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.RaiseException;
 import org.eclipse.fennec.m2x.qvto.engine.internal.QvtoControlFlowException.ReturnException;
+import org.eclipse.fennec.m2x.qvto.parser.QvtoStandardLibraryTypes;
 
 /**
  * Imperative AST interpreter for QVT-O transformations.
@@ -150,6 +166,25 @@ public class QvtoEvaluator {
 	// §8.3.19: predefined tags "proxy" and "topclasses"
 	private final QvtoTagRegistry tagRegistry;
 	private final QvtoOperationResolver operationResolver;
+	/** The query running now — its assignments are side effects (#347). */
+	private Helper runningQuery;
+	/** The inout objects of the mapping whose init section runs now, else null (#347). */
+	private Set<Object> initInouts;
+	private MappingOperation initMapping;
+	/** The operations whose side effect was reported already (#347). */
+	private final Set<EObject> reportedSideEffects = Collections.newSetFromMap(new IdentityHashMap<>());
+	/** The OCL engine's class for each collection kind, learnt from empty literals (#339). */
+	private Map<CollectionKind, Class<?>> collectionClasses;
+	/** The classes whose ambiguous extent was reported already (#337). */
+	private final Set<EClass> ambiguousClasses = new LinkedHashSet<>();
+	/** Per operation: its in, inout and out parameters (#336). */
+	private final Map<ImperativeOperation, List<VarParameter>> formalParameters = new IdentityHashMap<>();
+	/** Per operation: whether it has out or inout parameters (#336). */
+	private final Map<ImperativeOperation, Boolean> passesBackOperations = new IdentityHashMap<>();
+	/** Per operation name: whether one of that name has out or inout parameters (#336). */
+	private final Map<String, Boolean> passesBackByName = new HashMap<>();
+	/** The last call the OCL engine made through {@link #callFromOcl} (#336). */
+	private OclCall lastOclCall;
 	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final QvtoModelOperations modelOperations;
 	private final QvtoEngineServices engine;
@@ -164,14 +199,13 @@ public class QvtoEvaluator {
 	 */
 	private List<OclOperationProvider> additionalProviders;
 
-	// Late resolve support
-	private final List<DeferredResolveTask> deferredTasks = new ArrayList<>();
+	// Late resolve support (§8.2.1.22, §8.2.2.11)
+	private final List<DeferredAssignment> deferredAssignments = new ArrayList<>();
+	/** Whether an assignment involves a late resolve, per assignment node (§8.2.2.11). */
+	private final Map<AssignExp, Boolean> lateResolveAssignments = new IdentityHashMap<>();
 	private boolean isDeferredExecution;
-	// L-value capture: set by caseAssignExp before RHS evaluation
-	private EObject pendingLvalueOwner;
-	private EStructuralFeature pendingLvalueFeature;
-	private boolean pendingLvalueIsReset;
-	private boolean pendingLvalueIsSubtract;
+	// While a deferred assignment runs: the late resolves' sources captured when it was reached
+	private Map<ResolveExp, Object> deferredResolveSources = Map.of();
 
 	/**
 	 * Creates an evaluator for a single transformation execution.
@@ -199,7 +233,7 @@ public class QvtoEvaluator {
 		this.aliasRegistry = new QvtoAliasRegistry(transformation, extentManager, packageRegistry, diagnostics);
 		this.tagRegistry = new QvtoTagRegistry(transformation);
 		this.operationResolver = new QvtoOperationResolver(transformation);
-		this.modelOperations = new QvtoModelOperations(this::eval);
+		this.modelOperations = new QvtoModelOperations(this::eval, this::extentOf);
 	}
 
 	/**
@@ -217,6 +251,147 @@ public class QvtoEvaluator {
 	 * @return the collected diagnostics
 	 */
 	public List<Diagnostic> execute() {
+		prepare();
+		if (!modelsConform()) {
+			return diagnostics;
+		}
+
+		ImperativeOperation mainOp = operationResolver.findMainOperation();
+		if (mainOp == null) {
+			addError("No main() entry operation found in transformation '"
+					+ transformation.getName() + "'");
+			return diagnostics;
+		}
+		invokeGuarded(mainOp, null, new Object[0]);
+		processDeferredTasks();
+		return diagnostics;
+	}
+
+	/**
+	 * Invokes one operation of the transformation, outside {@code main()} — what a QVT-R
+	 * {@code implementedby} clause calls (QVT v1.3 §7.11.3.6, #282).
+	 *
+	 * <p>The transformation is set up as for {@link #execute()} — model parameters, configuration
+	 * properties, module properties — and then only the operation runs.
+	 *
+	 * @param operation the operation to invoke
+	 * @param self its context object, or {@code null} for an operation without one
+	 * @param args its arguments
+	 * @return the operation's result, or {@code null}
+	 */
+	public Object invoke(ImperativeOperation operation, Object self, Object[] args) {
+		prepare();
+		if (!modelsConform()) {
+			return null;
+		}
+		Object result = invokeGuarded(operation, self, args);
+		processDeferredTasks();
+		return result;
+	}
+
+	/**
+	 * Calls an operation the way an entry point is called: a return, a fatal assertion and an
+	 * uncaught exception end it and are reported here.
+	 */
+	private Object invokeGuarded(ImperativeOperation operation, Object self, Object[] args) {
+		try {
+			return callOperation(operation, self, args);
+		} catch (ReturnException e) {
+			return e.value;
+		} catch (FatalAssertionException e) {
+			// §8.2.2.20: fatal assert terminates execution
+			addError("Assertion failed: " + e.message);
+		} catch (RaiseException e) {
+			// §8.2.2.15: uncaught raise terminates execution
+			addError("Uncaught exception: " + e.exceptionType
+					+ (e.argument != null ? " - " + e.argument : ""));
+		} catch (StackOverflowError e) {
+			// Every QVT-O call takes many Java frames, so a deep recursion can exhaust the Java
+			// stack before maxStackDepth is reached. Reported, not thrown out of execute() (#332)
+			addError("Recursion too deep: the Java stack overflowed before maxStackDepth ("
+					+ options.maxStackDepth() + ") was reached");
+		}
+		return null;
+	}
+
+	/**
+	 * Sets the transformation up for a run: deadline, model parameters, configuration and module
+	 * properties, {@code this}, and the alias and tag registries.
+	 */
+	/**
+	 * Checks the in and inout models against their model types before anything runs (§8.2.1.6:
+	 * "model compliance implies that all the extra conditions … are satisfied"; §8.1.2). A
+	 * {@code strict} model type admits only objects of its own packages; every {@code where}
+	 * condition must hold with {@code self} bound to the model. Before #337 both were parsed and
+	 * never read. {@code effective} conformance (§8.2.1.6) is name-based and not checked.
+	 *
+	 * @return whether the transformation may run
+	 */
+	private boolean modelsConform() {
+		boolean conform = true;
+		for (ModelParameter mp : transformation.getModelParameter()) {
+			if (mp.getKind() == DirectionKind.OUT || mp.isSetCollectionKind()
+					|| !(mp.getEType() instanceof ModelType modelType)
+					|| !(env.lookup(mp.getName()) instanceof QvtoModelExtent model)) {
+				continue;
+			}
+			if ("strict".equals(modelType.getConformanceKind())) {
+				EObject foreign = firstForeignObject(model, modelType);
+				if (foreign != null) {
+					addError("Model '" + mp.getName() + "' does not conform to the strict model type '"
+							+ modelType.getName() + "': " + foreign.eClass().getName() + " is not in its metamodel");
+					conform = false;
+				}
+			}
+			if (!modelType.getAdditionalCondition().isEmpty()) {
+				env.pushScope();
+				try {
+					env.define("self", model);
+					for (OclExpression condition : modelType.getAdditionalCondition()) {
+						if (!Boolean.TRUE.equals(evalCondition(condition))) {
+							addError("Model '" + mp.getName() + "' does not satisfy the where condition of model type '"
+									+ modelType.getName() + "'");
+							conform = false;
+							break;
+						}
+					}
+				} finally {
+					env.popScope();
+				}
+			}
+		}
+		return conform;
+	}
+
+	/** The first object of the model whose class is in none of the model type's packages. */
+	private static EObject firstForeignObject(QvtoModelExtent model, ModelType modelType) {
+		for (EObject root : model.getContents()) {
+			if (!inMetamodel(root.eClass(), modelType)) {
+				return root;
+			}
+			for (TreeIterator<EObject> it = root.eAllContents(); it.hasNext();) {
+				EObject child = it.next();
+				if (!inMetamodel(child.eClass(), modelType)) {
+					return child;
+				}
+			}
+		}
+		return null;
+	}
+
+	/** Whether the class belongs to one of the model type's packages or their subpackages. */
+	private static boolean inMetamodel(EClass eClass, ModelType modelType) {
+		for (EPackage pkg = eClass.getEPackage(); pkg != null; pkg = pkg.getESuperPackage()) {
+			for (EPackage metamodel : modelType.getMetamodel()) {
+				if (pkg == metamodel || (pkg.getNsURI() != null && pkg.getNsURI().equals(metamodel.getNsURI()))) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private void prepare() {
 		// Set timeout deadline (Q-5 / M-3)
 		if (options.timeout() != null) {
 			deadlineNanos = System.nanoTime() + options.timeout().toNanos();
@@ -274,27 +449,6 @@ public class QvtoEvaluator {
 				env.define(varName, value);
 			}
 		}
-
-		ImperativeOperation mainOp = operationResolver.findMainOperation();
-		if (mainOp == null) {
-			addError("No main() entry operation found in transformation '"
-					+ transformation.getName() + "'");
-			return diagnostics;
-		}
-		try {
-			callOperation(mainOp, null, new Object[0]);
-		} catch (ReturnException e) {
-			// main() returned — normal
-		} catch (FatalAssertionException e) {
-			// §8.2.2.20: fatal assert terminates execution
-			addError("Assertion failed: " + e.message);
-		} catch (RaiseException e) {
-			// §8.2.2.15: uncaught raise terminates execution
-			addError("Uncaught exception: " + e.exceptionType
-					+ (e.argument != null ? " - " + e.argument : ""));
-		}
-		processDeferredTasks();
-		return diagnostics;
 	}
 
 	/**
@@ -361,6 +515,17 @@ public class QvtoEvaluator {
 					}
 				}
 			}
+			// §8.2.1.12: out and inout arguments of a helper or mapping called in an OCL
+			// expression — the OCL engine evaluates the call, this hands the values back (#336)
+			if (opCall.getName() != null && passesBackByName(opCall.getName())) {
+				lastOclCall = null;
+				Object value = evalOcl(opCall);
+				OclCall call = lastOclCall;
+				if (call != null && call.args().length == opCall.getOwnedArguments().size()) {
+					writeBackArgs(opCall.getOwnedArguments(), call.passed(), call.args());
+				}
+				return wrapNull(value);
+			}
 			// QVT-O reads null as the empty string in a string concatenation, where OCL's
 			// strict mode rejects the argument
 			if ("+".equals(opCall.getName())) {
@@ -372,16 +537,9 @@ public class QvtoEvaluator {
 							+ (arg != null ? arg.toString() : "");
 				}
 			}
-			// §8.1.13: an operation on an imperative source — "new T(m).transform()". The OCL
-			// engine cannot evaluate the source, so it is evaluated here and the call is offered
-			// to the registered custom operations. Answering here matters: falling through would
-			// evaluate the source a second time.
-			if (opCall.getOwnedSource() instanceof ImperativeExpression) {
-				Object handled = callOnImperativeSource(opCall);
-				if (handled != UNHANDLED) {
-					return handled;
-				}
-			}
+			// §8.1.13: an operation on an imperative source — "new T(m).transform()",
+			// "list[T]->first()" — is the OCL engine's like any other call: it hands the source
+			// back to evalNestedInOcl, evaluating it once, and dispatches on its value (#296)
 			return UNHANDLED;
 		}
 
@@ -400,70 +558,92 @@ public class QvtoEvaluator {
 		}
 
 		@Override
-		public Object casePropertyCallExp(PropertyCallExp propCall) {
-			// §8.1.10: an intermediate property is read from the store, not from the object
-			Object handled = evalIntermediatePropertyRead(propCall);
-			return handled == UNHANDLED ? UNHANDLED : wrapNull(handled);
-		}
-
-		@Override
 		public Object defaultCase(EObject object) {
 			return UNHANDLED;
 		}
 	}
 
 	/**
-	 * §8.1.13: an operation call whose source is an imperative expression.
-	 *
-	 * @param opCall the call
-	 * @return what the operation answered, or {@link #UNHANDLED} to let OCL evaluate it — which
-	 *         re-evaluates the source, acceptable only because the standard-library operations
-	 *         that end up there have no side effects
-	 */
-	private Object callOnImperativeSource(OperationCallExp opCall) {
-		Object source = eval(opCall.getOwnedSource());
-		Object[] args = new Object[opCall.getOwnedArguments().size()];
-		for (int i = 0; i < args.length; i++) {
-			args[i] = eval(opCall.getOwnedArguments().get(i));
-		}
-		String opName = opCall.getName();
-		// The catch-all is remembered rather than invoked, so that an exact match wins and no
-		// operation with a side effect is invoked twice
-		OclOperation fallback = null;
-		for (var provider : oclEngine.getOperationProviders(oclOptions())) {
-			for (var op : provider.getOperations()) {
-				if (!op.name().equals(opName)) {
-					continue;
-				}
-				if (op.ownerType() instanceof AnyType) {
-					fallback = op;
-				} else {
-					return wrapNull(op.implementation().apply(source, args));
-				}
-			}
-		}
-		if (fallback != null) {
-			Object opResult = fallback.implementation().apply(source, args);
-			if (opResult != null) {
-				return opResult;
-			}
-		}
-		return UNHANDLED;
-	}
-
-	/**
 	 * Evaluates an OCL IfExp using the QVT-O dispatch chain so that imperative
 	 * body expressions (BlockExp, etc.) are handled correctly.
 	 * §8.2.2.8: imperative if — else is optional (returns null when absent).
+	 *
+	 * <p>A condition that is neither true nor false takes no branch, the else branch included:
+	 * "otherwise the result is invalid" (OCL v2.4 §10.3, IfExpEval [1]). Imperatively that is a
+	 * statement that does not run, so it is an error of the transformation (#308).
 	 */
+	/**
+	 * A condition — wherever a Boolean is expected: if, while, forEach, the imperative iterate
+	 * variants, when, where, log … when, assert and the condition of a resolve. QVT v1.3 §8.4.5(2):
+	 * "if an Element instance is passed there is an implicit comparison with the null value … if
+	 * a collection value is passed there is an implicit comparison with the size of the
+	 * collection" — so the §8.1.9 example if (cl := …) return false works. A null counts as
+	 * false only where the condition is typed as an element or a collection; anywhere else
+	 * undefined stays the error of #308/#310 (#338).
+	 */
+	private Object evalCondition(OclExpression condition) {
+		Object value = eval(condition);
+		if (value instanceof Boolean || value == OclInvalid.INSTANCE) {
+			return value;
+		}
+		if (value instanceof EObject) {
+			return Boolean.TRUE;
+		}
+		if (value instanceof Collection<?> collection) {
+			return !collection.isEmpty();
+		}
+		if (value == null && (condition.getType() instanceof CollectionType
+				|| condition.getType() instanceof EClass && !(condition.getType() instanceof OclType))) {
+			return Boolean.FALSE;
+		}
+		return value;
+	}
+
 	private Object evalIfExp(IfExp ifExp) {
-		Object condVal = eval(ifExp.getOwnedCondition());
+		Object condVal = evalCondition(ifExp.getOwnedCondition());
 		if (Boolean.TRUE.equals(condVal)) {
 			return eval(ifExp.getOwnedThen());
-		} else if (ifExp.getOwnedElse() != null) {
+		}
+		if (!Boolean.FALSE.equals(condVal)) {
+			return undefinedCondition("if", condVal);
+		}
+		if (ifExp.getOwnedElse() != null) {
 			return eval(ifExp.getOwnedElse());
 		}
 		return null;
+	}
+
+	/**
+	 * Reports a condition that is neither true nor false (#308).
+	 *
+	 * @return invalid, the value of the construct
+	 */
+	/** The value of a condition that is not true, for an assertion message: "" for false. */
+	private static String conditionValue(Object condition) {
+		if (Boolean.FALSE.equals(condition)) {
+			return "";
+		}
+		return " — the condition is " + (condition == null ? "null"
+				: condition == OclInvalid.INSTANCE ? "invalid" : condition.getClass().getSimpleName());
+	}
+
+	private Object undefinedCondition(String construct, Object condition) {
+		return undefinedCondition(construct, condition, "no branch is taken");
+	}
+
+	/**
+	 * Reports a condition that is neither true nor false, and what does not happen because of
+	 * it (#308, #310). A statement that cannot run is an error of the transformation.
+	 *
+	 * @return invalid, the value of the construct
+	 */
+	private Object undefinedCondition(String construct, Object condition, String consequence) {
+		addError(construct + "-condition must be Boolean, got: "
+				+ (condition == null ? "null"
+						: condition == OclInvalid.INSTANCE ? "invalid"
+						: condition.getClass().getSimpleName())
+				+ " — " + consequence);
+		return OclInvalid.INSTANCE;
 	}
 
 	/**
@@ -494,31 +674,23 @@ public class QvtoEvaluator {
 		OclExpression body = iterExp.getOwnedBody();
 		String opName = iterExp.getName();
 
+		// The boolean iterators answer as the OCL engine does for the same expression (OCL v2.4
+		// §11.9): a body that is neither true nor false makes select and reject invalid, and
+		// counts in forAll, exists and any by their own precedence (#310). Read as false, the
+		// same expression had one result here and another one in the OCL engine.
 		return switch (opName) {
-			case "select" -> {
+			case "select", "reject" -> {
+				boolean keep = "select".equals(opName);
 				List<Object> result = new ArrayList<>();
 				for (Object elem : coll) {
 					env.pushScope();
 					try {
 						env.define(iterName, elem);
 						Object bodyVal = eval(body);
-						if (Boolean.TRUE.equals(bodyVal)) {
-							result.add(elem);
+						if (!(bodyVal instanceof Boolean matched)) {
+							yield OclInvalid.INSTANCE;
 						}
-					} finally {
-						env.popScope();
-					}
-				}
-				yield result;
-			}
-			case "reject" -> {
-				List<Object> result = new ArrayList<>();
-				for (Object elem : coll) {
-					env.pushScope();
-					try {
-						env.define(iterName, elem);
-						Object bodyVal = eval(body);
-						if (!Boolean.TRUE.equals(bodyVal)) {
+						if (matched == keep) {
 							result.add(elem);
 						}
 					} finally {
@@ -555,72 +727,51 @@ public class QvtoEvaluator {
 				}
 				yield result;
 			}
-			case "forAll" -> {
+			case "forAll", "exists" -> {
+				// §11.9.1: the deciding value wins — false for forAll, true for exists — then
+				// invalid, then null, then the other one
+				Boolean deciding = "exists".equals(opName);
+				boolean hasInvalid = false;
+				boolean hasNull = false;
 				for (Object elem : coll) {
 					env.pushScope();
 					try {
 						env.define(iterName, elem);
-						if (!Boolean.TRUE.equals(eval(body))) {
-							yield Boolean.FALSE;
+						Object bodyVal = eval(body);
+						if (deciding.equals(bodyVal)) {
+							yield deciding;
+						}
+						if (bodyVal == OclInvalid.INSTANCE) {
+							hasInvalid = true;
+						} else if (!(bodyVal instanceof Boolean)) {
+							hasNull = true;
 						}
 					} finally {
 						env.popScope();
 					}
 				}
-				yield Boolean.TRUE;
-			}
-			case "exists" -> {
-				for (Object elem : coll) {
-					env.pushScope();
-					try {
-						env.define(iterName, elem);
-						if (Boolean.TRUE.equals(eval(body))) {
-							yield Boolean.TRUE;
-						}
-					} finally {
-						env.popScope();
-					}
-				}
-				yield Boolean.FALSE;
+				yield hasInvalid ? OclInvalid.INSTANCE : hasNull ? WRAPPED_NULL : !deciding;
 			}
 			case "any" -> {
+				boolean hasInvalid = false;
 				for (Object elem : coll) {
 					env.pushScope();
 					try {
 						env.define(iterName, elem);
-						if (Boolean.TRUE.equals(eval(body))) {
+						Object bodyVal = eval(body);
+						if (Boolean.TRUE.equals(bodyVal)) {
 							yield elem;
 						}
+						hasInvalid |= bodyVal == OclInvalid.INSTANCE;
 					} finally {
 						env.popScope();
 					}
 				}
-				yield wrapNull(null);
+				// as the OCL engine: no match, and a body that was invalid — invalid
+				yield hasInvalid ? OclInvalid.INSTANCE : wrapNull(null);
 			}
 			default -> evalOcl(iterExp);
 		};
-	}
-
-	/**
-	 * §8.1.10: Checks if a PropertyCallExp refers to an intermediate property
-	 * and reads the value from intermediate storage if so.
-	 *
-	 * @return the value, or UNHANDLED if this is not an intermediate property
-	 */
-	private Object evalIntermediatePropertyRead(PropertyCallExp propCall) {
-		String propName = propCall.getReferredProperty() != null
-				? propCall.getReferredProperty().getName() : null;
-		if (propName == null) {
-			return UNHANDLED;
-		}
-		Object sourceObj = eval(propCall.getOwnedSource());
-		if (sourceObj instanceof EObject eo) {
-			ContextualProperty cp = intermediateStore.findIntermediateProperty(eo, propName);
-			if (cp != null) {
-				return wrapNull(intermediateStore.getIntermediatePropertyValue(eo, propName));
-			}
-		}
-		return UNHANDLED;
 	}
 
 	/**
@@ -634,15 +785,14 @@ public class QvtoEvaluator {
 		if (selfObj instanceof EObject eo) {
 			self = eo;
 		}
-		// §8.1.10: Intermediate property interceptor for OCL sub-expressions
-		OclContext oclCtx;
-		if (intermediateStore.hasIntermediateProperties()) {
-			oclCtx = new OclContext(self, null, vars, null, intermediateStore::interceptIntermediateProperty);
-		} else {
-			oclCtx = self != null
-					? OclContext.of(self, vars)
-					: OclContext.of(vars);
-		}
+		// §8.1.10: Intermediate property interceptor for OCL sub-expressions; and the imperative
+		// expressions nested in the OCL one come back here (#296)
+		// The transformation's models are the extent allInstances() ranges over (#342)
+		OclContext oclCtx = new OclContext(self, extentManager::allInstances, vars, null,
+				intermediateStore.hasIntermediateProperties()
+						? intermediateStore::interceptIntermediateProperty
+						: null,
+				this::evalNestedInOcl);
 		OclResult oclResult = oclEngine.evaluateWithDiagnostics(expr, oclCtx, oclOptions());
 		// Placed, not just copied: the OCL engine names the node it stumbled over, and the parser
 		// recorded where that node stood — including in an imported unit (#116).
@@ -651,6 +801,30 @@ public class QvtoEvaluator {
 	}
 
 
+
+	/**
+	 * A QVT-O expression nested in one the OCL engine evaluates — {@code list[T]->first()},
+	 * {@code x.late resolveone(T)->asOrderedSet()} (§8.1.13, #296). It is evaluated once, here,
+	 * with the iterator and let variables the OCL engine has bound around it.
+	 *
+	 * @param expr the nested expression
+	 * @param oclBindings the variables the OCL evaluation has bound
+	 * @return its value
+	 */
+	private Object evalNestedInOcl(OclExpression expr, Map<String, Object> oclBindings) {
+		if (expr.eClass().getEPackage() == OclPackage.eINSTANCE) {
+			// An OCL node the OCL engine itself does not know — not ours either
+			addError("Unsupported expression type: " + expr.eClass().getName());
+			return OclInvalid.INSTANCE;
+		}
+		env.pushScope();
+		try {
+			oclBindings.forEach(env::define);
+			return eval(expr);
+		} finally {
+			env.popScope();
+		}
+	}
 
 	/**
 	 * Calls an imperative operation (helper/query/mapping entry).
@@ -675,9 +849,12 @@ public class QvtoEvaluator {
 			addError("Execution timeout exceeded");
 			return null;
 		}
+		// §8.2.1.12: "A query has no side-effects" — the query running now, null in a helper (#347)
+		Helper outerQuery = runningQuery;
+		runningQuery = operation instanceof Helper helper && helper.isIsQuery() ? helper : null;
 		try {
-			env.pushScope();
-			bindOperationParams(operation, self, args);
+			env.pushFrame();
+			bindOperationParams(operation, self, args, false);
 
 			// Execute body
 			OperationBody body = operation.getBody();
@@ -706,11 +883,28 @@ public class QvtoEvaluator {
 			}
 			return lastResult;
 		} catch (ReturnException e) {
-			return e.value;
+			// §8.2.2.14: "return;" answers the result parameters — a tuple of several (#336)
+			return e.valueless ? currentResult(operation.getResult()) : e.value;
+		} catch (BreakException | ContinueException e) {
+			return loopControlLeftOperation(operation);
 		} finally {
-			env.popScope();
+			// §8.2.1.12: "the final value of each out, inout and result parameter is returned
+			// to the caller" — written into the caller's argument array (#336)
+			exportOutArgs(operation, args);
+			env.popFrame();
 			--stackDepth;
+			runningQuery = outerQuery;
 		}
+	}
+
+	/**
+	 * A break or continue that reached the boundary of its operation had no loop of its own to
+	 * act on (§8.2.2.17/§8.2.2.18). The parser rejects it; an AST built elsewhere reaches this,
+	 * which stops it here instead of letting it end the caller's loop (#338).
+	 */
+	private Object loopControlLeftOperation(ImperativeOperation operation) {
+		addError("break or continue outside of a loop in '" + operation.getName() + "'");
+		return null;
 	}
 
 	/**
@@ -718,33 +912,137 @@ public class QvtoEvaluator {
 	 * If the when-guard fails, this is an assertion failure (§8.2.1.15).
 	 */
 	private Object callMappingStrict(MappingOperation mappingOp, Object self, Object[] args) {
-		// Strict mode: check when-guards as pre-conditions
-		if (++stackDepth > options.maxStackDepth()) {
-			--stackDepth;
-			addError("Maximum stack depth exceeded: " + options.maxStackDepth());
-			return null;
-		}
-		if (checkTimeout()) {
-			--stackDepth;
-			addError("Execution timeout exceeded");
-			return null;
-		}
-		try {
-			env.pushScope();
-			bindOperationParams(mappingOp, self, args);
-			for (OclExpression whenExpr : mappingOp.getWhen()) {
-				Object whenVal = eval(whenExpr);
-				if (!Boolean.TRUE.equals(whenVal)) {
-					addError("xmap pre-condition failed for mapping: " + mappingOp.getName());
-					return null;
+		// §8.1.14.3: "For strict evaluation … the first candidate for which the source type
+		// conforms is selected without evaluating the predicate as a guard. The predicate is
+		// instead evaluated as a pre-condition" (#333)
+		MappingOperation target = mappingOp;
+		if (!mappingOp.getDisjunct().isEmpty()) {
+			target = null;
+			for (MappingOperation candidate : mappingOp.getDisjunct()) {
+				if (typesConform(candidate, self, args)) {
+					target = candidate;
+					break;
 				}
 			}
-		} finally {
-			env.popScope();
-			--stackDepth;
+		} else if (!typesConform(mappingOp, self, args)) {
+			target = null;
 		}
-		// Pre-condition passed — delegate to standard callMapping for body execution
-		return callMapping(mappingOp, self, args);
+		if (target == null) {
+			// §8.2.1.21: "failure to evaluate the when clause as a pre-condition causes the
+			// mapping execution to fail" — a fatal assertion, as in Eclipse (#335)
+			throw new FatalAssertionException("xmap pre-condition failed for mapping: " + mappingOp.getName()
+					+ " — no candidate conforms to the source and argument types");
+		}
+		// The predicate is evaluated once, by callMapping, as the pre-condition (#335)
+		Object result = callMapping(target, self, args, true);
+		return result == GUARD_FAILED ? null : result;
+	}
+
+	/**
+	 * Calls a mapping by name the way {@code source.map name(args)} does (§8.1.14.2, §8.2.1.15):
+	 * the overloads of that name and argument count are the candidates, those whose types the
+	 * source and arguments conform to are tried most-derived first, and the first whose guard
+	 * holds answers; none → null. Shared by the QVT-O evaluator and the OCL engine, which calls
+	 * mappings that stand inside an OCL expression through the operation provider (#333).
+	 *
+	 * @param strict {@code xmap}: the first conforming candidate is selected and its guard is a
+	 *        pre-condition
+	 * @return the mapping's result, or {@code null}
+	 */
+	Object callMappingByName(String opName, Object sourceObj, Object[] args, boolean strict) {
+		List<ImperativeOperation> named = operationResolver.findAllOperations(opName);
+		if (named.isEmpty()) {
+			addError("Mapping not found: " + opName);
+			return null;
+		}
+		List<ImperativeOperation> candidates = named.stream()
+				.filter(op -> accepts(op, args.length)).toList();
+		if (candidates.isEmpty()) {
+			addError("Mapping " + opName + " takes no " + args.length + " argument(s)");
+			return null;
+		}
+		// Single candidate: direct call
+		if (candidates.size() == 1) {
+			ImperativeOperation targetOp = candidates.get(0);
+			if (strict && targetOp instanceof MappingOperation mappingOp) {
+				return callMappingStrict(mappingOp, sourceObj, args);
+			}
+			return callOperation(targetOp, sourceObj, args);
+		}
+		// Multiple candidates: implicit disjunction, most-derived context type first
+		for (ImperativeOperation candidate : QvtoOperationResolver.filterAndSortByType(candidates, sourceObj)) {
+			if (candidate instanceof MappingOperation mappingOp) {
+				if (strict) {
+					// §8.1.14.3: the first conforming candidate is selected; its predicate is a
+					// pre-condition, not a guard that passes on to the next candidate
+					return callMappingStrict(mappingOp, sourceObj, args);
+				}
+				Object result = callMapping(mappingOp, sourceObj, args);
+				if (result != GUARD_FAILED) {
+					return result;
+				}
+			}
+		}
+		return null; // No candidate matched (§8.1.14: returns null)
+	}
+
+	/**
+	 * The implicit type predicate of a mapping (§8.1.14.1, §8.2.1.15): a contextual mapping needs
+	 * a non-null source of its context type, and every argument of a class-typed parameter must
+	 * be an instance of that class (null conforms to every type).
+	 */
+	private static boolean typesConform(MappingOperation mapping, Object self, Object[] args) {
+		VarParameter context = mapping.getContext();
+		if (context != null) {
+			if (self == null) {
+				return false;
+			}
+			if (context.getEType() instanceof EClass contextClass && !contextClass.isInstance(self)) {
+				return false;
+			}
+		}
+		int argIdx = 0;
+		for (Object param : mapping.getEParameters()) {
+			if (param instanceof VarParameter vp && !mapping.getResult().contains(vp)) {
+				Object arg = argIdx < args.length ? args[argIdx] : null;
+				argIdx++;
+				// What the caller holds in an out argument is overwritten, not passed (#336)
+				if (arg != null && vp.getKind() != DirectionKind.OUT
+						&& vp.getEType() instanceof EClass parameterClass && !parameterClass.isInstance(arg)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Whether a call with this many arguments reaches the operation: all its parameters, or
+	 * fewer where the rest have default values (§8.4 <init_part>, #346).
+	 */
+	static boolean accepts(ImperativeOperation operation, int argumentCount) {
+		int count = 0;
+		int required = 0;
+		for (Object param : operation.getEParameters()) {
+			if (param instanceof VarParameter vp && !operation.getResult().contains(vp)) {
+				count++;
+				if (vp.getOwnedInit() == null) {
+					required = count;
+				}
+			}
+		}
+		return argumentCount >= required && argumentCount <= count;
+	}
+
+	/** The number of in, inout and out parameters of an operation, results excluded. */
+	static int parameterCount(ImperativeOperation operation) {
+		int count = 0;
+		for (Object param : operation.getEParameters()) {
+			if (param instanceof VarParameter vp && !operation.getResult().contains(vp)) {
+				count++;
+			}
+		}
+		return count;
 	}
 
 	/**
@@ -752,16 +1050,32 @@ public class QvtoEvaluator {
 	 * when-guard, init/population/end, result creation, where-postcondition, trace recording.
 	 */
 	private Object callMapping(MappingOperation mappingOp, Object self, Object[] args) {
+		return callMapping(mappingOp, self, args, false);
+	}
+
+	/**
+	 * @param strict {@code xmap}: the when clause is a pre-condition, whose failure is fatal
+	 *        (§8.2.1.21), not a guard
+	 */
+	private Object callMapping(MappingOperation mappingOp, Object self, Object[] args, boolean strict) {
 		// Disjuncts: try each disjunct, first with passing when-guard wins (§8.1.14.1)
 		EList<MappingOperation> disjuncts = mappingOp.getDisjunct();
 		if (disjuncts != null && !disjuncts.isEmpty()) {
 			for (MappingOperation disjunct : disjuncts) {
 				Object result = callMapping(disjunct, self, args);
 				if (result != GUARD_FAILED) {
+					// §8.1.11.4: the record counts for the invoked mapping too (resolveIn)
+					traceManager.markInvoked(mappingOp, traceManager.lookupRecord(disjunct, self, traceKey(disjunct, args)));
 					return result; // First candidate whose guard passes wins (even if result is null)
 				}
 			}
 			return null; // No candidate matched
+		}
+
+		// §8.2.1.15: "After passing the parameters, the type compliance of the actual object
+		// parameters as well as the when clause are checked. If this fails, null is returned" (#333)
+		if (!typesConform(mappingOp, self, args)) {
+			return GUARD_FAILED;
 		}
 
 		if (++stackDepth > options.maxStackDepth()) {
@@ -774,54 +1088,86 @@ public class QvtoEvaluator {
 			addError("Execution timeout exceeded");
 			return null;
 		}
+		boolean traced = false;
+		boolean ran = false;
+		// A mapping is no query, even when a query calls it
+		Helper outerQuery = runningQuery;
+		runningQuery = null;
+		// §8.1.11.2: the record is matched on the context and the in parameters — what the
+		// caller holds in an out argument plays no part (#336)
+		Object[] keyArgs = traceKey(mappingOp, args);
 		try {
-			env.pushScope();
-			bindOperationParams(mappingOp, self, args);
+			env.pushFrame();
+			bindOperationParams(mappingOp, self, args, false);
 
-			// when-guard: all must be true, otherwise skip
+			// when-guard: all must be true, otherwise skip. A guard that cannot be decided is an
+			// error, and the mapping does not run (§8.2.1.15, #310)
 			for (OclExpression whenExpr : mappingOp.getWhen()) {
-				Object whenVal = eval(whenExpr);
+				Object whenVal = evalCondition(whenExpr);
 				if (!Boolean.TRUE.equals(whenVal)) {
+					if (strict) {
+						throw new FatalAssertionException("xmap pre-condition failed for mapping: "
+								+ mappingOp.getName() + conditionValue(whenVal));
+					}
+					if (!Boolean.FALSE.equals(whenVal)) {
+						undefinedCondition("when", whenVal,
+								"mapping '" + mappingOp.getName() + "' is not executed");
+					}
 					return GUARD_FAILED;
 				}
 			}
 
-			// Implicit inhibition (§8.2.1.15 p106): check trace for cached result
+			// Implicit inhibition (§8.2.1.15 p106, §8.1.11.2): an earlier execution with the same
+			// context and in parameters answers — with its result, or none for a void mapping (#334)
 			if (traceManager != null) {
-				Object cached = traceManager.lookupCachedResult(mappingOp, self, args);
-				if (cached != null) {
-					return cached;
+				QvtoTraceRecord previous = traceManager.lookupRecord(mappingOp, self, keyArgs);
+				if (previous != null) {
+					importOutArgs(mappingOp, previous.outArgs());
+					ran = true;
+					return previous.result();
 				}
 			}
+			ran = true;
 
-			// Create result objects for output parameters with EClass type
+			// §8.2.1.15: "The initial value of each out and result parameter is null … Collection
+			// types are initialized with empty collections." (#332)
 			EList<VarParameter> resultParams = mappingOp.getResult();
 			for (VarParameter rp : resultParams) {
-				Object existing = env.lookup(rp.getName());
-				if (existing == null) {
-					EClassifier type = rp.getEType();
-					if (type instanceof EClass eClass && !eClass.isAbstract()) {
-						EObject created = EcoreUtil.create(eClass);
-						env.assign(rp.getName(), created);
-						if (resultParams.size() == 1) {
-							env.assign("result", created);
-						}
-						addToDefaultExtent(created);
-					}
+				if (env.lookup(rp.getName()) == null && rp.getEType() instanceof CollectionType collectionType) {
+					env.assign(rp.getName(), emptyCollection(collectionType));
 				}
 			}
 
 			// Execute mapping body (§8.2.1.15 p106-107):
-			// init → inherited → population → end → merged
+			// init → instantiation → trace → inherited → population → end → merged
 			OperationBody body = mappingOp.getBody();
 			if (body instanceof MappingBody mappingBody) {
-				// 1. Init section
-				for (OclExpression initExpr : mappingBody.getInitSection()) {
-					eval(initExpr);
+				// 1. Init section — the results are still null here, so init may assign them.
+				// §8.1.11.2: "inout parameters may not be changed during the initialization
+				// section" — a property assigned on one is reported (#347)
+				Set<Object> outerInouts = initInouts;
+				initInouts = inoutObjects(mappingOp, self, args);
+				initMapping = mappingOp;
+				try {
+					for (OclExpression initExpr : mappingBody.getInitSection()) {
+						eval(initExpr);
+					}
+				} finally {
+					initInouts = outerInouts;
 				}
+			}
+			// "At the end of the initialization section, an implicit 'instantiation section' is
+			// entered, which provokes the instantiation of all the out parameters … that still have
+			// a null value." Then the relation holds: the trace is recorded now, so a mapping
+			// reached again from its own population finds it instead of recursing (§8.1.6, #332)
+			instantiateResults(resultParams);
+			instantiateOutParams(mappingOp);
+			recordTrace(mappingOp, self, keyArgs, currentOutArgs(mappingOp, args), currentResult(resultParams));
+			traced = true;
+			if (body instanceof MappingBody mappingBody) {
 				// 2. Inherited mappings: after init+instantiation, before population (§8.1.15)
 				for (MappingOperation inherited : mappingOp.getInherited()) {
-					executePopulationOnly(inherited, self, args);
+					invokeReused(inherited, mappingOp, self, args);
 				}
 				// 3. Population section (main body)
 				for (OclExpression contentExpr : mappingBody.getContent()) {
@@ -833,7 +1179,7 @@ public class QvtoEvaluator {
 				}
 				// 5. Merged mappings: after end section (§8.1.15)
 				for (MappingOperation merged : mappingOp.getMerged()) {
-					executePopulationOnly(merged, self, args);
+					invokeReused(merged, mappingOp, self, args);
 				}
 			} else if (body != null) {
 				for (OclExpression expr : body.getContent()) {
@@ -842,77 +1188,324 @@ public class QvtoEvaluator {
 			} else {
 				// §8.4 S.168: bodyless mapping declaration — still execute inherited/merged
 				for (MappingOperation inherited : mappingOp.getInherited()) {
-					executePopulationOnly(inherited, self, args);
+					invokeReused(inherited, mappingOp, self, args);
 				}
 				for (MappingOperation merged : mappingOp.getMerged()) {
-					executePopulationOnly(merged, self, args);
+					invokeReused(merged, mappingOp, self, args);
 				}
 			}
 
 			// where-postcondition
 			OclExpression whereExpr = mappingOp.getWhere();
 			if (whereExpr != null) {
-				Object whereVal = eval(whereExpr);
+				Object whereVal = evalCondition(whereExpr);
 				if (!Boolean.TRUE.equals(whereVal)) {
-					addWarning("Mapping '" + mappingOp.getName()
-							+ "': where-postcondition failed");
+					// §8.2.1.15: "pre-conditions and post-conditions are assertions; any execution
+					// failure is fatal" — one that is violated or cannot be decided ends the
+					// transformation, as in Eclipse (MappingPostconditionFailed) (#335)
+					throw new FatalAssertionException("where-postcondition failed for mapping: "
+							+ mappingOp.getName() + conditionValue(whereVal));
 				}
 			}
 
-			// Collect result
-			Object result = null;
-			if (!resultParams.isEmpty()) {
-				if (resultParams.size() > 1) {
-					result = collectMultiResult(resultParams);
-				} else {
-					result = env.lookup(resultParams.get(0).getName());
-				}
-			}
-
-			// Record trace (§8.1.11.1: context, in-params, result)
-			traceManager.addRecord(mappingOp, self, args, result);
-
-			return result;
+			return currentResult(resultParams);
 		} catch (ReturnException e) {
 			Object result = e.value;
 			if (result == null && !mappingOp.getResult().isEmpty()) {
-				result = env.lookup(mappingOp.getResult().get(0).getName());
+				result = currentResult(mappingOp.getResult());
 			}
-			traceManager.addRecord(mappingOp, self, args, result);
+			if (!traced) {
+				recordTrace(mappingOp, self, keyArgs, currentOutArgs(mappingOp, args), result);
+			}
 			return result;
+		} catch (BreakException | ContinueException e) {
+			return loopControlLeftOperation(mappingOp);
 		} finally {
-			env.popScope();
+			// A mapping that did not run (type or guard failed) leaves the caller's arguments
+			// as they were
+			if (ran) {
+				exportOutArgs(mappingOp, args);
+			}
+			env.popFrame();
 			--stackDepth;
+			runningQuery = outerQuery;
 		}
 	}
 
 	/**
-	 * Executes only the population section of a mapping body (for inherited/merged).
+	 * The instantiation section of a mapping (§8.2.1.15): every result of a class type that is
+	 * still null after {@code init} is created and added to its extent (§8.2.1.16, T@extent).
 	 */
-	private void executePopulationOnly(MappingOperation mapping, Object self, Object[] args) {
-		// §8.1.15: A merged/inherited mapping is not invoked if its when-guard is not satisfied
-		for (OclExpression whenExpr : mapping.getWhen()) {
-			Object whenVal = eval(whenExpr);
-			if (!Boolean.TRUE.equals(whenVal)) {
-				return;
+	private void instantiateResults(EList<VarParameter> resultParams) {
+		for (VarParameter rp : resultParams) {
+			if (env.lookup(rp.getName()) != null) {
+				continue;
+			}
+			if (rp.getEType() instanceof EClass eClass && !eClass.isAbstract()) {
+				EObject created = EcoreUtil.create(eClass);
+				env.assign(rp.getName(), created);
+				if (resultParams.size() == 1) {
+					env.assign("result", created);
+				}
+				addToExtent(created, rp instanceof MappingParameter mp && mp.getExtent() != null
+						? mp.getExtent().getName()
+						: null);
 			}
 		}
-		OperationBody body = mapping.getBody();
-		if (body instanceof MappingBody mappingBody) {
-			for (OclExpression expr : mappingBody.getContent()) {
-				eval(expr);
-			}
-		} else if (body != null) {
-			for (OclExpression expr : body.getContent()) {
-				eval(expr);
+	}
+
+	/**
+	 * The instantiation section for the out parameters of a mapping (§8.2.1.15): "the
+	 * instantiation of all the out parameters that are object instances and that still have a
+	 * null value" (#336). Before, only the result parameters were created.
+	 */
+	private void instantiateOutParams(MappingOperation mappingOp) {
+		for (VarParameter parameter : formalParameters(mappingOp)) {
+			if (parameter.getKind() == DirectionKind.OUT && env.lookup(parameter.getName()) == null
+					&& parameter.getEType() instanceof EClass eClass && !eClass.isAbstract()) {
+				EObject created = EcoreUtil.create(eClass);
+				env.assign(parameter.getName(), created);
+				addToExtent(created, parameter instanceof MappingParameter mp && mp.getExtent() != null
+						? mp.getExtent().getName()
+						: null);
 			}
 		}
+		// §8.1.18: "result … is a tuple when there are multiple result parameters"
+		if (mappingOp.getResult().size() > 1) {
+			env.assign("result", collectMultiResult(mappingOp.getResult()));
+		}
+	}
+
+	/**
+	 * The in, inout and out parameters of an operation in call order, results excluded —
+	 * computed once per operation, as every call asks for them.
+	 */
+	private List<VarParameter> formalParameters(ImperativeOperation operation) {
+		return formalParameters.computeIfAbsent(operation, op -> {
+			List<VarParameter> formals = new ArrayList<>();
+			for (Object param : op.getEParameters()) {
+				if (param instanceof VarParameter vp && !op.getResult().contains(vp)) {
+					formals.add(vp);
+				}
+			}
+			return List.copyOf(formals);
+		});
+	}
+
+	/** Whether an operation hands values back through out or inout parameters. */
+	private boolean passesBack(ImperativeOperation operation) {
+		return passesBackOperations.computeIfAbsent(operation,
+				op -> formalParameters(op).stream().anyMatch(QvtoEvaluator::passesBack));
+	}
+
+	/** Whether the final value of a parameter goes back to the caller (§8.2.1.12). */
+	private static boolean passesBack(VarParameter parameter) {
+		return parameter.getKind() == DirectionKind.OUT || parameter.getKind() == DirectionKind.INOUT;
+	}
+
+	/** The arguments a trace record is matched on: the out positions are blanked (§8.1.11.2). */
+	private Object[] traceKey(MappingOperation mappingOp, Object[] args) {
+		if (!passesBack(mappingOp)) {
+			return args;
+		}
+		List<VarParameter> formals = formalParameters(mappingOp);
+		Object[] key = null;
+		for (int i = 0; i < formals.size() && i < args.length; i++) {
+			if (formals.get(i).getKind() == DirectionKind.OUT && args[i] != null) {
+				if (key == null) {
+					key = args.clone();
+				}
+				key[i] = null;
+			}
+		}
+		return key != null ? key : args;
+	}
+
+	/** A copy of the arguments carrying the current out and inout values, or null without any. */
+	private Object[] currentOutArgs(ImperativeOperation operation, Object[] args) {
+		if (!passesBack(operation)) {
+			return null;
+		}
+		Object[] outs = args.clone();
+		exportOutArgs(operation, outs);
+		return outs;
+	}
+
+	/** Writes the current values of the out and inout parameters into the argument array. */
+	private void exportOutArgs(ImperativeOperation operation, Object[] args) {
+		if (!passesBack(operation)) {
+			return;
+		}
+		List<VarParameter> formals = formalParameters(operation);
+		for (int i = 0; i < formals.size() && i < args.length; i++) {
+			if (passesBack(formals.get(i))) {
+				args[i] = env.lookup(formals.get(i).getName());
+			}
+		}
+	}
+
+	/** Sets the out and inout parameters from an argument array (null: nothing to set). */
+	private void importOutArgs(ImperativeOperation operation, Object[] args) {
+		if (args == null || !passesBack(operation)) {
+			return;
+		}
+		List<VarParameter> formals = formalParameters(operation);
+		for (int i = 0; i < formals.size() && i < args.length; i++) {
+			if (passesBack(formals.get(i))) {
+				env.assign(formals.get(i).getName(), args[i]);
+			}
+		}
+	}
+
+	/**
+	 * Hands the final out and inout values of a call back to the caller (§8.2.1.12: "passed by
+	 * reference-to-variable … These updates are visible to the caller"): every argument whose
+	 * value the call changed is assigned to its argument expression, a variable or a property.
+	 * Another expression has nowhere to take the value (#336).
+	 */
+	private void writeBackArgs(List<OclExpression> argExprs, Object[] passed, Object[] args) {
+		for (int i = 0; i < argExprs.size() && i < args.length; i++) {
+			if (args[i] == passed[i]) {
+				continue;
+			}
+			OclExpression argExpr = argExprs.get(i);
+			if (argExpr instanceof VariableExp varExp && varExp.getReferredVariable() != null
+					&& env.contains(varExp.getReferredVariable().getName())) {
+				env.assign(varExp.getReferredVariable().getName(), args[i]);
+			} else if (argExpr instanceof PropertyCallExp propExp && propExp.getReferredProperty() != null
+					&& eval(propExp.getOwnedSource()) instanceof EObject target
+					&& target.eClass().getEAllStructuralFeatures().contains(propExp.getReferredProperty())) {
+				checkNotReadOnly(target, propExp.getReferredProperty().getName(), argExpr);
+				target.eSet(propExp.getReferredProperty(), coerceForFeature(propExp.getReferredProperty(), args[i]));
+			}
+		}
+	}
+
+	/**
+	 * Calls an operation for the OCL engine, which knows only the argument values: the call is
+	 * noted, so that the expression that made it can hand the out and inout values back to its
+	 * argument expressions (#336).
+	 */
+	Object callFromOcl(Object[] args, Supplier<Object> call) {
+		Object[] passed = args.clone();
+		Object result = call.get();
+		lastOclCall = new OclCall(passed, args);
+		return result;
+	}
+
+	/** The arguments of the last call through {@link #callFromOcl}, before and after it. */
+	private record OclCall(Object[] passed, Object[] args) {
+	}
+
+	/** Whether an operation of this name hands values back through out or inout parameters. */
+	private boolean passesBackByName(String name) {
+		return passesBackByName.computeIfAbsent(name, n -> operationResolver.findAllOperations(n).stream()
+				.anyMatch(this::passesBack));
+	}
+
+	/** The mapping's result as it stands: the single result, a tuple of several, or null. */
+	private Object currentResult(EList<VarParameter> resultParams) {
+		if (resultParams.isEmpty()) {
+			return null;
+		}
+		return resultParams.size() > 1 ? collectMultiResult(resultParams) : env.lookup(resultParams.get(0).getName());
+	}
+
+	/** An empty collection of the given type's kind, built the way OCL builds a literal. */
+	private Object emptyCollection(CollectionType type) {
+		return emptyCollection(type.getKind());
+	}
+
+	private Object emptyCollection(CollectionKind kind) {
+		CollectionLiteralExp literal = OclFactory.eINSTANCE.createCollectionLiteralExp();
+		literal.setKind(kind == CollectionKind.COLLECTION ? CollectionKind.SEQUENCE : kind);
+		return eval(literal);
+	}
+
+	/**
+	 * The model extent an object belongs to: the one holding its root container, or
+	 * {@code null} for an object in none (#342).
+	 */
+	QvtoModelExtent extentOf(EObject object) {
+		return extentManager == null ? null : extentManager.extentOf(object);
+	}
+
+	/**
+	 * Invokes an inherited or merged mapping (§8.2.1.15): "Invocation of the inherited mappings
+	 * follows the 'standard' invocation semantics, except that the out parameters may now start
+	 * with a non-null value"; for merges "the parameters of the merging mapping are passed to the
+	 * parameters of the merged mappings, including the actual value of the out parameters". The
+	 * reused mapping runs in a scope of its own — its parameter and result names, its init,
+	 * population and end — and hands its results back; it creates no trace record of its own.
+	 * Before #333 only its population ran, in the caller's scope.
+	 */
+	private void invokeReused(MappingOperation reused, MappingOperation caller, Object self, Object[] args) {
+		if (!typesConform(reused, self, args)) {
+			return;
+		}
+		EList<VarParameter> callerResults = caller.getResult();
+		EList<VarParameter> results = reused.getResult();
+		// "including the actual value of the out parameters" — passed positionally (#336)
+		Object[] passed = args.clone();
+		exportOutArgs(caller, passed);
+		// The caller's current results, read before the reused mapping's own names shadow them
+		List<Object> current = new ArrayList<>();
+		for (VarParameter callerResult : callerResults) {
+			current.add(env.lookup(callerResult.getName()));
+		}
+		List<Object> passedBack = new ArrayList<>();
+		env.pushFrame();
+		try {
+			bindOperationParams(reused, self, passed, true);
+			for (int i = 0; i < results.size(); i++) {
+				Object value = i < current.size() ? current.get(i) : null;
+				env.define(results.get(i).getName(), value);
+				if (results.size() == 1) {
+					env.define("result", value);
+				}
+			}
+			// §8.1.15: a reused mapping is not invoked if its when-guard is not satisfied
+			for (OclExpression whenExpr : reused.getWhen()) {
+				Object whenVal = evalCondition(whenExpr);
+				if (!Boolean.TRUE.equals(whenVal)) {
+					if (!Boolean.FALSE.equals(whenVal)) {
+						undefinedCondition("when", whenVal,
+								"mapping '" + reused.getName() + "' is not executed");
+					}
+					return;
+				}
+			}
+			OperationBody body = reused.getBody();
+			if (body instanceof MappingBody mappingBody) {
+				mappingBody.getInitSection().forEach(this::eval);
+				instantiateResults(results);
+				instantiateOutParams(reused);
+				mappingBody.getContent().forEach(this::eval);
+				mappingBody.getEndSection().forEach(this::eval);
+			} else if (body != null) {
+				body.getContent().forEach(this::eval);
+			}
+			for (VarParameter result : results) {
+				passedBack.add(env.lookup(result.getName()));
+			}
+			exportOutArgs(reused, passed);
+		} finally {
+			env.popFrame();
+		}
+		for (int i = 0; i < passedBack.size() && i < callerResults.size(); i++) {
+			env.assign(callerResults.get(i).getName(), passedBack.get(i));
+		}
+		importOutArgs(caller, passed);
 	}
 
 	/**
 	 * Binds operation parameters (self, formals, results) in the current scope.
+	 *
+	 * @param outsGiven an inherited or merged mapping, whose out parameters start with the
+	 *        caller's values; otherwise an out parameter starts null, or empty for a collection
+	 *        (§8.2.1.15)
 	 */
-	private void bindOperationParams(ImperativeOperation operation, Object self, Object[] args) {
+	private void bindOperationParams(ImperativeOperation operation, Object self, Object[] args, boolean outsGiven) {
 		// Bind 'self' if context parameter exists
 		if (self != null) {
 			env.define("self", self);
@@ -932,7 +1525,13 @@ public class QvtoEvaluator {
 				if (resultParams.contains(vp)) {
 					continue;
 				}
-				Object value = argIdx < args.length ? args[argIdx++] : null;
+				// An omitted argument takes the parameter's default value (§8.4 <init_part>, #346)
+				Object value = argIdx < args.length ? args[argIdx]
+						: vp.getOwnedInit() != null ? eval(vp.getOwnedInit()) : null;
+				argIdx++;
+				if (vp.getKind() == DirectionKind.OUT && !outsGiven) {
+					value = vp.getEType() instanceof CollectionType collectionType ? emptyCollection(collectionType) : null;
+				}
 				env.define(vp.getName(), value);
 			}
 		}
@@ -948,32 +1547,69 @@ public class QvtoEvaluator {
 				env.define("result", initValue);
 			}
 		}
-	}
-
-	/**
-	 * Adds an EObject to the appropriate output extent. First tries to match
-	 * by metamodel (EPackage), then falls back to the default output extent.
-	 */
-	private void addToDefaultExtent(EObject eObject) {
-		addToExtent(eObject, null);
+		// §8.1.18: "result … is a tuple when there are multiple result parameters" (#336)
+		if (resultParams.size() > 1) {
+			Map<String, Object> tuple = new LinkedHashMap<>();
+			resultParams.forEach(rp -> tuple.put(rp.getName(), env.lookup(rp.getName())));
+			env.define("result", tuple);
+		}
 	}
 
 	private void addToExtent(EObject eObject, Variable extentRef) {
-		if (extentRef != null && extentRef.getName() != null) {
-			QvtoModelExtent extent = extentManager.getExtent(extentRef.getName());
+		addToExtent(eObject, extentRef != null ? extentRef.getName() : null);
+	}
+
+	/**
+	 * Adds an EObject to the named extent, or — without a name — to the one inferred from its
+	 * metamodel.
+	 */
+	/**
+	 * Adds a created object to an extent, which an in model is not: an object the inference
+	 * would put there is an error of the transformation, reported — it used to throw the
+	 * extent's UnsupportedOperationException out of execute() (#338 side find).
+	 */
+	private void addToWritableExtent(QvtoModelExtent extent, EObject eObject) {
+		Optional<String> borrower = extentManager.borrowerOf(extent);
+		if (borrower.isPresent()) {
+			addError("Cannot add " + OclValues.repr(eObject) + " to " + lentModel(extent, borrower.get()));
+			return;
+		}
+		if (extent.isReadOnly()) {
+			addError("Cannot add " + OclValues.repr(eObject) + " to an in model: it is read-only (§8.1.3.2)");
+			return;
+		}
+		extent.add(eObject);
+	}
+
+	private void addToExtent(EObject eObject, String extentName) {
+		if (extentName != null) {
+			QvtoModelExtent extent = extentManager.getExtent(extentName);
 			if (extent != null) {
 				// §8.3.19: topclasses constraint — check if root type is allowed
 				if (tagRegistry.hasTopclassConstraints()
-						&& !tagRegistry.isTopclassAllowed(extentRef.getName(), eObject.eClass())) {
+						&& !tagRegistry.isTopclassAllowed(extentName, eObject.eClass())) {
 					addInfo("topclasses: " + eObject.eClass().getName()
-							+ " is not allowed as root in extent '" + extentRef.getName() + "'");
+							+ " is not allowed as root in extent '" + extentName + "'");
 					return;
 				}
-				extent.add(eObject);
+				addToWritableExtent(extent, eObject);
 				return;
 			}
 		}
+		if (transformation.getIntermediateClass().contains(eObject.eClass())) {
+			// §8.1.10: intermediate data does not exist outside the transformation — it goes to
+			// no output model unless an extent is named (#337)
+			extentManager.intermediateData().add(eObject);
+			return;
+		}
 		QvtoModelExtent extent = extentManager.getExtentForClassifier(eObject.eClass());
+		if (extent != null && extentManager.isAmbiguous(eObject.eClass()) && ambiguousClasses.add(eObject.eClass())) {
+			// §8.1.3.4: "If no extent can be inferred, typically because two ModelParameters use
+			// the same ModelType … a programming hazard that can be diagnosed by tooling". The
+			// first such parameter takes it, as in Eclipse (#337)
+			addWarning("The extent of " + eObject.eClass().getName() + " is ambiguous: it goes to '"
+					+ extentManager.getParameterName(extent) + "'; name the extent with @ to choose");
+		}
 		if (extent == null) {
 			extent = extentManager.getDefaultOutputExtent();
 		}
@@ -988,7 +1624,7 @@ public class QvtoEvaluator {
 					return;
 				}
 			}
-			extent.add(eObject);
+			addToWritableExtent(extent, eObject);
 		}
 	}
 
@@ -1072,9 +1708,12 @@ public class QvtoEvaluator {
 			OclEvaluationOptions base = options.oclOptions() != null
 					? options.oclOptions()
 					: oclEngine.getDefaultOptions();
-			oclOptions = base
-					.withNullHandling(OclEvaluationOptions.NullHandling.LENIENT)
-					.withAdditionalProviders(additionalProviders());
+			// QVT-O's standard library where it differs from OCL's: Dict::keys() is a List (#343)
+			oclOptions = base.toBuilder()
+					.nullHandling(OclEvaluationOptions.NullHandling.LENIENT)
+					.additionalProviders(additionalProviders())
+					.qvtCollections(true)
+					.build();
 		}
 		return oclOptions;
 	}
@@ -1086,21 +1725,292 @@ public class QvtoEvaluator {
 	 * §8.2.2.10: "zero for a numeric type, the empty string for a string,
 	 * and null for all other elements"
 	 */
-	private static Object defaultValueForType(EClassifier type) {
+	private Object defaultValueForType(EClassifier type) {
 		if (type == null) {
 			return null;
+		}
+		// §8.2.2.10: "an empty collection for a collection" (#339)
+		if (type instanceof CollectionType collectionType) {
+			return newCollection(collectionKind(collectionType, null), List.of());
+		}
+		if (type instanceof MapType) {
+			return new LinkedHashMap<>();
 		}
 		String typeName = type.getName();
 		if (typeName == null) {
 			return null;
 		}
+		// "zero for a numeric type, the empty string for a string, and null for all other
+		// elements" — Boolean included; Eclipse answers false (#339)
 		return switch (typeName) {
 			case "Integer" -> 0;
 			case "Real" -> 0.0;
-			case "Boolean" -> Boolean.FALSE;
 			case "String" -> "";
 			default -> null;
 		};
+	}
+
+	/**
+	 * The source of an arrow construct — {@code forEach}, {@code forOne} and the imperative
+	 * iterate variants — as a collection: a single value as if it were {@code oclAsSet()}, null
+	 * as the empty set (OCL v2.4 §9.3.35 [B], as #171 did for operations) (#341).
+	 *
+	 * @return the collection, or invalid
+	 */
+	private Object arrowSource(Object source) {
+		if (source instanceof Collection<?> || source == OclInvalid.INSTANCE) {
+			return source;
+		}
+		Object value = unwrapNull(source);
+		return newCollection(CollectionKind.SET, value == null ? List.of() : List.of(value));
+	}
+
+	/**
+	 * {@code list->foo(args)} as {@code list->xcollect(i | i.foo(args))} (§8.2.2.7: "these defined
+	 * shorthand conventions used to collect property values equally apply to operations"): the
+	 * contextual helper or query of each element's type called on it, the results flattened
+	 * without nulls into a Bag or a Sequence. The operation provider calls this when neither the
+	 * standard library nor an operation of the collection itself answers — a predefined
+	 * collection operation wins (#341).
+	 *
+	 * @return the collected results, or invalid if the source is no collection
+	 */
+	Object collectElementOperation(String name, Object source, Object[] args) {
+		if (!(source instanceof Collection<?> collection)) {
+			addError("Unknown operation: " + name + " on "
+					+ (source == null ? "null" : source.getClass().getSimpleName()));
+			return OclInvalid.INSTANCE;
+		}
+		List<ImperativeOperation> candidates = new ArrayList<>();
+		for (ImperativeOperation op : operationResolver.findAllOperations(name)) {
+			if (op.getContext() != null && !(op.getContext().getEType() instanceof CollectionType)
+					&& accepts(op, args.length)) {
+				candidates.add(op);
+			}
+		}
+		List<Object> results = new ArrayList<>();
+		for (Object element : collection) {
+			List<ImperativeOperation> applicable = QvtoOperationResolver.filterAndSortByType(candidates, element);
+			if (applicable.isEmpty() || element == null) {
+				continue;
+			}
+			ImperativeOperation op = applicable.get(0);
+			Object result = op instanceof MappingOperation
+					? callMappingByName(name, element, args.clone(), false)
+					: callOperation(op, element, args.clone());
+			for (Object value : flatten(result)) {
+				if (value != null) {
+					results.add(value);
+				}
+			}
+		}
+		CollectionKind kind = kindOf(collection);
+		return newCollection(kind == CollectionKind.SET || kind == CollectionKind.BAG ? CollectionKind.BAG
+				: CollectionKind.SEQUENCE, results);
+	}
+
+	/** The objects a mapping receives as inout: its inout parameters, and an inout context. */
+	private Set<Object> inoutObjects(MappingOperation mappingOp, Object self, Object[] args) {
+		Set<Object> inouts = Collections.newSetFromMap(new IdentityHashMap<>());
+		if (mappingOp.getContext() != null && mappingOp.getContext().getKind() == DirectionKind.INOUT && self != null) {
+			inouts.add(self);
+		}
+		List<VarParameter> formals = formalParameters(mappingOp);
+		for (int i = 0; i < formals.size() && i < args.length; i++) {
+			if (formals.get(i).getKind() == DirectionKind.INOUT && args[i] != null) {
+				inouts.add(args[i]);
+			}
+		}
+		return inouts;
+	}
+
+	/**
+	 * Reports a side effect where the spec rules one out, once per operation (#347): a query
+	 * that assigns a property or a module property (§8.2.1.12 "A query has no side-effects"),
+	 * an init section that changes an inout parameter (§8.1.11.2). Only direct assignments are
+	 * seen — a helper the query calls is not followed. A WARNING: the assignment still happens.
+	 */
+	private void checkSideEffect(Object target, String feature) {
+		if (runningQuery != null && reportedSideEffects.add(runningQuery)) {
+			addWarning("query '" + runningQuery.getName() + "' assigns '" + feature
+					+ "': a query has no side effects (§8.2.1.12)");
+		}
+		if (initInouts != null && target != null && initInouts.contains(target) && reportedSideEffects.add(initMapping)) {
+			addWarning("mapping '" + initMapping.getName() + "' changes the inout parameter's '" + feature
+					+ "' in its init section, where inout parameters may not be changed (§8.1.11.2)");
+		}
+	}
+
+	/**
+	 * The module property a variable reference stands for: the declaration itself, or the
+	 * untyped stand-in the parser builds for {@code this.name}; {@code null} for a variable.
+	 */
+	private Variable moduleProperty(Variable referred) {
+		for (Variable moduleVar : transformation.getOwnedVariable()) {
+			if (moduleVar == referred || (referred.eContainer() == null && referred.getType() == null
+					&& moduleVar.getName() != null && moduleVar.getName().equals(referred.getName()))) {
+				return moduleVar;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The value a variable, tuple part or intermediate property holds after an assignment, by
+	 * the equivalent assignments of §8.2.2.11 (#339). A multi-valued target — declared as a
+	 * collection, or holding one — gets a new collection of its own kind: the right-hand side is
+	 * flattened into it, a null element replaced by the default value. A variable keeps the
+	 * remaining nulls, a property drops them. The collection the target held is not changed, so
+	 * a variable that shares it keeps its elements. Before, {@code +=} added the right-hand
+	 * collection as one element and mutated the shared value, and {@code := null} cleared it.
+	 *
+	 * @param property whether the target is a property
+	 * @return the new value, or {@link #UNHANDLED} if the target keeps its value
+	 */
+	private Object assignedValue(String target, EClassifier declared, Object current, Object value, AssignExp exp,
+			boolean property) {
+		return assignedValue(target, declared, declared instanceof CollectionType, current, value, exp, property);
+	}
+
+	/**
+	 * @param declaredMany whether the target is declared multi-valued — a collection type, or a
+	 *        feature with an upper bound above one
+	 */
+	private Object assignedValue(String target, EClassifier declared, boolean declaredMany, Object current,
+			Object value, AssignExp exp, boolean property) {
+		if (exp.isIsSubtract()) {
+			if (!(current instanceof Collection<?> currentCollection)) {
+				return UNHANDLED;
+			}
+			Collection<Object> remaining = newCollection(collectionKind(declared, currentCollection), currentCollection);
+			flatten(value).forEach(remaining::remove);
+			return remaining;
+		}
+		if (exp.isIsReset()) {
+			// A collection is assigned element by element only to a target declared as one. A
+			// null or invalid right-hand side leaves a variable null (not LEFT{null}) and a property
+			// empty, as before
+			if (!declaredMany || value == OclInvalid.INSTANCE) {
+				return value;
+			}
+			if (value == null) {
+				return property ? newCollection(collectionKind(declared, null), List.of()) : null;
+			}
+			return appended(target, newCollection(collectionKind(declared, null), List.of()), value, exp, property);
+		}
+		// Eclipse bug449445: invalid is silently ignored on +=
+		if (value == OclInvalid.INSTANCE) {
+			return UNHANDLED;
+		}
+		if (current instanceof Collection<?> currentCollection) {
+			return appended(target, newCollection(collectionKind(declared, currentCollection), currentCollection),
+					value, exp, property);
+		}
+		if (declaredMany) {
+			return appended(target, newCollection(collectionKind(declared, null), List.of()), value, exp, property);
+		}
+		if (current == null) {
+			// An untyped variable that holds nothing yet takes the value
+			return value;
+		}
+		// "Equivalent Single valued Property or Variable append: invalid – append is not
+		// possible for single values"
+		addError("Cannot append to '" + target + "': append is not possible for single values");
+		return UNHANDLED;
+	}
+
+	/** Appends the flattened value to the new collection, within the collection size limit. */
+	private Object appended(String target, Collection<Object> acc, Object value, AssignExp exp, boolean property) {
+		Object defaultValue = UNHANDLED;
+		List<Object> elements = flatten(value);
+		// The size limit of #257 sees only standard-library results: `t.items += t.items` in a
+		// loop doubled on every step (#260)
+		int limit = oclOptions().maxCollectionSize();
+		if ((long) acc.size() + elements.size() > limit) {
+			addError("Collection size " + ((long) acc.size() + elements.size())
+					+ " exceeds maximum allowed size: " + limit + " — '" + target + "' is not changed");
+			return UNHANDLED;
+		}
+		for (Object element : elements) {
+			Object v = element;
+			if (v == null && exp.getDefaultValue() != null) {
+				if (defaultValue == UNHANDLED) {
+					defaultValue = eval(exp.getDefaultValue());
+				}
+				v = defaultValue;
+			}
+			if (v != null || !property) {
+				acc.add(v);
+			}
+		}
+		return acc;
+	}
+
+	/** {@code value->flatten()} of a single value or a collection, nested collections included. */
+	private static List<Object> flatten(Object value) {
+		List<Object> elements = new ArrayList<>();
+		if (value instanceof Collection<?> collection) {
+			for (Object element : collection) {
+				elements.addAll(flatten(element));
+			}
+		} else {
+			elements.add(value);
+		}
+		return elements;
+	}
+
+	/** The kind of collection a target holds: its declared kind, else that of its current value. */
+	private CollectionKind collectionKind(EClassifier declared, Collection<?> current) {
+		if (declared instanceof CollectionType collectionType && collectionType.getKind() != CollectionKind.COLLECTION) {
+			return collectionType.getKind();
+		}
+		return current != null ? kindOf(current) : CollectionKind.SEQUENCE;
+	}
+
+	/** Whether a collection is a mutable List — a Sequence, List being its alias (D26). */
+	boolean isList(Collection<?> collection) {
+		return kindOf(collection) == CollectionKind.SEQUENCE && !(collection instanceof Set<?>);
+	}
+
+	/** The kind of a collection value, by the class the OCL engine builds that kind with. */
+	CollectionKind kindOf(Collection<?> collection) {
+		collectionClasses();
+		for (Map.Entry<CollectionKind, Class<?>> entry : collectionClasses.entrySet()) {
+			if (entry.getValue() == collection.getClass()) {
+				return entry.getKey();
+			}
+		}
+		return collection instanceof Set<?> ? CollectionKind.SET : CollectionKind.SEQUENCE;
+	}
+
+	/**
+	 * A new collection of the kind, holding the elements. The OCL engine's collection classes
+	 * are internal to it: each is learnt once from an empty literal of its kind, and its
+	 * {@code (Collection)} constructor builds the copies — a literal evaluated per assignment
+	 * would cost a full OCL evaluation every time.
+	 */
+	@SuppressWarnings("unchecked")
+	Collection<Object> newCollection(CollectionKind kind, Collection<?> elements) {
+		Class<?> type = collectionClasses().get(kind == CollectionKind.COLLECTION ? CollectionKind.SEQUENCE : kind);
+		try {
+			return (Collection<Object>) type.getConstructor(Collection.class).newInstance(elements);
+		} catch (ReflectiveOperationException e) {
+			Collection<Object> fallback = (Collection<Object>) emptyCollection(kind);
+			fallback.addAll(elements);
+			return fallback;
+		}
+	}
+
+	private Map<CollectionKind, Class<?>> collectionClasses() {
+		if (collectionClasses == null) {
+			Map<CollectionKind, Class<?>> classes = new LinkedHashMap<>();
+			for (CollectionKind kind : List.of(CollectionKind.SEQUENCE, CollectionKind.ORDERED_SET,
+					CollectionKind.SET, CollectionKind.BAG)) {
+				classes.put(kind, emptyCollection(kind).getClass());
+			}
+			collectionClasses = classes;
+		}
+		return collectionClasses;
 	}
 
 	/**
@@ -1120,7 +2030,7 @@ public class QvtoEvaluator {
 			return;
 		}
 		try {
-			env.pushScope();
+			env.pushFrame();
 
 			// Bind parameters from args
 			List<?> formalParams = ctor.getEParameters();
@@ -1152,7 +2062,7 @@ public class QvtoEvaluator {
 		} catch (ReturnException e) {
 			// Constructor body may have return — ignore the value
 		} finally {
-			env.popScope();
+			env.popFrame();
 			--stackDepth;
 		}
 	}
@@ -1179,8 +2089,35 @@ public class QvtoEvaluator {
 		addDiagnostic(diagnostic.getSeverity(), message);
 	}
 
-	private void addError(String message) {
+	/**
+	 * Records a mapping invocation in the trace, and reports the first record the trace limit
+	 * drops (#284).
+	 *
+	 * <p>Past {@code maxTraceRecords} the trace stops growing, so a resolve operation, or the
+	 * reuse of a mapping already applied (§8.1.11.1), may miss what was mapped afterwards and
+	 * answer from an incomplete trace. Before #284 that happened in silence and the run reported
+	 * success; now it is an error, like every other limit, reported once.
+	 */
+	private void recordTrace(MappingOperation mappingOp, Object self, Object[] args, Object[] outArgs, Object result) {
+		boolean reachedBefore = traceManager.isLimitReached();
+		traceManager.addRecord(mappingOp, self, args, outArgs, result);
+		if (!reachedBefore && traceManager.isLimitReached()) {
+			addError("Maximum trace records exceeded: " + options.maxTraceRecords()
+					+ " — resolve operations and mapping reuse may miss what was mapped after it");
+		}
+	}
+
+	void addError(String message) {
 		addDiagnostic(Diagnostic.ERROR, message);
+	}
+
+	/**
+	 * Names a model lent to a transformation running in parallel, for a refused modification.
+	 */
+	String lentModel(QvtoModelExtent extent, String borrower) {
+		String model = extent != null ? extentManager.getParameterName(extent) : null;
+		return "the model" + (model != null ? " '" + model + "'" : "") + ", which the transformation '"
+				+ borrower + "' started by parallelTransform() uses until it ends (§8.1.3.3)";
 	}
 
 	private void addWarning(String message) {
@@ -1195,6 +2132,11 @@ public class QvtoEvaluator {
 	 * Adds a diagnostic entry, respecting {@code maxDiagnostics} limit (M-4b / Q-7).
 	 */
 	private void addDiagnostic(int severity, String message) {
+		addDiagnostic(severity, 0, message);
+	}
+
+	/** @param code the diagnostic's code — the level of a log record (§8.2.2.19) */
+	private void addDiagnostic(int severity, int code, String message) {
 		if (diagnostics.size() >= options.maxDiagnostics()) {
 			if (diagnostics.size() == options.maxDiagnostics()) {
 				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0,
@@ -1203,7 +2145,7 @@ public class QvtoEvaluator {
 			}
 			return;
 		}
-		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, 0, message, null));
+		diagnostics.add(new BasicDiagnostic(severity, SOURCE_ID, code, message, null));
 	}
 
 	/**
@@ -1217,64 +2159,116 @@ public class QvtoEvaluator {
 	}
 
 	/**
-	 * Processes all deferred (late) resolve tasks after all mappings have completed.
-	 * Each task re-evaluates its resolve expression (which now has access to the full
-	 * trace) and assigns the result to the captured l-value property.
+	 * Performs the deferred assignments once the entry operation has finished (§8.2.1.22), in
+	 * the order they were reached. Each right-hand side is evaluated now, against the full
+	 * trace, with the variables and late-resolve sources captured when it was reached.
 	 */
-	@SuppressWarnings("unchecked")
 	private void processDeferredTasks() {
-		if (deferredTasks.isEmpty()) {
+		if (deferredAssignments.isEmpty()) {
 			return;
 		}
 		isDeferredExecution = true;
 		try {
-			for (DeferredResolveTask task : deferredTasks) {
-				// Re-evaluate the resolve expression — isDeferredExecution causes
-				// caseResolveExp to fall through to normal resolve logic
-				pendingLvalueOwner = null; // Clear to avoid re-capture
-				Object sourceObj = task.capturedSource();
+			for (DeferredAssignment deferred : deferredAssignments) {
 				env.pushScope();
+				deferredResolveSources = deferred.resolveSources();
 				try {
-					if (sourceObj != null) {
-						env.define("self", sourceObj);
-					}
-					Object resolved = qvtOpSwitch.doSwitch(task.resolveExp());
-					resolved = unwrapNull(resolved);
-
-					if (resolved != null && task.targetObject() != null
-							&& task.targetFeature() != null) {
-						EStructuralFeature sf = task.targetObject().eClass()
-								.getEStructuralFeature(task.targetFeature().getName());
-						if (sf == null) {
-							sf = task.targetFeature();
-						}
-						if (task.isSubtract()) {
-							// -= : remove from collection
-							Object current = task.targetObject().eGet(sf);
-							if (current instanceof Collection<?>) {
-								Collection<Object> col = (Collection<Object>) current;
-								col.remove(coerceForFeature(sf, resolved));
-							}
-						} else if (task.isReset()) {
-							task.targetObject().eSet(sf, coerceForFeature(sf, resolved));
-						} else {
-							Object current = task.targetObject().eGet(sf);
-							if (current instanceof Collection<?>) {
-								((Collection<Object>) current).add(
-										coerceForFeature(sf, resolved));
-							} else {
-								task.targetObject().eSet(sf, coerceForFeature(sf, resolved));
-							}
-						}
-					}
+					deferred.variables().forEach(env::define);
+					Object value = evalAssignedValue(deferred.assignment());
+					assignToProperty(deferred.target(), deferred.feature(), value,
+							deferred.assignment());
 				} finally {
+					deferredResolveSources = Map.of();
 					env.popScope();
 				}
 			}
 		} finally {
 			isDeferredExecution = false;
-			deferredTasks.clear();
+			deferredAssignments.clear();
 		}
+	}
+
+	/**
+	 * §8.2.2.11: whether the assignment is a deferred one — its right-hand side involves a
+	 * late resolve. A property of the AST, so asked once per assignment node and remembered in
+	 * {@link #lateResolveAssignments}: walking the right-hand side at every execution of every
+	 * assignment cost a mapping-heavy transformation a fifth of its run time.
+	 */
+	private static boolean involvesLateResolve(AssignExp exp) {
+		List<OclExpression> parts = new ArrayList<>(exp.getValue());
+		if (exp.getDefaultValue() != null) {
+			parts.add(exp.getDefaultValue());
+		}
+		for (OclExpression part : parts) {
+			if (part instanceof ResolveExp r && r.isIsDeferred()) {
+				return true;
+			}
+			for (var iter = part.eAllContents(); iter.hasNext(); ) {
+				if (iter.next() instanceof ResolveExp r && r.isIsDeferred()) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * §8.2.1.22: the source object of each late resolve in the assignment, evaluated where the
+	 * assignment is reached — except a source that uses a variable the right-hand side itself
+	 * declares (an iterator, say), which can only be evaluated with the right-hand side.
+	 */
+	private Map<ResolveExp, Object> captureLateResolveSources(AssignExp exp) {
+		Map<ResolveExp, Object> sources = new IdentityHashMap<>();
+		List<OclExpression> parts = new ArrayList<>(exp.getValue());
+		if (exp.getDefaultValue() != null) {
+			parts.add(exp.getDefaultValue());
+		}
+		for (OclExpression part : parts) {
+			List<EObject> nodes = new ArrayList<>();
+			nodes.add(part);
+			part.eAllContents().forEachRemaining(nodes::add);
+			for (EObject node : nodes) {
+				if (node instanceof ResolveExp r && r.isIsDeferred() && r.getOwnedSource() != null
+						&& !usesVariableDeclaredIn(r.getOwnedSource(), exp)) {
+					sources.put(r, eval(r.getOwnedSource()));
+				}
+			}
+		}
+		return sources;
+	}
+
+	private static boolean usesVariableDeclaredIn(OclExpression expr, AssignExp assignment) {
+		List<EObject> nodes = new ArrayList<>();
+		nodes.add(expr);
+		expr.eAllContents().forEachRemaining(nodes::add);
+		for (EObject node : nodes) {
+			if (node instanceof VariableExp ref && ref.getReferredVariable() != null
+					&& EcoreUtil.isAncestor(assignment, ref.getReferredVariable())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * §8.2.2.11: the right-hand side of an assignment, with the default value standing in for null.
+	 */
+	private Object evalAssignedValue(AssignExp exp) {
+		List<OclExpression> values = exp.getValue();
+		if (values.size() > 1) {
+			// §8.2.2.11: "A complex assignment is equivalent to a simple assignment comprising a
+			// Sequence of the compound expression values" (#339)
+			List<Object> sequence = new ArrayList<>(values.size());
+			for (OclExpression valueExp : values) {
+				sequence.add(unwrapNull(eval(valueExp)));
+			}
+			return sequence;
+		}
+		Object value = values.isEmpty() ? null : eval(values.get(0));
+		if (value == null && exp.getDefaultValue() != null) {
+			value = eval(exp.getDefaultValue());
+		}
+		return value;
 	}
 
 	private static Object wrapNull(Object value) {
@@ -1290,8 +2284,11 @@ public class QvtoEvaluator {
 	 */
 	private Map<String, Object> collectMultiResult(EList<VarParameter> resultParams) {
 		Map<String, Object> tuple = new LinkedHashMap<>();
+		// A part assigned through "result.a := …" is in the tuple bound to result (#336)
+		Map<?, ?> bound = env.contains("result") && env.lookup("result") instanceof Map<?, ?> map ? map : Map.of();
 		for (VarParameter rp : resultParams) {
-			tuple.put(rp.getName(), env.lookup(rp.getName()));
+			Object value = env.lookup(rp.getName());
+			tuple.put(rp.getName(), value != null ? value : bound.get(rp.getName()));
 		}
 		return tuple;
 	}
@@ -1317,31 +2314,135 @@ public class QvtoEvaluator {
 
 
 	/**
-	 * §8.1.3.2: Guards property assignment on EObjects belonging to read-only (in) extents.
+	 * §8.1.3.2: Guards property assignment on EObjects belonging to read-only (in) extents. The
+	 * message names the place in the script, the object, the feature and the in model — it named
+	 * none of them, so a generator failing this way could only be found with a debugger.
+	 *
+	 * @param node the assignment (or argument) that writes, for its position; may be null
 	 */
-	private void checkNotReadOnly(EObject target) {
+	private void checkNotReadOnly(EObject target, String feature, EObject node) {
+		// §8.1.3.3: a model lent to a transformation running in parallel, checked first — while
+		// that transformation reads it as an in model, the flag below would misname the reason
+		Optional<String> borrower = extentManager.borrowerOf(target);
+		if (borrower.isPresent()) {
+			QvtoModelExtent extent = extentManager.extentOf(target);
+			SourcePosition position = node != null ? engine.positionOf(node) : null;
+			throw new RaiseException("InvalidModelMutation", (position != null ? position + " " : "")
+					+ "Cannot assign '" + feature + "' of " + OclValues.repr(target) + ": it belongs to "
+					+ lentModel(extent, borrower.get()));
+		}
 		if (extentManager.isReadOnly(target)) {
-			throw new RaiseException("InvalidModelMutation",
-					"Cannot modify object in read-only model extent (in-parameter)");
+			QvtoModelExtent extent = extentManager.extentOf(target);
+			String model = extent != null ? extentManager.getParameterName(extent) : null;
+			SourcePosition position = node != null ? engine.positionOf(node) : null;
+			throw new RaiseException("InvalidModelMutation", (position != null ? position + " " : "")
+					+ "Cannot assign '" + feature + "' of " + OclValues.repr(target) + ": it belongs to the in model"
+					+ (model != null ? " '" + model + "'" : "") + ", which is read-only (§8.1.3.2)");
+		}
+	}
+
+	/**
+	 * Assigns to a property of a model object: an intermediate property (§8.1.10), a static
+	 * one of an intermediate class (§8.4), or the object's own.
+	 */
+	private void assignToProperty(EObject eo, EStructuralFeature sf, Object value, AssignExp exp) {
+		// §8.1.10: Check intermediate property first — intermediate properties
+		// are stored externally, so they ARE allowed on in-model objects.
+		ContextualProperty icp = intermediateStore.findIntermediateProperty(eo, sf.getName());
+		if (icp != null) {
+			// A property: a multi-valued one skips null elements (§8.2.2.11, #339)
+			Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
+			Object assigned = assignedValue(sf.getName(), icp.getEType(),
+					icp.isMany() || icp.getEType() instanceof CollectionType, current, value, exp, true);
+			if (assigned != UNHANDLED) {
+				intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), assigned);
+			}
+			return;
+		}
+		// §8.1.3.2: Guard non-intermediate property assignment on in-model objects
+		checkNotReadOnly(eo, sf.getName(), exp);
+		// Resolve the feature from the actual EClass to handle
+		// cross-package identity (dynamic Ecore models)
+		EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
+		if (actualSf == null) {
+			actualSf = sf;
+		}
+		// §8.4: Static intermediate class feature → shared store
+		if (QvtoIntermediatePropertyStore.isStatic(actualSf)) {
+			intermediateStore.setStaticValue(actualSf, value);
+			return;
+		}
+		assignToModelFeature(eo, actualSf, value, exp);
+	}
+
+	/**
+	 * §8.2.2.11: assigns to, appends to or removes from a feature of a model object.
+	 *
+	 * <p>A many-valued feature takes the flattened values, and "any residual null values are
+	 * omitted". What EMF still refuses — a value of the wrong type, say — is an error of the
+	 * transformation, reported as such rather than thrown out of {@code execute} (#297).
+	 */
+	@SuppressWarnings("unchecked")
+	private void assignToModelFeature(EObject eo, EStructuralFeature sf, Object value,
+			AssignExp exp) {
+		if (sf == null) {
+			addError("Unknown property in assignment on " + eo.eClass().getName());
+			return;
+		}
+		// Eclipse bug449445: invalid → null for property assignment, ignored on +=
+		Object assigned = value == OclInvalid.INSTANCE ? null : value;
+		try {
+			if (exp.isIsSubtract()) {
+				if (eo.eGet(sf) instanceof Collection<?> current) {
+					((Collection<Object>) current).remove(coerceForFeature(sf, assigned));
+				}
+			} else if (sf.isMany()) {
+				List<Object> items = new ArrayList<>();
+				collectFeatureValues(sf, assigned, items);
+				if (exp.isIsReset()) {
+					// §8.2.1: collection assignment uses value-copy semantics
+					eo.eSet(sf, items);
+				} else {
+					((Collection<Object>) eo.eGet(sf)).addAll(items);
+				}
+			} else if (exp.isIsReset()) {
+				// A single-valued feature may hold a collection itself — an intermediate class's
+				// Sequence(String) — and gets a copy (§8.2.1: value-copy semantics)
+				eo.eSet(sf, assigned instanceof Collection<?> values
+						? new ArrayList<>(values)
+						: coerceForFeature(sf, assigned));
+			} else if (eo.eGet(sf) instanceof Collection<?> current) {
+				// += onto the collection such a feature holds
+				List<Object> items = new ArrayList<>();
+				collectFeatureValues(sf, assigned, items);
+				((Collection<Object>) current).addAll(items);
+			} else {
+				eo.eSet(sf, coerceForFeature(sf, assigned));
+			}
+		} catch (IllegalArgumentException | ClassCastException | ArrayStoreException e) {
+			addError("Cannot assign to " + eo.eClass().getName() + "::" + sf.getName() + ": "
+					+ e.getMessage());
+		}
+	}
+
+	private static void collectFeatureValues(EStructuralFeature sf, Object value, List<Object> into) {
+		if (value instanceof Collection<?> values) {
+			for (Object item : values) {
+				collectFeatureValues(sf, item, into);
+			}
+		} else if (value != null && value != OclInvalid.INSTANCE) {
+			into.add(coerceForFeature(sf, value));
 		}
 	}
 
 	/**
 	 * Coerces a value to match the expected EMF structural feature type.
-	 * OCL evaluates integer literals as Long, but EMF EInt expects Integer.
+	 * OCL evaluates an Integer as Long (BigInteger beyond 64 bits) and a Real as BigDecimal
+	 * (#322); the feature wants its own instance class — Integer for EInt, Double for EDouble.
 	 */
 	private static Object coerceForFeature(EStructuralFeature sf, Object value) {
-		if (value instanceof Long l && sf instanceof EAttribute attr) {
-			String typeName = attr.getEAttributeType().getName();
-			if ("EInt".equals(typeName) || "EIntegerObject".equals(typeName)) {
-				return l.intValue();
-			}
-			if ("EShort".equals(typeName) || "EShortObject".equals(typeName)) {
-				return l.shortValue();
-			}
-			if ("EByte".equals(typeName) || "EByteObject".equals(typeName)) {
-				return l.byteValue();
-			}
+		if (value instanceof Number && sf instanceof EAttribute attr) {
+			return OclValues.toEcore(value, attr.getEAttributeType());
 		}
 		return value;
 	}
@@ -1354,11 +2455,11 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseBlockExp(BlockExp exp) {
-			Object lastResult = null;
 			for (OclExpression bodyExp : exp.getBody()) {
-				lastResult = eval(bodyExp);
+				eval(bodyExp);
 			}
-			return wrapNull(lastResult);
+			// §8.2.2.2: "The returned value is null" — as in Eclipse (#339)
+			return WRAPPED_NULL;
 		}
 
 		@Override
@@ -1382,34 +2483,17 @@ public class QvtoEvaluator {
 		public Object caseAssignExp(AssignExp exp) {
 			OclExpression left = exp.getLeft();
 
-			// Capture l-value before evaluating RHS (needed for late resolve)
-			if (left instanceof PropertyCallExp propLeft) {
-				Object lvalSource = eval(propLeft.getOwnedSource());
-				if (lvalSource instanceof EObject eo) {
-					EStructuralFeature sf = propLeft.getReferredProperty();
-					EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
-					pendingLvalueOwner = eo;
-					pendingLvalueFeature = actualSf != null ? actualSf : sf;
-					pendingLvalueIsReset = exp.isIsReset();
-					pendingLvalueIsSubtract = exp.isIsSubtract();
-				}
+			// §8.2.2.11: an assignment involving a late resolve is deferred as a whole — wherever
+			// it stands, in a block or an if as much as at the top of a mapping body (#297)
+			if (!isDeferredExecution && lateResolveAssignments.computeIfAbsent(exp, QvtoEvaluator::involvesLateResolve)
+					&& deferAssignment(exp)) {
+				// "This assignment is not executed at the time the assignment is reached ...
+				// A null value is returned instead." (§8.2.1.22)
+				return WRAPPED_NULL;
 			}
 
-			// Evaluate value(s)
-			List<OclExpression> values = exp.getValue();
-			Object value = null;
-			if (!values.isEmpty()) {
-				value = eval(values.get(0));
-			}
+			Object value = evalAssignedValue(exp);
 
-			// §8.2.2.11: defaultValue — replace null with the default expression
-			if (value == null && exp.getDefaultValue() != null) {
-				value = eval(exp.getDefaultValue());
-			}
-
-			// Clear pending l-value after RHS evaluation
-			pendingLvalueOwner = null;
-			pendingLvalueFeature = null;
 			if (left instanceof VariableExp varExp) {
 				String varName = varExp.getReferredVariable().getName();
 				// §8.2.1.17: Implicit property assignment — inside object expressions
@@ -1419,86 +2503,42 @@ public class QvtoEvaluator {
 				if (!env.contains(varName)) {
 					EObject target = resolveImplicitPropertyTarget(varName);
 					if (target != null) {
-						checkNotReadOnly(target);
-						// §8.3.19: Resolve alias to real feature name
-						String realName = resolveAlias(varName, target);
-						EStructuralFeature sf = target.eClass().getEStructuralFeature(
-								realName != null ? realName : varName);
-						// Eclipse bug449445: invalid → null for property assignment
-						Object coerced = coerceForFeature(sf,
-								value == OclInvalid.INSTANCE ? null : value);
-						if (exp.isIsSubtract()) {
-							// -= : remove element from collection
-							Object current = target.eGet(sf);
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.remove(coerced);
-							}
-						} else if (exp.isIsReset()) {
-							if (value == OclInvalid.INSTANCE || value == null) {
-								// Clear collection or set null
-								Object current = target.eGet(sf);
-								if (current instanceof Collection<?>) {
-									@SuppressWarnings("unchecked")
-									Collection<Object> col = (Collection<Object>) current;
-									col.clear();
-								} else {
-									target.eSet(sf, null);
-								}
-							} else {
-								// §8.2.1: Collection assignment uses value-copy semantics
-								if (coerced instanceof Collection<?> srcCol) {
-									target.eSet(sf, new ArrayList<>(srcCol));
-								} else {
-									target.eSet(sf, coerced);
-								}
-							}
-						} else {
-							Object current = target.eGet(sf);
-							if (current instanceof Collection<?>) {
-								// Eclipse bug449445: invalid is silently ignored on +=
-								if (coerced != OclInvalid.INSTANCE) {
-									@SuppressWarnings("unchecked")
-									Collection<Object> col = (Collection<Object>) current;
-									col.add(coerced);
-								}
-							} else {
-								target.eSet(sf, coerced);
-							}
-						}
+						checkNotReadOnly(target, varName, exp);
+						checkSideEffect(target, varName);
+						assignToModelFeature(target, implicitFeature(target, varName), value, exp);
 						return wrapNull(value);
 					}
 				}
-				// Variable assignment
-				if (exp.isIsSubtract()) {
-					// -= : remove element from collection variable
-					Object current = env.lookup(varName);
-					if (current instanceof Collection<?>) {
-						@SuppressWarnings("unchecked")
-						Collection<Object> col = (Collection<Object>) current;
-						col.remove(value);
-					}
-				} else if (exp.isIsReset()) {
-					Object current = env.lookup(varName);
-					if (value == null && current instanceof Collection<?>) {
-						((Collection<?>) current).clear();
-					} else {
-						env.assign(varName, value);
-					}
-				} else {
-					// += (append): add to collection
-					Object current = env.lookup(varName);
-					if (current instanceof Collection<?>) {
-						// Eclipse bug449445: invalid is silently ignored on +=
-						if (value != OclInvalid.INSTANCE) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							col.add(value);
+				// §8.1.3.3: "A model assignment displaces any previous members associated with the
+				// extent in favor of the root model elements of the replacement Model" — the
+				// variable keeps its extent, whose contents change (#337)
+				if (exp.isIsReset() && env.lookup(varName) instanceof QvtoModelExtent target
+						&& value instanceof QvtoModelExtent replacement) {
+					if (target != replacement) {
+						Optional<String> borrower = extentManager.borrowerOf(target);
+						if (borrower.isPresent()) {
+							addError("Cannot assign to " + lentModel(target, borrower.get()));
+						} else if (target.isReadOnly()) {
+							addError("Cannot assign to the model '" + varName + "': it is an in model");
+						} else {
+							target.setContents(new ArrayList<>(replacement.getContents()));
 						}
-					} else {
-						env.assign(varName, value);
 					}
+					return wrapNull(value);
+				}
+				// Variable assignment (§8.2.2.11): the variable gets a new value, a collection it
+				// shared with another variable is not changed (#339)
+				// A module property (§8.1.18, also reached as this.name) is assigned as a property
+				Variable moduleProperty = moduleProperty(varExp.getReferredVariable());
+				if (moduleProperty != null) {
+					checkSideEffect(null, varName);
+				}
+				Object assigned = moduleProperty != null
+						? assignedValue(varName, moduleProperty.getType(), env.lookup(varName), value, exp, true)
+						: assignedValue(varName, varExp.getReferredVariable().getType(), env.lookup(varName), value,
+								exp, false);
+				if (assigned != UNHANDLED) {
+					env.assign(varName, assigned);
 				}
 			} else if (left instanceof PropertyCallExp propExp) {
 				// Property assignment: eObject.eSet(feature, value) or tuple.part
@@ -1509,151 +2549,58 @@ public class QvtoEvaluator {
 					@SuppressWarnings("unchecked")
 					Map<String, Object> tuple = (Map<String, Object>) source;
 					String partName = sf.getName();
-					if (exp.isIsSubtract()) {
-						// -= on tuple part: remove from collection
-						Object current = tuple.get(partName);
-						if (current instanceof Collection<?>) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							col.remove(value);
-						}
-					} else if (exp.isIsReset()) {
-						tuple.put(partName, value);
-					} else {
-						// += on tuple part: only valid for mutable collections (List)
-						Object current = tuple.get(partName);
-						if (current instanceof Collection<?>) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							if (value instanceof Collection<?> rhs) {
-								// The operand is a navigation result, not a standard-library result,
-								// so the size limit of #257 never saw it: `t.items += t.items` in a
-								// loop doubled on every step (#260)
-								int limit = oclOptions().maxCollectionSize();
-								if ((long) col.size() + rhs.size() > limit) {
-									addError("Collection size " + ((long) col.size() + rhs.size())
-											+ " exceeds maximum allowed size: " + limit);
-								} else {
-									col.addAll(rhs);
-								}
-							} else {
-								col.add(value);
-							}
-						} else {
-							tuple.put(partName, value);
-						}
+					// A tuple part is assigned like a variable (§8.2.2.11, #339)
+					Object assigned = assignedValue(partName, sf.getEType(), tuple.get(partName), value, exp, false);
+					if (assigned != UNHANDLED) {
+						tuple.put(partName, assigned);
 					}
 				} else if (source instanceof EObject eo && sf != null) {
-					// §8.1.10: Check intermediate property first — intermediate properties
-					// are stored externally, so they ARE allowed on in-model objects.
-					ContextualProperty icp = intermediateStore.findIntermediateProperty(eo, sf.getName());
-					if (icp != null) {
-						// Eclipse bug449445: invalid → null for property assignment,
-						// or clear if current value is a collection
-						if (exp.isIsSubtract()) {
-							// -= on intermediate property: remove from collection
-							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.remove(value);
-							}
-						} else if ((value == OclInvalid.INSTANCE || value == null) && exp.isIsReset()) {
-							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.clear();
-							} else {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), null);
-							}
-						} else if (value == OclInvalid.INSTANCE) {
-							// += invalid: silently ignored
-						} else if (exp.isIsReset()) {
-							// §8.2.1: Collection assignment uses value-copy semantics
-							if (value instanceof Collection<?> srcCol) {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), new ArrayList<>(srcCol));
-							} else {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
-							}
-						} else {
-							// += on intermediate property: add to collection or set value
-							Object current = intermediateStore.getIntermediatePropertyValue(eo, sf.getName());
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.add(value);
-							} else {
-								intermediateStore.setIntermediatePropertyValue(eo, sf.getName(), value);
-							}
-						}
-						return wrapNull(value);
-					}
-					// §8.1.3.2: Guard non-intermediate property assignment on in-model objects
-					checkNotReadOnly(eo);
-					// Resolve the feature from the actual EClass to handle
-					// cross-package identity (dynamic Ecore models)
-					EStructuralFeature actualSf = eo.eClass().getEStructuralFeature(sf.getName());
-					if (actualSf == null) {
-						actualSf = sf;
-					}
-					// §8.4: Static intermediate class feature → shared store
-					if (QvtoIntermediatePropertyStore.isStatic(actualSf)) {
-						intermediateStore.setStaticValue(actualSf, value);
-						return wrapNull(value);
-					}
-					// Eclipse bug449445: invalid → null for EObject property assignment
-					Object coerced = coerceForFeature(actualSf,
-							value == OclInvalid.INSTANCE ? null : value);
-					if (exp.isIsSubtract()) {
-						// -= on EObject property: remove from collection
-						Object current = eo.eGet(actualSf);
-						if (current instanceof Collection<?>) {
-							@SuppressWarnings("unchecked")
-							Collection<Object> col = (Collection<Object>) current;
-							col.remove(coerced);
-						}
-					} else if (exp.isIsReset()) {
-						if (value == OclInvalid.INSTANCE || value == null) {
-							// Clear collection or set null
-							Object current = eo.eGet(actualSf);
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								col.clear();
-							} else {
-								eo.eSet(actualSf, null);
-							}
-						} else {
-							// §8.2.1: Collection assignment uses value-copy semantics
-							if (coerced instanceof Collection<?> srcCol) {
-								eo.eSet(actualSf, new ArrayList<>(srcCol));
-							} else {
-								eo.eSet(actualSf, coerced);
-							}
-						}
-					} else {
-						// += on EReference/EAttribute list
-						if (coerced != OclInvalid.INSTANCE) {
-							Object current = eo.eGet(actualSf);
-							if (current instanceof Collection<?>) {
-								@SuppressWarnings("unchecked")
-								Collection<Object> col = (Collection<Object>) current;
-								if (coerced instanceof Collection<?> rhs) {
-									for (Object item : rhs) {
-										col.add(coerceForFeature(actualSf, item));
-									}
-								} else {
-									col.add(coerced);
-								}
-							} else {
-								eo.eSet(actualSf, coerced);
-							}
-						}
-					}
+					checkSideEffect(eo, sf.getName());
+					assignToProperty(eo, sf, value, exp);
+				} else if (source == null || source == OclInvalid.INSTANCE) {
+					// §8.2.2.11: there is no object to assign to — the assignment cannot be
+					// performed, and it is not dropped without a word (#308)
+					addError("Cannot assign to property '" + (sf != null ? sf.getName() : "?")
+							+ "': the target is " + (source == null ? "null" : "invalid"));
 				}
 			}
 			return wrapNull(value);
+		}
+
+		/**
+		 * §8.2.2.11: records a deferred assignment — the property it assigns and the sources
+		 * of its late resolves, as §8.2.1.22 lists them — to be performed at the end.
+		 *
+		 * @return whether it was deferred; an assignment to a variable is not, as the
+		 *         variable is gone by the time the late resolve can run
+		 */
+		private boolean deferAssignment(AssignExp exp) {
+			OclExpression left = exp.getLeft();
+			EObject target = null;
+			EStructuralFeature feature = null;
+			if (left instanceof PropertyCallExp propLeft
+					&& eval(propLeft.getOwnedSource()) instanceof EObject eo
+					&& propLeft.getReferredProperty() != null) {
+				target = eo;
+				feature = propLeft.getReferredProperty();
+			} else if (left instanceof VariableExp varExp
+					&& !env.contains(varExp.getReferredVariable().getName())) {
+				String name = varExp.getReferredVariable().getName();
+				target = resolveImplicitPropertyTarget(name);
+				feature = target != null ? implicitFeature(target, name) : null;
+			}
+			if (target == null || feature == null) {
+				return false;
+			}
+			deferredAssignments.add(new DeferredAssignment(exp, target, feature,
+					env.allVisibleVariables(), captureLateResolveSources(exp)));
+			return true;
+		}
+
+		/** §8.3.19: the feature an unqualified name stands for, an alias resolved. */
+		private EStructuralFeature implicitFeature(EObject target, String name) {
+			String realName = resolveAlias(name, target);
+			return target.eClass().getEStructuralFeature(realName != null ? realName : name);
 		}
 
 		@Override
@@ -1669,8 +2616,13 @@ public class QvtoEvaluator {
 					addError("Execution timeout exceeded");
 					break;
 				}
-				Object condition = eval(exp.getCondition());
+				Object condition = evalCondition(exp.getCondition());
 				if (!Boolean.TRUE.equals(condition)) {
+					// §8.2.2.4: iterates "until a condition becomes false" — an undefined one
+					// ends the loop too, but not without a word (#310)
+					if (!Boolean.FALSE.equals(condition)) {
+						undefinedCondition("while", condition, "the loop ends");
+					}
 					break;
 				}
 				try {
@@ -1686,10 +2638,9 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseForExp(ForExp exp) {
-			Object source = eval(exp.getOwnedSource());
+			Object source = arrowSource(eval(exp.getOwnedSource()));
 			if (!(source instanceof Collection<?> coll)) {
-				addError("for source must be a Collection, got: "
-						+ (source == null ? "null" : source.getClass().getSimpleName()));
+				addError("for source must be a Collection, got: invalid");
 				return WRAPPED_NULL;
 			}
 
@@ -1721,8 +2672,13 @@ public class QvtoEvaluator {
 					env.define(iterName, element);
 					// Optional condition filter
 					if (condition != null) {
-						Object condVal = eval(condition);
+						Object condVal = evalCondition(condition);
 						if (!Boolean.TRUE.equals(condVal)) {
+							// §8.2.2.6 defines the condition as "if (condition) body" per element:
+							// the if of #308, so this element is skipped with an error (#310)
+							if (!Boolean.FALSE.equals(condVal)) {
+								undefinedCondition(exp.getName(), condVal, "the element is skipped");
+							}
 							continue;
 						}
 					}
@@ -1759,10 +2715,9 @@ public class QvtoEvaluator {
 		 */
 		@Override
 		public Object caseImperativeIterateExp(ImperativeIterateExp exp) {
-			Object source = eval(exp.getOwnedSource());
+			Object source = arrowSource(eval(exp.getOwnedSource()));
 			if (!(source instanceof Collection<?> coll)) {
-				addError("imperativeIterate source must be a Collection, got: "
-						+ (source == null ? "null" : source.getClass().getSimpleName()));
+				addError("imperativeIterate source must be a Collection, got: invalid");
 				return WRAPPED_NULL;
 			}
 			if (coll.size() > options.maxLoopIterations()) {
@@ -1826,11 +2781,14 @@ public class QvtoEvaluator {
 			if (firstOnly) {
 				return wrapNull(collected.isEmpty() ? null : collected.get(0));
 			}
-			// A List, as every other iterator of this evaluator answers. §8.2.2.7 says the kind
-			// follows the source (Bag for an unordered one, Sequence for an ordered one); this
-			// evaluator does not carry collection kinds through any iterator, so doing it here
-			// alone would be a difference without a rule.
-			return collected;
+			// §8.2.2.7: xselect answers "BagOrOrderedSetOrSequenceOrSet(T)" — the kind of its
+			// source; the collecting variants "BagOrSequence(TT)" — a Bag for an unordered
+			// source, a Sequence for an ordered one, as OCL's collect does (#341)
+			CollectionKind sourceKind = kindOf(coll);
+			CollectionKind resultKind = !collecting ? sourceKind
+					: sourceKind == CollectionKind.SET || sourceKind == CollectionKind.BAG ? CollectionKind.BAG
+					: CollectionKind.SEQUENCE;
+			return newCollection(resultKind, collected);
 		}
 
 		/**
@@ -1846,7 +2804,13 @@ public class QvtoEvaluator {
 			env.pushScope();
 			try {
 				env.define(target != null ? target.getName() : iterName, candidate);
-				return Boolean.TRUE.equals(eval(condition));
+				// §8.2.2.7 defines the variants with "if (SELECTOR <> null and CONDITION)": the
+				// if of #308, so an undefined condition skips the element with an error (#310)
+				Object condVal = evalCondition(condition);
+				if (!(condVal instanceof Boolean)) {
+					undefinedCondition("xselect", condVal, "the element is skipped");
+				}
+				return Boolean.TRUE.equals(condVal);
 			} finally {
 				env.popScope();
 			}
@@ -1869,6 +2833,10 @@ public class QvtoEvaluator {
 				Object condition = eval(alt.getCondition());
 				if (Boolean.TRUE.equals(condition)) {
 					return wrapNull(eval(alt.getBody()));
+				}
+				// §8.2.2.8: "almost as nested OCL if expressions" — nor does it go on (#308)
+				if (!Boolean.FALSE.equals(condition)) {
+					return undefinedCondition("switch", condition);
 				}
 			}
 			if (exp.getElsePart() != null) {
@@ -1906,20 +2874,47 @@ public class QvtoEvaluator {
 				// §8.2.2.13: search except clauses for matching type
 				// Wrap FatalAssertionException as RaiseException for uniform matching
 				RaiseException re = (ex instanceof RaiseException r) ? r
-						: new RaiseException("AssertionFailed", null);
+						: new RaiseException("AssertionFailed", ((FatalAssertionException) ex).message,
+								QvtoStandardLibraryTypes.lookup("AssertionFailed"));
 
 				for (CatchExp catchExp : exp.getExceptClause()) {
 					if (matchesExceptClause(catchExp, re)) {
-						Object result = WRAPPED_NULL;
-						for (OclExpression bodyExpr : catchExp.getBody()) {
-							result = wrapNull(eval(bodyExpr));
+						// §8.2.2.14: the caught exception, an instance of its class with its reason (#340)
+						env.pushScope();
+						try {
+							if (catchExp.getExceptionVariable() != null) {
+								env.define(catchExp.getExceptionVariable().getName(), exceptionObject(re));
+							}
+							Object result = WRAPPED_NULL;
+							for (OclExpression bodyExpr : catchExp.getBody()) {
+								result = wrapNull(eval(bodyExpr));
+							}
+							return result;
+						} finally {
+							env.popScope();
 						}
-						return result;
 					}
 				}
 				// No matching clause — re-throw
 				throw ex;
 			}
+		}
+
+		/**
+		 * The raised exception as an object: an instance of its class (§8.3.1.4-6), whose reason is
+		 * the argument it was raised with (#340). A class that cannot be instantiated — none known,
+		 * or abstract — is represented by Exception.
+		 */
+		private EObject exceptionObject(RaiseException re) {
+			EClass exceptionClass = re.exceptionClassifier instanceof EClass ec && !ec.isAbstract() ? ec
+					: QvtoStandardLibraryTypes.lookup(re.exceptionType) instanceof EClass known ? known
+					: (EClass) QvtoStandardLibraryTypes.lookup("Exception");
+			EObject exception = EcoreUtil.create(exceptionClass);
+			EStructuralFeature reason = exceptionClass.getEStructuralFeature("reason");
+			if (reason != null && re.argument != null) {
+				exception.eSet(reason, re.argument);
+			}
+			return exception;
 		}
 
 		private boolean matchesExceptClause(CatchExp catchExp, RaiseException re) {
@@ -1965,7 +2960,7 @@ public class QvtoEvaluator {
 		@Override
 		public Object caseReturnExp(ReturnExp exp) {
 			Object value = exp.getValue() != null ? eval(exp.getValue()) : null;
-			throw new ReturnException(value);
+			throw new ReturnException(value, exp.getValue() == null);
 		}
 
 		@Override
@@ -1980,25 +2975,34 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseLogExp(LogExp exp) {
-			// Evaluate arguments (inherited from OperationCallExp)
-			StringBuilder sb = new StringBuilder();
-			for (OclExpression arg : exp.getOwnedArguments()) {
-				Object val = eval(arg);
-				if (sb.length() > 0) {
-					sb.append(' ');
-				}
-				sb.append(val);
-			}
-
-			// Check optional condition
+			// §8.2.2.19: "No log record is produced if it evaluates to false" — the condition
+			// first, so the arguments of a record that is not produced are not evaluated (#345)
 			if (exp.getCondition() != null) {
-				Object cond = eval(exp.getCondition());
+				Object cond = evalCondition(exp.getCondition());
 				if (!Boolean.TRUE.equals(cond)) {
+					if (!Boolean.FALSE.equals(cond)) {
+						undefinedCondition("log", cond, "nothing is logged");
+					}
 					return WRAPPED_NULL; // Condition false — skip logging
 				}
 			}
-
-			addInfo("log: " + sb);
+			// log(message, element, level): "the second argument gives the model element to be
+			// print (using an implicit call to the 'repr' operation) … the third argument gives a
+			// level number" — carried as the diagnostic's code, not written into the text (#345)
+			List<OclExpression> args = exp.getOwnedArguments();
+			StringBuilder sb = new StringBuilder();
+			if (!args.isEmpty()) {
+				Object message = eval(args.get(0));
+				sb.append(message instanceof String text ? text : OclValues.repr(message));
+			}
+			if (args.size() > 1) {
+				sb.append(' ').append(OclValues.repr(eval(args.get(1))));
+			}
+			int level = 0;
+			if (args.size() > 2 && eval(args.get(2)) instanceof Number number) {
+				level = number.intValue();
+			}
+			addDiagnostic(Diagnostic.INFO, level, "log: " + sb);
 			return WRAPPED_NULL;
 		}
 
@@ -2081,7 +3085,7 @@ public class QvtoEvaluator {
 
 		@Override
 		public Object caseAssertExp(AssertExp exp) {
-			Object condition = eval(exp.getAssertion());
+			Object condition = evalCondition(exp.getAssertion());
 			if (!Boolean.TRUE.equals(condition)) {
 				SeverityKind severity = exp.getSeverity();
 				int diagSeverity = switch (severity) {
@@ -2144,8 +3148,10 @@ public class QvtoEvaluator {
 					? refObj.getName() : "_objectExp";
 
 			// Only check for update when variable was explicitly named (§8.2.1.24)
-			// Default names "result" / "_objectExp" mean no explicit variable reference
-			boolean isExplicitVar = !"result".equals(varName) && !"_objectExp".equals(varName);
+			// "_objectExp" is the parser's name for an anonymous object expression.
+			// An explicit "result" updates the mapping result when it is already set (§8.1.6, #418).
+			boolean isAnonymous = "_objectExp".equals(varName);
+			boolean isExplicitVar = !isAnonymous;
 			Object existing = isExplicitVar ? env.lookup(varName) : null;
 			boolean isUpdate = (existing instanceof EObject);
 			EObject target = isUpdate ? (EObject) existing : EcoreUtil.create(eClass);
@@ -2157,7 +3163,9 @@ public class QvtoEvaluator {
 
 			env.pushScope();
 			try {
-				env.define(varName, target);
+				if (!isAnonymous) {
+					env.define(varName, target);
+				}
 				// Dedicated variable for resolveImplicitPropertyTarget lookups
 				env.define("_objectExp", target);
 				// §8.2.1.17/§8.2.1.18: self is NOT rebound inside object expressions.
@@ -2201,80 +3209,80 @@ public class QvtoEvaluator {
 				args[i] = eval(argExprs.get(i));
 			}
 
-			// Find all candidate operations (§8.1.14.2: implicit disjunction)
-			String opName = exp.getName();
-			List<ImperativeOperation> candidates = operationResolver.findAllOperations(opName);
-			if (candidates.isEmpty()) {
-				addError("Mapping not found: " + opName);
-				return WRAPPED_NULL;
-			}
-
-			boolean isStrict = exp.isIsStrict();
-
-			// Single candidate: direct call
-			if (candidates.size() == 1) {
-				ImperativeOperation targetOp = candidates.get(0);
-				if (isStrict && targetOp instanceof MappingOperation mappingOp) {
-					return wrapNull(callMappingStrict(mappingOp, sourceObj, args));
-				}
-				return wrapNull(callOperation(targetOp, sourceObj, args));
-			}
-
-			// Multiple candidates: implicit disjunction (§8.1.14.2)
-			// Filter by context type compatibility, then sort most-derived first
-			List<ImperativeOperation> sorted = QvtoOperationResolver.filterAndSortByType(candidates, sourceObj);
-			for (ImperativeOperation candidate : sorted) {
-				if (candidate instanceof MappingOperation mappingOp) {
-					Object result = isStrict
-							? callMappingStrict(mappingOp, sourceObj, args)
-							: callMapping(mappingOp, sourceObj, args);
-					if (result != GUARD_FAILED) {
-						return wrapNull(result);
-					}
-				}
-			}
-			// No candidate matched (§8.1.14: returns null)
-			return WRAPPED_NULL;
+			Object[] passed = args.clone();
+			Object result = callMappingByName(exp.getName(), sourceObj, args, exp.isIsStrict());
+			writeBackArgs(argExprs, passed, args);
+			return wrapNull(result);
 		}
 
 		@Override
 		public Object caseResolveExp(ResolveExp exp) {
 			if (exp.isIsDeferred() && !isDeferredExecution) {
-				// Deferred (late) resolve: capture source eagerly, defer actual resolve
-				// §8.1.11.3: null source = search all records
-				Object sourceObj = exp.getOwnedSource() != null
-						? eval(exp.getOwnedSource()) : null;
-				if (pendingLvalueOwner != null) {
-					deferredTasks.add(new DeferredResolveTask(
-							exp, pendingLvalueOwner, pendingLvalueFeature,
-							pendingLvalueIsReset, pendingLvalueIsSubtract, sourceObj));
-				} else {
-					addWarning("Late resolve only supported in property assignments");
-				}
+				// A late resolve is deferred with the property assignment it is part of
+				// (caseAssignExp); anywhere else there is nothing to defer it with
+				addWarning("Late resolve only supported in property assignments");
 				return WRAPPED_NULL;
 			}
 
-			// Source object: §8.1.11.3 — when no explicit source, search ALL trace records (null)
+			// Source object: §8.1.11.3 — when no explicit source, search ALL trace records (null).
+			// A late resolve's source was captured when its assignment was reached (§8.2.1.22).
 			Object sourceObj = null;
-			if (exp.getOwnedSource() != null) {
+			boolean hasSource = false;
+			if (deferredResolveSources.containsKey(exp)) {
+				sourceObj = deferredResolveSources.get(exp);
+				hasSource = true;
+			} else if (exp.getOwnedSource() != null) {
 				sourceObj = eval(exp.getOwnedSource());
+				hasSource = true;
 			}
-			// else: sourceObj stays null → resolve searches all records
+
+			// §8.2.1.22: with a source only that source's trace records count. A source that
+			// is undefined has none — it must not fall back to "all records" (#414)
+			if (hasSource) {
+				if (sourceObj instanceof OclInvalid) {
+					return OclInvalid.INSTANCE;
+				}
+				if (sourceObj == null) {
+					return exp.isOne() ? WRAPPED_NULL : wrapNull(new ArrayList<EObject>());
+				}
+			}
 
 			// §8.1.11.7: coll->resolve(Type) = coll->xcollect(resolve(Type))
 			// When source is a Collection, iterate per-element and collect results
 			if (sourceObj instanceof Collection<?> coll) {
 				List<EObject> allResults = new ArrayList<>();
 				for (Object elem : coll) {
-					allResults.addAll(resolveForSource(exp, elem));
+					if (elem == null) {
+						continue; // an undefined element has no trace records (#414)
+					}
+					List<EObject> resolved = resolveForSource(exp, elem);
+					if (resolved == null) {
+						return OclInvalid.INSTANCE;
+					}
+					allResults.addAll(resolved);
 				}
 				if (exp.isOne()) {
-					return wrapNull(allResults.isEmpty() ? null : allResults.get(0));
+					// §8.2.2.22: on a collection the operator is "a shorthand for invoking it in the
+					// body of an xcollect" — one result per element, nulls dropped (#334)
+					List<EObject> perElement = new ArrayList<>();
+					for (Object elem : coll) {
+						if (elem == null) {
+							continue;
+						}
+						List<EObject> resolved = resolveForSource(exp, elem);
+						if (resolved != null && !resolved.isEmpty()) {
+							perElement.add(resolved.get(0));
+						}
+					}
+					return wrapNull(perElement);
 				}
 				return wrapNull(allResults);
 			}
 
 			List<EObject> candidates = resolveForSource(exp, sourceObj);
+			if (candidates == null) {
+				return OclInvalid.INSTANCE;
+			}
 
 			if (exp.isOne()) {
 				return wrapNull(candidates.isEmpty() ? null : candidates.get(0));
@@ -2282,7 +3290,12 @@ public class QvtoEvaluator {
 			return wrapNull(candidates);
 		}
 
-		/** Resolves candidates for a single source object (or null for all records). */
+		/**
+		 * Resolves candidates for a single source object (or null for all records).
+		 *
+		 * @return the candidates, or {@code null} when the condition is neither true nor false
+		 *         for one of them — the resolve is then invalid
+		 */
 		private List<EObject> resolveForSource(ResolveExp exp, Object sourceObj) {
 			// Target type — the EClass itself (#156)
 			EClass targetType = null;
@@ -2296,11 +3309,11 @@ public class QvtoEvaluator {
 			// Resolve — dispatch based on inverse/in-mapping flags
 			List<EObject> candidates;
 			if (exp instanceof ResolveInExp resolveIn && resolveIn.getInMapping() != null) {
-				String mappingName = resolveIn.getInMapping().getName();
+				MappingOperation inMapping = resolveIn.getInMapping();
 				if (exp.isIsInverse()) {
-					candidates = traceManager.invResolveIn(mappingName, sourceObj, targetType);
+					candidates = traceManager.invResolveIn(inMapping, sourceObj, targetType);
 				} else {
-					candidates = traceManager.resolveIn(mappingName, sourceObj, targetType);
+					candidates = traceManager.resolveIn(inMapping, sourceObj, targetType);
 				}
 			} else if (exp.isIsInverse()) {
 				candidates = traceManager.invResolve(sourceObj, targetType);
@@ -2316,7 +3329,12 @@ public class QvtoEvaluator {
 					env.pushScope();
 					try {
 						env.define(targetVarName, candidate);
-						Object condVal = eval(exp.getCondition());
+						Object condVal = evalCondition(exp.getCondition());
+						if (!(condVal instanceof Boolean)) {
+							// §8.2.1.22: the condition filters as a select does, and a select
+							// whose body is neither true nor false is invalid (#310)
+							return null;
+						}
 						if (Boolean.TRUE.equals(condVal)) {
 							filtered.add(candidate);
 						}

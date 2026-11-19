@@ -28,6 +28,9 @@ public @interface OclMetadataCacheConfiguration {
 
 	String PREFIX_ = "ocl.metadata.";
 
-	@AttributeDefinition(name = "LRU Size", description = "Entries the fallback cache keeps for context types with no package to fingerprint")
+	@AttributeDefinition(name = "LRU Size", description = "Entries the in-memory cache keeps: context types with no package to fingerprint, and parses with declared variables")
 	int lruSize() default 256;
+
+	@AttributeDefinition(name = "LRU Failure Size", description = "Parse failures kept in memory (never in the registry), in an LRU of their own so broken expressions cannot displace working ones; 0 keeps none")
+	int lruFailureSize() default 256;
 }

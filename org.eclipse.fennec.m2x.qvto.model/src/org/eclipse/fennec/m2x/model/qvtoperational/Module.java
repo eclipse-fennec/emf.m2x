@@ -31,7 +31,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A QVT-O module: base class for transformations and libraries (QVT v1.3 Section 8.2.2.10). Extends EPackage (not EClass+EPackage) to avoid EMF codegen raw-type issues with dual Ecore metaclass inheritance. The module's owned types live as EClassifiers in the EPackage.
+ * A QVT-O module: base class for transformations and libraries (QVT v1.3 Section 8.2.1.3). Extends EPackage (not EClass+EPackage) to avoid EMF codegen raw-type issues with dual Ecore metaclass inheritance. The module's owned types live as EClassifiers in the EPackage.
  * <!-- end-model-doc -->
  *
  * <p>

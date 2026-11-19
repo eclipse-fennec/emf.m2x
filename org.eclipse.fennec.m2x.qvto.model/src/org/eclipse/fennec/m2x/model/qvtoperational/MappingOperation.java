@@ -28,7 +28,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A mapping operation with when/where guards and disjunct/inherited/merged clauses (QVT v1.3 Section 8.2.2.12).
+ * A mapping operation with when/where guards and disjunct/inherited/merged clauses (QVT v1.3 Section 8.2.1.15).
  * <!-- end-model-doc -->
  *
  * <p>

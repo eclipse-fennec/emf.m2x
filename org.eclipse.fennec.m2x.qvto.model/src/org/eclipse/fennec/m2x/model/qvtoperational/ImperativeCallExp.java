@@ -26,7 +26,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A call to an imperative operation (helper or mapping) (QVT v1.3 Section 8.2.2.17).
+ * A call to an imperative operation (helper or mapping) (QVT v1.3 Section 8.2.1.20).
  * <!-- end-model-doc -->
  *
  * <p>

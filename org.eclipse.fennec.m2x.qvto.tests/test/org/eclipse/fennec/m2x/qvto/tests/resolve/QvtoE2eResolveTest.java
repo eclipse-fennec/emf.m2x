@@ -1340,6 +1340,100 @@ class QvtoE2eResolveTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "resolved:2");
 	}
 
+	// #414 / §8.2.1.22: a resolve whose source is undefined considers no trace records —
+	// it must not fall back to the receiver-less "any record" form
+	private static final String NULL_SOURCE_PROLOG = """
+			modeltype SRC uses 'http://test/source/1.0';
+			modeltype TGT uses 'http://test/target/1.0';
+			transformation test(in s : SRC, out t : TGT) {
+			    mapping SourceElement::toTarget() : TargetElement {
+			        name := 'T-' + self.name;
+			    }
+			""";
+
+	@Test
+	void resolveoneIn_nullSource_returnsNull() throws Exception {
+		QvtoExecutionResult result = executeWithExtents(NULL_SOURCE_PROLOG + """
+				    main() {
+				        s.objectsOfType(SourceElement)->map toTarget();
+				        var none := s.objectsOfType(SourceElement)->any(e | e.value = -1);
+				        var found := none.resolveoneIn(SourceElement::toTarget);
+				        log(if found = null then 'null' else found.name endif);
+				    }
+				}
+				""", new BasicQvtoModelExtent(createSourceElement("a", 1)), emptyExtent());
+		assertSuccess(result);
+		assertLogged(result, "null");
+	}
+
+	@Test
+	void resolveone_nullSource_returnsNull() throws Exception {
+		QvtoExecutionResult result = executeWithExtents(NULL_SOURCE_PROLOG + """
+				    main() {
+				        s.objectsOfType(SourceElement)->map toTarget();
+				        var none := s.objectsOfType(SourceElement)->any(e | e.value = -1);
+				        var found := none.resolveone(TargetElement);
+				        log(if found = null then 'null' else found.name endif);
+				    }
+				}
+				""", new BasicQvtoModelExtent(createSourceElement("a", 1)), emptyExtent());
+		assertSuccess(result);
+		assertLogged(result, "null");
+	}
+
+	@Test
+	void resolveIn_nullSource_returnsEmpty() throws Exception {
+		QvtoExecutionResult result = executeWithExtents(NULL_SOURCE_PROLOG + """
+				    main() {
+				        s.objectsOfType(SourceElement)->map toTarget();
+				        var none := s.objectsOfType(SourceElement)->any(e | e.value = -1);
+				        log('size=' + none.resolveIn(SourceElement::toTarget)->size().toString());
+				    }
+				}
+				""", new BasicQvtoModelExtent(createSourceElement("a", 1)), emptyExtent());
+		assertSuccess(result);
+		assertLogged(result, "size=0");
+	}
+
+	@Test
+	void resolve_collectionWithNullElement_skipsIt() throws Exception {
+		QvtoExecutionResult result = executeWithExtents(NULL_SOURCE_PROLOG + """
+				    main() {
+				        s.objectsOfType(SourceElement)->map toTarget();
+				        var none := s.objectsOfType(SourceElement)->any(e | e.value = -1);
+				        log('size=' + Sequence{none}->resolve(TargetElement)->size().toString());
+				    }
+				}
+				""", new BasicQvtoModelExtent(createSourceElement("a", 1)), emptyExtent());
+		assertSuccess(result);
+		assertLogged(result, "size=0");
+	}
+
+	@Test
+	void lateResolveone_nullSource_leavesPropertyUnset() throws Exception {
+		QvtoModelExtent outExtent = emptyExtent();
+		QvtoExecutionResult result = executeWithExtents("""
+				modeltype SRC uses 'http://test/source/1.0';
+				modeltype TGT uses 'http://test/target/1.0';
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::toTarget() : TargetElement {
+				        name := 'T-' + self.name;
+				        ref := s.objectsOfType(SourceElement)->any(e | e.value = -1)
+				                .late resolveone(TargetElement);
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->map toTarget();
+				    }
+				}
+				""", new BasicQvtoModelExtent(createSourceElement("a", 1), createSourceElement("b", 2)),
+				outExtent);
+		assertSuccess(result);
+		assertEquals(2, outExtent.getContents().size());
+		for (EObject target : outExtent.getContents()) {
+			assertNull(eGet(target, "ref"), () -> "ref of " + eGet(target, "name"));
+		}
+	}
+
 	// ---- Helpers ----
 
 	private static void assertSuccess(QvtoExecutionResult result) {

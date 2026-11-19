@@ -20,6 +20,16 @@
         eType="#//Person" containment="true" eOpposite="#//Person/employer"/>
   </eClassifiers>
   <eClassifiers xsi:type="ecore:EClass" name="Person">
+    <!-- Operations the Complete OCL document tests state contexts for (OCL v2.4 §12.7: the
+         operation of a context declaration must exist, #324); no implementation behind them -->
+    <eOperations name="getAge" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
+    <eOperations name="setAge" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt">
+      <eParameters name="newAge" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EInt"/>
+    </eOperations>
+    <eOperations name="transfer" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EBoolean">
+      <eParameters name="target" eType="#//Person"/>
+      <eParameters name="amount" eType="ecore:EDataType http://www.eclipse.org/emf/2002/Ecore#//EDouble"/>
+    </eOperations>
     <eAnnotations source="http://www.eclipse.org/emf/2002/GenModel">
       <details key="documentation" value="A person employed by a company."/>
     </eAnnotations>

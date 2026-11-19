@@ -16,8 +16,8 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 
 import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.Map;
+import java.util.Objects;
 
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EClass;
@@ -28,16 +28,16 @@ import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
-import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 import org.eclipse.fennec.m2x.model.qvtbase.Function;
 import org.eclipse.fennec.m2x.model.qvtbase.Pattern;
 import org.eclipse.fennec.m2x.model.qvtbase.Predicate;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationCallExp;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 
 /**
- * Evaluates QVT-R query functions (§7.11.4) and pre-computes where-clause
+ * Evaluates QVT-R query functions (§7.11.1.5) and pre-computes where-clause
  * variable bindings.
  *
  * <p>Extracted from {@link QvtrEvaluator} for testability. Handles query
@@ -123,7 +123,7 @@ public class QvtrQueryEvaluator {
 	 * Pre-computes where-clause variable bindings that can be resolved before
 	 * enforcement. Handles predicates of the form {@code var = expr} where
 	 * {@code var} is unbound and {@code expr} can be evaluated (including
-	 * query calls, §7.11.4).
+	 * query calls, §7.11.1.5).
 	 */
 	public void preComputeWhereBindings(Relation relation, Map<String, Object> bindings) {
 		Pattern where = relation.getWhere();
@@ -172,7 +172,7 @@ public class QvtrQueryEvaluator {
 	}
 
 	/**
-	 * Evaluates an expression, resolving query calls (§7.11.4) from the
+	 * Evaluates an expression, resolving query calls (§7.11.1.5) from the
 	 * transformation's Function definitions.
 	 */
 	public Object evaluateExprWithQueries(OclExpression expr, Map<String, Object> bindings) {
@@ -206,7 +206,7 @@ public class QvtrQueryEvaluator {
 	}
 
 	/**
-	 * Evaluates a query Function call (§7.11.4). Binds the query's parameters
+	 * Evaluates a query Function call (§7.11.1.5). Binds the query's parameters
 	 * to the argument values and evaluates the queryExpression.
 	 */
 	public Object evaluateQueryCall(Function query, OperationCallExp callExpr,

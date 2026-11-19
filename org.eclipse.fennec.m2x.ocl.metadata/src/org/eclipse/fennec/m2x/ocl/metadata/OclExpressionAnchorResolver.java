@@ -46,7 +46,8 @@ import org.osgi.service.component.annotations.Reference;
  * expressions per class the last one placed is the one the aspect shows. The aspect is the
  * model-anchored entry point, not a query API; ask the registry when you need all of them.
  *
- * <p>Configured by target, as the bridge expects:
+ * <p>Configured by target, as the bridge expects. The bridge waits for the resolver its target
+ * names (eclipse-fennec/emf.osgi#127):
  *
  * <pre>
  * "EObjectRegistryMetadataBridge~ocl": {

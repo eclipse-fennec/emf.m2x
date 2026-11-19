@@ -27,7 +27,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * An import declaration referencing another module with extension or access semantics (QVT v1.3 Section 8.2.2.15).
+ * An import declaration referencing another module with extension or access semantics (QVT v1.3 Section 8.2.1.4).
  * <!-- end-model-doc -->
  *
  * <p>
@@ -49,14 +49,18 @@ import org.osgi.annotation.versioning.ProviderType;
 public interface ModuleImport extends EObject, EModelElement {
 	/**
 	 * Returns the value of the '<em><b>Kind</b></em>' attribute.
+	 * The default value is <code>"access"</code>.
 	 * The literals are from the enumeration {@link org.eclipse.fennec.m2x.model.qvtoperational.ImportKind}.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
+	 * <!-- begin-model-doc -->
+	 * Extension or access; access is the default (QVT v1.3 Section 8.2.1.4).
+	 * <!-- end-model-doc -->
 	 * @return the value of the '<em>Kind</em>' attribute.
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.ImportKind
 	 * @see #setKind(ImportKind)
 	 * @see org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalPackage#getModuleImport_Kind()
-	 * @model
+	 * @model default="access"
 	 * @generated
 	 */
 	ImportKind getKind();

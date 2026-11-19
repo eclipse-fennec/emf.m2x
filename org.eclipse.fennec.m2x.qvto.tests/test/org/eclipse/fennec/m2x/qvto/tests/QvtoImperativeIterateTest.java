@@ -144,6 +144,49 @@ class QvtoImperativeIterateTest extends AbstractQvtoEngineTest {
 
 	// --- helpers ---
 
+	@Test
+	@DisplayName("a variable as the condition of [i | b] is the variable, not a type (#312)")
+	void variableConditionIsNoType() throws QvtoParseException {
+		assertSuccessAndLogged(execute("""
+				transformation T();
+				main() {
+					var b : Boolean := true;
+					log(Sequence{1, 2, 3}[i | b]->size().repr());
+				}
+				"""), "3");
+
+		assertSuccessAndLogged(execute("""
+				transformation T();
+				main() {
+					var b : Boolean := true;
+					log(Sequence{1, 2, 3}![i | b].repr());
+				}
+				"""), "1");
+	}
+
+	@Test
+	@DisplayName("the shorthand's own iterator as the condition is the iterator (#312)")
+	void iteratorConditionIsNoType() throws QvtoParseException {
+		assertSuccessAndLogged(execute("""
+				transformation T();
+				main() {
+					log(Sequence{true, false, true}[i | i]->size().repr());
+				}
+				"""), "2");
+	}
+
+	@Test
+	@DisplayName("a name that is neither a variable nor a type is no parse error of the shorthand (#312)")
+	void unknownNameIsAnOrdinaryCondition() throws QvtoParseException {
+		// Read as a condition: the unknown name is reported where it is evaluated, as any other
+		parse("""
+				transformation T();
+				main() {
+					var kept := Sequence{1, 2, 3}[i | nope];
+				}
+				""");
+	}
+
 	private static void assertSuccessAndLogged(QvtoExecutionResult result, String expected) {
 		assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
 		assertTrue(result.diagnostics().stream()

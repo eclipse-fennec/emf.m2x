@@ -32,7 +32,9 @@ import org.eclipse.fennec.m2x.m2t.api.M2tContext;
  * <p>Follows the same scope-stack pattern as {@code QvtoEvalEnvironment}:
  * <ul>
  *   <li>{@link #pushScope()} / {@link #popScope()} — block-level scoping for
- *       for-blocks, let-blocks, template invocations</li>
+ *       for-blocks and let-blocks</li>
+ *   <li>{@link #pushFrame()} / {@link #popFrame()} — the scope of a template, query or
+ *       macro invocation, which does not see its caller's variables</li>
  *   <li>{@link #define(String, Object)} — define in current scope</li>
  *   <li>{@link #assign(String, Object)} — update existing variable (walk up)</li>
  *   <li>{@link #lookup(String)} — resolve variable (walk up)</li>
@@ -44,6 +46,12 @@ import org.eclipse.fennec.m2x.m2t.api.M2tContext;
 public class M2tEvalEnvironment {
 
 	private final Deque<Map<String, Object>> scopeStack = new ArrayDeque<>();
+	/**
+	 * The stack size at which each open frame began. A frame is the scope chain of one template,
+	 * query or macro invocation: scopes are lexical, so a callee sees its own scopes and the root
+	 * scope, never its caller's let or for variables (#383, as QVT v1.3 §8.2.1.17 for QVT-O).
+	 */
+	private final Deque<Integer> frameBases = new ArrayDeque<>();
 
 	/**
 	 * Creates a new environment with an empty root scope.
@@ -74,6 +82,44 @@ public class M2tEvalEnvironment {
 	 */
 	public void pushScope() {
 		scopeStack.push(new HashMap<>());
+	}
+
+	/**
+	 * Opens the frame of an invocation: a new scope whose outer scopes are only the root scope,
+	 * not the caller's (#383).
+	 */
+	public void pushFrame() {
+		frameBases.push(scopeStack.size());
+		pushScope();
+	}
+
+	/**
+	 * Closes the frame {@link #pushFrame()} opened, with any scope still open in it.
+	 */
+	public void popFrame() {
+		int base = frameBases.pop();
+		while (scopeStack.size() > base) {
+			popScope();
+		}
+	}
+
+	/**
+	 * The innermost visible scope that binds the name: one of the current frame's scopes, or the
+	 * root scope behind them.
+	 */
+	private Map<String, Object> scopeOf(String name) {
+		Integer base = frameBases.peek();
+		int visible = base == null ? scopeStack.size() : scopeStack.size() - base;
+		for (Map<String, Object> scope : scopeStack) {
+			if (visible-- <= 0) {
+				break;
+			}
+			if (scope.containsKey(name)) {
+				return scope;
+			}
+		}
+		Map<String, Object> root = scopeStack.peekLast();
+		return base != null && root.containsKey(name) ? root : null;
 	}
 
 	/**
@@ -110,13 +156,8 @@ public class M2tEvalEnvironment {
 	 */
 	public void assign(String name, Object value) {
 		Objects.requireNonNull(name, "name must not be null");
-		for (Map<String, Object> scope : scopeStack) {
-			if (scope.containsKey(name)) {
-				scope.put(name, value);
-				return;
-			}
-		}
-		scopeStack.peek().put(name, value);
+		Map<String, Object> scope = scopeOf(name);
+		(scope != null ? scope : scopeStack.peek()).put(name, value);
 	}
 
 	/**
@@ -127,12 +168,8 @@ public class M2tEvalEnvironment {
 	 */
 	public Object lookup(String name) {
 		Objects.requireNonNull(name, "name must not be null");
-		for (Map<String, Object> scope : scopeStack) {
-			if (scope.containsKey(name)) {
-				return scope.get(name);
-			}
-		}
-		return null;
+		Map<String, Object> scope = scopeOf(name);
+		return scope != null ? scope.get(name) : null;
 	}
 
 	/**
@@ -143,12 +180,7 @@ public class M2tEvalEnvironment {
 	 */
 	public boolean contains(String name) {
 		Objects.requireNonNull(name, "name must not be null");
-		for (Map<String, Object> scope : scopeStack) {
-			if (scope.containsKey(name)) {
-				return true;
-			}
-		}
-		return false;
+		return scopeOf(name) != null;
 	}
 
 	/**
@@ -158,8 +190,13 @@ public class M2tEvalEnvironment {
 	 */
 	public Map<String, Object> allVisibleVariables() {
 		Map<String, Object> result = new LinkedHashMap<>();
+		Integer base = frameBases.peek();
 		Object[] scopes = scopeStack.toArray();
-		for (int i = scopes.length - 1; i >= 0; i--) {
+		if (base != null) {
+			result.putAll(scopeStack.peekLast());
+		}
+		// Outermost to innermost so inner scopes override — the current frame only
+		for (int i = (base == null ? scopes.length : scopes.length - base) - 1; i >= 0; i--) {
 			@SuppressWarnings("unchecked")
 			Map<String, Object> scope = (Map<String, Object>) scopes[i];
 			result.putAll(scope);

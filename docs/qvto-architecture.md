@@ -63,7 +63,7 @@ workspace/
 **Key cross-component dependencies:**
 - `qvto.model` depends on `ocl.model` (ImperativeOCL extends OCL expression types)
 - `qvto.engine` depends on `ocl.engine` (delegates OCL expression evaluation)
-- `qvto.parser` imports `Ocl.g4` grammar for expression parsing
+- `qvto.parser` imports `Ocl.g4` grammar for expression parsing, and depends on `ocl.parser` for the shared OCL builder and the type rules (#378)
 
 ---
 
@@ -223,7 +223,7 @@ public sealed interface QvtoUnit {              // Sealed union
 }
 ```
 
-**OSGi registration:** `@Reference(cardinality = MULTIPLE, policy = DYNAMIC)` whiteboard.
+**OSGi registration:** not a whiteboard. A resolver service publishes the unit it serves as `qvto.unit.name`; `QvtoServiceUnitResolver` looks the name an `import` gives up in the service registry at link time (#90, see the user guide §3.4.2).
 **Standalone:** Pass resolvers via `QvtoConfiguration.Builder.unitResolvers(List<QvtoUnitResolver>)`.
 
 > **D29 Security:** Unit resolvers are **disabled by default**. Set `unitResolverEnabled(true)` in
@@ -340,8 +340,14 @@ QvtoConfiguration config = QvtoConfiguration.builder(oclConfig)
 > `allowedBlackboxModules(Set<String>)` — an empty set (default) allows all registered libraries
 > when enabled. See also §4.7.6 for linker enforcement.
 
-**OSGi:** The registry is a DS Component with `@Reference(MULTIPLE, DYNAMIC)` whiteboard
-for `QvtoBlackboxLibrary` services.
+**OSGi:** `DefaultQvtoEngine` binds `QvtoBlackboxLibrary` services through a dynamic `0..n`
+reference (`blackboxes`, bind and unbind methods) into an internal registry it hands to its
+configuration (#269). The engine is not restarted when a library comes or goes; each link and run
+reads the libraries bound at that moment, the higher `service.ranking` winning a name both claim
+(`RankedServices` in `unit.osgi`). Unlike unit resolvers this is a whiteboard on purpose: a
+transformation calls into a library by module name, so the engine has to know the libraries it
+has, and `blackboxes.target` / `blackboxes.cardinality.minimum` give deployments the standard DS
+means to narrow the set and to wait for it.
 
 #### 4.7.6 Synthetic Module Creation (QvtoLinker)
 
@@ -651,7 +657,7 @@ newly require is one policy, `ResolutionPolicy` (`unit.resolve`), used by the co
 execute-time linker and both discovery resolvers:
 
 1. **Every source is asked**, not only until the first answer. Order is the caller's: configured
-   resolvers in configuration order, whiteboard services by `service.ranking` (highest first; among
+   resolvers in configuration order, services looked up in the service registry by `service.ranking` (highest first; among
    equals the one registered first), class-path providers in declaration order. The first answer in
    that order is returned.
 2. **A failing source is an error.** A resolver that throws ends the resolution with a
@@ -734,7 +740,42 @@ Entry rule: `compilationUnitEntry()`. Extends OCL with transformation-level cons
 
 `QvtoUnitBuilder` delegates expression sub-trees to `QvtoExpressionBuilder`.
 
-### 5.4 Parsing API
+### 5.4 Static typing (GAP-3, #378)
+
+`QvtoExpressionBuilder` builds its nodes itself, but holds an `AbstractExpressionBuilder` from
+`ocl.parser` as `support`, as the QVT-R and MTL builders do: operation calls are resolved and typed
+through it, and every OCL node is typed by its rules (`support.typeNode`, see the OCL architecture
+§5.10). Its errors go to the unit's diagnostics, at the QVT-O builder's position. QVT-O settings on
+`support`: the QVT-O library (`QvtoLibrarySignatures`, §8.3, on top of OCL's), implicit conditions
+(an element or a collection as an `if` condition, §8.4.5(2)), the unit's variables for type
+arguments, and — where the unit imports others — an open operation scope, in which a call on a model
+class that fits no library signature is left to the evaluator, since an imported helper may have that
+name.
+
+| What | Rule |
+|---|---|
+| Helpers and queries | `QvtoUnitBuilder.collectOperationSignatures` collects context, parameter types, defaults and result before any body is built (`QvtoScope.definitions`). A call — contextual, unit-level, or a contextual one with `self` as first argument (§8.2.1.10) — has the declared result type and its arguments are checked (#345). Fewer arguments are fine where parameters have defaults; a name of the unit that fits no arity is left to the evaluator |
+| ImperativeOCL (§8.2.2) | `BlockExp`, `WhileExp`, `ForExp`, `LogExp`, `AssertExp`, `ReturnExp`, `BreakExp`, `ContinueExp`, `RaiseExp`, `UnlinkExp` are `OclVoid`; `ComputeExp` the returned variable's type; `AltExp`/`SwitchExp` the (common) body type; `VariableInitExp` the variable's type with `::=`, else `OclVoid`; `AssignExp` the right-hand side's |
+| QVT-O expressions | `InstantiationExp`/`ObjectExp` the created class; a mapping call the declared result (`QvtoScope.mappingResults`); `ResolveExp`/`ResolveInExp` the target or `inMapping` result type, a `Sequence` of it unless `one`; `xcollect` a `Sequence` of the body, `xselect` of the source's elements or — for `coll[Type]` — of `Type` (§8.2.2.7 re-casting), the `…One` variants a single one |
+| Assignments (#339) | A variable's initial value conforms to its declared type (§8.2.2.10); an assignment's value conforms to the target, a collection target taking elements and collections of them; a collection assigned to a single-valued target is an error |
+| Model parameters (§8.2.1.5) | The type is a declared `modeltype` or a collection of one |
+| Type names (§8.4.8.1) | An unqualified name found in two declared packages is ambiguous, an error |
+| Disjuncts (§8.1.14.1) | A candidate has the disjunction's number of parameters, and a covariant result |
+| Intermediate attributes (#404) | Typed as declared (below), so an assignment to one is checked like any other |
+| Overrides (§8.2.1.10) | At link time, with the base in hand: an operation of the same kind, name, context and arity as one of an `extends`-imported module overrides it — `overridden` is set — and each parameter type complies with the overridden one's |
+
+**Intermediate class attributes (#404)** have the Ecore type of what the engine computes with, so a
+written value fits and reads back as the same OCL value: `String` → `EString`, `Boolean` →
+`EBooleanObject` (null by default, #339), `Integer` → `EBigInteger` (unbounded, #322), `Real` →
+`EBigDecimal`; a data type of a metamodel or of the module stays itself. A class type makes a
+reference (not contained unless `composes`), a collection type a multi-valued feature of its element
+type. What has no Ecore counterpart — `UnlimitedNatural`, tuples, `Dict`, `OclAny` — stays
+`EJavaObject`, which the type rules read as unknown. Every write converts numbers to the attribute's
+instance class (`coerceForFeature`, also for defaults and `out` arguments). Intermediate instances do
+not leave the run (§8.2.1.1) except through the trace or an explicit extent; there the declared
+types make their values serializable.
+
+### 5.5 Parsing API
 
 ```java
 QvtoParserSupport parser = new QvtoParserSupport();
@@ -746,6 +787,17 @@ The registry is always explicit. There is deliberately no convenience overload t
 Alias tag targets (`tag "alias" RDBMS::Table::key_ = "key";`, §8.3.19) resolve through their qualifier: it names a model type of the transformation, or a package by name or nsURI, and only that metamodel is searched. Without a usable qualifier the search falls back to the model extents and then to the registry, and a name that fits several metamodels produces a warning instead of a silent pick.
 
 Type names resolve in this order: the module's own `typedef`s → the package registry → the QVT-O standard library (`QvtoStandardLibraryTypes`, QVT v1.3 §8.3.1). A name that resolves in none of them becomes an error diagnostic, collected and reported together with every other unresolved name when the unit has been visited. Typedefs are registered in a pre-pass, like intermediate class shells, so a reference ahead of the declaration resolves too.
+
+The standard library names (#345) are:
+- `Exception`, `StringException`, `AssertionFailed` and `Void`.
+- `Object` and its deprecated synonym `Any`, both `OclAny`.
+- `Element`, which is `EObject`. A helper with the context `Element::` applies to every model object.
+- `Status`, the Status class that `transform()` answers.
+- `Model` and `Transformation`, as data types, because their values are an extent and a transformation instance, not model objects.
+
+A metamodel class of the same name (a UML `Element`, say) comes first, by the order above. The deprecated operation synonyms `isKindOf`, `isTypeOf` and `asType` (§8.3.2) are renamed to their `ocl…` operations. `_localId` and `_globalId` (§8.3.4) are not supported, as in Eclipse.
+
+`repr()` (§8.3.3, `OclValues.repr`) writes a model object as its class and name (`Person 'Ann'`). `log` and the `%s` of `format` use it. `log(message, element, level)` evaluates its `when` condition first, prints the element through `repr()`, and carries the level as the diagnostic's code instead of in the text (§8.2.2.19).
 
 ---
 
@@ -779,11 +831,71 @@ QvtoEvaluator
 then delegates to OclEngine for standard OCL expressions.
 
 **Source evaluation invariant:** For `OperationCallExp`, intermediate dispatch steps
-(model extent/element operation checks, imperative source handling) must not eagerly
-evaluate the source expression unless the operation name actually matches a known
-operation in that category. This prevents duplicate side effects when chaining operations
+(model extent/element operation checks) must not eagerly evaluate the source expression
+unless the operation name actually matches a known operation in that category. This
+prevents duplicate side effects when chaining operations
 (e.g. `String.incrStrCounter('X').repr()` must evaluate `incrStrCounter` exactly once).
 Name guards (`QvtoModelOperations.isExtentOperation`/`isElementOperation`) enforce this.
+
+**Undefined values in statements (#308).** An `if` (either notation) or a `switch` alternative whose
+condition is neither `true` nor `false` takes no branch, the `else` included — "otherwise the result is
+invalid" (OCL v2.4 §10.3, IfExpEval [1]; QVT §8.2.2.8 defines the switch "almost as nested OCL if
+expressions") — and reports the ERROR `if-condition must be Boolean, got: invalid — no branch is
+taken`. Assigning a property of `null` or `invalid` cannot be performed and reports `Cannot assign to
+property 'p': the target is null`. Both used to pass silently, the `if` even running its `else`; the
+measurement before the change found no test in any suite that reached either case.
+
+The other conditions follow the same line (#310); every one of them used to read `null` and `invalid`
+as `false`, and again no test in any suite reached them:
+
+| Condition | Undefined (neither true nor false) |
+|---|---|
+| `while` (§8.2.2.4) | ERROR, the loop ends |
+| `forEach`/`forOne` condition (§8.2.2.6: `if (condition) body` per element) | ERROR, that element is skipped, the loop goes on |
+| `xselect`/`xcollectselect…` condition (§8.2.2.7, same `if`) | ERROR, that element is skipped |
+| `log … when` (§8.2.2.19) | ERROR, nothing is logged |
+| `when` guard (§8.2.1.15), `map` and inherited/merged | ERROR, the mapping does not run |
+| `when` as the pre-condition of `xmap` (§8.2.1.21) | fatal assertion, as when it is `false`; evaluated once (#335) |
+| `where` postcondition | fatal assertion, as when it is `false` (#335) |
+| `select`/`reject`/`forAll`/`exists`/`any` evaluated by QVT-O | as the OCL engine (§11.9.1): `select`/`reject` invalid, the quantifiers by their precedence, no diagnostic |
+| `resolve` condition (§8.2.1.22) | the resolve is `invalid`, as a `select` |
+
+Where a Boolean is expected, §8.4.5(2) converts first (#338): an element is `true` and a collection is `notEmpty()`. A null is `false` where the condition is typed as an element or a collection (`if (cl := …)` from §8.1.9, `var e : T := null; if (e)`). Only the remaining values, a null of no such type, a String, `invalid`, are the undefined conditions of the table above.
+
+Pre- and post-conditions are assertions (§8.2.1.15: "any execution failure is fatal"; §8.2.1.21): a
+`where` that does not hold and an `xmap` whose candidate does not conform or whose `when` does not
+hold raise `AssertionFailed`, as `assert fatal` does (§8.2.2.20). Eclipse does the same
+(`MappingPostconditionFailed`). The transformation ends with
+`Assertion failed: where-postcondition failed for mapping: m`, unless a `try … except (AssertionFailed)`
+catches it. Before #335 a violated `where` was a WARNING and a failed `xmap` an ERROR, and the
+transformation went on in both cases. Four tests encoded that, and they were changed with the spec
+quote.
+
+**Imperative iterate variants (§8.2.2.7, #341).** The variants keep their collection kind:
+`xselect` answers the kind of its source, and `xcollect`/`xcollectselect` answer a Bag for an
+unordered source and a Sequence for an ordered one. The shorthands are xcollects as well:
+- `list->prop` is OCL's `collect` with `->excluding(null)`. A property read needs no loop of its own, and the result is the same.
+- `list->map m()`, `list->xmap(i) i.m()`, `list->object(a) T {…}` (the type of `a` may be omitted) and `list->new(a) T(args)` are `ImperativeIterateExp`s, so `break` works and nulls are dropped.
+- `list->foo()` with a contextual query or helper of the elements collects `foo()` over them. It is registered on collections, so the standard library (`->size()`) and a `foo()` defined on a collection answer first.
+- The target form `xcollectselect(i; res = body | condition)` and the implicit iterator (`->xselect(value > 1)`) build the imperative variant.
+
+`forEach`, `forOne` and the variants take a single value as `oclAsSet()` and null as the empty set (OCL §9.3.35 [B]).
+
+The shorthands `list[T]` and `list![T]` share their notation with `list[condition]`; a simple name is
+the type form only when it names a type and is neither a variable in scope nor the shorthand's own
+iterator — `coll[i | b]` with a variable `b` used to fail with `Unknown type (b)` (#312).
+
+**Imperative expressions inside OCL ones (§8.1.13, #296):** a call whose source is an
+imperative expression (`list[T]->first()`, `new T(m).transform()`) goes to the OCL engine like
+any other. The OCL evaluator meets the imperative node, which it does not know, and hands it
+back through `OclContext.foreignExpressionEvaluator` (`QvtoEvaluator.evalNestedInOcl`)
+together with the iterator/let variables it has bound. The source is evaluated once, and the
+call is dispatched on its value: model `EOperation`, standard library, providers.
+
+The model extent operations exist twice — in `QvtoModelOperations` (QVT-O dispatch) and in
+`QvtoOperationProvider` (when the OCL engine evaluates the call); both share
+`QvtoModelOperations.allObjects/objectsOfType/objectsOfKind/rootObjects`, so `objects()`
+and its typed variants cover every contained object, not only the roots (§8.3.5, #301).
 
 ### 6.3 QvtoEvalEnvironment — Mutable Scope Stack
 
@@ -829,6 +941,11 @@ Binds `ModelParameter` declarations to `QvtoModelExtent` instances:
 - Enforces read-only constraint on `in` parameters (§8.1.3.2)
 - Accessed via `getExtent(ModelParameter)`, `getExtent(int index)`, or `getExtent(String name)`
 - **Explicit extent routing (§8.1.3/§8.1.6):** `object T@extentName { ... }` and `new T@extentName()` route created objects to the named extent via `addToExtent(EObject, Variable)`
+- **Mapping parameters (§8.2.1.16, #302):** `mapping X::m(in p : S@src) : T@dest` — the parser resolves `@dest` to the `ModelParameter` (`MappingParameter.extent`; an unknown name is a parse error), and the result object is created in that extent. Without it the extent is inferred from the model types: the first `out`/`inout` parameter whose metamodel contains the type. With two out parameters of the same model type only the explicit form reaches the second. A mapping's result parameters are `MappingParameter`s of kind `OUT`.
+- **Inferred extents are a deviation (#337):** §8.2.1.24 says "Object residence is left unchanged when the extent is omitted". Like Eclipse, this engine still infers the extent: the first `out`/`inout` parameter whose metamodel contains the type, otherwise the first `out`/`inout` parameter. When several parameters could take the type (§8.1.3.4: "a programming hazard that can be diagnosed by tooling"), a WARNING per class names the extent that was chosen.
+- **Intermediate data (§8.1.10, #337):** an instance of an intermediate class created without `@extent` goes to no output model. It goes to the manager's own intermediate-data extent, which `allInstances()` searches as well. Before #337 it landed in the first out model and was saved with it.
+- **Model assignment (§8.1.3.3, #337):** `t := m` replaces the contents of `t`'s extent with the roots of `m`, and the previous members become orphans. The variable keeps its extent. Before, the variable was rebound, so `t.rootObjects()` and the saved output disagreed. Assigning to an `in` model is an error.
+- **Model type conformance (§8.1.2, §8.2.1.6, #337):** before `main()` runs, every `in`/`inout` model is checked against its model type. Under `strict`, every object's class must come from one of the model type's packages or their subpackages. Every `where` condition must hold with `self` bound to the model. A violation is an ERROR, and nothing runs. `effective` is the default conformance kind; it is name-based and is not checked. The `where` block takes `;` as separator (§8.4 `<expression_block>`), and `,` is still accepted. A package reference takes a URI in either quote style (`uses source("http://…")`).
 
 ### 6.6 QvtoControlFlowException — Imperative Control Flow
 
@@ -910,8 +1027,34 @@ late resolveone(Type)
 late resolveIn(ClassName::mappingName, Type)
 ```
 
-Late resolve creates deferred tasks that are executed after the main transformation run,
-allowing forward references to mappings that haven't executed yet.
+An assignment whose right-hand side involves a late resolve is a *deferred assignment*
+(§8.2.2.11) and is deferred as a whole, wherever it stands (top of a mapping body, block,
+`if`). When it is reached, `QvtoEvaluator` records a `DeferredAssignment`: the target object
+and property, the visible variables, and the source of each late resolve (§8.2.1.22) — except
+a source that uses a variable of the right-hand side itself (an iterator), which is evaluated
+with it. The assignment returns null. After the entry operation, the right-hand sides are
+evaluated in order against the full trace and assigned, so
+`x.late resolveone(T)->asOrderedSet()` works as well as a bare late resolve.
+
+Assignments to a many-valued property flatten the value and omit nulls (§8.2.2.11); what EMF
+still refuses is reported as an ERROR diagnostic, not thrown out of `execute` (#297). A late
+resolve outside a property assignment (a variable, say) is not deferred and yields null with
+a warning.
+
+Variables, tuple parts and intermediate properties follow the same equivalent assignments
+(#339). A multi-valued target is one declared as a collection or holding one. It gets a **new**
+collection of its own kind: `l += Sequence{2,3}` adds two elements, `var st : Set(Integer); st :=
+Sequence{1,1,2}` stays a Set of two, and a variable that shares the old collection (`var b := a; b
++= 2`) leaves `a` unchanged. A variable keeps null elements; a property drops them. `+=` on a
+single value is an ERROR ("append is not possible for single values"). `:= null` makes a variable
+null. The spec's formula would give `LEFT{null}`, and its "Multiple valued Variable assign"
+starts from `acc = left`, which contradicts `isReset` ("the list is reset"). Both are read as
+slips. A collection assigned to a single-valued target is not reduced to its first element:
+`value->at(1)` in the formula is the first of the composite values, not the first element of a
+collection value. `x := { a; b; }` is a composite assignment (several `AssignExp.value`, a
+Sequence); `x := do { … }` is a block, whose value is null (§8.2.2.2). Typed variables start with
+the §8.2.2.10 defaults: an empty collection of the declared kind, an empty `Dict`, 0, `''`, and
+null for everything else, Boolean included (Eclipse: `false`).
 
 ---
 
@@ -936,7 +1079,7 @@ t.transform();
 | `access` declaration | Declares a required transformation without importing its body |
 | `new T(args)` | Instantiates a transformation with bound extents |
 | `transform()` | Executes a transformation synchronously |
-| `parallelTransform()` | Executes asynchronously (future) |
+| `parallelTransform()` | Executes asynchronously (future); the models it gets are lent to it until it ends — a second parallel use that writes is refused, the caller may not modify them (§8.1.3.3, `QvtoExtentManager.lend`) |
 | `wait()` | Waits for async transformation completion |
 
 ### 9.3 Status Query
@@ -1056,6 +1199,31 @@ if (ro.oclIsKindOf(Family::Family)) then {
 } endif;
 ```
 
+### 10.x Spec notation accepted since #346
+
+- Model parameters without a direction, which defaults to `in`: `transformation T(src : SRC)`, `library L(SRC)`.
+- Unnamed parameters (`constructor Column::Column(String, String)`) and default values: `helper h(x : Integer = 3)`. A call may omit trailing parameters that have a default.
+- Named and multiple helper results: `helper h() : a : String, b : Integer`. Several results form a tuple.
+- `refines` together with `access`/`extends`.
+- A bodyless mapping with `when`/`where`, and `main();`.
+- The last expression of a block needs no `;` (`{ log('a'); log('b') }`). A switch alternative whose body is a block needs none either. The `end` section of a mapping body keeps its `;` rule, because there `end` followed by a block would read as two statements.
+- `while (i = 0; i < 3)`: the declarator may use `=`, `:=` or `::=` and omit the type.
+- `map T:::Type::m()`: the transformation and type qualifiers of a `<mapping_id>`. Calls resolve by name, and the source type chooses the candidate.
+- `class` and `abstract class` in a `metamodel` block and at module level, and declarations without a body (`exception E;`, `intermediate class IC;`, `metamodel MM;`).
+- The property keys `derived`, `literal` and `configuration` (the latter without `property`).
+- The deprecated `typedef X = T [cond]` beside Eclipse's `with`.
+- A class of the module (§8.4.8.1) comes before a model type of the same name.
+
+**Well-formedness (#347).** After parsing, these are errors:
+- more than one `main`, or a `main` with parameters (§8.2.1.11);
+- a `main` in an `abstract` transformation (§8.2.1.1);
+- a mapping with `disjuncts` and a body (§8.2.1.15);
+- two contextual operations of one name, context and parameter types (§8.2.1.10).
+
+At run time a WARNING reports two kinds of side effect, without stopping the assignment: a property or module property assigned by a `query` (§8.2.1.12), and a property of an `inout` parameter assigned in an `init` section (§8.1.11.2). Only direct assignments are seen; a helper the query calls is not followed. Override compatibility and `overridden`, the types of model parameters and the explicit disjuncts are checked by the type checker (§5.4). `refines` is a stub: the refined transformation is recorded by name, a mapping's `refines` as an annotation, and `relation`/`referredDomain` do not exist in the metamodel.
+
+**Lenient superset.** `==` and `!=` are accepted without the `use-traditional-comparison-syntax` directive (§8.4.4), and `=`/`<>` stay valid after it, as in Eclipse. **Precedence:** `xor` binds tighter than `or`, as in OCL v2.4 §9.3, while the QVT EBNF puts both on one level: `true xor true or true` is `false`. Both are deliberate (#346), and `QvtoConcreteSyntaxSpecConformanceTest` covers them.
+
 ---
 
 ## 11. Design Decisions (QVT-O-specific)
@@ -1065,7 +1233,7 @@ if (ro.oclIsKindOf(Family::Family)) then {
 | D22 | 3 EPackages in `qvto.model` | Implemented — see §3.4 |
 | D24 | Blackbox via `QvtoBlackboxLibrary` interface | Implemented — see §4.6 |
 | D25 | Hybrid evaluator (composition, not inheritance) | Implemented — see §6.2 |
-| D26 | `Dict`/`List` as aliases for OCL `Map`/`Sequence` | Implemented — parser-level mapping |
+| D26 | `Dict`/`List` as aliases for OCL `Map`/`Sequence` | Implemented — parser-level mapping. Where QVT v1.3 §8.3 defines an operation differently from OCL, the engine evaluates with `OclEvaluationOptions.qvtCollections` set: `Dict::keys()` is a List, while OCL's `Map::keys()` stays a Set (#343) |
 | D27 | Unit Resolver — ServiceLoader + Whiteboard | Implemented — see §4.6 |
 | D28 | QVT-O v1.3, Eclipse feature scope | Implemented — gaps documented in §12 |
 

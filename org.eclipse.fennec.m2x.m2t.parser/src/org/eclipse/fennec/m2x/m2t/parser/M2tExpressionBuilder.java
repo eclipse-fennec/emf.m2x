@@ -122,6 +122,8 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 			positions.putIfAbsent(node, new SourcePosition(context.getStart().getLine(),
 					context.getStart().getCharPositionInLine()));
 		}
+		// and so a type error about the node is reported where it begins (#378)
+		support.recordNode(built, context);
 		return built;
 	}
 
@@ -337,9 +339,16 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 		M2tParser.PropertyOrCallSuffixContext suffix = ctx.propertyOrCallSuffix();
 		if (suffix instanceof M2tParser.PropertySuffixContext propCtx) {
+			// §7.4.11, §9.3.36: the qualifier of self.T::feature is checked, as in OCL (#375)
+			if (propCtx.pathName() != null) {
+				support.checkQualifier(source, pathNameSegments(propCtx.pathName()));
+			}
 			String propName = identifierText(propCtx.identifier());
 			return support.buildPropertyCall(source, propName, isSafe, false);
 		} else if (suffix instanceof M2tParser.DotCallSuffixContext callCtx) {
+			if (callCtx.pathName() != null) {
+				support.checkQualifier(source, pathNameSegments(callCtx.pathName()));
+			}
 			String opName = identifierText(callCtx.identifier());
 			List<OclExpression> args = new ArrayList<>();
 			if (callCtx.argumentList() != null) {
@@ -375,18 +384,18 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 		EClassifier elementType = support.inferElementType(source);
 		M2tParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
-		List<Variable> iterVars = new ArrayList<>();
+		List<String> iterNames = new ArrayList<>();
+		List<EClassifier> iterTypes = new ArrayList<>();
 		for (int i = 0; i < varsCtx.identifier().size(); i++) {
-			EClassifier varType = (i < varsCtx.typeExpression().size()
-					&& varsCtx.typeExpression(i) != null)
-					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType;
-			Variable iterVar = support.createVariable(
-					identifierText(varsCtx.identifier(i)), varType, null);
-			iterVars.add(iterVar);
+			iterNames.add(identifierText(varsCtx.identifier(i)));
+			iterTypes.add((i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null)
+					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType);
 		}
+		List<Variable> iterVars = support.declareIteratorVariables(iterNames, iterTypes);
 		support.validateIteratorVarCount(iterName, iterVars.size());
 
-		setEnv(env().nested(iterVars));
+		// Named iterator variables are implicit sources too (§9.3.25 [A], #320)
+		setEnv(env().nestedIterators(iterVars));
 		OclExpression body = (OclExpression) visit(ctx.expression());
 		setEnv(savedEnv);
 
@@ -397,22 +406,23 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 			M2tParser.IterateCallContext ctx, boolean isSafe) {
 		OclEnvironment savedEnv = env();
 
-		EClassifier iterType = ctx.typeExpression().size() > 0
-				? resolveTypeExpression(ctx.typeExpression(0))
+		EClassifier iterType = ctx.iterType != null
+				? resolveTypeExpression(ctx.iterType)
 				: support.inferElementType(source);
-		Variable iterVar = support.createVariable(
-				identifierText(ctx.identifier(1)), iterType, null);
 
-		EClassifier accType = ctx.typeExpression().size() > 1
-				? resolveTypeExpression(ctx.typeExpression(1)) : null;
-		Variable accVar = support.createVariable(
-				identifierText(ctx.identifier(2)), accType,
-				(OclExpression) visit(ctx.expression(0)));
+		EClassifier accType = ctx.accType != null
+				? resolveTypeExpression(ctx.accType) : null;
+		// §9.3.26: without an iterator variable the body has an implicit one (#320, #375)
+		String iterName = ctx.iterName != null ? identifierText(ctx.iterName) : support.implicitIteratorName();
+		List<Variable> iterateVars = support.declareIterateVariables(iterName, iterType,
+				identifierText(ctx.accName), accType, (OclExpression) visit(ctx.accInit));
+		Variable iterVar = iterateVars.get(0);
+		Variable accVar = iterateVars.get(1);
 
-		setEnv(env().nested(iterVar));
-		setEnv(env().nested(accVar));
+		// Iterator and result are both implicit sources (§9.3.26, #320)
+		setEnv(env().nestedIterators(List.of(iterVar, accVar)));
 
-		OclExpression body = (OclExpression) visit(ctx.expression(1));
+		OclExpression body = (OclExpression) visit(ctx.iterBody);
 		setEnv(savedEnv);
 
 		return support.buildIterateExp(source, iterVar, accVar, body, isSafe);
@@ -444,27 +454,25 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 	@Override
 	public IfExp visitOclIfExp(M2tParser.OclIfExpContext ctx) {
-		// [if cond then thenExpr (elseif cond then thenExpr)* else elseExpr endif]
-		// The grammar uses: expression KW_THEN expression (KW_ELSEIF expression KW_THEN expression)* KW_ELSE expression KW_ENDIF
-		// Expressions are interleaved: [0]=condition, [1]=then, [2..]=elseif pairs, last=else
-		List<M2tParser.ExpressionContext> exprs = ctx.expression();
-		OclExpression condition = (OclExpression) visit(exprs.get(0));
-		OclExpression thenExp = (OclExpression) visit(exprs.get(1));
-
-		// Count elseif pairs: everything between index 2 and last-1 (exclusive) in pairs
-		int elseifCount = (exprs.size() - 3) / 2; // 3 base (cond, then, else) + 2 per elseif
-		List<OclExpression> elseIfConditions = null;
-		List<OclExpression> elseIfExps = null;
-		if (elseifCount > 0) {
-			elseIfConditions = new ArrayList<>();
-			elseIfExps = new ArrayList<>();
-			for (int i = 0; i < elseifCount; i++) {
-				elseIfConditions.add((OclExpression) visit(exprs.get(2 + i * 2)));
-				elseIfExps.add((OclExpression) visit(exprs.get(3 + i * 2)));
-			}
+		List<OclExpression> elseIfConditions = new ArrayList<>();
+		List<OclExpression> elseIfExps = new ArrayList<>();
+		OclExpression condition = (OclExpression) visit(ctx.condition);
+		OclExpression thenExp = (OclExpression) visit(ctx.thenExp);
+		for (int i = 0; i < ctx.elseIfCondition.size(); i++) {
+			elseIfConditions.add((OclExpression) visit(ctx.elseIfCondition.get(i)));
+			elseIfExps.add((OclExpression) visit(ctx.elseIfExp.get(i)));
 		}
-		OclExpression elseExp = (OclExpression) visit(exprs.get(exprs.size() - 1));
+		OclExpression elseExp = (OclExpression) visit(ctx.elseExp);
 		return support.buildIfExp(condition, thenExp, elseIfConditions, elseIfExps, elseExp);
+	}
+
+	/** §8.2 {@code <ifExp> ::= <OclExpressionCS> '?' <OclExpressionCS> ':' <OclExpressionCS>} (#375). */
+	@Override
+	public IfExp visitTernaryExp(M2tParser.TernaryExpContext ctx) {
+		OclExpression condition = (OclExpression) visit(ctx.condition);
+		OclExpression thenExp = (OclExpression) visit(ctx.thenExp);
+		OclExpression elseExp = (OclExpression) visit(ctx.elseExp);
+		return support.buildIfExp(condition, thenExp, null, null, elseExp);
 	}
 
 	@Override
@@ -478,9 +486,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 		for (M2tParser.LetBindingContext bindCtx : bindings) {
 			EClassifier type = bindCtx.typeExpression() != null
 					? resolveTypeExpression(bindCtx.typeExpression()) : null;
-			Variable var = support.createVariable(
-					identifierText(bindCtx.identifier()),
-					type,
+			Variable var = support.declareLetVariable(identifierText(bindCtx.identifier()), type,
 					(OclExpression) visit(bindCtx.expression()));
 			setEnv(env().nested(var));
 
@@ -496,6 +502,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 		current.setOwnedIn((OclExpression) visit(ctx.expression()));
 		setEnv(savedEnv);
+		support.typeLet(outermost);
 		return outermost;
 	}
 
@@ -545,6 +552,10 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 	public OperationCallExp visitOperationCallExp(M2tParser.OperationCallExpContext ctx) {
 		List<String> segments = pathNameSegments(ctx.pathName());
 		String opName = segments.get(segments.size() - 1);
+		if (segments.size() > 1) {
+			// §9.3.35 [I]/[J]: Type::op() is a call on self of a supertype's operation (#375)
+			support.checkStaticQualifier(segments.subList(0, segments.size() - 1), opName);
+		}
 
 		List<OclExpression> args = new ArrayList<>();
 		if (ctx.argumentList() != null) {
@@ -612,8 +623,12 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 
 	static List<String> pathNameSegments(M2tParser.PathNameContext ctx) {
 		List<String> segments = new ArrayList<>();
-		for (var id : ctx.identifier()) {
-			segments.add(identifierText(id));
+		for (var child : ctx.children) {
+			if (child instanceof M2tParser.IdentifierContext id) {
+				segments.add(identifierText(id));
+			} else if (child instanceof M2tParser.RestrictedWordContext word) {
+				segments.add(word.getText()); // §7.4.11: a restricted word after '::' (#325, #375)
+			}
 		}
 		return segments;
 	}

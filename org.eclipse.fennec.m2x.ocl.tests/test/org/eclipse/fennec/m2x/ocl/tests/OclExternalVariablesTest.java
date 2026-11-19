@@ -16,12 +16,14 @@ package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
@@ -133,5 +135,15 @@ class OclExternalVariablesTest extends AbstractOclTest {
 		EObject bob = createPerson("Bob", 25, 40000.0, false);
 		assertEquals(true, engine.evaluate("self.isMarried", OclContext.of(self)));
 		assertEquals(false, engine.evaluate("self.isMarried", OclContext.of(bob)));
+	}
+
+	// --- Model operations on a value of unknown type ---
+
+	@Test
+	void modelOperation_onAVariableOfUnknownType() throws OclParseException {
+		// The parser cannot know p's type, so it resolves no EOperation; the object's own
+		// getEClassifier(String) still answers (OCL v2.4 §7.5.4, #300)
+		OclContext ctx = OclContext.of(self, Map.of("p", EcorePackage.eINSTANCE));
+		assertSame(EcorePackage.Literals.ESTRING, engine.evaluate("p.getEClassifier('EString')", ctx));
 	}
 }

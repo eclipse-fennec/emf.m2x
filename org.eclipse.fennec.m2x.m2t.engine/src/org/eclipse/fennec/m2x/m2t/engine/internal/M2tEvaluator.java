@@ -14,17 +14,20 @@
  */
 package org.eclipse.fennec.m2x.m2t.engine.internal;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.nio.charset.IllegalCharsetNameException;
-import java.nio.charset.StandardCharsets;
 import java.nio.charset.UnsupportedCharsetException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -34,15 +37,18 @@ import java.util.regex.Matcher;
 
 import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
-import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
+import org.eclipse.fennec.m2x.m2t.parser.M2tParserSupport;
 import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
+import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.MacroInvocation;
 import org.eclipse.fennec.m2x.model.m2t.Module;
@@ -57,16 +63,22 @@ import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
 import org.eclipse.fennec.m2x.model.m2t.TextExpression;
 import org.eclipse.fennec.m2x.model.m2t.TraceBlock;
 import org.eclipse.fennec.m2x.model.m2t.util.M2tSwitch;
+import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
-import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions.NullHandling;
+import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
+import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Switch-based interpreter for MOFM2T template evaluation.
@@ -126,6 +138,7 @@ public class M2tEvaluator {
 
 	/** Maps standalone template invocations to their indentation string (§8.4). */
 	private final Map<TemplateInvocation, String> indentationMap;
+	private final Set<Block> conditionalNewlines;
 
 	/**
 	 * Where each expression node stood in its template. The OCL engine says which node a
@@ -164,9 +177,10 @@ public class M2tEvaluator {
 				.withCustomOperationsEnabled(true)
 				.withNullHandling(NullHandling.LENIENT)
 				.withAdditionalProviders(withStandardLibraryAndQueries(
-						oclEngine.getDefaultOptions(), module, this::invokeQueryValue));
+						oclEngine.getDefaultOptions(), module, this::invokeQueryValue, this::invokeTemplateValue));
 		this.writers = Objects.requireNonNull(writers, "writers must not be null");
 		this.indentationMap = linkSet.indentation();
+		this.conditionalNewlines = linkSet.conditionalNewlines();
 		this.positions = linkSet.positions();
 		this.limits = Objects.requireNonNull(limits, "limits must not be null");
 		buildOverrideIndex(linkSet.modules());
@@ -234,10 +248,11 @@ public class M2tEvaluator {
 		if (pastDeadline()) {
 			return "";
 		}
+		boolean entry = templateDepth == 0;
 		templateDepth++;
 		Template enclosing = executing;
 		executing = template;
-		env.pushScope();
+		env.pushFrame();
 		try {
 			// Bind template parameters
 			List<Variable> params = template.getParameter();
@@ -249,39 +264,29 @@ public class M2tEvaluator {
 				env.define("self", args.get(0));
 			}
 
-			// Evaluate guard if present
-			if (template.getGuard() != null) {
-				Object guardResult = evaluateOcl(template.getGuard());
-				if (!isTrue(guardResult)) {
-					return "";
-				}
+			if (template.getGuard() != null && !holds(template.getGuard(), "guard of template '" + template.getName() + "'")) {
+				return "";
 			}
 
-			// Execute init section
-			if (template.getInit() != null) {
-				for (Variable v : template.getInit().getVariable()) {
-					Object initValue = v.getOwnedInit() != null
-							? evaluateOcl(v.getOwnedInit())
-							: null;
-					env.define(v.getName(), initValue);
-				}
+			// Execute body, after the init section. What the entry template writes outside a file
+			// block is the standard output, with the [file (stdout)] blocks in their place (#368)
+			if (entry) {
+				writers.pushStdoutWriter();
+			} else {
+				writers.pushStringWriter();
 			}
-
-			// Execute body
-			writers.pushStringWriter();
 			executeBody(template);
 			String result = writers.popWriter();
 
 			// Apply post-processing if present
 			if (template.getPost() != null) {
 				env.define("self", result);
-				Object postResult = evaluateOcl(template.getPost());
-				result = asString(postResult);
+				result = render(template.getPost());
 			}
 
 			return result;
 		} finally {
-			env.popScope();
+			env.popFrame();
 			templateDepth--;
 			executing = enclosing;
 		}
@@ -306,12 +311,7 @@ public class M2tEvaluator {
 
 		@Override
 		public Object caseForBlock(ForBlock block) {
-			Object iterSetResult = evaluateOcl(block.getIterSet());
-			if (!(iterSetResult instanceof Collection<?> collection)) {
-				return WRAPPED_NULL;
-			}
-
-			List<?> items = new ArrayList<>(collection);
+			List<?> items = iterationItems(block);
 			// Apply guard filter if present
 			if (block.getGuard() != null) {
 				items = items.stream().filter(item -> {
@@ -320,7 +320,7 @@ public class M2tEvaluator {
 						String varName = block.getLoopVariable() != null
 								? block.getLoopVariable().getName() : "self";
 						env.define(varName, item);
-						return isTrue(evaluateOcl(block.getGuard()));
+						return holds(block.getGuard(), "guard of a for block");
 					} finally {
 						env.popScope();
 					}
@@ -333,7 +333,7 @@ public class M2tEvaluator {
 
 			// Evaluate before expression (outside loop scope, before first iteration)
 			if (block.getBefore() != null) {
-				writers.append(asString(evaluateOcl(block.getBefore())));
+				writers.append(render(block.getBefore()));
 			}
 
 			int iterLimit = Math.min(items.size(), limits.maxForIterations());
@@ -356,7 +356,7 @@ public class M2tEvaluator {
 
 					// Separator evaluated between iterations, with 'i' in scope
 					if (i > 0 && block.getEach() != null) {
-						writers.append(asString(evaluateOcl(block.getEach())));
+						writers.append(render(block.getEach()));
 					}
 
 					executeBody(block);
@@ -367,7 +367,7 @@ public class M2tEvaluator {
 
 			// Evaluate after expression (outside loop scope, after last iteration)
 			if (block.getAfter() != null) {
-				writers.append(asString(evaluateOcl(block.getAfter())));
+				writers.append(render(block.getAfter()));
 			}
 
 			return WRAPPED_NULL;
@@ -375,16 +375,24 @@ public class M2tEvaluator {
 
 		@Override
 		public Object caseIfBlock(IfBlock block) {
-			Object condResult = evaluateOcl(block.getIfExpr());
-			if (isTrue(condResult)) {
+			// §8.1.21: a condition that is neither true nor false takes no branch, the else
+			// branch included — it reports an ERROR instead (#366)
+			Boolean condition = condition(block.getIfExpr(), "condition of an if block");
+			if (condition == null) {
+				return WRAPPED_NULL;
+			}
+			if (condition) {
 				executeBody(block);
 				return WRAPPED_NULL;
 			}
 
 			// Check elseIf chain
 			for (IfBlock elseIf : block.getElseIf()) {
-				Object elseIfResult = evaluateOcl(elseIf.getIfExpr());
-				if (isTrue(elseIfResult)) {
+				Boolean elseIfCondition = condition(elseIf.getIfExpr(), "condition of an elseif");
+				if (elseIfCondition == null) {
+					return WRAPPED_NULL;
+				}
+				if (elseIfCondition) {
 					executeBody(elseIf);
 					return WRAPPED_NULL;
 				}
@@ -399,26 +407,27 @@ public class M2tEvaluator {
 		}
 
 		@Override
+		public Object caseInlineExpression(InlineExpression inline) {
+			// §7.4: a macro's Body parameter, referred to, inserts the body of the call
+			if (inline.getExpression() instanceof VariableExp reference && reference.getReferredVariable() != null
+					&& env.lookup(reference.getReferredVariable().getName()) instanceof BodyArgument body) {
+				expandBody(body);
+				return WRAPPED_NULL;
+			}
+			// §8.2 '[' OclExpressionCS '/]': the value goes into the document (#370)
+			writers.append(render(inline.getExpression()));
+			return WRAPPED_NULL;
+		}
+
+		@Override
 		public Object caseLetBlock(LetBlock block) {
-			// Inline expression wrapper — special case, no elseLet/else semantics
-			Variable letVar = block.getLetVariable();
-			if (block.getBody().isEmpty() && letVar.getName().startsWith("__inline__")) {
-				Object value = letVar.getOwnedInit() != null
-						? evaluateOcl(letVar.getOwnedInit()) : null;
-				writers.append(asString(value));
-				return WRAPPED_NULL;
-			}
 
-			// MOFM2T §8.1.16: LetBlock is a subtype test chain.
-			// Evaluate init — if value is non-null (cast succeeded), bind and execute body.
-			// Otherwise, try elseLet chain, then else block.
-			if (tryLetBlock(block)) {
-				return WRAPPED_NULL;
-			}
-
-			// Try elseLet chain
-			for (LetBlock elseLet : block.getElseLet()) {
-				if (tryLetBlock(elseLet)) {
+			// MOFM2T §8.1.16: a let block is a subtype test chain — the first let or elselet whose
+			// value is an instance of its declared type runs, otherwise the else block. An invalid
+			// value ends the whole block (#363).
+			for (LetBlock candidate : letChain(block)) {
+				LetOutcome outcome = tryLetBlock(candidate);
+				if (outcome != LetOutcome.DECLINED) {
 					return WRAPPED_NULL;
 				}
 			}
@@ -433,21 +442,50 @@ public class M2tEvaluator {
 
 		@Override
 		public Object caseFileBlock(FileBlock block) {
-			String filePath = asString(evaluateOcl(block.getFileUrl()));
+			String filePath = render(block.getFileUrl());
+			if (filePath.isEmpty()) {
+				// Acceleo stops the generation here ("undefined file URL"); this one skips the
+				// block, so the rest of the document still gets its say, and names the block.
+				// Writing on would have produced a file called OclInvalid (#270).
+				addDiagnostic(Diagnostic.ERROR, "[file] URL evaluated to nothing — block skipped",
+						positionOf(block.getFileUrl()));
+				return WRAPPED_NULL;
+			}
+			if (M2tParserSupport.STDOUT.equals(filePath)) {
+				// §7.3: "The uri 'stdout' denotes the stdout output stream" (#368)
+				writers.pushStdoutWriter();
+				executeBody(block);
+				writers.popWriter();
+				return WRAPPED_NULL;
+			}
 			OpenModeKind mode = block.getOpenMode();
-			Charset charset = StandardCharsets.UTF_8;
+			if (block.getAppendExpr() != null) {
+				// §8.2: the append flag is an expression (#368)
+				Boolean append = condition(block.getAppendExpr(), "append flag of [file] '" + filePath + "'");
+				if (append == null) {
+					return WRAPPED_NULL;
+				}
+				mode = append ? OpenModeKind.APPEND : OpenModeKind.OVERWRITE;
+			}
+			// No charset of its own: the configured default applies when the file is written
+			Charset charset = null;
 			if (block.getCharset() != null) {
-				String charsetName = asString(evaluateOcl(block.getCharset()));
+				String charsetName = render(block.getCharset());
 				try {
 					charset = Charset.forName(charsetName);
 				} catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
-					addWarning("Unknown charset '" + charsetName + "', using UTF-8");
+					addWarning("Unknown charset '" + charsetName + "', using the default charset");
 				}
 			}
 
 			// §8.1.17: Evaluate optional uniqId for file-rename tracking
 			if (block.getUniqId() != null) {
-				String uniqId = asString(evaluateOcl(block.getUniqId()));
+				String uniqId = render(block.getUniqId());
+				if (isCharsetName(uniqId)) {
+					addDiagnostic(Diagnostic.WARNING, "The third argument of [file] is the uniqId (MOFM2T §7.3); '"
+							+ uniqId + "' looks like a charset, which is the fourth argument",
+							positionOf(block.getUniqId()));
+				}
 				writers.setFileUniqueId(filePath, uniqId);
 			}
 
@@ -466,24 +504,54 @@ public class M2tEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			String markerId = asString(evaluateOcl(block.getMarker()));
+			// §7.2: a protected text part has "a unique identification" — an area without a usable
+			// id, or with one the file already has, could never be merged back, so it is not
+			// written at all (#367)
+			OclResult idResult = evaluate(block.getMarker());
+			Object idValue = idResult == null ? null : idResult.value();
+			String markerId = idValue == null || idValue == OclInvalid.INSTANCE ? "" : asString(idValue);
+			if (markerId.isEmpty() || markerId.contains("\n") || markerId.contains("\r")) {
+				addDiagnostic(Diagnostic.ERROR, "The id of a protected area is "
+						+ (idValue == OclInvalid.INSTANCE ? "invalid" : markerId.isEmpty() ? "empty" : "more than one line")
+						+ " — the area is not written (MOFM2T §7.2)", positionOf(block.getMarker()));
+				return WRAPPED_NULL;
+			}
+			if (!writers.claimProtectedAreaId(markerId)) {
+				addDiagnostic(Diagnostic.ERROR, "Protected area id '" + markerId + "' is used twice in '"
+						+ writers.currentTargetName() + "' — the second area is not written (MOFM2T §7.2)",
+						positionOf(block.getMarker()));
+				return WRAPPED_NULL;
+			}
 
 			// Execute body first to capture default content and compute hash (D31)
 			writers.pushStringWriter();
 			executeBody(block);
 			String defaultContent = writers.popWriter();
 
-			writers.append(M2tProtectedAreaMerger.startMarker(markerId, defaultContent));
+			// Both markers on lines of their own, indented like the tag; the hash covers exactly
+			// what stands between them, so a regeneration recognises it untouched (#367)
+			String indentation = writers.currentLineIndentation();
+			String body = defaultContent + (defaultContent.isEmpty() || defaultContent.endsWith("\n") ? "" : "\n")
+					+ indentation;
+			M2tProtectedAreaMerger markers = new M2tProtectedAreaMerger(
+					M2tConfiguration.delimiterFor(limits.protectedAreaDelimiters(), writers.currentTargetName()));
+			writers.append(markers.startMarkerFor(markerId, body));
 			writers.append("\n");
-			writers.append(defaultContent);
-			writers.append(M2tProtectedAreaMerger.endMarker());
+			writers.append(body);
+			writers.append(markers.endMarkerLine());
 
 			return WRAPPED_NULL;
 		}
 
 		@Override
 		public Object caseTraceBlock(TraceBlock block) {
-			// Trace blocks are evaluated but the traceability info is not yet used
+			// D15 (#371): a trace block emits its body; the trace information itself is not
+			// recorded. Its model element is evaluated all the same — a mistake in it went
+			// unnoticed before
+			if (block.getModelElement() != null && evaluateOcl(block.getModelElement()) == OclInvalid.INSTANCE) {
+				addDiagnostic(Diagnostic.ERROR, "The model element of a trace block is invalid (MOFM2T §8.1.18)",
+						positionOf(block.getModelElement()));
+			}
 			executeBody(block);
 			return WRAPPED_NULL;
 		}
@@ -510,19 +578,7 @@ public class M2tEvaluator {
 					addError("[super/] called outside of an override context");
 					return WRAPPED_NULL;
 				}
-				Template overridden = ctx.overridden;
-				// If the overridden template itself overrides something, set up super context
-				if (!overridden.getOverrides().isEmpty()) {
-					Template nextSuper = overridden.getOverrides().get(0);
-					superStack.push(new SuperContext(nextSuper, ctx.args));
-					try {
-						invokeTemplate(overridden, ctx.args);
-					} finally {
-						superStack.pop();
-					}
-				} else {
-					invokeTemplate(overridden, ctx.args);
-				}
+				invokeTemplateWithOverride(ctx.overridden, ctx.invoked, ctx.args);
 				return WRAPPED_NULL;
 			}
 
@@ -538,55 +594,43 @@ public class M2tEvaluator {
 				evalArgs.add(evaluateOcl(argExpr));
 			}
 
-			// Override resolution: check if an overriding template applies
-			Template resolved = resolveOverride(target, evalArgs);
-
-			// §8.1.10: Determine which arguments are sets with singleton parameters
-			// If argument is a set and parameter is singleton → iterate
-			List<Variable> params = resolved.getParameter();
-			List<List<?>> setArgs = new ArrayList<>();
-			boolean hasSetIteration = false;
-
-			for (int i = 0; i < evalArgs.size() && i < params.size(); i++) {
-				Object arg = evalArgs.get(i);
-				if (arg instanceof Collection<?> coll) {
-					setArgs.add(new ArrayList<>(coll));
-					hasSetIteration = true;
-				} else {
-					setArgs.add(List.of(arg != null ? arg : WRAPPED_NULL));
-				}
+			List<List<Object>> invocations = invocationArguments(target, evalArgs);
+			if (invocations == null) {
+				return WRAPPED_NULL;
 			}
 
-			if (hasSetIteration) {
-				// T-3: Check cross-product size before computing
-				long productSize = 1;
-				for (List<?> setArg : setArgs) {
-					productSize *= setArg.size();
-					if (productSize > limits.maxCrossProductSize()) {
-						addError("Cross-product size exceeds limit (" + limits.maxCrossProductSize()
-								+ ") — template invocation skipped");
-						return WRAPPED_NULL;
-					}
+			// §8.1.10: before goes in front of the first invocation, the separator between two,
+			// after behind the last — of the invocations that took place: a template its guard
+			// declines was not invoked (#364)
+			String each = null;
+			boolean invoked = false;
+			for (List<Object> arguments : invocations) {
+				writers.pushStringWriter();
+				boolean ran;
+				String output;
+				try {
+					ran = invokeChecked(target, arguments, invocation.getArgument());
+				} finally {
+					output = writers.popWriter();
 				}
-				List<List<Object>> crossProduct = crossProduct(setArgs);
-
-				String before = invocation.getBefore() != null
-						? asString(evaluateOcl(invocation.getBefore())) : null;
-				String each = invocation.getEach() != null
-						? asString(evaluateOcl(invocation.getEach())) : null;
-				String after = invocation.getAfter() != null
-						? asString(evaluateOcl(invocation.getAfter())) : null;
-
-				if (!crossProduct.isEmpty()) {
-					if (before != null) writers.append(before);
-					for (int i = 0; i < crossProduct.size(); i++) {
-						if (i > 0 && each != null) writers.append(each);
-						invokeTemplateWithOverride(resolved, target, crossProduct.get(i));
-					}
-					if (after != null) writers.append(after);
+				if (!ran) {
+					continue;
 				}
-			} else {
-				invokeTemplateWithOverride(resolved, target, evalArgs);
+				if (!invoked) {
+					if (invocation.getBefore() != null) {
+						writers.append(render(invocation.getBefore()));
+					}
+				} else if (invocation.getEach() != null) {
+					if (each == null) {
+						each = render(invocation.getEach());
+					}
+					writers.append(each);
+				}
+				invoked = true;
+				writers.append(output);
+			}
+			if (invoked && invocation.getAfter() != null) {
+				writers.append(render(invocation.getAfter()));
 			}
 
 			return WRAPPED_NULL;
@@ -600,14 +644,14 @@ public class M2tEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			env.pushScope();
+			// Evaluate all arguments once, in the caller's scope
+			List<Variable> params = query.getParameter();
+			List<Object> evalArgs = new ArrayList<>();
+			for (int i = 0; i < invocation.getArgument().size(); i++) {
+				evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
+			}
+			env.pushFrame();
 			try {
-				// Evaluate all arguments once
-				List<Variable> params = query.getParameter();
-				List<Object> evalArgs = new ArrayList<>();
-				for (int i = 0; i < invocation.getArgument().size(); i++) {
-					evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
-				}
 				for (int i = 0; i < params.size() && i < evalArgs.size(); i++) {
 					env.define(params.get(i).getName(), evalArgs.get(i));
 				}
@@ -615,10 +659,11 @@ public class M2tEvaluator {
 					env.define("self", evalArgs.get(0));
 				}
 
-				Object result = evaluateOcl(query.getExpression());
-				writers.append(asString(result));
+				OclResult result = evaluate(query.getExpression());
+				checkQueryResult(query, result == null ? null : result.value());
+				writers.append(render(result, query.getExpression()));
 			} finally {
-				env.popScope();
+				env.popFrame();
 			}
 
 			return WRAPPED_NULL;
@@ -632,14 +677,22 @@ public class M2tEvaluator {
 				return WRAPPED_NULL;
 			}
 
-			env.pushScope();
+			// A macro calling itself is bounded like a template doing so (#371)
+			if (templateDepth >= limits.maxTemplateDepth()) {
+				addError("Maximum template depth exceeded (" + limits.maxTemplateDepth()
+						+ ") — possible infinite recursion in macro '" + macro.getName() + "'");
+				return WRAPPED_NULL;
+			}
+			// Evaluate all arguments once, in the caller's scope; the body of the call is kept
+			// with that scope, as §7.4 expands it "in the context of the macro call" (#371)
+			List<Variable> params = macro.getParameter();
+			List<Object> evalArgs = new ArrayList<>();
+			for (OclExpression argument : invocation.getArgument()) {
+				evalArgs.add(argument instanceof Block body ? new BodyArgument(body, env.allVisibleVariables())
+						: evaluateOcl(argument));
+			}
+			env.pushFrame();
 			try {
-				// Evaluate all arguments once
-				List<Variable> params = macro.getParameter();
-				List<Object> evalArgs = new ArrayList<>();
-				for (int i = 0; i < invocation.getArgument().size(); i++) {
-					evalArgs.add(evaluateOcl(invocation.getArgument().get(i)));
-				}
 				for (int i = 0; i < params.size() && i < evalArgs.size(); i++) {
 					env.define(params.get(i).getName(), evalArgs.get(i));
 				}
@@ -647,17 +700,14 @@ public class M2tEvaluator {
 					env.define("self", evalArgs.get(0));
 				}
 
-				if (macro.getInit() != null) {
-					for (Variable v : macro.getInit().getVariable()) {
-						Object initValue = v.getOwnedInit() != null
-								? evaluateOcl(v.getOwnedInit()) : null;
-						env.define(v.getName(), initValue);
-					}
+				templateDepth++;
+				try {
+					executeBody(macro);
+				} finally {
+					templateDepth--;
 				}
-
-				executeBody(macro);
 			} finally {
-				env.popScope();
+				env.popFrame();
 			}
 
 			return WRAPPED_NULL;
@@ -666,8 +716,7 @@ public class M2tEvaluator {
 		@Override
 		public Object caseOclExpression(OclExpression expr) {
 			// Generic OCL expression in template position — evaluate and output result
-			Object result = evaluateOcl(expr);
-			writers.append(asString(result));
+			writers.append(render(expr));
 			return WRAPPED_NULL;
 		}
 
@@ -680,23 +729,79 @@ public class M2tEvaluator {
 
 	// --- Helpers ---
 
-	private void executeBody(Block block) {
-		for (TemplateExpression expr : block.getBody()) {
-			templateSwitch.doSwitch(expr);
+	/** The text after the end of its first line, or nothing when the text is only whitespace. */
+	private static String withoutFirstLineBreak(String text) {
+		int newline = text.indexOf('\n');
+		if (newline >= 0 && text.substring(0, newline).isBlank()) {
+			return text.substring(newline + 1);
 		}
+		return text.isBlank() ? "" : text;
 	}
 
 	/**
-	 * Tries to execute a single LetBlock: evaluates init, if non-null binds
-	 * variable and executes body, returns true. If null, returns false.
-	 * (MOFM2T §8.1.16 subtype test semantics)
+	 * Executes a block: its init section, then its body (§8.1.4). The init variables go into the
+	 * current scope — a template's stay visible to its post expression, a for block's are
+	 * evaluated per iteration in the scope of the loop variable (#366).
 	 */
-	private boolean tryLetBlock(LetBlock block) {
+	private void executeBody(Block block) {
+		if (block.getInit() != null) {
+			for (Variable v : block.getInit().getVariable()) {
+				env.define(v.getName(), v.getOwnedInit() != null ? evaluateOcl(v.getOwnedInit()) : null);
+			}
+		}
+		boolean dropNewline = false;
+		for (TemplateExpression expr : block.getBody()) {
+			if (dropNewline && expr instanceof TextExpression text) {
+				writers.append(withoutFirstLineBreak(text.getValue()));
+			} else {
+				int before = writers.currentLength();
+				templateSwitch.doSwitch(expr);
+				// §8.4: the line of a single-line stand-alone block goes when the block wrote
+				// nothing; when it wrote text, the line break after it is output as is (#374)
+				dropNewline = expr instanceof Block nested && conditionalNewlines.contains(nested)
+						&& writers.currentLength() == before;
+				continue;
+			}
+			dropNewline = false;
+		}
+	}
+
+	/** What one let or elselet of a let block did. */
+	private enum LetOutcome {
+		/** Its value had the declared type, and its body ran. */
+		TAKEN,
+		/** Its value was null or of another type: the next one is asked. */
+		DECLINED,
+		/** Its value was invalid: the let block produces nothing. */
+		INVALID
+	}
+
+	/** The let block and its elselets, in the order they are tried. */
+	private static List<LetBlock> letChain(LetBlock block) {
+		List<LetBlock> chain = new ArrayList<>();
+		chain.add(block);
+		chain.addAll(block.getElseLet());
+		return chain;
+	}
+
+	/**
+	 * Tries one let or elselet (MOFM2T §7, §8.1.16): "a test that checks whether the object bound
+	 * to the supertype variable is actually an instance of the specified subtype". {@code null} is
+	 * no instance of any type; an untyped declaration takes the type of its value, so for it only
+	 * {@code null} fails. An {@code invalid} value is an ERROR and ends the let block, the else
+	 * branch included — the line of the conditions (#363, #366).
+	 */
+	private LetOutcome tryLetBlock(LetBlock block) {
 		Variable letVar = block.getLetVariable();
 		Object value = letVar.getOwnedInit() != null
 				? evaluateOcl(letVar.getOwnedInit()) : null;
-		if (value == null) {
-			return false;
+		if (value == OclInvalid.INSTANCE) {
+			addDiagnostic(Diagnostic.ERROR, "The value of let '" + letVar.getName()
+					+ "' is invalid — the let block produces nothing (MOFM2T §8.1.16)", positionOf(letVar.getOwnedInit()));
+			return LetOutcome.INVALID;
+		}
+		if (value == null || !conformsAtRuntime(value, letVar.getType())) {
+			return LetOutcome.DECLINED;
 		}
 		env.pushScope();
 		try {
@@ -705,7 +810,7 @@ public class M2tEvaluator {
 		} finally {
 			env.popScope();
 		}
-		return true;
+		return LetOutcome.TAKEN;
 	}
 
 	/**
@@ -713,6 +818,44 @@ public class M2tEvaluator {
 	 * Variables from the M2T environment are made available as the OCL context.
 	 */
 	Object evaluateOcl(OclExpression expression) {
+		OclResult result = evaluate(expression);
+		return result == null ? null : result.value();
+	}
+
+	/**
+	 * Evaluates an expression whose value goes into the document.
+	 *
+	 * <p>{@code invalid} is not text. It is what an expression answers when it could not be
+	 * evaluated — a null argument, an operation nobody provides, a failed cast — and writing
+	 * its name into the document turned that into a word a reader had to search for, in a
+	 * generation that counted as successful (#270). The spot stays empty instead, and the
+	 * expression is named at its line: by the OCL engine's own diagnostic where it reported
+	 * why, and by this one where the value turned invalid in silence — a literal
+	 * {@code invalid}, or a failure the engine answers without a word.
+	 */
+	private String render(OclExpression expression) {
+		return render(evaluate(expression), expression);
+	}
+
+	/** {@link #render(OclExpression)} for a result already evaluated. */
+	private String render(OclResult result, OclExpression expression) {
+		if (result == null) {
+			return "";
+		}
+		if (result.value() == OclInvalid.INSTANCE) {
+			if (result.isSuccess()) {
+				addDiagnostic(Diagnostic.ERROR, "Expression evaluated to invalid — nothing written",
+						positionOf(expression));
+			}
+			return "";
+		}
+		return asString(result.value());
+	}
+
+	/**
+	 * Evaluates an expression and forwards what it reported; {@code null} for no expression.
+	 */
+	private OclResult evaluate(OclExpression expression) {
 		if (expression == null) {
 			return null;
 		}
@@ -745,7 +888,7 @@ public class M2tEvaluator {
 			// reporting success while the document said otherwise (#114).
 			OclResult result = oclEngine.evaluateWithDiagnostics(expression, oclContext, oclOptions);
 			result.diagnostics().forEach(this::addOclDiagnostic);
-			return result.value();
+			return result;
 		} catch (RuntimeException e) {
 			addError("OCL evaluation error [" + e.getClass().getSimpleName() + "]: " + e.getMessage());
 			return null;
@@ -773,16 +916,28 @@ public class M2tEvaluator {
 			return null;
 		}
 		for (Object entry : data) {
-			if (!(entry instanceof EObject node)) {
-				continue;
-			}
-			// Up the containment chain: only the node a visit was entered for is recorded, while a
-			// diagnostic is usually about an inner one — the enclosing expression is its place.
-			for (EObject current = node; current != null; current = current.eContainer()) {
-				SourcePosition position = positions.get(current);
+			if (entry instanceof EObject node) {
+				SourcePosition position = positionOf(node);
 				if (position != null) {
 					return position;
 				}
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * The place a node stood in the template, or {@code null} when nothing this module parsed
+	 * contains it.
+	 *
+	 * <p>Up the containment chain: only the node a visit was entered for is recorded, while a
+	 * diagnostic is usually about an inner one — the enclosing expression is its place.
+	 */
+	private SourcePosition positionOf(EObject node) {
+		for (EObject current = node; current != null; current = current.eContainer()) {
+			SourcePosition position = positions.get(current);
+			if (position != null) {
+				return position;
 			}
 		}
 		return null;
@@ -818,12 +973,13 @@ public class M2tEvaluator {
 	 */
 	private static List<OclOperationProvider> withStandardLibraryAndQueries(
 			OclEvaluationOptions options, Module module,
-			BiFunction<Query, Object[], Object> queryInvoker) {
+			BiFunction<Query, Object[], Object> queryInvoker, BiFunction<Template, Object[], Object> templateInvoker) {
 		List<OclOperationProvider> providers = new ArrayList<>(options.additionalProviders());
 		providers.add(new M2tStandardLibrary());
-		// The module's own queries. Without them a guard — a plain OCL expression the linker's
-		// invocation rewrite never reaches — cannot call what the module defines (#146).
-		providers.add(new M2tOperationProvider(module, queryInvoker));
+		// The module's own queries and templates. Without them a guard — a plain OCL expression the
+		// linker's invocation rewrite never reaches — cannot call what the module defines (#146),
+		// nor can an invocation inside a larger expression (#364).
+		providers.add(new M2tOperationProvider(module, queryInvoker, templateInvoker));
 		return List.copyOf(providers);
 	}
 
@@ -849,7 +1005,7 @@ public class M2tEvaluator {
 			return null;
 		}
 		queryDepth++;
-		env.pushScope();
+		env.pushFrame();
 		try {
 			List<Variable> parameters = query.getParameter();
 			for (int i = 0; i < parameters.size() && i < arguments.length; i++) {
@@ -858,35 +1014,252 @@ public class M2tEvaluator {
 			if (arguments.length > 0) {
 				env.define("self", arguments[0]);
 			}
-			return evaluateOcl(query.getExpression());
+			Object value = evaluateOcl(query.getExpression());
+			checkQueryResult(query, value);
+			return value;
 		} finally {
-			env.popScope();
+			env.popFrame();
 			queryDepth--;
 		}
+	}
+
+	/** The body of a macro invocation, with the variables of the scope it was written in (#371). */
+	private record BodyArgument(Block block, Map<String, Object> scope) {
+	}
+
+	/** Writes the body of a macro invocation, in the scope of the call. */
+	private void expandBody(BodyArgument body) {
+		env.pushFrame();
+		try {
+			body.scope().forEach(env::define);
+			executeBody(body.block());
+		} finally {
+			env.popFrame();
+		}
+	}
+
+	/**
+	 * §8.1.15: a query has a return type. Where the body's type is known the parser checks it;
+	 * where it is not, a value that is known not to be of that type is reported here (#370).
+	 */
+	private void checkQueryResult(Query query, Object value) {
+		EClassifier returnType = query.getReturnType();
+		EClassifier valueType = OclTypeRules.normalize(runtimeType(value));
+		if (returnType != null && valueType != null && !OclTypeRules.conformsTo(valueType, returnType)) {
+			addDiagnostic(Diagnostic.WARNING, "Query '" + query.getName() + "' returned a "
+					+ OclTypeRules.nameOf(valueType) + ", which is no " + OclTypeRules.nameOf(returnType)
+					+ " as it declares (MOFM2T §8.1.15)");
+		}
+	}
+
+	/** The type of a value as far as it says: a model object's class, a primitive's library type. */
+	private static EClassifier runtimeType(Object value) {
+		OclStandardLibrary library = OclStandardLibrary.INSTANCE;
+		return switch (value) {
+			case EObject object -> object.eClass();
+			case String text -> library.string();
+			case Boolean bool -> library.booleanType();
+			case Long l -> library.integer();
+			case Integer i -> library.integer();
+			case BigInteger big -> library.integer();
+			case BigDecimal decimal -> library.real();
+			case Double d -> library.real();
+			case null, default -> null;
+		};
+	}
+
+	/**
+	 * The argument lists a template invocation runs with (MOFM2T §8.1.10): "If the argument is a
+	 * set and the parameter is singleton, then the template is invoked for each member of the
+	 * set. If the argument is a set and the parameter is a set, then the template is invoked
+	 * once. If the argument is a singleton and the parameter is a set, then the template is
+	 * invoked once with the singleton set." Several fanned-out arguments make the cross product.
+	 * {@code null} when the cross product exceeds its limit, which is reported.
+	 */
+	private List<List<Object>> invocationArguments(Template target, List<Object> evalArgs) {
+		List<Variable> params = target.getParameter();
+		List<List<?>> perParameter = new ArrayList<>();
+		for (int i = 0; i < evalArgs.size(); i++) {
+			Object arg = evalArgs.get(i);
+			EClassifier type = i < params.size() ? params.get(i).getType() : null;
+			if (arg instanceof Collection<?> collection && !(type instanceof CollectionType)) {
+				perParameter.add(new ArrayList<>(collection));
+			} else if (type instanceof CollectionType collectionType && arg != null && arg != OclInvalid.INSTANCE
+					&& !(arg instanceof Collection<?>)) {
+				perParameter.add(Collections.singletonList(singletonCollection(arg, collectionType)));
+			} else {
+				perParameter.add(Collections.singletonList(arg));
+			}
+		}
+		long productSize = 1;
+		for (List<?> values : perParameter) {
+			productSize *= values.size();
+			if (productSize > limits.maxCrossProductSize()) {
+				// T-3
+				addError("Cross-product size exceeds limit (" + limits.maxCrossProductSize()
+						+ ") — template invocation skipped");
+				return null;
+			}
+		}
+		return crossProduct(perParameter);
+	}
+
+	/** One value as a collection of the parameter's kind, for a collection parameter (§8.1.10). */
+	private static Collection<Object> singletonCollection(Object value, CollectionType type) {
+		Collection<Object> collection = type.getKind() == CollectionKind.SET || type.getKind() == CollectionKind.ORDERED_SET
+				? new LinkedHashSet<>() : new ArrayList<>();
+		collection.add(value);
+		return collection;
+	}
+
+	/**
+	 * Invokes a template with one argument list, unless an argument rules it out (#364): an
+	 * {@code invalid} or {@code null} argument — the template is skipped, as in Acceleo — or one
+	 * that is no instance of its parameter's type (§8.1.10: "An argument type matches the
+	 * parameter type when the latter is either the same type or a super type"). Each is an
+	 * ERROR at the argument. Among same-named templates of the module the most specific one that
+	 * fits is taken (#369), then the override that applies.
+	 *
+	 * @param argumentExpressions where the arguments were written, for the position of a
+	 *            diagnostic; empty for a call from an OCL expression
+	 * @return whether the template ran, its guard holding
+	 */
+	private boolean invokeChecked(Template target, List<Object> arguments, List<OclExpression> argumentExpressions) {
+		for (int i = 0; i < arguments.size(); i++) {
+			Object argument = arguments.get(i);
+			if (argument == null || argument == OclInvalid.INSTANCE) {
+				addDiagnostic(Diagnostic.ERROR, "Argument " + (i + 1) + " of template '" + target.getName() + "' is "
+						+ (argument == null ? "null" : "invalid") + " — the template is not invoked (MOFM2T §8.1.10)",
+						argumentPosition(argumentExpressions, i));
+				return false;
+			}
+		}
+		Template chosen = dispatch(target, arguments);
+		List<Variable> params = chosen.getParameter();
+		for (int i = 0; i < arguments.size() && i < params.size(); i++) {
+			if (!conformsAtRuntime(arguments.get(i), params.get(i).getType())) {
+				addDiagnostic(Diagnostic.ERROR, "Argument " + (i + 1) + " of template '" + chosen.getName() + "' is a "
+						+ typeName(arguments.get(i)) + ", which is no " + OclTypeRules.nameOf(params.get(i).getType())
+						+ " — the template is not invoked (MOFM2T §8.1.10)", argumentPosition(argumentExpressions, i));
+				return false;
+			}
+		}
+		return invokeTemplateWithOverride(resolveOverride(chosen, arguments), chosen, arguments);
+	}
+
+	private SourcePosition argumentPosition(List<OclExpression> argumentExpressions, int index) {
+		return index < argumentExpressions.size() ? positionOf(argumentExpressions.get(index)) : null;
+	}
+
+	/**
+	 * The template a call runs among the same-named ones of the module that declares the
+	 * target (#369, as Acceleo): of those with as many parameters as there are arguments and
+	 * whose parameter types the arguments are instances of, the most specific — the one whose
+	 * parameter types all conform to those of the others. The target itself when nothing else fits.
+	 */
+	private Template dispatch(Template target, List<Object> arguments) {
+		if (!(target.eContainer() instanceof Module module)) {
+			return target;
+		}
+		Template best = null;
+		for (ModuleElement element : module.getOwnedModuleElement()) {
+			if (element instanceof Template candidate && target.getName().equals(candidate.getName())
+					&& candidate.getParameter().size() == arguments.size() && fits(candidate, arguments)
+					&& (best == null || moreSpecific(candidate, best))) {
+				best = candidate;
+			}
+		}
+		return best != null ? best : target;
+	}
+
+	private static boolean fits(Template candidate, List<Object> arguments) {
+		for (int i = 0; i < arguments.size(); i++) {
+			if (!conformsAtRuntime(arguments.get(i), candidate.getParameter().get(i).getType())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** Whether every parameter type of {@code a} conforms to the one of {@code b} in its place. */
+	static boolean moreSpecific(Template a, Template b) {
+		for (int i = 0; i < a.getParameter().size(); i++) {
+			if (!OclTypeRules.conformsTo(a.getParameter().get(i).getType(), b.getParameter().get(i).getType())) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Evaluates a template invocation written inside an OCL expression (§8.2 {@code <invocation>}
+	 * is an {@code OclExpressionCS}): the text the template generates is its value (#364).
+	 */
+	private Object invokeTemplateValue(Template template, Object[] arguments) {
+		List<List<Object>> invocations = invocationArguments(template, Arrays.asList(arguments));
+		String text;
+		writers.pushStringWriter();
+		try {
+			if (invocations != null) {
+				for (List<Object> invocation : invocations) {
+					invokeChecked(template, invocation, List.of());
+				}
+			}
+		} finally {
+			text = writers.popWriter();
+		}
+		return text;
 	}
 
 	/**
 	 * Invokes a template, pushing super context if the resolved template differs
 	 * from the original (i.e., an override was applied).
 	 */
-	private void invokeTemplateWithOverride(Template resolved, Template original,
+	private boolean invokeTemplateWithOverride(Template resolved, Template original,
 			List<Object> argValues) {
-		if (resolved != original) {
-			// Find what the resolved template directly overrides (for [super/] target)
-			Template superTarget = original; // default fallback
-			if (!resolved.getOverrides().isEmpty()) {
-				// The template's overrides list contains what it directly overrides
-				superTarget = resolved.getOverrides().get(0);
-			}
-			superStack.push(new SuperContext(superTarget, argValues));
-			try {
-				invokeTemplate(resolved, argValues);
-			} finally {
-				superStack.pop();
-			}
-		} else {
-			invokeTemplate(resolved, argValues);
+		Template superTarget = superOf(resolved, original);
+		if (superTarget == null) {
+			return invokeTemplate(resolved, argValues);
 		}
+		superStack.push(new SuperContext(superTarget, argValues, original));
+		try {
+			return invokeTemplate(resolved, argValues);
+		} finally {
+			superStack.pop();
+		}
+	}
+
+	/**
+	 * What {@code [super/]} in a template points to (MOFM2T §8.1.3): "Let's say that T2 overrides
+	 * T1 and T3 … Invocation of T1 resulted in invocation of T2. In this case super points to T1.
+	 * … T2 is directly invoked. In this case we have ambiguity … we choose the first listed
+	 * template". Of the templates it overrides, the one through which the invoked template is
+	 * reached — the invoked one itself, or the one in a chain between them — else the first
+	 * listed; {@code null} for a template that overrides nothing (#365).
+	 */
+	private static Template superOf(Template template, Template invoked) {
+		for (Template overridden : template.getOverrides()) {
+			if (reaches(overridden, invoked, Collections.newSetFromMap(new IdentityHashMap<>()))) {
+				return overridden;
+			}
+		}
+		return template.getOverrides().isEmpty() ? null : template.getOverrides().get(0);
+	}
+
+	/** Whether {@code target} is {@code from} or a template {@code from} overrides, transitively. */
+	private static boolean reaches(Template from, Template target, Set<Template> visited) {
+		if (from == target) {
+			return true;
+		}
+		if (!visited.add(from)) {
+			return false;
+		}
+		for (Template overridden : from.getOverrides()) {
+			if (reaches(overridden, target, visited)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -945,32 +1318,20 @@ public class M2tEvaluator {
 	}
 
 	/**
-	 * Checks if an overriding template is applicable for the given argument values.
-	 * All parameters must be type-compatible and the guard (if present) must be true.
+	 * Whether an overriding template applies to the given argument values (MOFM2T §8.1.3): "The
+	 * overriding template is invoked in place of the overridden template when the parameter types
+	 * match and the guard condition of the overriding template evaluates to true" — every
+	 * argument an instance of its parameter type, so that a single parameter deciding for the
+	 * overridden template decides for it (#365).
 	 */
 	private boolean isOverrideApplicable(Template override, List<Object> evalArgs) {
-		List<Variable> overrideParams = override.getParameter();
-
-		// Check parameter type compatibility
-		for (int i = 0; i < overrideParams.size() && i < evalArgs.size(); i++) {
-			Object arg = evalArgs.get(i);
-			if (arg == null || arg == WRAPPED_NULL) {
-				continue; // null is compatible with any type
-			}
-			Variable param = overrideParams.get(i);
-			if (param.getType() != null && arg instanceof EObject eo) {
-				EClassifier paramType = resolveEClassifier(param.getType());
-				if (paramType instanceof EClass eClass) {
-					if (!eClass.isSuperTypeOf(eo.eClass())) {
-						return false;
-					}
-				}
-			}
+		if (override.getParameter().size() != evalArgs.size() || !fits(override, evalArgs)) {
+			return false;
 		}
 
 		// Check guard if present
 		if (override.getGuard() != null) {
-			env.pushScope();
+			env.pushFrame();
 			try {
 				// Bind parameters for guard evaluation
 				List<Variable> params = override.getParameter();
@@ -984,9 +1345,9 @@ public class M2tEvaluator {
 					if (firstVal == WRAPPED_NULL) firstVal = null;
 					env.define("self", firstVal);
 				}
-				return isTrue(evaluateOcl(override.getGuard()));
+				return holds(override.getGuard(), "guard of template '" + override.getName() + "'");
 			} finally {
-				env.popScope();
+				env.popFrame();
 			}
 		}
 
@@ -994,30 +1355,22 @@ public class M2tEvaluator {
 	}
 
 	/**
-	 * The metamodel classifier behind a parameter type, for type checking: the type itself unless
-	 * it is one of the OCL types (#156).
-	 */
-	private EClassifier resolveEClassifier(EClassifier type) {
-		return type != null && !(type instanceof OclType) ? type : null;
-	}
-
-	/**
 	 * Invokes a template with resolved argument values. Binds parameters
 	 * to argument values and executes the template body.
 	 */
-	private void invokeTemplate(Template target, List<Object> argValues) {
+	private boolean invokeTemplate(Template target, List<Object> argValues) {
 		if (templateDepth >= limits.maxTemplateDepth()) {
 			addError("Maximum template depth exceeded (" + limits.maxTemplateDepth()
 					+ ") — possible infinite recursion in template '" + target.getName() + "'");
-			return;
+			return false;
 		}
 		if (pastDeadline()) {
-			return;
+			return false;
 		}
 		templateDepth++;
 		Template enclosing = executing;
 		executing = target;
-		env.pushScope();
+		env.pushFrame();
 		try {
 			List<Variable> params = target.getParameter();
 			for (int i = 0; i < params.size() && i < argValues.size(); i++) {
@@ -1031,18 +1384,8 @@ public class M2tEvaluator {
 				env.define("self", firstVal);
 			}
 
-			if (target.getGuard() != null) {
-				if (!isTrue(evaluateOcl(target.getGuard()))) {
-					return;
-				}
-			}
-
-			if (target.getInit() != null) {
-				for (Variable v : target.getInit().getVariable()) {
-					Object initValue = v.getOwnedInit() != null
-							? evaluateOcl(v.getOwnedInit()) : null;
-					env.define(v.getName(), initValue);
-				}
+			if (target.getGuard() != null && !holds(target.getGuard(), "guard of template '" + target.getName() + "'")) {
+				return false;
 			}
 
 			// Apply post-processing if present (Acceleo extension)
@@ -1051,13 +1394,13 @@ public class M2tEvaluator {
 				executeBody(target);
 				String result = writers.popWriter();
 				env.define("self", result);
-				Object postResult = evaluateOcl(target.getPost());
-				writers.append(asString(postResult));
+				writers.append(render(target.getPost()));
 			} else {
 				executeBody(target);
 			}
+			return true;
 		} finally {
-			env.popScope();
+			env.popFrame();
 			templateDepth--;
 			executing = enclosing;
 		}
@@ -1088,11 +1431,96 @@ public class M2tEvaluator {
 		if (value == null || value == WRAPPED_NULL) {
 			return "";
 		}
-		return value.toString();
+		// A Real is written as OCL writes it: 3.0, never 3 or 3E+1 (#322)
+		return OclValues.toText(value);
 	}
 
-	private static boolean isTrue(Object value) {
-		return Boolean.TRUE.equals(value);
+	/**
+	 * Evaluates a guard or condition: {@code true} or {@code false}, or {@code null} for anything
+	 * else — {@code null}, {@code invalid}, a value of another type — which is reported as an
+	 * ERROR at the expression. Such a condition decides nothing, so the caller takes no branch
+	 * (#366, the line of QVT-O #308/#310). A navigation that leniently yields {@code null}
+	 * inside a comparison is not affected: {@code null = 'X'} is {@code false}.
+	 */
+	private Boolean condition(OclExpression expression, String what) {
+		Object value = evaluateOcl(expression);
+		if (value instanceof Boolean bool) {
+			return bool;
+		}
+		String found = value == null ? "null" : value == OclInvalid.INSTANCE ? "invalid" : "a " + typeName(value);
+		addDiagnostic(Diagnostic.ERROR, "The " + what + " is " + found
+				+ ", not true or false — nothing is executed (MOFM2T §8.1.21)", positionOf(expression));
+		return null;
+	}
+
+	private static boolean isCharsetName(String name) {
+		try {
+			return Charset.isSupported(name);
+		} catch (IllegalCharsetNameException e) {
+			return false;
+		}
+	}
+
+	/** The name of a value's type, for a message. */
+	private static String typeName(Object value) {
+		EClassifier type = runtimeType(value);
+		return type != null ? OclTypeRules.nameOf(type) : value.getClass().getSimpleName();
+	}
+
+	/** Whether a guard holds: {@code false} for a guard that is not true, reported or not. */
+	private boolean holds(OclExpression guard, String what) {
+		return Boolean.TRUE.equals(condition(guard, what));
+	}
+
+	/**
+	 * The elements a for block iterates over (§8.1.8, #366): a collection's elements, a single
+	 * value as a one-element collection — as Acceleo and OCL's implicit {@code asSet} — and
+	 * nothing for {@code null}. An {@code invalid} iteration set is an ERROR. An element that is
+	 * no instance of the loop variable's type is skipped, with one ERROR per block.
+	 */
+	private List<?> iterationItems(ForBlock block) {
+		Object iterSet = evaluateOcl(block.getIterSet());
+		if (iterSet == null) {
+			return List.of();
+		}
+		if (iterSet == OclInvalid.INSTANCE) {
+			addDiagnostic(Diagnostic.ERROR, "The iteration set of a for block is invalid — nothing is iterated (MOFM2T §8.1.8)",
+					positionOf(block.getIterSet()));
+			return List.of();
+		}
+		List<?> items = iterSet instanceof Collection<?> collection ? new ArrayList<>(collection) : List.of(iterSet);
+		Variable loopVariable = block.getLoopVariable();
+		if (loopVariable == null || loopVariable.getType() == null) {
+			return items;
+		}
+		List<Object> fitting = new ArrayList<>();
+		String mismatch = null;
+		for (Object item : items) {
+			if (conformsAtRuntime(item, loopVariable.getType())) {
+				fitting.add(item);
+			} else if (mismatch == null) {
+				mismatch = typeName(item);
+			}
+		}
+		if (mismatch != null) {
+			addDiagnostic(Diagnostic.ERROR, "The for block skips the elements that are no "
+					+ OclTypeRules.nameOf(loopVariable.getType()) + ", among them a " + mismatch
+					+ " (MOFM2T §8.1.8)", positionOf(block.getIterSet()));
+		}
+		return fitting;
+	}
+
+	/**
+	 * Whether a value is an instance of a declared type, as far as the value tells: a value whose
+	 * type is not known here — a collection, an enumerator, a Java object — is taken as fitting.
+	 * {@code null} fits every type; whether a null is wanted is for the caller to say.
+	 */
+	private static boolean conformsAtRuntime(Object value, EClassifier type) {
+		if (value == null || type == null || type == M2tPackage.Literals.BODY) {
+			return true;
+		}
+		EClassifier valueType = OclTypeRules.normalize(runtimeType(value));
+		return valueType == null || OclTypeRules.conformsTo(valueType, type);
 	}
 
 	/**
@@ -1116,6 +1544,17 @@ public class M2tEvaluator {
 		addError("The stack ran out while evaluating; the template depth limit of "
 				+ limits.maxTemplateDepth() + " was not reached first. "
 				+ "A recursion without a base case, or a limit above what this stack can take.");
+	}
+
+	/**
+	 * Reports what happened while the files were merged and written: a protected area that
+	 * could not be merged or lost its place, a file found under its unique id.
+	 *
+	 * @param severity the severity
+	 * @param message the message
+	 */
+	public void addOutputDiagnostic(int severity, String message) {
+		addDiagnostic(severity, message);
 	}
 
 	public void addOutputLimitError(long maxOutputSize) {
@@ -1215,11 +1654,15 @@ public class M2tEvaluator {
 		if (indentation.isEmpty() || source.isEmpty()) {
 			return source;
 		}
-		return source.replaceAll("(\r\n|\r|\n)", "$1" + Matcher.quoteReplacement(indentation));
+		// §8.4: "Add the whitespace preceding the invocation expression before each line of
+		// the text produced by the invoked template" — the first line included. The
+		// normalizer stripped that whitespace from the text in front of the invocation, so
+		// it is restored here, once per line (#277).
+		return indentation + source.replaceAll("(\r\n|\r|\n)", "$1" + Matcher.quoteReplacement(indentation));
 	}
 
 	/**
 	 * Context for [super/] calls: the overridden template and its argument values.
 	 */
-	private record SuperContext(Template overridden, List<Object> args) {}
+	private record SuperContext(Template overridden, List<Object> args, Template invoked) {}
 }

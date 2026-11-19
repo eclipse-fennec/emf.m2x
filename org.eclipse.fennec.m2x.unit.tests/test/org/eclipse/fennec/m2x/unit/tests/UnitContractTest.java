@@ -92,7 +92,7 @@ class UnitContractTest {
 
 	@Test
 	void m2tSourceUnit_isANeutralSourceUnit() {
-		M2tUnit.SourceUnit unit = new M2tUnit.SourceUnit("gen.Java", SOURCE_URI, "[module m(Ecore)/]");
+		M2tUnit.SourceUnit unit = new M2tUnit.SourceUnit("gen.Java", SOURCE_URI, "[module m(ecore)/]");
 		Unit.Source source = assertInstanceOf(Unit.Source.class, unit);
 		assertEquals("gen.Java", source.qualifiedName());
 		assertEquals(UnitKind.SOURCE, source.kind());

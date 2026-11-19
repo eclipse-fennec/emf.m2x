@@ -62,14 +62,24 @@ class QvtoE2eVarAssignTest extends AbstractQvtoEngineTest {
 				    main() {
 				        var i : Integer;
 				        var s : String;
+				        var q : Sequence(String);
+				        var st : Set(Integer);
+				        var d : Dict(String, Integer);
+				        var b : Boolean;
 				        log('i=' + i.toString());
 				        log('s=' + s);
+				        log('q=' + q->size().repr() + ' st=' + st->size().repr() + ' d=' + d->size().repr());
+				        log('b=' + b.oclIsUndefined().repr());
 				    }
 				}
 				""");
 		assertSuccess(result);
 		assertLogged(result, "i=0");
 		assertLogged(result, "s=");
+		// The Javadoc claimed the collection defaults, the test never checked them (#339)
+		assertLogged(result, "q=0 st=0 d=0");
+		// "null for all other elements" — Boolean included (Eclipse: false)
+		assertLogged(result, "b=true");
 	}
 
 	@Test

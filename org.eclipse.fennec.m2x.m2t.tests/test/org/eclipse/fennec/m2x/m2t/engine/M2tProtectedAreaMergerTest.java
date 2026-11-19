@@ -18,6 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
+
 import org.eclipse.fennec.m2x.m2t.engine.internal.M2tProtectedAreaMerger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -244,7 +246,7 @@ class M2tProtectedAreaMergerTest {
 		}
 
 		@Test
-		@DisplayName("protected area removed from template — old area dropped")
+		@DisplayName("protected area removed from template — dropped from the file, its user code reported as lost")
 		void areaRemovedFromTemplate() {
 			String defaultContent = "default\n";
 			String hash = M2tProtectedAreaMerger.contentHash(defaultContent);
@@ -260,9 +262,11 @@ class M2tProtectedAreaMergerTest {
 			// New generation: no protected areas at all
 			String newContent = "before\nafter\n";
 
-			String merged = merger.merge(newContent, existing);
-			assertEquals("before\nafter\n", merged,
+			M2tProtectedAreaMerger.Result merged = merger.mergeReporting(newContent, existing);
+			assertEquals("before\nafter\n", merged.content(),
 					"Removed area must not appear in merged output");
+			// §7.2: the user code is not lost silently — it goes to the strategy (#367)
+			assertEquals(Map.of("old-area", "user content\n"), merged.lost());
 		}
 
 		@Test

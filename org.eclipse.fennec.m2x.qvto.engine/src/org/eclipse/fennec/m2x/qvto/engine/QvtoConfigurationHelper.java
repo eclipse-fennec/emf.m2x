@@ -19,6 +19,7 @@ import java.util.Set;
 
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoConfiguration;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
 
@@ -89,6 +90,31 @@ public final class QvtoConfigurationHelper {
 	 */
 	public static QvtoConfiguration from(QvtoEngineConfiguration config, OclEngine oclEngine,
 			QvtoUnitResolver serviceResolver, ResourceSet resourceSet) {
+		return from(config, oclEngine, serviceResolver, resourceSet, null);
+	}
+
+	/**
+	 * Creates a {@link QvtoConfiguration} as {@link #from(QvtoEngineConfiguration, OclEngine,
+	 * QvtoUnitResolver, ResourceSet)} does, whose blackbox libraries come from the given
+	 * registry.
+	 *
+	 * <p>The registry is the seam the DS component fills with the {@code QvtoBlackboxLibrary}
+	 * services it binds (#269). It is handed over whether or not blackboxes are enabled: the
+	 * engine consults it only when {@code qvto.blackboxEnabled} is on, and then only for the
+	 * modules {@code qvto.allowedBlackboxModules} permits.
+	 *
+	 * @param config           the OSGi configuration annotation, must not be {@code null}
+	 * @param oclEngine        the engine to evaluate with, must not be {@code null}
+	 * @param serviceResolver  the resolver that looks units up in the service registry, or
+	 *                         {@code null} when there is none
+	 * @param resourceSet      the resource set whose package registry resolves metamodels, or
+	 *                         {@code null} to keep the plain-Java fallback to the global registry
+	 * @param blackboxRegistry the blackbox libraries, or {@code null} when there are none
+	 * @return the configuration
+	 */
+	public static QvtoConfiguration from(QvtoEngineConfiguration config, OclEngine oclEngine,
+			QvtoUnitResolver serviceResolver, ResourceSet resourceSet,
+			QvtoBlackboxRegistry blackboxRegistry) {
 		Objects.requireNonNull(config, "config must not be null");
 		Objects.requireNonNull(oclEngine, "oclEngine must not be null");
 		QvtoConfiguration.Builder builder = QvtoConfiguration.builder(oclEngine)
@@ -100,6 +126,9 @@ public final class QvtoConfigurationHelper {
 				.maxUnitResolvers(config.maxUnitResolvers());
 		if (resourceSet != null) {
 			builder.resourceSet(resourceSet);
+		}
+		if (blackboxRegistry != null) {
+			builder.blackboxRegistry(blackboxRegistry);
 		}
 		if (config.discoverUnitResolvers() && serviceResolver != null) {
 			builder.addUnitResolver(serviceResolver);

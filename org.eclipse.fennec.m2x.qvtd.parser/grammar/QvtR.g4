@@ -35,8 +35,15 @@ compilationUnit
 
 // ==================== Import ====================
 
+// §7.13.4: <import> ::= 'import' [<identifier> ':'] <URI> ('::' <identifier>)* ['::*'] ';'
+// A quoted URI names a metamodel, an unquoted qualified name a compilation unit (§7.13.1, #360)
 importDecl
-    : 'import' qualifiedName ('::' qualifiedName)* ('::' '*')? ';'
+    : 'import' (alias=identifier ':')? importTarget ('::' identifier)* (wildcard='::' '*')? ';'
+    ;
+
+importTarget
+    : STRING_LITERAL
+    | qualifiedName
     ;
 
 qualifiedName
@@ -45,9 +52,10 @@ qualifiedName
 
 // ==================== Transformation ====================
 
+// §7.13.4: <transformationId> ::= <pathNameCS> (#360)
 transformationDef
-    : 'transformation' identifier '(' modelDecl (',' modelDecl)* ')'
-      ('extends' identifier)?
+    : 'transformation' name=pathName '(' modelDecl (',' modelDecl)* ')'
+      ('extends' base=pathName)?
       '{' keyDecl* (relation | queryDef)* '}'
     ;
 
@@ -153,11 +161,18 @@ memberItem
 // ==================== When / Where ====================
 
 whenClause
-    : 'when' '{' (expression ';')* '}'
+    : 'when' '{' (predicate ';')* '}'
     ;
 
 whereClause
-    : 'where' '{' (expression ';')* '}'
+    : 'where' '{' (predicate ';')* '}'
+    ;
+
+// §7.13.5: <OclExpressionCS> ::= … | <template> — a template is a predicate that holds when
+// it has a match (decided in #361)
+predicate
+    : template
+    | expression
     ;
 
 // ==================== Query (§7.11.3.6 / Function) ====================
@@ -169,6 +184,26 @@ queryDef
 
 paramDecl
     : identifier ':' typeExpression
+    ;
+
+// ==================== Identifiers (§7.13.2) ====================
+
+// Overrides Ocl.g4's identifier: 'import' is reserved in QVT-R (§7.13.2), and abstract, opposite
+// and default_values — literals of §7.13.4 but not in the reserved list — are names (#361)
+identifier
+    : IDENTIFIER
+    | ESCAPED_IDENTIFIER
+    | qvtrDocumentKeyword
+    | softKeyword
+    ;
+
+qvtrDocumentKeyword
+    : 'body' | 'context' | 'def' | 'derive' | 'endpackage' | 'init' | 'inv' | 'package'
+    | 'post' | 'pre' | 'static' | 'include' | 'library'
+    ;
+
+softKeyword
+    : 'abstract' | 'opposite' | 'default_values'
     ;
 
 // ==================== New Keywords ====================

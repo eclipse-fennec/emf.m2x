@@ -16,12 +16,12 @@ package org.eclipse.fennec.m2x.qvtd.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
@@ -424,10 +424,15 @@ class QvtdEnginePatternTest extends AbstractQvtdEngineTest {
 			QvtdExecutionResult result = executeCheckOnly(source,
 					Map.of("uml", umlExtent, "rdbms", rdbmsExtent));
 
-			assertNotNull(result);
-			// Should report a warning about missing match
-			assertFalse(result.diagnostics().isEmpty(),
-					"Should report inconsistency when Package has no matching Schema");
+			// §7.2.3/§7.10: a checkonly run that finds a violation ran without error, but the
+			// models are not consistent — one WARNING per violated relation, direction and object
+			assertTrue(result.isSuccess(), "" + result.diagnostics());
+			assertFalse(result.isConsistent(), "Package HR has no Schema: the models are inconsistent");
+			List<Diagnostic> warnings = result.diagnostics().stream()
+					.filter(d -> d.getSeverity() == Diagnostic.WARNING).toList();
+			assertEquals(1, warnings.size(), "" + result.diagnostics());
+			assertTrue(warnings.get(0).getMessage().contains("PackageToSchema")
+					&& warnings.get(0).getMessage().contains("HR"), warnings.get(0).getMessage());
 		}
 
 		@Test

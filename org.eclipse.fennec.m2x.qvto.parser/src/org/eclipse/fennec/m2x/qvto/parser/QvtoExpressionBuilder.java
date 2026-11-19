@@ -19,9 +19,11 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -29,18 +31,20 @@ import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EEnum;
 import org.eclipse.emf.ecore.EEnumLiteral;
 import org.eclipse.emf.ecore.EObject;
-import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.imperativeocl.AltExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.AssertExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.AssignExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.BlockExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.BreakExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.CatchExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ComputeExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ForExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeIterateExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeOclFactory;
@@ -52,6 +56,7 @@ import org.eclipse.fennec.m2x.model.imperativeocl.SeverityKind;
 import org.eclipse.fennec.m2x.model.imperativeocl.SwitchExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.TransformationInstantiationExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.TryExp;
+import org.eclipse.fennec.m2x.model.imperativeocl.UnlinkExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.VariableInitExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
 import org.eclipse.fennec.m2x.model.ocl.BooleanLiteralExp;
@@ -96,9 +101,12 @@ import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.QvtOperationalFactory;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveInExp;
+import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Visitor that transforms ANTLR4 parse tree nodes into EMF OCL + Imperative OCL AST nodes.
@@ -141,6 +149,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private QvtoEnvironment environment;
 
 	/**
+	 * The shared OCL builder (#378): operation calls are resolved and typed through it, and every
+	 * OCL node this builder makes is typed by its rules — what QVT-R and MTL use for all their
+	 * OCL nodes. Its errors go to this unit's diagnostics.
+	 */
+	private final AbstractExpressionBuilder support;
+
+	/** What the unit knows, among it the result types of its mappings. */
+	private final QvtoScope scope;
+
+	/**
 	 * Keeps the diagnostic position with the descent — see {@link ParseDiagnostics}. One override
 	 * covers the visitor, because every step into the tree goes through here.
 	 */
@@ -154,6 +172,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 */
 	void positionAt(int line, int column) {
 		positions.positionAt(line, column);
+		support.positionAt(line, column);
 	}
 
 	@Override
@@ -164,13 +183,171 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		int line = context.getStart().getLine();
 		int column = context.getStart().getCharPositionInLine();
 		positions.positionAt(line, column);
+		support.positionAt(line, column);
 		Object built = super.visit(tree);
+		// where the node begins, so a type error about it is reported there (#378)
+		support.recordNode(built, line, column);
+		if (built instanceof OclExpression expression) {
+			// the node's parts are built and typed; what it is itself follows from them
+			support.positionAt(line, column);
+			support.typeNode(expression);
+			typeImperative(expression);
+		}
 		// The same step that keeps the parse-time cursor also learns which node came out of this
 		// piece of text — the one place where both are in hand (#116).
 		if (built instanceof EObject node) {
 			nodePositions.putIfAbsent(node, new SourcePosition(line, column));
 		}
 		return built;
+	}
+
+	/**
+	 * Types the expressions ImperativeOCL and QVT-O add to OCL (QVT v1.3 §8.2.2, §8.2.1.x, #378)
+	 * and checks what an assignment or a variable initialization is given against what it is
+	 * declared to hold (§8.2.2.10, §8.2.2.11, #339). A node with a type keeps it.
+	 */
+	private void typeImperative(OclExpression node) {
+		if (node.getType() != null) {
+			return;
+		}
+		EClassifier type = switch (node) {
+			// statements: "returns null" (§8.2.2.2, §8.2.2.4, §8.2.2.6, §8.2.2.15–§8.2.2.20)
+			case BlockExp b -> LIBRARY.oclVoid();
+			case WhileExp w -> LIBRARY.oclVoid();
+			case ForExp f -> LIBRARY.oclVoid();
+			case LogExp l -> LIBRARY.oclVoid();
+			case AssertExp a -> LIBRARY.oclVoid();
+			case ReturnExp r -> LIBRARY.oclVoid();
+			case BreakExp b -> LIBRARY.oclVoid();
+			case ContinueExp c -> LIBRARY.oclVoid();
+			case RaiseExp r -> LIBRARY.oclVoid();
+			case UnlinkExp u -> LIBRARY.oclVoid();
+			// §8.2.2.3: the value of the variable at the end of the body
+			case ComputeExp compute -> compute.getReturnedElement() != null ? compute.getReturnedElement().getType() : null;
+			// §8.2.2.9: the body if the condition holds, else null
+			case AltExp alt -> alt.getBody() != null ? alt.getBody().getType() : null;
+			case SwitchExp switchExp -> switchType(switchExp);
+			case VariableInitExp init -> init.isWithResult() && init.getReferredVariable() != null
+					? init.getReferredVariable().getType() : LIBRARY.oclVoid();
+			case AssignExp assign -> assign.getValue().size() == 1 ? assign.getValue().get(0).getType() : null;
+			case InstantiationExp instantiation -> instantiation.getInstantiatedClass();
+			case ResolveExp resolve -> resolveType(resolve);
+			case ImperativeIterateExp iterate -> imperativeIterateType(iterate);
+			case MappingCallExp call -> mappingResultType(call.getName());
+			default -> null;
+		};
+		if (type != null && node.getType() == null) {
+			node.setType(copyType(type));
+		}
+	}
+
+	private static final OclStandardLibrary LIBRARY = OclStandardLibrary.INSTANCE;
+
+	/** §8.2.2.8: the common supertype of what the alternatives and the else part give. */
+	private static EClassifier switchType(SwitchExp switchExp) {
+		List<EClassifier> types = new ArrayList<>();
+		for (AltExp alternative : switchExp.getAlternativePart()) {
+			types.add(alternative.getBody() != null ? alternative.getBody().getType() : null);
+		}
+		types.add(switchExp.getElsePart() != null ? switchExp.getElsePart().getType() : LIBRARY.oclVoid());
+		return OclTypeRules.commonSuperType(types);
+	}
+
+	/**
+	 * §8.2.2.10: "The initializer must … conform to any explicit Variable type". Checked where the
+	 * declaration is built, which is not always through {@link #visit}.
+	 */
+	private void checkVariableInit(Variable variable) {
+		OclExpression value = variable.getOwnedInit();
+		if (value != null && variable.getType() != null && value.getType() != null
+				&& !OclTypeRules.conformsTo(value.getType(), variable.getType())) {
+			support.addTypeFinding("The variable '" + variable.getName() + "' is declared as "
+					+ OclTypeRules.nameOf(variable.getType()) + " but initialized with a "
+					+ OclTypeRules.nameOf(value.getType()));
+		}
+	}
+
+	/**
+	 * §8.2.2.11: "the type of the LHS is unchanged by the assignment". A value that cannot be the
+	 * LHS's — a collection for a single-valued target, an element of the wrong type — is a type
+	 * error (#339).
+	 */
+	private void checkAssignment(AssignExp assign) {
+		OclExpression left = assign.getLeft();
+		EClassifier target = left != null ? OclTypeRules.normalize(left.getType()) : null;
+		EClassifier valueType = null;
+		for (OclExpression value : assign.getValue()) {
+			valueType = OclTypeRules.normalize(value.getType());
+			if (target == null || valueType == null) {
+				continue;
+			}
+			if (target instanceof CollectionType collection) {
+				// a collection target takes elements and collections of them (§8.2.2.11 flattening)
+				EClassifier element = valueType instanceof CollectionType given ? given.getElementType() : valueType;
+				if (!OclTypeRules.conformsTo(element, collection.getElementType())) {
+					support.addTypeFinding("A " + OclTypeRules.nameOf(valueType) + " cannot be assigned to a "
+							+ OclTypeRules.nameOf(target));
+				}
+			} else if (valueType instanceof CollectionType) {
+				support.addTypeFinding("A " + OclTypeRules.nameOf(valueType)
+						+ " cannot be assigned to a single-valued " + OclTypeRules.nameOf(target));
+			} else if (!OclTypeRules.conformsTo(valueType, target)) {
+				support.addTypeFinding("A " + OclTypeRules.nameOf(valueType) + " cannot be assigned to a "
+						+ OclTypeRules.nameOf(target));
+			}
+		}
+	}
+
+	/**
+	 * §8.2.2.x ResolveExp/ResolveInExp: the target's type, or the mapping's result type for a
+	 * resolveIn without target; a Sequence of it unless {@code one}. Without either the resolved
+	 * type is Object, whose values this parser knows nothing about.
+	 */
+	private EClassifier resolveType(ResolveExp resolve) {
+		EClassifier resolved = resolve.getTarget() != null ? resolve.getTarget().getType() : null;
+		if (resolved == null && resolve instanceof ResolveInExp resolveIn && resolveIn.getInMapping() != null
+				&& resolveIn.getInMapping().getResult().size() == 1) {
+			resolved = resolveIn.getInMapping().getResult().get(0).getEType();
+		}
+		if (resolve.isOne()) {
+			return resolved;
+		}
+		return OclTypeRules.collectionType(CollectionKind.SEQUENCE, copyType(resolved));
+	}
+
+	/**
+	 * §8.2.2.7: xcollect gives a Sequence of the body's values, xselect a Sequence of the source's
+	 * elements — of the type a TypeExp condition names — and the *One variants a single one;
+	 * xcollectselect gives what its target variable holds.
+	 */
+	private EClassifier imperativeIterateType(ImperativeIterateExp iterate) {
+		String name = iterate.getName();
+		if (name == null) {
+			return null;
+		}
+		EClassifier element = switch (name) {
+			case "xcollect" -> iterate.getOwnedBody() != null ? flatElement(iterate.getOwnedBody().getType()) : null;
+			case "xselect", "xselectOne" -> iterate.getCondition() instanceof TypeExp typeExp
+					? typeExp.getReferredType() : inferElementType(iterate.getOwnedSource());
+			case "xcollectselect", "xcollectselectOne" -> iterate.getTarget() != null ? iterate.getTarget().getType()
+					: null;
+			default -> null;
+		};
+		if (name.endsWith("One")) {
+			return element;
+		}
+		return OclTypeRules.collectionType(CollectionKind.SEQUENCE, copyType(element));
+	}
+
+	private static EClassifier flatElement(EClassifier type) {
+		EClassifier t = OclTypeRules.normalize(type);
+		return t instanceof CollectionType c ? c.getElementType() : type;
+	}
+
+	/** The result type of the mappings of that name, where they all declare the same one. */
+	private EClassifier mappingResultType(String name) {
+		List<EClassifier> types = scope.mappingResults().get(name);
+		return types == null || types.isEmpty() ? null : OclTypeRules.commonSuperType(types);
 	}
 
 	/**
@@ -192,7 +369,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 */
 	QvtoExpressionBuilder(QvtoEnvironment environment, EPackage.Registry packageRegistry,
 			QvtoScope scope) {
-		Objects.requireNonNull(scope, "scope must not be null");
+		this.scope = Objects.requireNonNull(scope, "scope must not be null");
 		this.declaredPackages = scope.declaredPackages();
 		this.localTypes = scope.localTypes();
 		this.diagnostics = scope.diagnostics();
@@ -200,15 +377,22 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = Objects.requireNonNull(environment,
 				"environment must not be null");
 		this.packageRegistry = packageRegistry;
+		this.support = new AbstractExpressionBuilder(EcorePackage.Literals.EOBJECT, packageRegistry);
+		support.setDiagnosticSink(diagnostics::add);
+		support.setVariableLookup(name -> this.environment.lookup(name).isPresent());
+		// §8.4.5(2): an element or a collection may stand as a condition
+		support.setImplicitConditions(true);
+		support.useSignatures(QvtoLibrarySignatures.QVTO);
+		support.declareDefinitions(scope.definitions());
+		// helpers of an imported unit are not known here: one may share a library name (#378)
+		support.setOpenOperationScope(!scope.importedModuleStubs().isEmpty());
 	}
 
 	// ==================== OCL Literals ====================
 
 	@Override
 	public IntegerLiteralExp visitIntegerLiteral(QvtOParser.IntegerLiteralContext ctx) {
-		IntegerLiteralExp exp = OCL.createIntegerLiteralExp();
-		exp.setIntegerSymbol(Long.parseLong(ctx.INTEGER_LITERAL().getText()));
-		return exp;
+		return integerLiteral(ctx.INTEGER_LITERAL().getText(), ctx.getStart());
 	}
 
 	@Override
@@ -269,9 +453,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public IntegerLiteralExp visitSimpleLitInt(QvtOParser.SimpleLitIntContext ctx) {
-		IntegerLiteralExp exp = OCL.createIntegerLiteralExp();
-		exp.setIntegerSymbol(Long.parseLong(ctx.INTEGER_LITERAL().getText()));
-		return exp;
+		return integerLiteral(ctx.INTEGER_LITERAL().getText(), ctx.getStart());
 	}
 
 	@Override
@@ -331,6 +513,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			String name = segments.get(0);
 			return environment.lookup(name)
 					.<OclExpression>map(this::createVariableExp)
+					.or(() -> resolveOnImplicitIterator(name))
 					.orElseGet(() -> resolveImplicitProperty(name));
 		}
 
@@ -572,14 +755,37 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		// var x := expr → combine into VariableInitExp with init
 		if (left instanceof VariableInitExp varInit) {
-			varInit.getReferredVariable().setOwnedInit(right);
+			Variable variable = varInit.getReferredVariable();
+			variable.setOwnedInit(right);
+			if (variable.getType() == null && right != null && right.getType() != null) {
+				variable.setType(copyType(right.getType()));
+			}
+			positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+			checkVariableInit(variable);
 			return varInit;
 		}
 
 		// §8.2.2.11: optional 'default' clause
 		OclExpression defaultValue = ctx.defaultValue != null
 				? (OclExpression) visit(ctx.defaultValue) : null;
-		return buildAssignment(left, right, ctx.assignOp().getText(), defaultValue);
+		AssignExp assign = buildAssignment(left, right, ctx.assignOp().getText(), defaultValue);
+		// §8.2.2.11: "feature := { self.attribute; self.operation; }" — a complex assignment, whose
+		// values are the expressions of the braces; 'do { … }' stays a block, whose value is
+		// null (§8.2.2.2) (#339)
+		if (right instanceof BlockExp block && ctx.expression(1) instanceof QvtOParser.PrimaryExpContext primaryExp
+				&& primaryExp.primaryExpression() instanceof QvtOParser.BlockPrimaryContext primary
+				&& isBareBlock(primary.blockExp())) {
+			assign.getValue().clear();
+			assign.getValue().addAll(block.getBody());
+		}
+		positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+		checkAssignment(assign);
+		return assign;
+	}
+
+	/** A block written as braces alone, not {@code do { … }}. */
+	private static boolean isBareBlock(QvtOParser.BlockExpContext ctx) {
+		return "{".equals(ctx.getStart().getText());
 	}
 
 	// ==================== Navigation ====================
@@ -638,6 +844,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		} else if (call instanceof QvtOParser.ArrowMappingCallContext mapCtx) {
 			// §8.2.2.7: list->map f() — mapping call on collection
 			result = createArrowMappingCallOnCollection(source, mapCtx);
+		} else if (call instanceof QvtOParser.ArrowMappingIteratorCallContext mapCtx) {
+			// §8.4.7, §8.2.1.21: list->xmap(i) i.m() — the declarator names the iterator
+			result = createArrowMappingIteratorCall(source, mapCtx);
+		} else if (call instanceof QvtOParser.ArrowNewCallContext newCtx) {
+			// §8.1.8, §8.2.2.22: list->new(a) T(args) = list->xcollect(a | new T(args))
+			result = createArrowNewCall(source, newCtx);
 		} else if (call instanceof QvtOParser.ArrowObjectCallContext objCtx) {
 			// §8.4.7: coll->object(x:T) Type { ... } = coll->collect(x | object Type { ... })
 			result = createArrowObjectCall(source, objCtx);
@@ -669,14 +881,14 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	public OclExpression visitXselectExp(QvtOParser.XselectExpContext ctx) {
 		OclExpression source = (OclExpression) visit(ctx.expression(0));
 
-		// §8.2.2.7: If condition is a TypeExp, reinterpret as oclIsKindOf(Type)
-		QvtOParser.ExpressionContext conditionCtx = ctx.xselectCondition;
-		TypeExp typeCondition = tryBuildTypeCondition(conditionCtx);
-
 		// Determine iterator variable name
 		String iterName = ctx.xselectIter != null
 				? qvtoIdentifierText(ctx.xselectIter)
 				: "_xsel_it";
+
+		// §8.2.2.7: If condition is a TypeExp, reinterpret as oclIsKindOf(Type)
+		QvtOParser.ExpressionContext conditionCtx = ctx.xselectCondition;
+		TypeExp typeCondition = tryBuildShorthandTypeCondition(conditionCtx, iterName);
 
 		// §8.2.2.7: this is xselect, not an OCL select — an imperative loop, so the AST says so
 		ImperativeIterateExp selectExp = IMP.createImperativeIterateExp();
@@ -696,13 +908,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = this.environment.nested(iterVar);
 
 		if (typeCondition != null) {
-			OperationCallExp oclIsKindOf = OCL.createOperationCallExp();
-			oclIsKindOf.setName("oclIsKindOf");
-			VariableExp iterRef = OCL.createVariableExp();
-			iterRef.setReferredVariable(iterVar);
-			oclIsKindOf.setOwnedSource(iterRef);
-			oclIsKindOf.getOwnedArguments().add(typeCondition);
-			selectExp.setCondition(oclIsKindOf);
+			selectExp.setCondition(isKindOf(iterVar, typeCondition));
+			// §8.2.2.7 "Type re-casting": a Sequence of the type the condition names
+			selectExp.setType(OclTypeRules.collectionType(CollectionKind.SEQUENCE, typeCondition.getReferredType()));
 		} else {
 			OclExpression condition = (OclExpression) visit(conditionCtx);
 			selectExp.setCondition(condition);
@@ -717,9 +925,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		// §8.2.2.7: list![condition] = xselectOne — returns first matching element
 		OclExpression source = (OclExpression) visit(ctx.expression(0));
 
+		// §8.2.2.7: "these shorthand conventions apply also to ... xselectOne", the type form
+		// included — list![T] is the first T, as list[T] is all of them (#298)
 		String iterName = ctx.xselectOneIter != null
 				? qvtoIdentifierText(ctx.xselectOneIter)
 				: "_xsel1_it";
+		TypeExp typeCondition = tryBuildShorthandTypeCondition(ctx.xselectOneCondition, iterName);
 
 		// §8.2.2.7: this is xselectOne — the first match, and never a null (which is where it
 		// differs from OCL's any)
@@ -738,7 +949,14 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		QvtoEnvironment savedEnv = this.environment;
 		this.environment = this.environment.nested(iterVar);
 
-		OclExpression condition = (OclExpression) visit(ctx.xselectOneCondition);
+		OclExpression condition;
+		if (typeCondition != null) {
+			condition = isKindOf(iterVar, typeCondition);
+			// §8.2.2.7 "Type re-casting": an instance of the type the condition names
+			anyExp.setType(typeCondition.getReferredType());
+		} else {
+			condition = (OclExpression) visit(ctx.xselectOneCondition);
+		}
 
 		this.environment = savedEnv;
 
@@ -747,10 +965,51 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	/**
+	 * The condition of the type form {@code list[T]} / {@code list![T]}: the iterator is a T.
+	 */
+	private static OperationCallExp isKindOf(Variable iterVar, TypeExp type) {
+		OperationCallExp oclIsKindOf = OCL.createOperationCallExp();
+		oclIsKindOf.setName("oclIsKindOf");
+		VariableExp iterRef = OCL.createVariableExp();
+		iterRef.setReferredVariable(iterVar);
+		oclIsKindOf.setOwnedSource(iterRef);
+		oclIsKindOf.getOwnedArguments().add(type);
+		return oclIsKindOf;
+	}
+
+	/**
 	 * Try to interpret an expression context as a type reference for xselect.
 	 * Returns a TypeExp if the expression is a simple path name that resolves to a type,
 	 * null otherwise.
 	 */
+	/**
+	 * The type form of the shorthands {@code list[T]} and {@code list![T]} (§8.2.2.7). They share
+	 * their notation with {@code list[condition]}, so a simple name is the type form only if it
+	 * names a type — not when it is a variable in scope or the shorthand's own iterator, and not
+	 * when it names nothing, which the condition reports like any unknown name (#312).
+	 */
+	private TypeExp tryBuildShorthandTypeCondition(QvtOParser.ExpressionContext exprCtx,
+			String iteratorName) {
+		if (exprCtx instanceof QvtOParser.PrimaryExpContext primaryCtx
+				&& primaryCtx.primaryExpression() instanceof QvtOParser.PathNameExpContext pathCtx) {
+			List<String> segments = pathNameSegments(pathCtx.pathName());
+			if (segments.size() == 1) {
+				String name = segments.get(0);
+				if (name.equals(iteratorName) || environment.lookup(name).isPresent()) {
+					return null;
+				}
+				EClassifier classifier = findClassifier(name);
+				if (classifier == null) {
+					return null;
+				}
+				TypeExp typeExp = OCL.createTypeExp();
+				typeExp.setReferredType(classifier);
+				return typeExp;
+			}
+		}
+		return tryBuildTypeCondition(exprCtx);
+	}
+
 	private TypeExp tryBuildTypeCondition(QvtOParser.ExpressionContext exprCtx) {
 		// Unwrap: expression → primaryExpression → pathNameExp
 		if (exprCtx instanceof QvtOParser.PrimaryExpContext primaryCtx) {
@@ -1041,11 +1300,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	@Override
 	public BlockExp visitBlockExp(QvtOParser.BlockExpContext ctx) {
 		BlockExp block = IMP.createBlockExp();
-		for (QvtOParser.StatementContext stmtCtx : ctx.statement()) {
-			OclExpression stmtExpr = buildStatement(stmtCtx);
-			if (stmtExpr != null) {
-				block.getBody().add(stmtExpr);
-			}
+		for (OclExpression stmtExpr : blockContents(ctx)) {
+			block.getBody().add(stmtExpr);
 		}
 		return block;
 	}
@@ -1066,7 +1322,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable returnedElement = OCL.createVariable();
 		returnedElement.setName(qvtoIdentifierText(ctx.varName));
-		returnedElement.setType(resolveTypeExpression(ctx.type));
+		if (ctx.type != null) {
+			returnedElement.setType(resolveTypeExpression(ctx.type));
+		}
 		returnedElement.setOwnedInit((OclExpression) visit(ctx.initValue));
 		this.environment = this.environment.nested(returnedElement);
 
@@ -1098,6 +1356,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		QvtOParser.ForVarListContext varList = ctx.forVarList();
 		QvtOParser.IteratorVariablesContext iterVars = varList.iteratorVariables();
 
+		// The compute variable is declared before the body that refers to it (#384)
+		Variable computeVar = computeShorthandVariable(varList);
+		if (computeVar != null) {
+			this.environment = this.environment.nested(computeVar);
+		}
+
 		for (int i = 0; i < iterVars.qvtoIdentifier().size(); i++) {
 			Variable iterVar = OCL.createVariable();
 			iterVar.setName(qvtoIdentifierText(iterVars.qvtoIdentifier(i)));
@@ -1117,7 +1381,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = savedEnv;
 
 		// §8.2.2.6: compute shorthand — forEach(i;x:X=init|cond) ≡ compute(x:X=init) forEach(i|cond)
-		return wrapInComputeIfShorthand(forExp, varList, savedEnv);
+		return wrapInComputeIfShorthand(forExp, computeVar);
 	}
 
 	@Override
@@ -1129,6 +1393,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		QvtOParser.ForVarListContext varList = ctx.forVarList();
 		QvtOParser.IteratorVariablesContext iterVars = varList.iteratorVariables();
+
+		// The compute variable is declared before the body that refers to it (#384)
+		Variable computeVar = computeShorthandVariable(varList);
+		if (computeVar != null) {
+			this.environment = this.environment.nested(computeVar);
+		}
 
 		for (int i = 0; i < iterVars.qvtoIdentifier().size(); i++) {
 			Variable iterVar = OCL.createVariable();
@@ -1150,22 +1420,19 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.environment = savedEnv;
 
 		// §8.2.2.6: compute shorthand — forEach(i;x:X=init|cond) ≡ compute(x:X=init) forEach(i|cond)
-		return wrapInComputeIfShorthand(forExp, varList, savedEnv);
+		return wrapInComputeIfShorthand(forExp, computeVar);
 	}
 
 	/**
-	 * §8.2.2.6: If forVarList has a compute shorthand (name:Type=init after ';'),
-	 * wraps the ForExp in a ComputeExp. Otherwise returns the ForExp unchanged.
-	 * Detects compute shorthand by the presence of qvtoIdentifier (the variable name).
+	 * §8.2.2.6: the variable of a compute shorthand ({@code name:Type=init} after ';'), or
+	 * {@code null} when the forVarList has none. Its init is built in the scope around the loop.
 	 */
-	private OclExpression wrapInComputeIfShorthand(ForExp forExp,
-			QvtOParser.ForVarListContext varList, QvtoEnvironment savedEnv) {
+	private Variable computeShorthandVariable(QvtOParser.ForVarListContext varList) {
 		// Compute shorthand: forVarList matched alternative 1 (i;x:Type=init)
 		// Detected by qvtoIdentifier being present (the compute variable name)
 		if (varList.qvtoIdentifier() == null) {
-			return forExp;
+			return null;
 		}
-		ComputeExp computeExp = IMP.createComputeExp();
 		Variable computeVar = OCL.createVariable();
 		computeVar.setName(qvtoIdentifierText(varList.qvtoIdentifier()));
 		if (varList.typeExpression() != null) {
@@ -1174,6 +1441,18 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (varList.expression() != null) {
 			computeVar.setOwnedInit((OclExpression) visit(varList.expression()));
 		}
+		return computeVar;
+	}
+
+	/**
+	 * §8.2.2.6: wraps the ForExp in a ComputeExp when it has a compute shorthand variable.
+	 * Otherwise returns the ForExp unchanged.
+	 */
+	private OclExpression wrapInComputeIfShorthand(ForExp forExp, Variable computeVar) {
+		if (computeVar == null) {
+			return forExp;
+		}
+		ComputeExp computeExp = IMP.createComputeExp();
 		computeExp.setReturnedElement(computeVar);
 		computeExp.setBody(forExp);
 		return computeExp;
@@ -1181,8 +1460,17 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public OclExpression visitSwitchExp(QvtOParser.SwitchExpContext ctx) {
+		return buildSwitchExp(ctx, ctx.switchIterator());
+	}
+
+	/**
+	 * Builds a switch. The arrow form {@code coll->switch(x) {…}} has bound its iterator already
+	 * and passes {@code null}, so the cases refer to that iterator, not to a second variable of
+	 * the same name (#384).
+	 */
+	private OclExpression buildSwitchExp(QvtOParser.SwitchExpContext ctx,
+			QvtOParser.SwitchIteratorContext iterCtx) {
 		// §8.4.7: switch ('(' <iter_declarator> ')')? <switch_body>
-		QvtOParser.SwitchIteratorContext iterCtx = ctx.switchIterator();
 
 		QvtoEnvironment savedEnv = null;
 		VariableInitExp varInitExp = null;
@@ -1211,6 +1499,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				varInitExp = IMP.createVariableInitExp();
 				varInitExp.setReferredVariable(initVar);
 				varInitExp.setWithResult(true); // ::= semantics — block returns switch result, not void
+				// The cases refer to the variable the block declares, not to a second one (#384)
+				iterVar = initVar;
 			}
 
 			savedEnv = this.environment;
@@ -1235,12 +1525,13 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			this.environment = savedEnv;
 		}
 
-		// If there's an iterator with init, wrap: { var x := expr; switch { ... } }
+		// If there's an iterator with init, wrap: let x = expr in switch { ... } — a block would
+		// answer null (§8.2.2.2), the let answers the switch (#339)
 		if (varInitExp != null) {
-			BlockExp block = IMP.createBlockExp();
-			block.getBody().add(varInitExp);
-			block.getBody().add(switchExp);
-			return block;
+			LetExp letExp = OCL.createLetExp();
+			letExp.setOwnedVariable(varInitExp.getReferredVariable());
+			letExp.setOwnedIn(switchExp);
+			return letExp;
 		}
 
 		return switchExp;
@@ -1266,12 +1557,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	public ObjectExp visitObjectExp(QvtOParser.ObjectExpContext ctx) {
 		ObjectExp objectExp = QVTO.createObjectExp();
 
-		// optional variable name: object (varName :) Type { ... }
-		Variable refVar = OCL.createVariable();
-		if (ctx.varName != null) {
-			refVar.setName(qvtoIdentifierText(ctx.varName));
-		} else {
-			refVar.setName("result");
+		// optional variable name: object (varName :) Type { ... } — a variable already in scope is
+		// the one the object expression refers to (§8.2.2.24), not a second one of its name (#384)
+		Variable existing = ctx.varName != null
+				? this.environment.lookup(qvtoIdentifierText(ctx.varName)).orElse(null)
+				: null;
+		Variable refVar = existing != null ? existing : OCL.createVariable();
+		if (existing == null) {
+			// Anonymous object expression: use an internal name so the enclosing
+			// operation's 'result' is not shadowed inside the body (§8.2.1.24, #413)
+			refVar.setName(ctx.varName != null ? qvtoIdentifierText(ctx.varName) : "_objectExp");
 		}
 		objectExp.setReferredObject(refVar);
 
@@ -1281,7 +1576,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			if (type instanceof EClass ec) {
 				objectExp.setInstantiatedClass(ec);
 				objectExp.setType(type);
-				refVar.setType(type);
+				if (existing == null) {
+					refVar.setType(type);
+				}
 			}
 		}
 
@@ -1293,15 +1590,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		}
 
 		QvtoEnvironment savedEnv = this.environment;
-		this.environment = this.environment.nested(refVar);
+		this.environment = this.environment.nestedObjectBody(refVar);
 
 		// Body as ConstructorBody
 		var body = QVTO.createConstructorBody();
-		for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-			OclExpression stmtExpr = buildStatement(stmtCtx);
-			if (stmtExpr != null) {
-				body.getContent().add(stmtExpr);
-			}
+		for (OclExpression stmtExpr : blockContents(ctx.block())) {
+			body.getContent().add(stmtExpr);
 		}
 		objectExp.setBody(body);
 
@@ -1311,6 +1605,11 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 	@Override
 	public InstantiationExp visitNewExp(QvtOParser.NewExpContext ctx) {
+		return buildInstantiation(ctx.newTail());
+	}
+
+	/** {@code new T@extent(args)}: a class instantiation, or of an imported transformation. */
+	private InstantiationExp buildInstantiation(QvtOParser.NewTailContext ctx) {
 		List<String> segments = pathNameSegments(ctx.pathName());
 		String typeName = String.join("::", segments);
 
@@ -1360,8 +1659,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		MappingCallExp exp = QVTO.createMappingCallExp();
 		exp.setIsStrict("xmap".equals(ctx.mappingCallKind().getText()));
 
-		String name = scopedNameText(ctx.scopedName());
-		exp.setName(name);
+		exp.setName(mappingName(ctx.scopedName()));
 
 		if (ctx.argumentList() != null) {
 			for (QvtOParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
@@ -1412,11 +1710,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		TryExp tryExp = IMP.createTryExp();
 
 		// Try body
-		for (QvtOParser.StatementContext stmtCtx : ctx.block().statement()) {
-			OclExpression stmtExpr = buildStatement(stmtCtx);
-			if (stmtExpr != null) {
-				tryExp.getTryBody().add(stmtExpr);
-			}
+		for (OclExpression stmtExpr : blockContents(ctx.block())) {
+			tryExp.getTryBody().add(stmtExpr);
 		}
 
 		// Catch clauses
@@ -1433,17 +1728,49 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				}
 			}
 
-			for (QvtOParser.StatementContext stmtCtx : catchCtx.block().statement()) {
-				OclExpression stmtExpr = buildStatement(stmtCtx);
-				if (stmtExpr != null) {
+			// §8.2.2.14 exceptionVariable: "the variable through which the caught exception may be
+			// accessed" — typed by the listed exception, the common supertype of several, or
+			// Exception (#340)
+			QvtoEnvironment savedEnv = this.environment;
+			if (catchCtx.exceptionVar != null) {
+				Variable exceptionVariable = OCL.createVariable();
+				exceptionVariable.setName(qvtoIdentifierText(catchCtx.exceptionVar));
+				exceptionVariable.setType(commonExceptionType(catchExp.getException()));
+				catchExp.setExceptionVariable(exceptionVariable);
+				this.environment = this.environment.nested(exceptionVariable);
+			}
+			try {
+				for (OclExpression stmtExpr : blockContents(catchCtx.block())) {
 					catchExp.getBody().add(stmtExpr);
 				}
+			} finally {
+				this.environment = savedEnv;
 			}
 
 			tryExp.getExceptClause().add(catchExp);
 		}
 
 		return tryExp;
+	}
+
+	/** The most derived class the listed exceptions share, Exception if they share none or none is listed. */
+	private static EClassifier commonExceptionType(List<EClassifier> exceptions) {
+		EClassifier base = QvtoStandardLibraryTypes.lookup("Exception");
+		if (exceptions.size() == 1) {
+			return exceptions.get(0);
+		}
+		if (exceptions.isEmpty() || !(exceptions.get(0) instanceof EClass first)) {
+			return base;
+		}
+		List<EClass> candidates = new ArrayList<>();
+		candidates.add(first);
+		candidates.addAll(first.getEAllSuperTypes().reversed());
+		for (EClass candidate : candidates) {
+			if (exceptions.stream().allMatch(e -> e instanceof EClass c && (c == candidate || c.getEAllSuperTypes().contains(candidate)))) {
+				return candidate;
+			}
+		}
+		return base;
 	}
 
 	@Override
@@ -1459,12 +1786,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			if (ctx.expression() != null) {
 				raiseExp.setArgument((OclExpression) visit(ctx.expression()));
 			}
-		} else if (ctx.STRING_LITERAL() != null) {
-			// raise 'message' — create a StringLiteralExp as argument
+		} else {
+			// §8.2.2.15: raise "ProblemHere" is "a shorthand for raising a StringException with the
+			// string as the constructor argument" — a StringException, so except (StringException)
+			// catches it; it was an untyped Exception before (#340)
 			StringLiteralExp msgExp = OCL.createStringLiteralExp();
-			String text = ctx.STRING_LITERAL().getText();
+			String text = ctx.STRING_LITERAL() != null ? ctx.STRING_LITERAL().getText()
+					: ctx.DOUBLE_QUOTED_STRING().getText();
 			msgExp.setStringSymbol(unescapeString(text.substring(1, text.length() - 1)));
 			raiseExp.setArgument(msgExp);
+			raiseExp.setException(QvtoStandardLibraryTypes.lookup("StringException"));
 		}
 
 		return raiseExp;
@@ -1556,6 +1887,10 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		if (built != null && ctx.getStart() != null) {
 			nodePositions.putIfAbsent(built, new SourcePosition(ctx.getStart().getLine(),
 					ctx.getStart().getCharPositionInLine()));
+			support.recordNode(built, ctx);
+			// typed here for the same reason: a declaration does not pass through visit (#378)
+			positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+			typeImperative(built);
 		}
 		return built;
 	}
@@ -1684,22 +2019,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	EClassifier resolveClassifier(List<String> segments) {
 		if (segments.size() == 1) {
 			String name = segments.get(0);
-			EClassifier local = localTypes.get(name);
-			if (local != null) {
-				return local;
-			}
-			EClassifier fromRegistry = findInDeclaredPackages(name);
-			if (fromRegistry != null) {
-				return fromRegistry;
-			}
-			// QVT v1.3 §8.3.1: names of the QVT-O standard library — Exception and its
-			// subclasses, and the Void synonym — belong to the language, not to a
-			// metamodel, so they resolve here rather than through the registry.
-			EClassifier fromStandardLibrary = QvtoStandardLibraryTypes.lookup(name);
-			if (fromStandardLibrary != null) {
-				return fromStandardLibrary;
-			}
-			return unresolvedName(name);
+			EClassifier found = findClassifier(name);
+			return found != null ? found : unresolvedName(name);
 		}
 
 		String classifierName = segments.get(segments.size() - 1);
@@ -1726,7 +2047,44 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * of the visit does not run into a {@code null}. The unit is rejected once it has
 	 * been visited — see {@link #getDiagnostics()} (#66).
 	 */
-	private EClassifier unresolvedName(String name) {
+	/**
+	 * A simple type name — a typedef, a class of a declared package, or a name of the QVT-O
+	 * standard library — without reporting a miss.
+	 *
+	 * @return the classifier, or {@code null} if the name is no type in scope
+	 */
+	private EClassifier findClassifier(String name) {
+		EClassifier local = localTypes.get(name);
+		if (local != null) {
+			return local;
+		}
+		EClassifier fromRegistry = findInDeclaredPackages(name);
+		if (fromRegistry != null) {
+			return fromRegistry;
+		}
+		// QVT v1.3 §8.3.1: names of the QVT-O standard library — Exception and its
+		// subclasses, and the Void synonym — belong to the language, not to a
+		// metamodel, so they resolve here rather than through the registry.
+		return QvtoStandardLibraryTypes.lookup(name);
+	}
+
+	/**
+	 * An Integer literal. It is held as an ELong; larger Integers are reached by arithmetic or
+	 * toInteger(), which are unbounded (#322). A larger literal is a parse error, as in the OCL
+	 * parser — it used to escape as Java's NumberFormatException (#344).
+	 */
+	private IntegerLiteralExp integerLiteral(String text, Token start) {
+		IntegerLiteralExp exp = OCL.createIntegerLiteralExp();
+		try {
+			exp.setIntegerSymbol(Long.parseLong(text));
+		} catch (NumberFormatException e) {
+			positions.positionAt(start.getLine(), start.getCharPositionInLine());
+			diagnostics.add(positions.at("Integer literal out of range (64 bit): " + text));
+		}
+		return exp;
+	}
+
+		private EClassifier unresolvedName(String name) {
 		diagnostics.add(positions.at("Unknown type (" + name + ")"));
 		EClass placeholder = EcoreFactory.eINSTANCE.createEClass();
 		placeholder.setName(name);
@@ -1746,13 +2104,27 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	 * a bare type name depend on what else was registered in the JVM.
 	 */
 	private EClassifier findInDeclaredPackages(String name) {
+		EClassifier first = null;
 		for (EPackage pkg : declaredScope()) {
 			EClassifier found = pkg.getEClassifier(name);
-			if (found != null) {
-				return found;
+			if (found == null || found == first) {
+				continue;
 			}
+			if (first != null) {
+				// §8.4.8.1: "If the resolution rule provides more than one result, the
+				// specification is erroneous" — before, the first package won (#346)
+				diagnostics.add(positions.at("Type '" + name + "' is ambiguous: " + qualified(first) + " and "
+						+ qualified(found) + "; qualify it with its model type or package (§8.4.8.1)"));
+				return first;
+			}
+			first = found;
 		}
-		return null;
+		return first;
+	}
+
+	private static String qualified(EClassifier classifier) {
+		return classifier.getEPackage() != null ? classifier.getEPackage().getName() + "::" + classifier.getName()
+				: classifier.getName();
 	}
 
 	/**
@@ -1800,26 +2172,9 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void resolveOperation(OperationCallExp exp, String opName) {
-		exp.setName(opName);
-		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());
-		if (sourceType instanceof EClass eClass) {
-			int argCount = exp.getOwnedArguments().size();
-			EOperation bestMatch = null;
-			for (EOperation op : eClass.getEAllOperations()) {
-				if (opName.equals(op.getName())) {
-					if (op.getEParameters().size() == argCount) {
-						bestMatch = op;
-						break;
-					}
-					if (bestMatch == null) {
-						bestMatch = op;
-					}
-				}
-			}
-			if (bestMatch != null) {
-				exp.setReferredOperation(bestMatch);
-			}
-		}
+		// resolved and typed by the shared rules: a metamodel operation by its declaration, a
+		// library operation by its signature (#378)
+		support.resolveOperation(exp, opName);
 	}
 
 	private EClassifier getSourceClassifier(OclExpression source) {
@@ -1888,9 +2243,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		}
 
 		String opName = qvtoIdentifierText(ctx.qvtoIdentifier());
-		resolveOperation(exp, opName);
+		resolveOperation(exp, DEPRECATED_SYNONYMS.getOrDefault(opName, opName));
 		return exp;
 	}
+
+	/**
+	 * §8.3.2: the deprecated synonyms an implementation "may support" — cheap to support, and
+	 * scripts written for older QVT tools use them (#345).
+	 */
+	private static final Map<String, String> DEPRECATED_SYNONYMS = Map.of(
+			"isKindOf", "oclIsKindOf", "isTypeOf", "oclIsTypeOf", "asType", "oclAsType");
 
 	private ResolveExp createDotResolveCall(OclExpression source,
 			QvtOParser.ResolveCallSuffixContext ctx) {
@@ -1968,8 +2330,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		exp.setIsSafe(isSafe);
 		exp.setIsStrict("xmap".equals(ctx.mappingCallKind().getText()));
 
-		String name = scopedNameText(ctx.scopedName());
-		exp.setName(name);
+		exp.setName(mappingName(ctx.scopedName()));
 
 		if (ctx.argumentList() != null) {
 			for (QvtOParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
@@ -1980,9 +2341,11 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return exp;
 	}
 
-	private IteratorExp createXcollectPropertyCall(OclExpression source,
+	private OclExpression createXcollectPropertyCall(OclExpression source,
 			QvtOParser.ArrowPropertyCallContext propCtx) {
-		// §8.2.2.7: list->prop desugars to list->collect(i | i.prop)
+		// §8.2.2.7: "list->prop; // same as list->xcollect(i | i.prop)" — and xcollect collects
+		// no null. Built as OCL's collect, which yields the same kind (Bag or Sequence), without
+		// the null elements: a property read needs no loop of its own (#341)
 		IteratorExp collectExp = OCL.createIteratorExp();
 		collectExp.setOwnedSource(source);
 		collectExp.setName("collect");
@@ -2004,23 +2367,88 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		resolveProperty(propAccess, propName);
 		collectExp.setOwnedBody(propAccess);
 
-		return collectExp;
+		return withoutNulls(collectExp);
 	}
 
-	private IteratorExp createArrowMappingCallOnCollection(OclExpression source,
-			QvtOParser.ArrowMappingCallContext mapCtx) {
-		// §8.2.2.7: list->map f() desugars to list->xcollect(i | i.map f())
-		IteratorExp collectExp = OCL.createIteratorExp();
-		collectExp.setOwnedSource(source);
-		collectExp.setName("collect");
+	/** {@code collection->excluding(null)}: what xcollect leaves out of its result. */
+	private OclExpression withoutNulls(OclExpression collection) {
+		OperationCallExp excluding = OCL.createOperationCallExp();
+		excluding.setName("excluding");
+		excluding.setOwnedSource(collection);
+		excluding.getOwnedArguments().add(OCL.createNullLiteralExp());
+		return excluding;
+	}
 
+	/** An {@code xcollect} over the source with the given iterator (§8.2.2.7). */
+	private static ImperativeIterateExp xcollect(OclExpression source, Variable iterVar) {
+		ImperativeIterateExp xcollectExp = IMP.createImperativeIterateExp();
+		xcollectExp.setOwnedSource(source);
+		xcollectExp.setName("xcollect");
+		xcollectExp.getOwnedIterators().add(iterVar);
+		return xcollectExp;
+	}
+
+	/** The iterator a declarator {@code (a)} or {@code (a : T)} names, typed by the source if untyped. */
+	private Variable arrowIterator(QvtOParser.ArrowIteratorContext ctx, OclExpression source) {
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName(qvtoIdentifierText(ctx.qvtoIdentifier()));
+		EClassifier type = ctx.typeExpression() != null ? resolveTypeExpression(ctx.typeExpression())
+				: inferElementType(source);
+		if (type != null) {
+			iterVar.setType(type);
+		}
+		return iterVar;
+	}
+
+	private ImperativeIterateExp createArrowMappingIteratorCall(OclExpression source,
+			QvtOParser.ArrowMappingIteratorCallContext ctx) {
+		Variable iterVar = arrowIterator(ctx.arrowIterator(), source);
+		ImperativeIterateExp xcollectExp = xcollect(source, iterVar);
+		QvtoEnvironment savedEnv = this.environment;
+		this.environment = this.environment.nested(iterVar);
+		try {
+			MappingCallExp mapCall = QVTO.createMappingCallExp();
+			mapCall.setIsStrict("xmap".equals(ctx.mappingCallKind().getText()));
+			mapCall.setName(mappingName(ctx.scopedName()));
+			String sourceName = qvtoIdentifierText(ctx.callSource);
+			mapCall.setOwnedSource(sourceName.equals(iterVar.getName()) ? createVariableExp(iterVar)
+					: (OclExpression) visit(ctx.callSource));
+			if (ctx.argumentList() != null) {
+				for (QvtOParser.ExpressionContext argCtx : ctx.argumentList().expression()) {
+					mapCall.getOwnedArguments().add((OclExpression) visit(argCtx));
+				}
+			}
+			xcollectExp.setOwnedBody(mapCall);
+		} finally {
+			this.environment = savedEnv;
+		}
+		return xcollectExp;
+	}
+
+	private ImperativeIterateExp createArrowNewCall(OclExpression source, QvtOParser.ArrowNewCallContext ctx) {
+		Variable iterVar = arrowIterator(ctx.arrowIterator(), source);
+		ImperativeIterateExp xcollectExp = xcollect(source, iterVar);
+		QvtoEnvironment savedEnv = this.environment;
+		this.environment = this.environment.nested(iterVar);
+		try {
+			xcollectExp.setOwnedBody(buildInstantiation(ctx.newTail()));
+		} finally {
+			this.environment = savedEnv;
+		}
+		return xcollectExp;
+	}
+
+	private ImperativeIterateExp createArrowMappingCallOnCollection(OclExpression source,
+			QvtOParser.ArrowMappingCallContext mapCtx) {
+		// §8.2.2.7: list->map f() desugars to list->xcollect(i | i.map f()) — an xcollect, which
+		// leaves the nulls of failed guards out; it was OCL's collect before #341
 		Variable iterVar = OCL.createVariable();
 		iterVar.setName("_xmap_it");
 		EClassifier elementType = inferElementType(source);
 		if (elementType != null) {
 			iterVar.setType(elementType);
 		}
-		collectExp.getOwnedIterators().add(iterVar);
+		ImperativeIterateExp collectExp = xcollect(source, iterVar);
 
 		// Build body: i.map f(args)
 		VariableExp iterRef = OCL.createVariableExp();
@@ -2028,8 +2456,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		MappingCallExp mapCall = QVTO.createMappingCallExp();
 		mapCall.setOwnedSource(iterRef);
 		mapCall.setIsStrict("xmap".equals(mapCtx.mappingCallKind().getText()));
-		String name = scopedNameText(mapCtx.scopedName());
-		mapCall.setName(name);
+		mapCall.setName(mappingName(mapCtx.scopedName()));
 		if (mapCtx.argumentList() != null) {
 			for (QvtOParser.ExpressionContext argCtx : mapCtx.argumentList().expression()) {
 				mapCall.getOwnedArguments().add((OclExpression) visit(argCtx));
@@ -2040,21 +2467,19 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return collectExp;
 	}
 
-	private IteratorExp createArrowObjectCall(OclExpression source,
+	private ImperativeIterateExp createArrowObjectCall(OclExpression source,
 			QvtOParser.ArrowObjectCallContext ctx) {
-		// §8.4.7: coll->object(x:T) Type { ... } desugars to coll->collect(x | object Type { ... })
+		// §8.4.7: coll->object(x:T) Type { ... } desugars to coll->xcollect(x | object Type { ... })
 		QvtOParser.ObjectExpContext objCtx = ctx.objectExp();
 
-		IteratorExp collectExp = OCL.createIteratorExp();
-		collectExp.setOwnedSource(source);
-		collectExp.setName("collect");
-
-		// Iterator variable from objectIterator: (x : Type)
+		// Iterator variable from objectIterator: (x : Type), or (x) typed by the source (#341)
 		Variable iterVar = OCL.createVariable();
+		ImperativeIterateExp collectExp = xcollect(source, iterVar);
 		if (objCtx.objectIterator() != null) {
 			QvtOParser.ObjectIteratorContext iterCtx = objCtx.objectIterator();
 			iterVar.setName(qvtoIdentifierText(iterCtx.qvtoIdentifier()));
-			EClassifier iterType = resolveTypeExpression(iterCtx.typeExpression());
+			EClassifier iterType = iterCtx.typeExpression() != null
+					? resolveTypeExpression(iterCtx.typeExpression()) : inferElementType(source);
 			if (iterType != null) {
 				iterVar.setType(iterType);
 			}
@@ -2066,7 +2491,6 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				iterVar.setType(elementType);
 			}
 		}
-		collectExp.getOwnedIterators().add(iterVar);
 
 		// Build body: the ObjectExp (visited with the iterator variable in scope)
 		QvtoEnvironment savedEnv = this.environment;
@@ -2112,7 +2536,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		// Build body: the SwitchExp (visited with the iterator variable in scope)
 		QvtoEnvironment savedEnv = this.environment;
 		this.environment = this.environment.nested(iterVar);
-		OclExpression switchBody = visitSwitchExp(switchCtx);
+		OclExpression switchBody = buildSwitchExp(switchCtx, null);
 		this.environment = savedEnv;
 
 		xcollectExp.setOwnedBody(switchBody);
@@ -2161,7 +2585,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			iterVars.add(iterVar);
 			loop.getOwnedIterators().add(iterVar);
 		}
-		this.environment = this.environment.nested(iterVars);
+		this.environment = this.environment.nestedIterators(iterVars);
 
 		OclExpression argument = (OclExpression) visit(ctx.expression());
 		// §8.2.2.7 notation: the single expression is the body of a collecting variant and the
@@ -2176,8 +2600,12 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return imperative ? imperativeExp : exp;
 	}
 
-	private IterateExp createIterateExp(OclExpression source,
+	private LoopExp createIterateExp(OclExpression source,
 			QvtOParser.IterateCallContext ctx, boolean isSafe) {
+		String name = qvtoIdentifierText(ctx.qvtoIdentifier(0));
+		if (IMPERATIVE_ITERATORS.contains(name)) {
+			return createTargetIterate(source, ctx, name, isSafe);
+		}
 		IterateExp exp = OCL.createIterateExp();
 		exp.setOwnedSource(source);
 		exp.setIsSafe(isSafe);
@@ -2204,12 +2632,47 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		accVar.setOwnedInit((OclExpression) visit(ctx.expression(0)));
 		exp.setOwnedResult(accVar);
 
-		this.environment = this.environment.nested(iterVar);
-		this.environment = this.environment.nested(accVar);
+		this.environment = this.environment.nestedIterators(List.of(iterVar, accVar));
 
 		exp.setOwnedBody((OclExpression) visit(ctx.expression(1)));
 
 		this.environment = savedEnv;
+		return exp;
+	}
+
+	/**
+	 * §8.2.2.7 target form: {@code list->xcollectselect(i; res = i.prop | not res.startsWith('_'))}
+	 * — the body is computed into the target, which the condition then reads. Before #341 it was
+	 * built as OCL's iterate, whose accumulator syntax it shares, and the name was ignored.
+	 */
+	private ImperativeIterateExp createTargetIterate(OclExpression source, QvtOParser.IterateCallContext ctx,
+			String name, boolean isSafe) {
+		ImperativeIterateExp exp = IMP.createImperativeIterateExp();
+		exp.setOwnedSource(source);
+		exp.setName(name);
+		exp.setIsSafe(isSafe);
+		Variable iterVar = OCL.createVariable();
+		iterVar.setName(qvtoIdentifierText(ctx.qvtoIdentifier(1)));
+		EClassifier iterType = ctx.iterType != null ? resolveTypeExpression(ctx.iterType) : inferElementType(source);
+		if (iterType != null) {
+			iterVar.setType(iterType);
+		}
+		exp.getOwnedIterators().add(iterVar);
+		Variable target = OCL.createVariable();
+		target.setName(qvtoIdentifierText(ctx.qvtoIdentifier(2)));
+		if (ctx.accType != null) {
+			target.setType(resolveTypeExpression(ctx.accType));
+		}
+		exp.setTarget(target);
+		QvtoEnvironment savedEnv = this.environment;
+		try {
+			this.environment = this.environment.nested(iterVar);
+			exp.setOwnedBody((OclExpression) visit(ctx.expression(0)));
+			this.environment = this.environment.nested(target);
+			exp.setCondition((OclExpression) visit(ctx.expression(1)));
+		} finally {
+			this.environment = savedEnv;
+		}
 		return exp;
 	}
 
@@ -2221,18 +2684,69 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			QvtOParser.CollectionOperationCallContext ctx, boolean isSafe) {
 		String opName = qvtoIdentifierText(ctx.qvtoIdentifier());
 
-		// §8.4.4: ->select(#Type) / ->select(##Type) — shorthand type check as iterator predicate
-		// When a known iterator receives a single #/## shorthand argument (sourceless oclIsKindOf/oclIsTypeOf),
-		// desugar to IteratorExp with the type check as body and iterator variable as source.
+		// OCL v2.4 §7.6.3: an iterator whose variable is omitted — ->any(true),
+		// ->select(name = 'x') — has an implicit one, and a name in the body may be its
+		// property (#299)
+		// §8.2.2.7 notation "(<body_or_condition>)": the imperative variants have the implicit
+		// iterator too (#341)
+		if (IMPERATIVE_ITERATORS.contains(opName) && ctx.argumentList() != null
+				&& ctx.argumentList().expression().size() == 1) {
+			Variable iterVar = OCL.createVariable();
+			iterVar.setName("_implicit");
+			EClassifier elementType = inferElementType(source);
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
+			ImperativeIterateExp exp = IMP.createImperativeIterateExp();
+			exp.setOwnedSource(source);
+			exp.setName(opName);
+			exp.setIsSafe(isSafe);
+			exp.getOwnedIterators().add(iterVar);
+			QvtoEnvironment savedEnv = this.environment;
+			this.environment = this.environment.nestedImplicit(iterVar);
+			try {
+				OclExpression argument = (OclExpression) visit(ctx.argumentList().expression(0));
+				if (opName.startsWith("xselect")) {
+					exp.setCondition(argument);
+				} else {
+					exp.setOwnedBody(argument);
+				}
+			} finally {
+				this.environment = savedEnv;
+			}
+			return exp;
+		}
 		if (ITERATOR_NAMES.contains(opName) && ctx.argumentList() != null
 				&& ctx.argumentList().expression().size() == 1) {
-			OclExpression arg = (OclExpression) visit(ctx.argumentList().expression(0));
+			Variable iterVar = OCL.createVariable();
+			iterVar.setName("_implicit");
+			EClassifier elementType = inferElementType(source);
+			if (elementType != null) {
+				iterVar.setType(elementType);
+			}
+			QvtoEnvironment savedEnv = this.environment;
+			this.environment = this.environment.nestedImplicit(iterVar);
+			OclExpression arg;
+			try {
+				arg = (OclExpression) visit(ctx.argumentList().expression(0));
+			} finally {
+				this.environment = savedEnv;
+			}
+			// §8.4.4: ->select(#Type) / ->select(##Type) — a sourceless oclIsKindOf/oclIsTypeOf
+			// is a type check on the iterator
 			if (arg instanceof OperationCallExp shorthand
 					&& shorthand.getOwnedSource() == null
 					&& ("oclIsKindOf".equals(shorthand.getName())
 						|| "oclIsTypeOf".equals(shorthand.getName()))) {
 				return desugarShorthandIterator(source, opName, shorthand, isSafe);
 			}
+			IteratorExp iterExp = OCL.createIteratorExp();
+			iterExp.setOwnedSource(source);
+			iterExp.setName(opName);
+			iterExp.setIsSafe(isSafe);
+			iterExp.getOwnedIterators().add(iterVar);
+			iterExp.setOwnedBody(arg);
+			return iterExp;
 		}
 
 		OperationCallExp exp = OCL.createOperationCallExp();
@@ -2280,6 +2794,40 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		VariableExp exp = OCL.createVariableExp();
 		exp.setReferredVariable(variable);
 		exp.setType(variable.getType());
+		return exp;
+	}
+
+	/**
+	 * A bare name inside an iterator: the property of the innermost implicit source whose class
+	 * has one of that name (OCL v2.4 §9.4.1 [10], §7.8). The sources are the iterators without a
+	 * name and, as in OCL since #320, the named iterator variables — {@code ->collect(p | name)}
+	 * is p's name. An iterator without a name whose element type is unknown here takes the name
+	 * at run time, as for any property this parser cannot resolve; a named one of unknown type
+	 * does not, so a name in scope elsewhere keeps its meaning.
+	 */
+	private Optional<OclExpression> resolveOnImplicitIterator(String name) {
+		for (Variable source : environment.lookupImplicitSources()) {
+			boolean anonymous = source.getName() != null && source.getName().startsWith("_implicit");
+			if (source.getType() instanceof EClass eClass) {
+				if (eClass.getEStructuralFeature(name) != null) {
+					return Optional.of(implicitProperty(source, name));
+				}
+			} else if (anonymous) {
+				// A data-typed element has no properties; a type name stays a type
+				if (source.getType() != null || findInDeclaredPackages(name) != null) {
+					return Optional.empty();
+				}
+				return Optional.of(implicitProperty(source, name));
+			}
+		}
+		return Optional.empty();
+	}
+
+	private PropertyCallExp implicitProperty(Variable source, String name) {
+		PropertyCallExp exp = OCL.createPropertyCallExp();
+		exp.setIsImplicit(true);
+		exp.setOwnedSource(createVariableExp(source));
+		resolveProperty(exp, name);
 		return exp;
 	}
 
@@ -2358,13 +2906,37 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		return type;
 	}
 
-	private BlockExp buildBlock(QvtOParser.BlockContext ctx) {
-		BlockExp block = IMP.createBlockExp();
-		for (QvtOParser.StatementContext stmtCtx : ctx.statement()) {
+	/**
+	 * The expressions of a block: its statements, and the last expression, which needs no ';'
+	 * (§8.4 <expression_list> ::= <expression_semi_list> ';'?, #346).
+	 */
+	List<OclExpression> blockContents(QvtOParser.BlockContext ctx) {
+		return blockContents(ctx.statement(), ctx.last);
+	}
+
+	List<OclExpression> blockContents(QvtOParser.BlockExpContext ctx) {
+		return blockContents(ctx.statement(), ctx.last);
+	}
+
+	private List<OclExpression> blockContents(List<QvtOParser.StatementContext> statements,
+			QvtOParser.ExpressionContext last) {
+		List<OclExpression> contents = new ArrayList<>();
+		for (QvtOParser.StatementContext stmtCtx : statements) {
 			OclExpression stmtExpr = buildStatement(stmtCtx);
 			if (stmtExpr != null) {
-				block.getBody().add(stmtExpr);
+				contents.add(stmtExpr);
 			}
+		}
+		if (last != null) {
+			contents.add((OclExpression) visit(last));
+		}
+		return contents;
+	}
+
+	private BlockExp buildBlock(QvtOParser.BlockContext ctx) {
+		BlockExp block = IMP.createBlockExp();
+		for (OclExpression stmtExpr : blockContents(ctx)) {
+			block.getBody().add(stmtExpr);
 		}
 		return block;
 	}
@@ -2391,6 +2963,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 
 		Variable var = buildVarFromDeclarator(ctx);
 		initExp.setReferredVariable(var);
+		positionAt(ctx.getStart().getLine(), ctx.getStart().getCharPositionInLine());
+		checkVariableInit(var);
 
 		// §8.2.2.10: '::=' notation — withResult=true, the expression returns the init value
 		if (ctx.varInitOp() != null && ctx.varInitOp().getText().equals("::=")) {
@@ -2416,7 +2990,16 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			exp.setTarget(target);
 		}
 		if (ctx.expression() != null) {
-			exp.setCondition((OclExpression) visit(ctx.expression()));
+			// The condition refers to the target variable it declares (#384)
+			QvtoEnvironment savedEnv = this.environment;
+			if (exp.getTarget() != null) {
+				this.environment = this.environment.nested(exp.getTarget());
+			}
+			try {
+				exp.setCondition((OclExpression) visit(ctx.expression()));
+			} finally {
+				this.environment = savedEnv;
+			}
 		}
 	}
 
@@ -2484,6 +3067,18 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				: fullName;
 		MappingOperation stub = QVTO.createMappingOperation();
 		stub.setName(mappingName);
+		// The context type tells SourceElement::toT from SourceContainer::toT (§8.2.1.23, #334)
+		if (fullName.contains("::")) {
+			String typeName = fullName.substring(0, fullName.lastIndexOf("::"));
+			EClassifier contextType = findClassifier(typeName.contains("::")
+					? typeName.substring(typeName.lastIndexOf("::") + 2) : typeName);
+			if (contextType != null) {
+				VarParameter context = QVTO.createVarParameter();
+				context.setName("self");
+				context.setEType(contextType);
+				stub.setContext(context);
+			}
+		}
 		return stub;
 	}
 
@@ -2499,15 +3094,30 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 					+ "::" + qvtoIdentifierText(ctx.qvtoIdentifier(0));
 		}
 		// §8.4.7: scoped_identifier ::= identifier ('::' identifier)*
+		// §8.4.8 transformation_id ':::' — the mapping is found by its name and type (#346)
 		List<QvtOParser.QvtoIdentifierContext> ids = ctx.qvtoIdentifier();
 		List<String> parts = new ArrayList<>();
 		for (QvtOParser.QvtoIdentifierContext idCtx : ids) {
-			parts.add(qvtoIdentifierText(idCtx));
+			if (idCtx != ctx.transformationId) {
+				parts.add(qvtoIdentifierText(idCtx));
+			}
 		}
 		return String.join("::", parts);
 	}
 
-	String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {
+	/**
+	 * The name a mapping call is resolved by. §8.4.8 <mapping_id> ::= (<transformation_id> ':::')?
+	 * (<type_id> '::')? <mapping_name>: the qualifiers say where the mapping is defined, and the
+	 * candidates are chosen by the source's type anyway (§8.1.14) — so only the name is kept. A
+	 * qualified name used to reach the OCL engine verbatim and found no operation (#346).
+	 */
+	String mappingName(QvtOParser.ScopedNameContext ctx) {
+		String qualified = scopedNameText(ctx);
+		int separator = qualified.lastIndexOf("::");
+		return separator < 0 ? qualified : qualified.substring(separator + 2);
+	}
+
+		String qualifiedNameText(QvtOParser.QualifiedNameContext ctx) {
 		List<String> parts = new ArrayList<>();
 		for (QvtOParser.QvtoIdentifierContext idCtx : ctx.qvtoIdentifier()) {
 			parts.add(qvtoIdentifierText(idCtx));

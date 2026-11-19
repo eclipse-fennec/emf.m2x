@@ -29,17 +29,17 @@ import org.eclipse.emf.ecore.EParameter;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
+import org.eclipse.fennec.m2x.model.ocl.Variable;
+import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.model.qvtbase.Function;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
-import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
-import org.eclipse.fennec.m2x.model.ocl.Variable;
-import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
 
 /**
- * Hands the OCL engine what a QVT-R transformation defines: its queries (§7.11.4) and, where a
+ * Hands the OCL engine what a QVT-R transformation defines: its queries (§7.11.1.5) and, where a
  * query has no body, the blackbox implementations behind them (§7.8).
  *
  * <p>Without this, OCL cannot resolve a query it meets <em>inside</em> an expression — the

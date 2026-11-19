@@ -14,16 +14,25 @@
  */
 package org.eclipse.fennec.m2x.qvtd.tests;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
+import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.BasicQvtdModelExtent;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
+import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -104,5 +113,40 @@ class QvtdEngineFailurePathTest extends AbstractQvtdEngineTest {
 		public org.eclipse.emf.ecore.resource.ResourceSet resourceSet() {
 			return new org.eclipse.emf.ecore.resource.impl.ResourceSetImpl();
 		}
+	}
+
+	@Test
+	@DisplayName("reaching the trace limit is reported once, as an error (#284)")
+	void traceLimitIsReportedOnceAsAnError() throws Exception {
+		// Two relations, two packages: four records against a limit of three. Before #284 the
+		// fourth was dropped with a log line and the run reported success.
+		String source = """
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					top relation PackageToSchema {
+						pn : String;
+						checkonly domain uml p : Package { name = pn };
+						enforce domain rdbms s : Schema { name = pn };
+					}
+					top relation PackageToTable {
+						pn : String;
+						checkonly domain uml p : Package { name = pn };
+						enforce domain rdbms t : Table { name = pn };
+					}
+				}
+				""";
+		OclConfiguration oclConfig = OclConfiguration.builder(new OclParserSupport()).build();
+		QvtdEngine limited = QvtdEngines.create(QvtdConfiguration.builder(oclConfig)
+				.maxTraceRecords(3).build());
+		QvtdModelExtent rdbms = emptyExtent();
+		QvtdExecutionResult result = limited.execute(limited.parse(source, "T"),
+				QvtdExecutionContext.enforce("rdbms", Map.of(
+						"uml", QvtdModelExtent.of(createPackage("A"), createPackage("B")),
+						"rdbms", rdbms)));
+
+		assertFalse(result.isSuccess(), "a run whose trace was cut must not report success");
+		assertEquals(1, result.diagnostics().stream()
+				.filter(d -> d.getSeverity() == Diagnostic.ERROR
+						&& d.getMessage().startsWith("Maximum trace records exceeded: 3"))
+				.count(), () -> "one error naming the limit: " + result.diagnostics());
 	}
 }

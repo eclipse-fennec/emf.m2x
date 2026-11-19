@@ -62,7 +62,7 @@ public class ModuleImportImpl extends EModelElementImpl implements ModuleImport 
 	 * @generated
 	 * @ordered
 	 */
-	protected static final ImportKind KIND_EDEFAULT = ImportKind.EXTENSION;
+	protected static final ImportKind KIND_EDEFAULT = ImportKind.ACCESS;
 
 	/**
 	 * The cached value of the '{@link #getKind() <em>Kind</em>}' attribute.

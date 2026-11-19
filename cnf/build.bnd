@@ -10,11 +10,12 @@
 
 # Needed because we enabled library 'fennec'
 # Activate baselining — deliberately still off, see #33.
-# Setting it to true would currently switch on nothing: the baseline.bnd that the
-# shared fennec bnd library 0.0.9 includes for this flag is commented out in its
-# entirety, so there is neither a -baselinerepo nor a repository plugin behind it.
-# Enabling it before that is fixed upstream, and before a release exists to baseline
-# against, would look like API-evolution enforcement without being any.
+# The shared fennec bnd library 0.0.10 does provide a baseline repository (the
+# release OBR on the 'release-obr' branch), but that repository is not yet tagged
+# to stay out of default resolution (eclipse-fennec/fennec.bnd.libraries#25, fixed
+# only after 0.0.10). Enabling it before that release, and before a release of this
+# workspace exists to baseline against, would look like API-evolution enforcement
+# without being any.
 #fennec-baselining: true
 github-orga: eclipse-fennec
 github-project: emf.m2x
@@ -33,7 +34,7 @@ Bundle-Copyright: Copyright (c) Contributors to the Eclipse Foundation.
 javac.source: 21
 javac.target: 21
 
--require-bnd "(version>=7.2.1)"
+-require-bnd "(version>=7.4.0)"
 
 -plugin.0.Central: \
     aQute.bnd.repository.maven.provider.MavenBndRepository; \
@@ -62,16 +63,6 @@ javac.target: 21
 		pretty = true; \
 		local = ${build}/templates
 		
--plugin.4.EMFCompare: \
- 	aQute.bnd.repository.p2.provider.P2Repository; \
- 	url = https://download.eclipse.org/modeling/emf/compare/updates/releases/latest/; \
- 	name = EMFCompare
- 	
--plugin.3.EclipseMDT-UML2: \
- 	aQute.bnd.repository.p2.provider.P2Repository; \
- 	url = https://download.eclipse.org/modeling/mdt/uml2/updates/releases/; \
- 	name = EclipseMDT-UML2
-
 # Enables `-export ...; type=p2` to produce an Eclipse p2 repository
 # (used by org.eclipse.fennec.m2x.ocl.ide.p2).
 -plugin.5.P2Export: \

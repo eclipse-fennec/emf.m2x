@@ -42,6 +42,7 @@ import org.eclipse.fennec.m2x.model.ocl.OclPackage;
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getName <em>Name</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getKind <em>Kind</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getSpecification <em>Specification</em>}</li>
+ *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getMessageExpression <em>Message Expression</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getContextClassifier <em>Context Classifier</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getContextOperation <em>Context Operation</em>}</li>
  *   <li>{@link org.eclipse.fennec.m2x.model.ocl.impl.ConstraintImpl#getContextProperty <em>Context Property</em>}</li>
@@ -100,6 +101,16 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 	 * @ordered
 	 */
 	protected OclExpression specification;
+
+	/**
+	 * The cached value of the '{@link #getMessageExpression() <em>Message Expression</em>}' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @see #getMessageExpression()
+	 * @generated
+	 * @ordered
+	 */
+	protected OclExpression messageExpression;
 
 	/**
 	 * The cached value of the '{@link #getContextClassifier() <em>Context Classifier</em>}' reference.
@@ -267,6 +278,51 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 	 * @generated
 	 */
 	@Override
+	public OclExpression getMessageExpression() {
+		return messageExpression;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	public NotificationChain basicSetMessageExpression(OclExpression newMessageExpression, NotificationChain msgs) {
+		OclExpression oldMessageExpression = messageExpression;
+		messageExpression = newMessageExpression;
+		if (eNotificationRequired()) {
+			ENotificationImpl notification = new ENotificationImpl(this, Notification.SET, OclPackage.CONSTRAINT__MESSAGE_EXPRESSION, oldMessageExpression, newMessageExpression);
+			if (msgs == null) msgs = notification; else msgs.add(notification);
+		}
+		return msgs;
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
+	public void setMessageExpression(OclExpression newMessageExpression) {
+		if (newMessageExpression != messageExpression) {
+			NotificationChain msgs = null;
+			if (messageExpression != null)
+				msgs = ((InternalEObject)messageExpression).eInverseRemove(this, EOPPOSITE_FEATURE_BASE - OclPackage.CONSTRAINT__MESSAGE_EXPRESSION, null, msgs);
+			if (newMessageExpression != null)
+				msgs = ((InternalEObject)newMessageExpression).eInverseAdd(this, EOPPOSITE_FEATURE_BASE - OclPackage.CONSTRAINT__MESSAGE_EXPRESSION, null, msgs);
+			msgs = basicSetMessageExpression(newMessageExpression, msgs);
+			if (msgs != null) msgs.dispatch();
+		}
+		else if (eNotificationRequired())
+			eNotify(new ENotificationImpl(this, Notification.SET, OclPackage.CONSTRAINT__MESSAGE_EXPRESSION, newMessageExpression, newMessageExpression));
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EClassifier getContextClassifier() {
 		if (contextClassifier != null && contextClassifier.eIsProxy()) {
 			InternalEObject oldContextClassifier = (InternalEObject)contextClassifier;
@@ -414,6 +470,8 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 		switch (featureID) {
 			case OclPackage.CONSTRAINT__SPECIFICATION:
 				return basicSetSpecification(null, msgs);
+			case OclPackage.CONSTRAINT__MESSAGE_EXPRESSION:
+				return basicSetMessageExpression(null, msgs);
 		}
 		return super.eInverseRemove(otherEnd, featureID, msgs);
 	}
@@ -432,6 +490,8 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 				return getKind();
 			case OclPackage.CONSTRAINT__SPECIFICATION:
 				return getSpecification();
+			case OclPackage.CONSTRAINT__MESSAGE_EXPRESSION:
+				return getMessageExpression();
 			case OclPackage.CONSTRAINT__CONTEXT_CLASSIFIER:
 				if (resolve) return getContextClassifier();
 				return basicGetContextClassifier();
@@ -463,6 +523,9 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 				return;
 			case OclPackage.CONSTRAINT__SPECIFICATION:
 				setSpecification((OclExpression)newValue);
+				return;
+			case OclPackage.CONSTRAINT__MESSAGE_EXPRESSION:
+				setMessageExpression((OclExpression)newValue);
 				return;
 			case OclPackage.CONSTRAINT__CONTEXT_CLASSIFIER:
 				setContextClassifier((EClassifier)newValue);
@@ -497,6 +560,9 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 			case OclPackage.CONSTRAINT__SPECIFICATION:
 				setSpecification((OclExpression)null);
 				return;
+			case OclPackage.CONSTRAINT__MESSAGE_EXPRESSION:
+				setMessageExpression((OclExpression)null);
+				return;
 			case OclPackage.CONSTRAINT__CONTEXT_CLASSIFIER:
 				setContextClassifier((EClassifier)null);
 				return;
@@ -527,6 +593,8 @@ public class ConstraintImpl extends MinimalEObjectImpl.Container implements Cons
 				return kind != KIND_EDEFAULT;
 			case OclPackage.CONSTRAINT__SPECIFICATION:
 				return specification != null;
+			case OclPackage.CONSTRAINT__MESSAGE_EXPRESSION:
+				return messageExpression != null;
 			case OclPackage.CONSTRAINT__CONTEXT_CLASSIFIER:
 				return contextClassifier != null;
 			case OclPackage.CONSTRAINT__CONTEXT_OPERATION:

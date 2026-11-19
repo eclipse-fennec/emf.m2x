@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
@@ -86,10 +87,11 @@ class OclIfLetTest extends AbstractOclTest {
 	}
 
 	@Test
-	void letShadowing() throws OclParseException {
-		// Inner let shadows outer
-		assertEquals(10, eval(
-				"let x : Integer = 5 in let x : Integer = 10 in x", self));
+	void letShadowing_isAParseError() {
+		// OCL v2.4 §9.3.41 [1]: env.lookup(varName).oclIsUndefined() — lookup includes the enclosing
+		// scopes, so a let variable may not hide another (#326; stricter than Eclipse)
+		assertThrows(OclParseException.class,
+				() -> eval("let x : Integer = 5 in let x : Integer = 10 in x", self));
 	}
 
 	@Test

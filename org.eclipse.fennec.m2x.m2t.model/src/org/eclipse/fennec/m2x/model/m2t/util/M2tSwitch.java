@@ -26,6 +26,7 @@ import org.eclipse.fennec.m2x.model.m2t.FileBlock;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.InitSection;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
@@ -213,6 +214,14 @@ public class M2tSwitch<T> extends Switch<T> {
 				if (result == null) result = caseBlock(traceBlock);
 				if (result == null) result = caseTemplateExpression(traceBlock);
 				if (result == null) result = caseOclExpression(traceBlock);
+				if (result == null) result = defaultCase(theEObject);
+				return result;
+			}
+			case M2tPackage.INLINE_EXPRESSION: {
+				InlineExpression inlineExpression = (InlineExpression)theEObject;
+				T result = caseInlineExpression(inlineExpression);
+				if (result == null) result = caseTemplateExpression(inlineExpression);
+				if (result == null) result = caseOclExpression(inlineExpression);
 				if (result == null) result = defaultCase(theEObject);
 				return result;
 			}
@@ -459,6 +468,21 @@ public class M2tSwitch<T> extends Switch<T> {
 	 * @generated
 	 */
 	public T caseTraceBlock(TraceBlock object) {
+		return null;
+	}
+
+	/**
+	 * Returns the result of interpreting the object as an instance of '<em>Inline Expression</em>'.
+	 * <!-- begin-user-doc -->
+	 * This implementation returns null;
+	 * returning a non-null result will terminate the switch.
+	 * <!-- end-user-doc -->
+	 * @param object the target of the switch.
+	 * @return the result of interpreting the object as an instance of '<em>Inline Expression</em>'.
+	 * @see #doSwitch(org.eclipse.emf.ecore.EObject) doSwitch(EObject)
+	 * @generated
+	 */
+	public T caseInlineExpression(InlineExpression object) {
 		return null;
 	}
 

@@ -18,6 +18,7 @@ import org.eclipse.emf.common.util.URI;
 import org.eclipse.fennec.m2x.model.compiled.CompiledUnit;
 
 import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.qvtd.api.RelationImplementationProvider;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.unit.api.PreparedContext;
 import org.eclipse.fennec.m2x.unit.api.UnitBinder;
@@ -42,7 +43,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @since 1.0
  */
 @ProviderType
-public interface QvtoEngine {
+public interface QvtoEngine extends RelationImplementationProvider {
 
 	// --- Parsing ---
 
@@ -207,10 +208,10 @@ public interface QvtoEngine {
 	 * Loads a transformation so that its mappings can serve relation implementations
 	 * (§7.8, D39 hybrid QVT-R / QVT-O).
 	 *
-	 * <p>The engine acts as a {@code RelationImplementationProvider} for a QVT-R engine
-	 * once a transformation is loaded. Under OSGi that role arrives as its own service
-	 * registration; in plain Java the engine created by {@code QvtoEngines} implements
-	 * it and can be handed to {@code QvtdEngine.registerImplementationProvider}.
+	 * <p>Every QVT-O engine is a {@link RelationImplementationProvider}: once a transformation
+	 * is loaded, its mappings serve the operations QVT-R {@code implementedby} clauses name, and
+	 * the engine can be handed to {@code QvtdEngine.registerImplementationProvider} as it is
+	 * (#282 — before, that needed a cast to the implementation class).
 	 *
 	 * @param transformation the transformation whose mappings implement relations
 	 */

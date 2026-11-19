@@ -69,7 +69,7 @@ class QvtdResourceUnitTest {
 			""";
 	private static final String IMPORTER = """
 			import shared.Library;
-			transformation importer(source : bookshelf, target : bookshelf) {
+			transformation importer(source : bookshelf, target : bookshelf) extends shared {
 			}
 			""";
 

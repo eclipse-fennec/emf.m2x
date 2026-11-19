@@ -32,7 +32,10 @@ import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryEntry;
 import org.eclipse.fennec.emf.osgi.eobject.registry.EObjectRegistryWriter;
 import org.eclipse.fennec.emf.osgi.fingerprint.FingerprintService;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
+import org.eclipse.fennec.m2x.ocl.api.OclCacheKey;
 import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
+import org.eclipse.fennec.m2x.ocl.api.OclParseResult;
+import org.eclipse.fennec.m2x.ocl.api.OclParseResult.Parsed;
 
 /**
  * Keeps compiled expressions in a named {@link EObjectRegistry}, anchored to the model
@@ -68,6 +71,13 @@ import org.eclipse.fennec.m2x.ocl.api.OclExpressionCache;
  * of models fails exactly when it matters, while a version's tree is being built and is not
  * published yet.
  *
+ * <p><b>Only executable ASTs go into the registry.</b> The registry is shared and read by
+ * others, and what they find there must run as it is. Parse failures and parses with declared
+ * variables (whose AST has free variables) stay in memory: the delegate keeps them under the
+ * derived fingerprint, so a changed model is parsed again, and bounds failures with a limit of
+ * their own, so a flood of broken expressions cannot displace anything. {@link #release} does
+ * not reach them; they are bounded and age out of the delegate on their own.
+ *
  * <p><b>Model mutation after registration is out of contract.</b> A fingerprint describes the
  * package as it was; changing it afterwards leaves entries that no longer describe it, and
  * nothing here tries to notice.
@@ -96,7 +106,6 @@ public class RegistryExpressionCache implements OclExpressionCache, OclVersioned
 	private final FingerprintService fingerprintService;
 	private final OclExpressionCache delegate;
 	private final AtomicLong hits = new AtomicLong();
-	private final AtomicLong misses = new AtomicLong();
 
 	/**
 	 * The context type per entry key — what this cache knows and no lookup could tell it in
@@ -123,45 +132,76 @@ public class RegistryExpressionCache implements OclExpressionCache, OclVersioned
 
 	@Override
 	public OclExpression get(String expression, EClassifier contextType) {
-		String derived = derivedFingerprintOf(contextType);
-		if (derived == null) {
-			return delegate.get(expression, contextType);
-		}
-		Optional<EObject> found = registry.get(key(derived, expression, contextType));
-		if (found.isPresent() && found.get() instanceof OclExpression parsed) {
-			hits.incrementAndGet();
-			return parsed;
-		}
-		misses.incrementAndGet();
-		return null;
+		return lookup(OclCacheKey.of(expression, contextType))
+				.filter(Parsed.class::isInstance)
+				.map(result -> ((Parsed) result).expression())
+				.orElse(null);
 	}
 
 	@Override
 	public void put(String expression, EClassifier contextType, OclExpression parsed) {
-		String derived = derivedFingerprintOf(contextType);
-		if (derived == null) {
-			delegate.put(expression, contextType, parsed);
-			return;
-		}
-		String key = key(derived, expression, contextType);
-		if (contextType instanceof EClass eClass) {
-			// before the write, because filing the entry is what notifies a listener, and a
-			// bridge asking for the anchor must not be told "unknown" for what it just saw
-			anchors.put(key, eClass);
-		}
-		writer.put(SOURCE, key, parsed, propertiesOf(contextType));
+		Objects.requireNonNull(parsed, "parsed must not be null");
+		store(OclCacheKey.of(expression, contextType), new Parsed(parsed));
 	}
 
 	@Override
 	public void invalidate(String expression, EClassifier contextType) {
-		String derived = derivedFingerprintOf(contextType);
+		invalidate(OclCacheKey.of(expression, contextType));
+	}
+
+	@Override
+	public Optional<OclParseResult> lookup(OclCacheKey key) {
+		String derived = derivedFingerprintOf(key.contextType());
 		if (derived == null) {
-			delegate.invalidate(expression, contextType);
+			return delegate.lookup(key);
+		}
+		if (!key.hasVariables()) {
+			Optional<EObject> found = registry.get(key(derived, key.expression(), key.contextType()));
+			if (found.isPresent() && found.get() instanceof OclExpression parsed) {
+				hits.incrementAndGet();
+				return Optional.of(new Parsed(parsed));
+			}
+		}
+		// the delegate counts the miss, or the hit on a failure or a parse with variables
+		return delegate.lookup(inMemory(derived, key));
+	}
+
+	@Override
+	public void store(OclCacheKey key, OclParseResult result) {
+		Objects.requireNonNull(result, "result must not be null");
+		String derived = derivedFingerprintOf(key.contextType());
+		if (derived == null) {
+			delegate.store(key, result);
 			return;
 		}
-		String key = key(derived, expression, contextType);
-		anchors.remove(key);
-		writer.remove(SOURCE, key);
+		if (key.hasVariables() || !(result instanceof Parsed parsed)) {
+			delegate.store(inMemory(derived, key), result);
+			return;
+		}
+		delegate.invalidate(inMemory(derived, key));
+		EClassifier contextType = key.contextType();
+		String registryKey = key(derived, key.expression(), contextType);
+		if (contextType instanceof EClass eClass) {
+			// before the write, because filing the entry is what notifies a listener, and a
+			// bridge asking for the anchor must not be told "unknown" for what it just saw
+			anchors.put(registryKey, eClass);
+		}
+		writer.put(SOURCE, registryKey, parsed.expression(), propertiesOf(contextType));
+	}
+
+	@Override
+	public void invalidate(OclCacheKey key) {
+		String derived = derivedFingerprintOf(key.contextType());
+		if (derived == null) {
+			delegate.invalidate(key);
+			return;
+		}
+		if (!key.hasVariables()) {
+			String registryKey = key(derived, key.expression(), key.contextType());
+			anchors.remove(registryKey);
+			writer.remove(SOURCE, registryKey);
+		}
+		delegate.invalidate(inMemory(derived, key));
 	}
 
 	@Override
@@ -209,7 +249,7 @@ public class RegistryExpressionCache implements OclExpressionCache, OclVersioned
 
 	@Override
 	public long missCount() {
-		return misses.get() + delegate.missCount();
+		return delegate.missCount();
 	}
 
 	/**
@@ -254,6 +294,14 @@ public class RegistryExpressionCache implements OclExpressionCache, OclVersioned
 	 * version, then context type, then expression — so that two versions of one model never
 	 * answer for each other, and two classes of one model do not either.
 	 */
+	/**
+	 * The key under which the delegate keeps what does not go into the registry: the derived
+	 * fingerprint in front of the text, as the registry key has it.
+	 */
+	private static OclCacheKey inMemory(String derived, OclCacheKey key) {
+		return key.withExpression(derived + "#" + key.expression());
+	}
+
 	private static String key(String fingerprint, String expression, EClassifier contextType) {
 		return fingerprint + "#" + contextType.getName() + "#" + expression;
 	}

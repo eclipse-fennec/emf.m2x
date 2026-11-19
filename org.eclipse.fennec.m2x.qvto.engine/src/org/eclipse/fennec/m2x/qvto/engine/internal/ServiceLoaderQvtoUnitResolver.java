@@ -17,10 +17,9 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 import java.util.Optional;
 import java.util.ServiceLoader;
 
-import org.eclipse.fennec.m2x.unit.resolve.ServiceLoaderUnitResolver;
-
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnit;
 import org.eclipse.fennec.m2x.qvto.api.QvtoUnitResolver;
+import org.eclipse.fennec.m2x.unit.resolve.ServiceLoaderUnitResolver;
 
 /**
  * Asks every {@link QvtoUnitResolver} on the class path, in the order

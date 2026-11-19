@@ -14,8 +14,11 @@
  */
 package org.eclipse.fennec.m2x.qvto.tests.lexer;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
 
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.tests.AbstractQvtoEngineTest;
@@ -108,7 +111,65 @@ class QvtoE2eLexerCommentTest extends AbstractQvtoEngineTest {
 		assertLogged(result, "val:http://example.com");
 	}
 
+	// ---- Code inside a comment is never executed ----
+
+	@Test
+	void comment_codeInsideCommentsIsNotExecuted() throws Exception {
+		// Every comment form holds a statement that would log; only the active ones may run.
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        log('run:A');
+				        -- log('run:B');
+				        // log('run:C');
+				        /* log('run:D'); */
+				        /*
+				        log('run:E');
+				        */
+				        /* outer /* nested log('run:F'); */ still comment log('run:G'); */
+				        log('run:H'); // log('run:I');
+				        log('run:J'); -- log('run:K');
+				    }
+				}
+				""");
+		assertSuccess(result);
+		for (String active : List.of("A", "H", "J")) {
+			assertLogged(result, "run:" + active);
+		}
+		for (String commented : List.of("B", "C", "D", "E", "F", "G", "I", "K")) {
+			assertNotLogged(result, "run:" + commented);
+		}
+	}
+
+	@Test
+	void comment_mappingCallInsideCommentIsNotInvoked() throws Exception {
+		QvtoExecutionResult result = execute("""
+				transformation test() {
+				    main() {
+				        log('run:main');
+				        -- leak();
+				        // leak();
+				        /* leak(); */
+				    }
+				    helper leak() : Boolean {
+				        log('run:leak');
+				        return true;
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "run:main");
+		assertNotLogged(result, "run:leak");
+	}
+
 	// ---- Helpers ----
+
+	private static void assertNotLogged(QvtoExecutionResult result, String unexpected) {
+		boolean found = result.diagnostics().stream()
+				.anyMatch(d -> d.getMessage().contains(unexpected));
+		assertFalse(found, "Commented-out code ran: '" + unexpected
+				+ "' was logged, diagnostics: " + result.diagnostics());
+	}
 
 	private static void assertSuccess(QvtoExecutionResult result) {
 		assertNotNull(result);

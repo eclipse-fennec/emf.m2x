@@ -22,8 +22,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
@@ -38,7 +40,6 @@ import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -582,6 +583,8 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 							enforce domain rdbms s : Schema { name = pn };
 						}
 						top relation ClassToTable {
+							p : Package;
+							s : Schema;
 							cn : String;
 							checkonly domain uml c : Class { name = cn };
 							enforce domain rdbms t : Table { name = cn };
@@ -1130,10 +1133,10 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 		}
 	}
 
-	// ===== §7.5: In-place Transformations =====
+	// ===== §7.7: In-place Transformations =====
 
 	@Nested
-	@DisplayName("§7.5: In-place Transformations")
+	@DisplayName("§7.7: In-place Transformations")
 	class InPlaceTransformations {
 
 		@Test
@@ -1143,8 +1146,11 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 			// the enforce domain writes to the same extent.
 			// §7.7: "an implementation that operates in-place must take copies
 			// of the old state to avoid confusion with updated new state"
+			// The key makes c2 the existing Class of that name (§7.4) — without it nothing
+			// identifies the object to update, and a new Class would be created (#350)
 			String source = """
 					transformation T(uml : simpleuml) {
+						key Class {name};
 						top relation AddKind {
 							cn : String;
 							checkonly domain uml c : Class {
@@ -1263,48 +1269,9 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 
 	// ===== §7.13.1: Import/Multi-File =====
 
-	@Nested
-	@DisplayName("§7.13.1: Import/Multi-File")
-	class ImportMultiFile {
+	// §7.13.1 imports: QvtdImportTest (unit imports through resolvers, #360)
 
-		@Test
-		@Disabled("GAP-10: Multi-file import — deferred to Phase 5 (Language Servers). "
-				+ "§7.13.4 defines 'import' syntax for referencing external QVT-R units by URI. "
-				+ "Requires: (1) UnitResolver infrastructure for QVT-R (analog to QvtoUnitResolver), "
-				+ "(2) file lookup + external parsing + cross-unit linking in QvtrParserSupport, "
-				+ "(3) relation/query sharing across compilation units. "
-				+ "Currently all QVT-R transformations are single-file. Multi-file becomes relevant "
-				+ "with Language Server support (live editing, workspace-wide resolution).")
-		@DisplayName("import resolves external transformation unit")
-		void importResolvesExternalUnit() throws QvtdParseException {
-			// §7.13.4: 'import' [identifier ':'] URI ('::' identifier)* ['::*'] ';'
-			//
-			// What this gap requires:
-			// 1. QvtdUnitResolver interface (analog to QvtoUnitResolver) — resolves
-			//    unit names/URIs to source text or pre-parsed RelationalTransformations.
-			// 2. QvtrParserSupport extended to handle multi-unit parsing — parse the
-			//    imported unit, merge relations/queries into the importing transformation.
-			// 3. Cross-unit relation calls — a relation in unit A can invoke a relation
-			//    from imported unit B via 'where { B::SomeRelation(...); }'.
-			// 4. QvtdConfiguration extended with unitResolvers (like QvtoConfiguration).
-			//
-			// Example (when implemented):
-			//   // helpers.qvtr
-			//   transformation Helpers(uml : simpleuml, rdbms : simplerdbms) {
-			//       relation NameMapping { ... }
-			//   }
-			//   // main.qvtr
-			//   import helpers;
-			//   transformation Main(uml : simpleuml, rdbms : simplerdbms) {
-			//       top relation ClassToTable {
-			//           ...
-			//           where { Helpers::NameMapping(cn, tn); }
-			//       }
-			//   }
-		}
-	}
-
-	// ===== §7.6: Transformation Extends =====
+	// ===== §7.11.1.1: Transformation Extends =====
 
 	@Nested
 	@DisplayName("§7.11.1.1: Transformation Extends")
@@ -1405,7 +1372,7 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 							cn : String;
 							checkonly domain uml c : Class { name = cn };
 							enforce domain rdbms t : Table { name = cn }
-								implementedby createTableOp(cn);
+								implementedby createTableOp(c);
 						}
 					}
 					""";
@@ -1427,13 +1394,13 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 
 				@Override
 				public Object invoke(String operationName, Object self, Object[] args) {
-					if ("createTableOp".equals(operationName) && args.length == 1) {
-						// Create a Table with name = arg and custom marker
-						createdTable = createTable((String) args[0]);
-						// Set a distinguishing marker to prove implementedby was called
-						createdTable.eSet(
-								createdTable.eClass().getEStructuralFeature("name"),
-								"IMPL_" + args[0]);
+					if ("createTableOp".equals(operationName) && args.length == 1
+							&& args[0] instanceof EObject cls) {
+						// §10 rule 4.5: the argument is the root object of the other domain. The
+						// relation has to hold afterwards, so name = cn; the type is the marker
+						// that proves implementedby was called
+						createdTable = createTable(getName(cls));
+						createdTable.eSet(createdTable.eClass().getEStructuralFeature("type"), "IMPL");
 						return createdTable;
 					}
 					return null;
@@ -1460,47 +1427,218 @@ class QvtdSpecConformanceTest extends AbstractQvtdEngineTest {
 			assertTrue(result.isSuccess(), "" + result.diagnostics());
 			assertEquals(1, rdbms.getContents().size());
 			EObject table = rdbms.getContents().get(0);
-			assertEquals("IMPL_Employee",
-					table.eGet(table.eClass().getEStructuralFeature("name")),
+			assertEquals("Employee", table.eGet(table.eClass().getEStructuralFeature("name")));
+			assertEquals("IMPL", table.eGet(table.eClass().getEStructuralFeature("type")),
 					"implementedby should delegate to blackbox operation");
+		}
+
+		private static final String IMPLEMENTED = """
+				transformation T(uml : simpleuml, rdbms : simplerdbms) {
+					top relation ClassToTable {
+						cn : String;
+						checkonly domain uml c : Class { name = cn };
+						enforce domain rdbms t : Table { name = cn }
+							implementedby createTableOp(c);
+					}
+				}
+				""";
+
+		/** Runs IMPLEMENTED with a library whose createTableOp is the given function. */
+		private QvtdExecutionResult runImplemented(java.util.function.Function<EObject, Object> op,
+				AtomicInteger calls, QvtdModelExtent rdbms) throws QvtdParseException {
+			BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+			registry.register(new QvtdBlackboxLibrary() {
+				@Override
+				public String getModuleName() { return "ops"; }
+				@Override
+				public String getUnitQualifiedName() { return "ops"; }
+				@Override
+				public List<String> getUsedPackageURIs() { return List.of(); }
+				@Override
+				public List<String> getOperationNames() { return List.of("createTableOp"); }
+				@Override
+				public Object invoke(String operationName, Object self, Object[] args) {
+					calls.incrementAndGet();
+					return op.apply((EObject) args[0]);
+				}
+			});
+			QvtdEngine implEngine = QvtdEngines.create(QvtdConfiguration.builder(
+					OclConfiguration.builder(new OclParserSupport()).build())
+					.blackboxRegistry(registry).blackboxEnabled(true).build());
+			return implEngine.execute(implEngine.parse(IMPLEMENTED, "test"), QvtdExecutionContext.enforce(
+					"rdbms", Map.of("uml", QvtdModelExtent.of(createClass("Employee", null)), "rdbms", rdbms)));
+		}
+
+		@Test
+		@DisplayName("the operation is not invoked when the relation already holds (§7.11.3.6)")
+		void implementedbyNotInvokedWhenRelationHolds() throws QvtdParseException {
+			// "invoked when [...] the relation evaluates to false as per the checking semantics"
+			AtomicInteger calls = new AtomicInteger();
+			QvtdModelExtent rdbms = QvtdModelExtent.of(createTable("Employee"));
+
+			QvtdExecutionResult result = runImplemented(cls -> createTable(getName(cls)), calls, rdbms);
+
+			assertTrue(result.isSuccess(), "" + result.diagnostics());
+			assertEquals(0, calls.get(), "the table exists, so the relation holds already");
+			assertEquals(1, rdbms.getContents().size());
+		}
+
+		@Test
+		@DisplayName("a relation that does not hold after the operation returned is an error (§7.11.3.6)")
+		void relationMustHoldAfterTheOperation() throws QvtdParseException {
+			// "It is a runtime exception if the relation evaluates to false after the operation
+			// returns." Before #282 nothing checked, and a wrongly named table was a success.
+			AtomicInteger calls = new AtomicInteger();
+			QvtdModelExtent rdbms = emptyExtent();
+
+			QvtdExecutionResult result = runImplemented(cls -> createTable("Wrong"), calls, rdbms);
+
+			assertEquals(1, calls.get());
+			assertFalse(result.isSuccess(), "the relation does not hold, so the run must fail");
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().equals(
+					"Relation 'ClassToTable' does not hold after its implementedby operation returned (§7.11.3.6)")),
+					() -> "diagnostics: " + result.diagnostics());
+		}
+
+		/** Runs a source with ClassToTable's createTableOp served, over the given classes. */
+		private QvtdExecutionResult runWithOp(String source, EObject... classes) throws QvtdParseException {
+			BasicQvtdBlackboxRegistry registry = new BasicQvtdBlackboxRegistry();
+			registry.register(new QvtdBlackboxLibrary() {
+				@Override
+				public String getModuleName() { return "ops"; }
+				@Override
+				public String getUnitQualifiedName() { return "ops"; }
+				@Override
+				public List<String> getUsedPackageURIs() { return List.of(); }
+				@Override
+				public List<String> getOperationNames() { return List.of("createTableOp"); }
+				@Override
+				public Object invoke(String operationName, Object self, Object[] args) {
+					return createTable(getName((EObject) args[0]));
+				}
+			});
+			QvtdEngine implEngine = QvtdEngines.create(QvtdConfiguration.builder(
+					OclConfiguration.builder(new OclParserSupport()).build())
+					.blackboxRegistry(registry).blackboxEnabled(true).build());
+			return implEngine.execute(implEngine.parse(source, "test"), QvtdExecutionContext.enforce(
+					"rdbms", Map.of("uml", QvtdModelExtent.of(classes), "rdbms", emptyExtent())));
+		}
+
+		private static List<Diagnostic> section78Warnings(QvtdExecutionResult result) {
+			return result.diagnostics().stream()
+					.filter(d -> d.getSeverity() == Diagnostic.WARNING && d.getMessage().contains("(§7.8)"))
+					.toList();
+		}
+
+		@Test
+		@DisplayName("an implementedby relation with sub-elements is warned about once, at the clause (§7.8, #287)")
+		void beyondSection78IsWarnedAboutOnce() throws QvtdParseException {
+			// IMPLEMENTED's domains carry name = cn: §7.8 says they "should" be simple templates
+			QvtdExecutionResult result = runWithOp(IMPLEMENTED,
+					createClass("Employee", null), createClass("Manager", null));
+
+			assertTrue(result.isSuccess(), () -> "a warning, not an error: " + result.diagnostics());
+			List<Diagnostic> warnings = section78Warnings(result);
+			assertEquals(1, warnings.size(), () -> "once per relation, not per binding: " + result.diagnostics());
+			int line = 6;
+			int column = IMPLEMENTED.lines().toList().get(line - 1).indexOf("createTableOp");
+			assertEquals("test:" + line + ":" + column + " Relation 'ClassToTable': implemented by an operation,"
+					+ " but domain 'uml' is neither primitive nor a simple object template without sub-elements;"
+					+ " domain 'rdbms' is neither primitive nor a simple object template without sub-elements"
+					+ " (§7.8) — keep it simple and constrain it from a wrapper relation that calls it",
+					warnings.get(0).getMessage());
+		}
+
+		@Test
+		@DisplayName("a relation within the §7.8 restrictions is not warned about (#287)")
+		void withinSection78IsNotWarnedAbout() throws QvtdParseException {
+			QvtdExecutionResult result = runWithOp("""
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation ClassToTable {
+							checkonly domain uml c : Class {};
+							enforce domain rdbms t : Table {} implementedby createTableOp(c);
+						}
+					}
+					""", createClass("Employee", null));
+
+			assertTrue(result.isSuccess(), () -> "" + result.diagnostics());
+			assertEquals(List.of(), section78Warnings(result));
+		}
+
+		@Test
+		@DisplayName("a where-clause that defines a variable is named in the warning (§7.8, #287)")
+		void whereDefiningVariableIsNamed() throws QvtdParseException {
+			QvtdExecutionResult result = runWithOp("""
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						top relation ClassToTable {
+							note : String;
+							checkonly domain uml c : Class {};
+							enforce domain rdbms t : Table {} implementedby createTableOp(c);
+							where { note = 'x'; }
+						}
+					}
+					""", createClass("Employee", null));
+
+			List<Diagnostic> warnings = section78Warnings(result);
+			assertEquals(1, warnings.size(), () -> "" + result.diagnostics());
+			assertTrue(warnings.get(0).getMessage().contains("but its where-clause defines variable 'note' (§7.8)"),
+					warnings.get(0).getMessage());
+		}
+
+		@Test
+		@DisplayName("an implementedby operation nobody serves is an error, not QVT-R enforcing it (#282)")
+		void unservedImplementedbyIsAnError() throws QvtdParseException {
+			// RelationImplementation.impl is [1]: a clause without an operation behind it has no
+			// reading. Before #282 QVT-R quietly enforced the domain itself.
+			QvtdEngine plain = QvtdEngines.create(QvtdConfiguration.builder(
+					OclConfiguration.builder(new OclParserSupport()).build()).build());
+			QvtdModelExtent rdbms = emptyExtent();
+			QvtdExecutionResult result = plain.execute(plain.parse(IMPLEMENTED, "test"), QvtdExecutionContext.enforce(
+					"rdbms", Map.of("uml", QvtdModelExtent.of(createClass("Employee", null)), "rdbms", rdbms)));
+
+			assertFalse(result.isSuccess());
+			assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().equals(
+					"Operation 'createTableOp' of the implementedby clause of relation 'ClassToTable'"
+							+ " cannot be served: blackboxes are not enabled")),
+					() -> "diagnostics: " + result.diagnostics());
+			assertTrue(rdbms.getContents().isEmpty(), "QVT-R must not enforce the domain in its place");
 		}
 	}
 
-	// ===== §7.10.4: Change Propagation =====
+	// ===== §7.6: Change Propagation =====
 
 	@Nested
-	@DisplayName("§7.10.4: Change Propagation")
+	@DisplayName("§7.6: Change Propagation")
 	class ChangePropagation {
 
 		@Test
-		@Disabled("GAP-13: Incremental change propagation — deferred to Phase 5 (Language Servers). "
-				+ "§7.10.4 describes incremental re-execution where only affected relations re-run "
-				+ "after source model changes. Our engine currently performs full re-execution, which "
-				+ "is semantically correct (produces identical results). Incremental execution is a "
-				+ "performance optimization requiring: (1) dependency graph between relations, "
-				+ "(2) change listeners on source model extents, (3) dirty-marking of affected traces. "
-				+ "Becomes relevant with Language Server support (live preview, watch mode).")
-		@DisplayName("Incremental execution propagates changes without full re-execution")
-		void incrementalChangePropagation() throws QvtdParseException {
-			// §7.10.4: Change propagation — incremental re-execution optimization.
-			//
-			// Current behavior: Full re-execution on every engine.execute() call.
-			// This is CORRECT per spec — §7.6 states that change propagation is
-			// "semantically equivalent to re-execution of the transformation".
-			//
-			// What this gap requires for INCREMENTAL execution:
-			// 1. Dependency graph: track which relations depend on which model elements.
-			//    When element E changes, only relations touching E need re-execution.
-			// 2. Change listeners: EMF EContentAdapter or similar on source extents to
-			//    detect modifications between execute() calls.
-			// 3. Trace-based dirty marking: use QvtrTraceManager to identify which
-			//    trace entries are invalidated by the change, re-execute only those.
-			// 4. Target model update: merge incremental results into existing target
-			//    (update/delete affected elements, keep unaffected ones).
-			//
-			// This is a pure performance optimization — the spec explicitly notes that
-			// full re-execution produces correct results. Incremental mode becomes
-			// valuable in IDE/LSP scenarios with live model editing.
+		@DisplayName("re-executing after a source change gives what a fresh execution gives")
+		void reExecutionAfterASourceChange_equalsAFreshExecution() throws QvtdParseException {
+			// §7.6: change propagation "is semantically equivalent to re-execution of the
+			// transformation" — incremental or not, the target afterwards is what a fresh
+			// execution on the changed source produces, so a Schema whose Package is gone goes
+			String source = """
+					transformation T(uml : simpleuml, rdbms : simplerdbms) {
+						key Schema {name};
+						top relation PackageToSchema {
+							pn : String;
+							checkonly domain uml p : Package { name = pn };
+							enforce domain rdbms s : Schema { name = pn };
+						}
+					}
+					""";
+			EObject hr = createPackage("HR");
+			EObject finance = createPackage("Finance");
+			QvtdModelExtent uml = QvtdModelExtent.of(hr, finance);
+			QvtdModelExtent rdbms = emptyExtent();
+			assertTrue(executeEnforce(source, "rdbms", Map.of("uml", uml, "rdbms", rdbms)).isSuccess());
+
+			uml.getContents().remove(finance);
+			hr.eSet(hr.eClass().getEStructuralFeature("name"), "People");
+			QvtdExecutionResult again = executeEnforce(source, "rdbms", Map.of("uml", uml, "rdbms", rdbms));
+
+			assertTrue(again.isSuccess(), "" + again.diagnostics());
+			assertEquals(List.of("People"), rdbms.getContents().stream().map(o -> getName(o)).toList());
 		}
 	}
 

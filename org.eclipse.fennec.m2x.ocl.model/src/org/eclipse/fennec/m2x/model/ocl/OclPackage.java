@@ -43,7 +43,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * @generated
  */
 @ProviderType
-@EPackage(uri = OclPackage.eNS_URI, fingerprint = "fp1:596c0d7dcabd56cd159b01cfdaae2084093946fc5231c422f52f2913e7171793", genModel = "/model/ocl.genmodel", genModelSourceLocations = {"model/ocl.genmodel","org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel"}, ecore = "/model/ocl.ecore", ecoreSourceLocations = "/model/ocl.ecore")
+@EPackage(uri = OclPackage.eNS_URI, fingerprint = "fp1:249369ea2313f3d07d999f1dc78b8d6881adf9edcc2aefa014471ffaa0c2a302", genModel = "/model/ocl.genmodel", genModelSourceLocations = {"model/ocl.genmodel","org.eclipse.fennec.m2x.ocl.model/model/ocl.genmodel"}, ecore = "/model/ocl.ecore", ecoreSourceLocations = "/model/ocl.ecore")
 public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	/**
 	 * The package name.
@@ -3694,13 +3694,22 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	int CONSTRAINT__SPECIFICATION = 2;
 
 	/**
+	 * The feature id for the '<em><b>Message Expression</b></em>' containment reference.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 * @ordered
+	 */
+	int CONSTRAINT__MESSAGE_EXPRESSION = 3;
+
+	/**
 	 * The feature id for the '<em><b>Context Classifier</b></em>' reference.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
 	 * @generated
 	 * @ordered
 	 */
-	int CONSTRAINT__CONTEXT_CLASSIFIER = 3;
+	int CONSTRAINT__CONTEXT_CLASSIFIER = 4;
 
 	/**
 	 * The feature id for the '<em><b>Context Operation</b></em>' reference.
@@ -3709,7 +3718,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int CONSTRAINT__CONTEXT_OPERATION = 4;
+	int CONSTRAINT__CONTEXT_OPERATION = 5;
 
 	/**
 	 * The feature id for the '<em><b>Context Property</b></em>' reference.
@@ -3718,7 +3727,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int CONSTRAINT__CONTEXT_PROPERTY = 5;
+	int CONSTRAINT__CONTEXT_PROPERTY = 6;
 
 	/**
 	 * The feature id for the '<em><b>Is Static</b></em>' attribute.
@@ -3727,7 +3736,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int CONSTRAINT__IS_STATIC = 6;
+	int CONSTRAINT__IS_STATIC = 7;
 
 	/**
 	 * The number of structural features of the '<em>Constraint</em>' class.
@@ -3736,7 +3745,7 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	 * @generated
 	 * @ordered
 	 */
-	int CONSTRAINT_FEATURE_COUNT = 7;
+	int CONSTRAINT_FEATURE_COUNT = 8;
 
 	/**
 	 * The number of operations of the '<em>Constraint</em>' class.
@@ -5180,6 +5189,17 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 	EReference getConstraint_Specification();
 
 	/**
+	 * Returns the meta object for the containment reference '{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getMessageExpression <em>Message Expression</em>}'.
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @return the meta object for the containment reference '<em>Message Expression</em>'.
+	 * @see org.eclipse.fennec.m2x.model.ocl.Constraint#getMessageExpression()
+	 * @see #getConstraint()
+	 * @generated
+	 */
+	EReference getConstraint_MessageExpression();
+
+	/**
 	 * Returns the meta object for the reference '{@link org.eclipse.fennec.m2x.model.ocl.Constraint#getContextClassifier <em>Context Classifier</em>}'.
 	 * <!-- begin-user-doc -->
 	 * <!-- end-user-doc -->
@@ -6307,6 +6327,14 @@ public interface OclPackage extends org.eclipse.emf.ecore.EPackage {
 		 * @generated
 		 */
 		EReference CONSTRAINT__SPECIFICATION = eINSTANCE.getConstraint_Specification();
+
+		/**
+		 * The meta object literal for the '<em><b>Message Expression</b></em>' containment reference feature.
+		 * <!-- begin-user-doc -->
+		 * <!-- end-user-doc -->
+		 * @generated
+		 */
+		EReference CONSTRAINT__MESSAGE_EXPRESSION = eINSTANCE.getConstraint_MessageExpression();
 
 		/**
 		 * The meta object literal for the '<em><b>Context Classifier</b></em>' reference feature.

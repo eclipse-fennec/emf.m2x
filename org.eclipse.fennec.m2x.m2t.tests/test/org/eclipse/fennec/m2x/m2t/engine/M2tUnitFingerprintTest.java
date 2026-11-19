@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Test;
 class M2tUnitFingerprintTest {
 
 	private static final String MODULE = """
-			[module m(Ecore)/]
+			[module m(ecore)/]
 			[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 			[template public main(c : EClass) ? (c.hasOps())]
 			[file ('out', false)]
@@ -47,7 +47,7 @@ class M2tUnitFingerprintTest {
 			""";
 
 	private static final String REFORMATTED = """
-			[module m(Ecore)/]
+			[module m(ecore)/]
 			[comment]a comment says nothing about the program[/comment]
 			[query public hasOps(c : EClass) : Boolean =   c.eOperations -> size()   >   0 /]
 			[template public main(c : EClass) ? ( c.hasOps() )]
@@ -58,7 +58,7 @@ class M2tUnitFingerprintTest {
 			""";
 
 	private static final String OTHER_LOGIC = """
-			[module m(Ecore)/]
+			[module m(ecore)/]
 			[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 1/]
 			[template public main(c : EClass) ? (c.hasOps())]
 			[file ('out', false)]

@@ -94,7 +94,16 @@ class OclInvalidPropagationTest extends AbstractOclTest {
 
 	@Test
 	void invalidInLetInit() throws OclParseException {
-		assertInvalid("let x: Integer = 1 / 0 in x + 1", self);
+		// '/' is a Real (§11.5.2); div is the Integer division, and by zero just as invalid
+		assertInvalid("let x: Integer = 1.div(0) in x + 1", self);
+		assertInvalid("let x: Real = 1 / 0 in x + 1", self);
+	}
+
+	@Test
+	void anIntegerLetInitializedWithADivision_isATypeError() {
+		// 1 / 0 is a Real, which does not conform to Integer (§8.3.7 Variable [1], #378)
+		assertTypeError("let x: Integer = 1 / 0 in x + 1", self,
+				"The let variable 'x' is declared as Integer but initialized with a Real");
 	}
 
 	// --- oclIsInvalid detects invalid ---
@@ -120,8 +129,9 @@ class OclInvalidPropagationTest extends AbstractOclTest {
 
 	@Test
 	void invalidInSequence() throws OclParseException {
-		// Sequence containing invalid — size should still work
-		assertEquals(3, eval("Sequence{1, 1 / 0, 3}->size()", self));
+		// OCL v2.4 §11.7.1 [1]: "A collection cannot contain invalid values" — the literal is
+		// invalid, so is its size (#316)
+		assertInvalid("Sequence{1, 1 / 0, 3}->size()", self);
 	}
 
 	// --- Invalid comparison ---

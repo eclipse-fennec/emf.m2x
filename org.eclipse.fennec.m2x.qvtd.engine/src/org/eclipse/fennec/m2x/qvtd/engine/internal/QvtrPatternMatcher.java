@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvtd.engine.internal;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,6 +26,8 @@ import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EReference;
 import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.fennec.m2x.model.ocl.CollectionKind;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
@@ -35,8 +38,8 @@ import org.eclipse.fennec.m2x.model.qvttemplate.CollectionTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.ObjectTemplateExp;
 import org.eclipse.fennec.m2x.model.qvttemplate.PropertyTemplateItem;
 import org.eclipse.fennec.m2x.model.qvttemplate.TemplateExp;
-import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionException;
 
 /**
@@ -86,7 +89,7 @@ public class QvtrPatternMatcher {
 
 		List<Map<String, Object>> results = new ArrayList<>();
 
-		// Primitive domain (§7.11.3.10): no patterns, root variable already
+		// Primitive domain (§7.13.4 primitive domain): no patterns, root variable already
 		// bound from relation call arguments. Just pass through with bindings.
 		if (domain.getPattern().isEmpty()) {
 			if (!domain.getRootVariable().isEmpty()) {
@@ -98,55 +101,104 @@ public class QvtrPatternMatcher {
 			return results;
 		}
 
+		// A binding of the domain binds all its root variables at once (§7.11.3.3): the templates
+		// of a domain are matched as a cross product, each pattern extending the bindings of the
+		// ones before it — not as a union, which left each binding with one pattern's variables
+		// (#355)
+		List<Map<String, Object>> current = List.of(preBindings);
 		for (DomainPattern pattern : domain.getPattern()) {
-			TemplateExp templateExp = pattern.getTemplateExpression();
-			if (!(templateExp instanceof ObjectTemplateExp objectTemplate)) {
-				continue; // CollectionTemplateExp deferred
+			List<Map<String, Object>> next = new ArrayList<>();
+			for (Map<String, Object> bindings : current) {
+				next.addAll(matchPattern(domain, pattern, bindings));
+				checkBindingLimit(next);
 			}
-
-			Variable rootVar = objectTemplate.getBindsTo();
-			EClass rootType = objectTemplate.getReferredClass();
-
-			if (rootVar == null || rootType == null) {
-				continue;
-			}
-
-			// [?] optional multiplicity (Eclipse extension): stored on DomainPattern
-			boolean isOptional = pattern.getEAnnotation("qvtr.optional") != null;
-
-			// If root variable is already pre-bound, check that single candidate
-			Object preBound = preBindings.get(rootVar.getName());
-			if (preBound instanceof EObject preBoundObj) {
-				if (rootType.isInstance(preBoundObj)) {
-					Map<String, Object> bindings = new HashMap<>(preBindings);
-					results.addAll(matchObjectTemplateAll(objectTemplate, preBoundObj, bindings));
-				}
-			} else if (preBound == null && preBindings.containsKey(rootVar.getName())) {
-				// Pre-bound to null (from optional [?] relation call) → null-to-null match
-				if (isOptional) {
-					results.add(new HashMap<>(preBindings));
-				}
-			} else {
-				// Collect all instances from the extent
-				TypedModel typedModel = domain.getTypedModel();
-				List<EObject> candidates = extentManager.allInstances(typedModel, rootType);
-
-				for (EObject candidate : candidates) {
-					Map<String, Object> bindings = new HashMap<>(preBindings);
-					bindings.put(rootVar.getName(), candidate);
-					results.addAll(matchObjectTemplateAll(objectTemplate, candidate, bindings));
-				}
-
-				// [?] optional: if no matches found, bind root variable to null
-				if (results.isEmpty() && isOptional) {
-					Map<String, Object> nullBindings = new HashMap<>(preBindings);
-					nullBindings.put(rootVar.getName(), null);
-					results.add(nullBindings);
-				}
+			current = next;
+			if (current.isEmpty()) {
+				break;
 			}
 		}
-
+		results.addAll(current);
 		return results;
+	}
+
+	/** Matches one domain pattern, extending the given bindings. */
+	private List<Map<String, Object>> matchPattern(RelationDomain domain, DomainPattern pattern,
+			Map<String, Object> preBindings) {
+		List<Map<String, Object>> results = new ArrayList<>();
+		TemplateExp templateExp = pattern.getTemplateExpression();
+		if (!(templateExp instanceof ObjectTemplateExp objectTemplate)) {
+			return results; // CollectionTemplateExp deferred
+		}
+
+		Variable rootVar = objectTemplate.getBindsTo();
+		EClass rootType = objectTemplate.getReferredClass();
+
+		if (rootVar == null || rootType == null) {
+			return results;
+		}
+
+		// [?] optional multiplicity (Eclipse extension): stored on DomainPattern
+		boolean isOptional = pattern.getEAnnotation("qvtr.optional") != null;
+
+		// If root variable is already pre-bound, check that single candidate
+		Object preBound = preBindings.get(rootVar.getName());
+		if (preBound instanceof EObject preBoundObj) {
+			if (rootType.isInstance(preBoundObj)) {
+				Map<String, Object> bindings = new HashMap<>(preBindings);
+				results.addAll(matchObjectTemplateAll(objectTemplate, preBoundObj, bindings));
+			}
+		} else if (preBound == null && preBindings.containsKey(rootVar.getName())) {
+			// Pre-bound to null (from optional [?] relation call) → null-to-null match
+			if (isOptional) {
+				results.add(new HashMap<>(preBindings));
+			}
+		} else {
+			// Collect all instances from the extent
+			TypedModel typedModel = domain.getTypedModel();
+			List<EObject> candidates = extentManager.allInstances(typedModel, rootType);
+
+			for (EObject candidate : candidates) {
+				Map<String, Object> bindings = new HashMap<>(preBindings);
+				bindings.put(rootVar.getName(), candidate);
+				results.addAll(matchObjectTemplateAll(objectTemplate, candidate, bindings));
+			}
+
+			// [?] optional: if no matches found, bind root variable to null
+			if (results.isEmpty() && isOptional) {
+				Map<String, Object> nullBindings = new HashMap<>(preBindings);
+				nullBindings.put(rootVar.getName(), null);
+				results.add(nullBindings);
+			}
+		}
+		return results;
+	}
+
+	/**
+	 * Whether a template that stands as a when or where predicate holds: some object of any
+	 * model of the run matches it under the given bindings (§7.13.5, #361). Its root variable,
+	 * if bound, is the only candidate; what the template binds besides stays inside the
+	 * predicate.
+	 *
+	 * @param template the template
+	 * @param bindings the relation's bindings, not changed
+	 * @return {@code true} when a match exists
+	 */
+	public boolean templateHolds(ObjectTemplateExp template, Map<String, Object> bindings) {
+		EClass type = template.getReferredClass();
+		if (type == null) {
+			return false;
+		}
+		Variable root = template.getBindsTo();
+		if (root != null && bindings.containsKey(root.getName())) {
+			return bindings.get(root.getName()) instanceof EObject bound && type.isInstance(bound)
+					&& !matchObjectTemplateAll(template, bound, new HashMap<>(bindings)).isEmpty();
+		}
+		for (EObject candidate : extentManager.allInstances(type)) {
+			if (!matchObjectTemplateAll(template, candidate, new HashMap<>(bindings)).isEmpty()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -179,8 +231,8 @@ public class QvtrPatternMatcher {
 		Variable bindVar = template.getBindsTo();
 		if (bindVar != null) {
 			String varName = bindVar.getName();
-			Object existing = initialBindings.get(varName);
-			if (existing != null && existing != object) {
+			// A variable bound to null is bound: null is a value, and it is not this object (#355)
+			if (initialBindings.containsKey(varName) && initialBindings.get(varName) != object) {
 				return List.of(); // Binding conflict
 			}
 			initialBindings.put(varName, object);
@@ -222,16 +274,31 @@ public class QvtrPatternMatcher {
 	private List<Map<String, Object>> matchPropertyItemAll(PropertyTemplateItem item,
 			EObject object, Map<String, Object> bindings) {
 		EStructuralFeature feature = resolveFeature(item, object);
-		if (feature == null) {
+		Object actualValue;
+		if (feature != null) {
+			actualValue = object.eGet(feature);
+		} else if (item.isIsOpposite() && item.getReferredProperty() != null
+				&& item.getReferredProperty().getEContainingClass() != null) {
+			// A non-navigable opposite role — the case §7.3 introduces opposite() for: the
+			// objects of the class whose property holds this object (#355)
+			List<EObject> owners = ownersOf(object, item.getReferredProperty());
+			if (owners.isEmpty()) {
+				return List.of();
+			}
+			actualValue = owners.size() == 1 ? owners.get(0) : owners;
+		} else {
 			return List.of();
 		}
-
-		Object actualValue = object.eGet(feature);
 		OclExpression valueExpr = item.getValue();
 
 		// Nested ObjectTemplateExp → recursive match
 		if (valueExpr instanceof ObjectTemplateExp nestedTemplate) {
 			if (actualValue instanceof EObject actualObj) {
+				// "o2 is of type <classname2> or one of its subtypes" (§7.10.3.2, #355)
+				if (nestedTemplate.getReferredClass() != null
+						&& !nestedTemplate.getReferredClass().isInstance(actualObj)) {
+					return List.of();
+				}
 				Map<String, Object> copy = new HashMap<>(bindings);
 				List<Map<String, Object>> nested = matchObjectTemplateAll(
 						nestedTemplate, actualObj, copy);
@@ -244,12 +311,13 @@ public class QvtrPatternMatcher {
 			return List.of();
 		}
 
-		// CollectionTemplateExp → match collection pattern (§7.11.2.3)
+		// CollectionTemplateExp → match collection pattern (§7.11.2.3); "If the value expression
+		// is a collection template expression and the referred property is single-valued, then
+		// the property value is treated as a singleton collection" (§7.11.2.4, #354)
 		if (valueExpr instanceof CollectionTemplateExp collTemplate) {
-			if (actualValue instanceof Collection<?> collection) {
-				return matchCollectionTemplate(collTemplate, collection, bindings);
-			}
-			return List.of();
+			Collection<?> collection = actualValue instanceof Collection<?> values ? values
+					: actualValue == null ? List.of() : List.of(actualValue);
+			return matchCollectionTemplate(collTemplate, collection, bindings);
 		}
 
 		// VariableExp → bind or compare
@@ -257,9 +325,8 @@ public class QvtrPatternMatcher {
 				&& ve.getReferredVariable() != null) {
 			String varName = ve.getReferredVariable().getName();
 			if (varName != null) {
-				Object existing = bindings.get(varName);
-				if (existing != null) {
-					return valuesEqual(existing, actualValue)
+				if (bindings.containsKey(varName)) {
+					return valuesEqual(bindings.get(varName), actualValue)
 							? List.of(bindings) : List.of();
 				}
 				bindings.put(varName, actualValue);
@@ -301,6 +368,26 @@ public class QvtrPatternMatcher {
 		}
 		// Otherwise resolve by name (parser placeholder)
 		return objectClass.getEStructuralFeature(feature.getName());
+	}
+
+	/**
+	 * The objects whose property holds the object: {@code opposite(C::p)} without an eOpposite,
+	 * "equivalent to … {c.attribute.includes(a)}" (§7.3). Looked for in the object's own model.
+	 */
+	@SuppressWarnings("unchecked")
+	private List<EObject> ownersOf(EObject object, EStructuralFeature property) {
+		List<EObject> owners = new ArrayList<>();
+		for (EObject candidate : extentManager.instancesBeside(object, property.getEContainingClass())) {
+			EStructuralFeature feature = candidate.eClass().getEStructuralFeature(property.getName());
+			if (feature == null) {
+				continue;
+			}
+			Object held = candidate.eGet(feature);
+			if (feature.isMany() ? ((List<Object>) held).contains(object) : held == object) {
+				owners.add(candidate);
+			}
+		}
+		return owners;
 	}
 
 	/**
@@ -352,131 +439,134 @@ public class QvtrPatternMatcher {
 	}
 
 	/**
-	 * Matches a CollectionTemplateExp against a collection value (§7.11.2.3).
-	 *
-	 * <p>Each member expression must match at least one element in the collection.
-	 * For ObjectTemplateExp members, each matching element produces a separate
-	 * binding set (like nested template matching). The rest variable captures
-	 * remaining elements. {@code _} wildcards match any element.
+	 * Matches a collection template against the values of a property (§7.11.2.3): the members
+	 * match distinct elements — each one, a variable, an object template or {@code _}, consumes
+	 * an element — and the rest the elements left over; without a rest nothing may be left. For
+	 * a Sequence or OrderedSet "the matching member elements must be present at the head of the
+	 * sequence in the order specified by the member expressions", and for a Set or OrderedSet "a
+	 * valid match requires that each value of the property be unique" (§7.11.2.4). The template's
+	 * where condition filters the bindings (§7.11.2.1). Before #354 the members could bind the
+	 * same element, variable members stayed in the rest, and kind and where were ignored.
 	 */
 	private List<Map<String, Object>> matchCollectionTemplate(CollectionTemplateExp template,
 			Collection<?> collection, Map<String, Object> bindings) {
-		// Bind the template's variable to the collection itself
+		CollectionKind kind = template.getReferredCollectionType() instanceof CollectionType type
+				? type.getKind() : CollectionKind.SET;
+		List<Object> elements = new ArrayList<>(collection);
+		boolean unique = kind == CollectionKind.SET || kind == CollectionKind.ORDERED_SET;
+		if (unique && new HashSet<>(elements).size() != elements.size()) {
+			return List.of();
+		}
+		boolean ordered = kind == CollectionKind.SEQUENCE || kind == CollectionKind.ORDERED_SET;
+
+		Map<String, Object> start = new HashMap<>(bindings);
 		Variable bindVar = template.getBindsTo();
 		if (bindVar != null && !"_".equals(bindVar.getName())) {
-			bindings.put(bindVar.getName(), new ArrayList<>(collection));
+			if (start.containsKey(bindVar.getName())
+					&& !sameElements(start.get(bindVar.getName()), elements, ordered)) {
+				return List.of();
+			}
+			start.put(bindVar.getName(), new ArrayList<>(elements));
 		}
 
+		List<Map<String, Object>> results = new ArrayList<>();
+		matchMembers(template, elements, ordered, 0, new boolean[elements.size()], start, results);
+
+		OclExpression where = template.getWhere();
+		if (where != null) {
+			results.removeIf(bs -> !Boolean.TRUE.equals(evaluateOcl(where, null, bs)));
+		}
+		return results;
+	}
+
+	/** Assigns the members from {@code index} on to unconsumed elements, then binds the rest. */
+	private void matchMembers(CollectionTemplateExp template, List<Object> elements, boolean ordered,
+			int index, boolean[] consumed, Map<String, Object> bindings, List<Map<String, Object>> results) {
 		List<OclExpression> members = template.getMember();
-
-		if (members.isEmpty()) {
-			// No members → match depends on rest variable
-			Variable rest = template.getRest();
-			if (rest == null) {
-				// No rest, no members → must be empty collection
-				return collection.isEmpty() ? List.of(bindings) : List.of();
-			}
-			// Has rest → bind rest to entire collection
-			if (!"_".equals(rest.getName())) {
-				bindings.put(rest.getName(), new ArrayList<>(collection));
-			}
-			return List.of(bindings);
+		if (index == members.size()) {
+			bindRest(template, elements, consumed, ordered, bindings, results);
+			return;
 		}
-
-		// Match each member expression against collection elements.
-		// Each member must find at least one match. ObjectTemplateExp members
-		// produce one binding set per matching element (cross-product).
-		List<Map<String, Object>> currentSets = new ArrayList<>();
-		currentSets.add(bindings);
-
-		for (OclExpression memberExpr : members) {
-			List<Map<String, Object>> nextSets = new ArrayList<>();
-
-			if (memberExpr instanceof ObjectTemplateExp memberTemplate) {
-				// Match member template against each collection element
-				for (Map<String, Object> bs : currentSets) {
-					for (Object element : collection) {
-						if (element instanceof EObject eo) {
-							EClass referredClass = memberTemplate.getReferredClass();
-							if (referredClass != null && referredClass.isInstance(eo)) {
-								Map<String, Object> copy = new HashMap<>(bs);
-								List<Map<String, Object>> nested = matchObjectTemplateAll(
-										memberTemplate, eo, copy);
-								nextSets.addAll(nested);
-							}
-						}
-					}
-				}
-			} else if (memberExpr instanceof VariableExp memberVe
-					&& memberVe.getReferredVariable() != null) {
-				String varName = memberVe.getReferredVariable().getName();
-				if ("_".equals(varName)) {
-					// Wildcard: matches any single element — require non-empty collection
-					if (!collection.isEmpty()) {
-						nextSets.addAll(currentSets);
-					}
-				} else if (varName != null) {
-					// Named variable: bind to each element or compare
-					for (Map<String, Object> bs : currentSets) {
-						for (Object element : collection) {
-							Object existing = bs.get(varName);
-							if (existing != null) {
-								if (valuesEqual(existing, element)) {
-									nextSets.add(bs);
-								}
-							} else {
-								Map<String, Object> copy = new HashMap<>(bs);
-								copy.put(varName, element);
-								nextSets.add(copy);
-							}
-						}
-					}
-				}
-			} else {
-				// OCL expression: evaluate and check containment
-				for (Map<String, Object> bs : currentSets) {
-					Object expectedValue = evaluateOcl(memberExpr, null, bs);
-					if (collection.contains(expectedValue)) {
-						nextSets.add(bs);
-					}
-				}
+		OclExpression member = members.get(index);
+		for (int i = 0; i < elements.size(); i++) {
+			// In a Sequence or OrderedSet the i-th member is the i-th element
+			if (consumed[i] || (ordered && i != index)) {
+				continue;
 			}
-
-			checkBindingLimit(nextSets);
-			currentSets = nextSets;
-			if (currentSets.isEmpty()) {
-				return List.of();
+			for (Map<String, Object> extended : matchMember(member, elements.get(i), bindings)) {
+				consumed[i] = true;
+				matchMembers(template, elements, ordered, index + 1, consumed, extended, results);
+				consumed[i] = false;
 			}
 		}
+	}
 
-		// Bind rest variable to remaining elements (§7.11.2.3)
+	private void bindRest(CollectionTemplateExp template, List<Object> elements, boolean[] consumed,
+			boolean ordered, Map<String, Object> bindings, List<Map<String, Object>> results) {
+		List<Object> remaining = new ArrayList<>();
+		for (int i = 0; i < elements.size(); i++) {
+			if (!consumed[i]) {
+				remaining.add(elements.get(i));
+			}
+		}
 		Variable rest = template.getRest();
-		if (rest != null && !"_".equals(rest.getName())) {
-			for (Map<String, Object> bs : currentSets) {
-				// Compute remaining: collection minus matched member elements
-				List<Object> remaining = new ArrayList<>(collection);
-				for (OclExpression memberExpr : members) {
-					if (memberExpr instanceof ObjectTemplateExp memberTemplate) {
-						Variable memberVar = memberTemplate.getBindsTo();
-						if (memberVar != null) {
-							Object matched = bs.get(memberVar.getName());
-							if (matched != null) {
-								remaining.remove(matched);
-							}
-						}
-					}
-				}
-				bs.put(rest.getName(), remaining);
+		if (rest == null) {
+			// "The variable may be omitted to restrict a match to a collection with no elements
+			// other than those matched by the member expressions"
+			if (remaining.isEmpty()) {
+				results.add(bindings);
 			}
-		} else if (rest == null) {
-			// No rest variable → only exact matches (members account for all elements)
-			int memberCount = members.size();
-			if (collection.size() != memberCount) {
-				return List.of();
+		} else if ("_".equals(rest.getName())) {
+			results.add(bindings);
+		} else if (bindings.containsKey(rest.getName())) {
+			if (sameElements(bindings.get(rest.getName()), remaining, ordered)) {
+				results.add(bindings);
 			}
+		} else {
+			Map<String, Object> withRest = new HashMap<>(bindings);
+			withRest.put(rest.getName(), remaining);
+			results.add(withRest);
 		}
+		checkBindingLimit(results);
+	}
 
-		return currentSets;
+	/** The bindings under which a member matches one element. */
+	private List<Map<String, Object>> matchMember(OclExpression member, Object element,
+			Map<String, Object> bindings) {
+		if (member instanceof ObjectTemplateExp memberTemplate) {
+			EClass referredClass = memberTemplate.getReferredClass();
+			if (element instanceof EObject eo && (referredClass == null || referredClass.isInstance(eo))) {
+				return matchObjectTemplateAll(memberTemplate, eo, new HashMap<>(bindings));
+			}
+			return List.of();
+		}
+		if (member instanceof VariableExp memberVe && memberVe.getReferredVariable() != null) {
+			String varName = memberVe.getReferredVariable().getName();
+			if ("_".equals(varName)) {
+				return List.of(bindings);
+			}
+			if (bindings.containsKey(varName)) {
+				return valuesEqual(bindings.get(varName), element) ? List.of(bindings) : List.of();
+			}
+			Map<String, Object> copy = new HashMap<>(bindings);
+			copy.put(varName, element);
+			return List.of(copy);
+		}
+		return valuesEqual(evaluateOcl(member, null, bindings), element) ? List.of(bindings) : List.of();
+	}
+
+	/** Whether a bound collection holds the same elements — in the same order for an ordered kind. */
+	private static boolean sameElements(Object bound, List<Object> elements, boolean ordered) {
+		if (!(bound instanceof Collection<?> collection)) {
+			return false;
+		}
+		if (ordered) {
+			return new ArrayList<>(collection).equals(elements);
+		}
+		Map<Object, Integer> counts = new HashMap<>();
+		collection.forEach(e -> counts.merge(e, 1, Integer::sum));
+		elements.forEach(e -> counts.merge(e, -1, Integer::sum));
+		return counts.values().stream().allMatch(c -> c == 0);
 	}
 
 	/**

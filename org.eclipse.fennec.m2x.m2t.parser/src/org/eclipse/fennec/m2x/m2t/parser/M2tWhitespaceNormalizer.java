@@ -14,9 +14,11 @@
  */
 package org.eclipse.fennec.m2x.m2t.parser;
 
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.fennec.m2x.m2t.api.WhitespaceMode;
@@ -24,8 +26,10 @@ import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.ForBlock;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
+import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.Module;
 import org.eclipse.fennec.m2x.model.m2t.ModuleElement;
+import org.eclipse.fennec.m2x.model.m2t.ProtectedAreaBlock;
 import org.eclipse.fennec.m2x.model.m2t.Template;
 import org.eclipse.fennec.m2x.model.m2t.TemplateExpression;
 import org.eclipse.fennec.m2x.model.m2t.TemplateInvocation;
@@ -43,12 +47,14 @@ import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
  *   <li><b>Standalone-block detection</b>: Remove the leading whitespace of blocks that
  *       occupy a line by themselves. The newline ending the tail line stays — it is a
  *       whitespace body element of the enclosing body (#122).</li>
- *   <li><b>Default separator</b>: Set {@code "\n"} as default separator
- *       for standalone for-blocks without explicit separator.</li>
+ *   <li><b>Default separator</b>: Set {@code "\n"} as default separator for standalone
+ *       multi-line for-blocks and standalone template invocations without an explicit
+ *       separator (#273, #276).</li>
  *   <li><b>BOL indicator</b>: Process {@code ^} markers in text expressions
  *       to strip leading whitespace on that line.</li>
  *   <li><b>Indent extraction</b>: Detect standalone template invocations and
- *       extract their indentation for eval-time indent-propagation.</li>
+ *       extract their indentation for eval-time indent-propagation onto every line of
+ *       the invoked template's output (#277).</li>
  * </ol>
  *
  * @author Data In Motion Consulting
@@ -57,6 +63,12 @@ import org.eclipse.fennec.m2x.model.ocl.StringLiteralExp;
 public class M2tWhitespaceNormalizer {
 
 	private final Map<TemplateInvocation, String> indentationMap = new IdentityHashMap<>();
+
+	/**
+	 * Single-line stand-alone blocks: the newline ending their line goes only when the block
+	 * produces no text, which the evaluator decides (#374).
+	 */
+	private final Set<Block> conditionalNewlines = Collections.newSetFromMap(new IdentityHashMap<>());
 
 	/**
 	 * Which blocks are multi-line, i.e. have their head and their tail on different lines.
@@ -88,9 +100,12 @@ public class M2tWhitespaceNormalizer {
 			return Map.of();
 		}
 		for (ModuleElement element : module.getOwnedModuleElement()) {
+			// §8.4 applies to "the body of a template (or a block expression)"; a macro is a
+			// block too (§8.1.19, #371)
 			if (element instanceof Template template) {
-				trimBody(template);
-				processBody(template.getBody());
+				processBody(template.getBody(), trimBody(template));
+			} else if (element instanceof Macro macro) {
+				processBody(macro.getBody(), trimBody(macro));
 			}
 		}
 		return Map.copyOf(indentationMap);
@@ -158,13 +173,22 @@ public class M2tWhitespaceNormalizer {
 
 	// --- Recursive body processing ---
 
-	private void processBody(EList<TemplateExpression> body) {
+	/**
+	 * Normalizes one body.
+	 *
+	 * @param body the body elements, already trimmed by {@link #trimBody(Block)}
+	 * @param multiLine whether the owning block is multi-line — then the first element
+	 *        starts on its own line and the last element ends before the tail line; in a
+	 *        single-line body both share the line with the head and the tail, which makes a
+	 *        block there an {@code <embedded-block-expression>} (§8.4, #272)
+	 */
+	private void processBody(EList<TemplateExpression> body, boolean multiLine) {
 		// First pass: process nested blocks (trim their bodies + recurse)
-		// Skip inline LetBlocks — they are expression wrappers, not structural blocks
 		for (TemplateExpression expr : body) {
-			if (expr instanceof Block nested && !isInlineLetBlock(nested)) {
-				multiLineBlocks.put(nested, trimBody(nested));
-				processBody(nested.getBody());
+			if (expr instanceof Block nested) {
+				boolean nestedMultiLine = trimBody(nested);
+				multiLineBlocks.put(nested, nestedMultiLine);
+				processBody(nested.getBody(), nestedMultiLine);
 				processAlternatives(nested);
 			}
 		}
@@ -173,10 +197,10 @@ public class M2tWhitespaceNormalizer {
 		// Iterate by index since we modify TextExpression values
 		for (int i = 0; i < body.size(); i++) {
 			TemplateExpression expr = body.get(i);
-			if (expr instanceof Block block && !isInlineLetBlock(block)) {
-				processStandaloneBlock(body, i, block);
+			if (expr instanceof Block block) {
+				processStandaloneBlock(body, i, block, multiLine);
 			} else if (expr instanceof TemplateInvocation invocation && !invocation.isSuper()) {
-				processStandaloneInvocation(body, i, invocation);
+				processStandaloneInvocation(body, i, invocation, multiLine);
 			}
 		}
 
@@ -205,15 +229,13 @@ public class M2tWhitespaceNormalizer {
 	private void processAlternatives(Block block) {
 		if (block instanceof IfBlock ifBlock) {
 			for (IfBlock elseIf : ifBlock.getElseIf()) {
-				trimBody(elseIf);
-				processBody(elseIf.getBody());
+				processBody(elseIf.getBody(), trimBody(elseIf));
 				processAlternatives(elseIf);
 			}
 			processElse(ifBlock.getElse());
 		} else if (block instanceof LetBlock letBlock) {
 			for (LetBlock elseLet : letBlock.getElseLet()) {
-				trimBody(elseLet);
-				processBody(elseLet.getBody());
+				processBody(elseLet.getBody(), trimBody(elseLet));
 				processAlternatives(elseLet);
 			}
 			processElse(letBlock.getElse());
@@ -224,27 +246,30 @@ public class M2tWhitespaceNormalizer {
 		if (elseBlock == null) {
 			return;
 		}
-		trimBody(elseBlock);
-		processBody(elseBlock.getBody());
+		processBody(elseBlock.getBody(), trimBody(elseBlock));
 		processAlternatives(elseBlock);
 	}
 
 	// --- Standalone Block Detection (§8.4 Rule 3) ---
 
-	private void processStandaloneBlock(EList<TemplateExpression> body, int index, Block block) {
+	private void processStandaloneBlock(EList<TemplateExpression> body, int index, Block block,
+			boolean multiLine) {
 		// Check if block is standalone: only whitespace before on its line
 		// and only whitespace/newline after on its line
-		String leadingWs = getLeadingWhitespace(body, index);
+		String leadingWs = getLeadingWhitespace(body, index, multiLine);
 		if (leadingWs == null) {
 			return; // not standalone
 		}
-		if (!hasTrailingNewline(body, index)) {
+		if (!hasTrailingNewline(body, index, multiLine)) {
 			return; // not standalone
 		}
 
 		// Strip the whitespace in front of the head — §8.4's one rule for a standalone
-		// block.
-		stripLeadingWhitespace(body, index);
+		// block. A protected area keeps it: its markers are written in its place, and they are
+		// indented like the tag, the end marker as well (#367).
+		if (!(block instanceof ProtectedAreaBlock)) {
+			stripLeadingWhitespace(body, index);
+		}
 
 		// What happens to the newline that ends the tail line follows the two body rules
 		// §8.4 gives the two block shapes (#122). A multi-line block has already spent a
@@ -256,17 +281,23 @@ public class M2tWhitespaceNormalizer {
 		// bracket of the block head" — so its line ends where the tag line ends and the
 		// newline goes with it.
 		//
-		// Acceleo 3.7 draws the same line: in the engine tests, template_if's testingElseif
-		// keeps a newline after each multi-line branch, while testingIf's single-line
-		// [if …][/if] runs the next iteration onto the same line.
+		// That newline is a whitespace element of the enclosing body, which §8.4 outputs "as
+		// is" — so it stays when the block produced text: `[if (true)]X[/if]` on its own line
+		// is `X` and a line break, not `X` glued to the next line. The line of a block that
+		// produced nothing (`[if (false)]`) goes, as Acceleo 3.7's testingIf drops it. Which
+		// of the two is known only when the block has run, so the evaluator decides (#374).
 		if (!Boolean.TRUE.equals(multiLineBlocks.get(block))) {
-			stripTrailingNewline(body, index);
+			conditionalNewlines.add(block);
 		}
 
-		// Inject default "\n" separator for standalone for-blocks without explicit separator.
-		// Both SPEC and ACCELEO modes do this — the newline between iterations is a
-		// fundamental part of standalone for-block behavior (§8.4).
-		if (block instanceof ForBlock forBlock && forBlock.getEach() == null) {
+		// Inject the default "\n" separator for a standalone for-block without an explicit
+		// separator — but only for the multi-line shape: §8.4 says "in the case of a
+		// multi-line 'for block', when a separator character is not specified, use 'new
+		// line' as the default separator". A single-line [for …]…[/for] alone on its line
+		// concatenates its iterations, as Acceleo 3.7's testForI reference ("123") shows
+		// (#273). Both SPEC and ACCELEO modes do this.
+		if (block instanceof ForBlock forBlock && forBlock.getEach() == null
+				&& Boolean.TRUE.equals(multiLineBlocks.get(block))) {
 			StringLiteralExp newlineSep = OclFactory.eINSTANCE.createStringLiteralExp();
 			newlineSep.setStringSymbol("\n");
 			forBlock.setEach(newlineSep);
@@ -276,10 +307,15 @@ public class M2tWhitespaceNormalizer {
 	/**
 	 * Returns the leading whitespace before the element at {@code index}
 	 * if the element is standalone on its line, or {@code null} if not standalone.
+	 *
+	 * @param multiLine whether the owning block is multi-line, see
+	 *        {@link #processBody(EList, boolean)}
 	 */
-	private String getLeadingWhitespace(EList<TemplateExpression> body, int index) {
+	private String getLeadingWhitespace(EList<TemplateExpression> body, int index, boolean multiLine) {
 		if (index == 0) {
-			return ""; // first element — no leading text, counts as standalone
+			// First element: in a multi-line body it starts its own line; in a single-line
+			// body it follows the head on the head's line, which makes it embedded (§8.4).
+			return multiLine ? "" : null;
 		}
 		if (!(body.get(index - 1) instanceof TextExpression prev)) {
 			return null; // previous element is not text → not standalone
@@ -290,9 +326,11 @@ public class M2tWhitespaceNormalizer {
 		return afterNl.isBlank() ? afterNl : null;
 	}
 
-	private boolean hasTrailingNewline(EList<TemplateExpression> body, int index) {
+	private boolean hasTrailingNewline(EList<TemplateExpression> body, int index, boolean multiLine) {
 		if (index == body.size() - 1) {
-			return true; // last element — counts as standalone
+			// Last element: in a multi-line body its line ends before the tail line; in a
+			// single-line body the tail follows on the same line (§8.4).
+			return multiLine;
 		}
 		if (!(body.get(index + 1) instanceof TextExpression next)) {
 			return false;
@@ -300,8 +338,9 @@ public class M2tWhitespaceNormalizer {
 		String value = next.getValue();
 		int nlIdx = value.indexOf('\n');
 		if (nlIdx < 0) {
-			// No newline — standalone only if rest is all whitespace and it's the last text
-			return value.isBlank() && index + 1 == body.size() - 1;
+			// No newline — standalone only if the rest of the line is whitespace, it is the
+			// last text, and the tail does not share that line
+			return multiLine && value.isBlank() && index + 1 == body.size() - 1;
 		}
 		String beforeNl = value.substring(0, nlIdx);
 		return beforeNl.isBlank();
@@ -325,19 +364,14 @@ public class M2tWhitespaceNormalizer {
 		}
 	}
 
-	private void stripTrailingNewline(EList<TemplateExpression> body, int index) {
-		if (index >= body.size() - 1) {
-			return;
-		}
-		if (body.get(index + 1) instanceof TextExpression next) {
-			String value = next.getValue();
-			int nlIdx = value.indexOf('\n');
-			if (nlIdx >= 0) {
-				next.setValue(value.substring(nlIdx + 1));
-			} else if (value.isBlank()) {
-				next.setValue("");
-			}
-		}
+	/**
+	 * The single-line stand-alone blocks of the modules normalized so far: the newline after
+	 * such a block is written only when the block produces text (#374).
+	 *
+	 * @return the blocks, compared by identity
+	 */
+	public Set<Block> getConditionalNewlines() {
+		return Collections.unmodifiableSet(conditionalNewlines);
 	}
 
 	// --- BOL Indicator (§8.4 Rule 5) ---
@@ -368,30 +402,33 @@ public class M2tWhitespaceNormalizer {
 	// --- Standalone Template Invocation + Indent Extraction (§8.4 Rule 4) ---
 
 	private void processStandaloneInvocation(EList<TemplateExpression> body, int index,
-			TemplateInvocation invocation) {
-		String indent = getLeadingWhitespace(body, index);
-		if (indent == null || indent.isEmpty()) {
-			return; // not standalone or no indentation
+			TemplateInvocation invocation, boolean multiLine) {
+		String indent = getLeadingWhitespace(body, index, multiLine);
+		if (indent == null) {
+			return; // not standalone
 		}
-		if (!hasTrailingNewline(body, index)) {
+		if (!hasTrailingNewline(body, index, multiLine)) {
 			return; // not standalone
 		}
 
-		// Extract indentation and strip leading whitespace only.
+		// §8.4, <stand-alone-template-invocation>: "In the case of an iterative template
+		// invocation (e.g., when the argument is a collection), if a separator character is
+		// not specified, use 'new line' as the default separator between the outputs
+		// produced by successive iterations" — the twin of the multi-line for block's rule.
+		// The evaluator reads it only when an argument is a collection (#276).
+		if (invocation.getEach() == null) {
+			StringLiteralExp newlineSep = OclFactory.eINSTANCE.createStringLiteralExp();
+			newlineSep.setStringSymbol("\n");
+			invocation.setEach(newlineSep);
+		}
+
+		if (indent.isEmpty()) {
+			return; // nothing to propagate
+		}
+		// Extract indentation and strip leading whitespace only — the evaluator puts the
+		// indentation in front of every line of the output, the first included (#277).
 		// Trailing newline is kept — it separates invocation output from following text.
 		indentationMap.put(invocation, indent);
 		stripLeadingWhitespace(body, index);
-	}
-
-	/**
-	 * Returns {@code true} if the block is an inline expression wrapper
-	 * (a LetBlock with a synthetic {@code __inline__} variable name).
-	 * These are not structural blocks and should not be treated as standalone.
-	 */
-	private static boolean isInlineLetBlock(Block block) {
-		return block instanceof LetBlock let
-				&& let.getLetVariable() != null
-				&& let.getLetVariable().getName() != null
-				&& let.getLetVariable().getName().startsWith("__inline__");
 	}
 }

@@ -16,7 +16,10 @@ package org.eclipse.fennec.m2x.qvto.engine.internal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,16 +32,18 @@ import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EReference;
-import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.ocl.AnyType;
+import org.eclipse.fennec.m2x.model.ocl.CollectionType;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
 import org.eclipse.fennec.m2x.model.ocl.OclType;
 import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
 import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
+import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.Module;
 import org.eclipse.fennec.m2x.model.qvtoperational.ModuleImport;
 import org.eclipse.fennec.m2x.model.qvtoperational.OperationalTransformation;
 import org.eclipse.fennec.m2x.model.qvtoperational.Status;
+import org.eclipse.fennec.m2x.ocl.api.OclFeatureValue;
 import org.eclipse.fennec.m2x.ocl.api.OclOperation;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
@@ -62,12 +67,18 @@ import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
 public class QvtoOperationProvider implements OclOperationProvider {
 
 	private static final AnyType ANY_TYPE = OclStandardLibrary.INSTANCE.oclAny();
+	/** Any collection, as the owner of the element operations collected over one (#341). */
+	private static final CollectionType COLLECTION_TYPE = OclFactory.eINSTANCE.createCollectionType();
 
 	private final OperationalTransformation transformation;
 	private final QvtoEvaluator evaluator;
 	private final QvtoOperationResolver operationResolver;
 	private final QvtoBlackboxRegistry blackboxRegistry;
 	private final Map<String, int[]> stringCounters = new HashMap<>();
+	/** The mappings already registered, as name/arity — one OCL operation dispatches all candidates. */
+	private final Set<String> registeredMappings = new HashSet<>();
+	/** Names and arities of the element operations already registered for collections (#341). */
+	private final Set<String> registeredElementCollects = new HashSet<>();
 	private List<OclOperation> operations;
 
 	public QvtoOperationProvider(OperationalTransformation transformation, QvtoEvaluator evaluator,
@@ -92,61 +103,30 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// Built-in model extent operations
 		// §8.3.5.3: objectsOfType — exact type match only (not subtypes)
 		ops.add(new OclOperation("objectsOfType", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof QvtoModelExtent extent && args.length > 0) {
-						EClass filterType = resolveEClassArg(args[0]);
-						if (filterType != null) {
-							List<EObject> result = new ArrayList<>();
-							for (EObject eo : extent.getContents()) {
-								if (eo.eClass() == filterType) {
-									result.add(eo);
-								}
-							}
-							return result;
-						}
-					}
-					return List.of();
-				}));
+				(self, args) -> self instanceof QvtoModelExtent extent && args.length > 0
+						? QvtoModelOperations.objectsOfType(extent, args[0])
+						: List.of()));
 		// §8.3.5.2: objectsOfKind — includes subtypes
 		ops.add(new OclOperation("objectsOfKind", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof QvtoModelExtent extent && args.length > 0) {
-						EClass filterType = resolveEClassArg(args[0]);
-						if (filterType != null) {
-							List<EObject> result = new ArrayList<>();
-							for (EObject eo : extent.getContents()) {
-								if (filterType.isInstance(eo)) {
-									result.add(eo);
-								}
-							}
-							return result;
-						}
-					}
-					return List.of();
-				}));
-		// §8.3.5.1: objects — all objects
+				(self, args) -> self instanceof QvtoModelExtent extent && args.length > 0
+						? QvtoModelOperations.objectsOfKind(extent, args[0])
+						: List.of()));
+		// §8.3.5.1: objects — all objects, not only the roots (#301)
 		ops.add(new OclOperation("objects", ANY_TYPE, List.of(), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof QvtoModelExtent extent) {
-						return new ArrayList<>(extent.getContents());
-					}
-					return List.of();
-				}));
+				(self, args) -> self instanceof QvtoModelExtent extent
+						? new ArrayList<>(QvtoModelOperations.allObjects(extent))
+						: List.of()));
 		// §8.3.5.4: rootObjects — top-level objects not contained by others
 		ops.add(new OclOperation("rootObjects", ANY_TYPE, List.of(), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof QvtoModelExtent extent) {
-						return new ArrayList<>(extent.getContents());
-					}
-					return List.of();
-				}));
+				(self, args) -> self instanceof QvtoModelExtent extent
+						? QvtoModelOperations.rootObjects(extent)
+						: List.of()));
 		// §8.3.5.5: addElement — add element to extent
 		ops.add(new OclOperation("addElement", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
-						checkExtentWritable(extent);
-						extent.add(eo);
+						QvtoModelOperations.addElement(extent, eo);
 					}
 					return null;
 				}));
@@ -155,8 +135,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
-						checkExtentWritable(extent);
-						extent.add(eo);
+						QvtoModelOperations.addElement(extent, eo);
 					}
 					return null;
 				}));
@@ -165,8 +144,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent && args.length > 0
 							&& args[0] instanceof EObject eo) {
-						checkExtentWritable(extent);
-						extent.getContents().remove(eo);
+						QvtoModelOperations.removeElement(extent, eo);
 					}
 					return null;
 				}));
@@ -174,13 +152,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		ops.add(new OclOperation("copy", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof QvtoModelExtent extent) {
-						List<EObject> copies = new ArrayList<>();
-						for (EObject eo : extent.getContents()) {
-							copies.add(EcoreUtil.copy(eo));
-						}
-						BasicQvtoModelExtent copyExtent = new BasicQvtoModelExtent();
-						copyExtent.setContents(copies);
-						return copyExtent;
+						return QvtoModelOperations.copy(extent);
 					}
 					return null;
 				}));
@@ -232,7 +204,30 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// Residence of removed object is unaffected.
 		ops.add(new OclOperation("unlink", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof List<?> list && args.length > 0) {
+					if (args.length == 0) {
+						return self;
+					}
+					// OCL hands out a copy of a navigated feature (#319) that remembers its owner
+					// and feature; the statement changes the feature itself
+					// and keeps the copy in step, which is what the statement answers
+					if (self instanceof OclFeatureValue featureValue
+							&& featureValue.owner().eGet(featureValue.feature()) instanceof List<?> live) {
+						live.remove(args[0]);
+						// §8.2.2.12: "If the unlink affects a containment relationship, the no
+						// longer contained object becomes a root object of its model" (#342)
+						if (featureValue.feature() instanceof EReference ref && ref.isContainment()
+								&& args[0] instanceof EObject detached) {
+							QvtoModelExtent extent = evaluator.extentOf(featureValue.owner());
+							if (extent != null && !extent.getContents().contains(detached)) {
+								extent.add(detached);
+							}
+						}
+						if (self instanceof Collection<?> copy) {
+							copy.remove(args[0]);
+						}
+						return self;
+					}
+					if (self instanceof List<?> list) {
 						@SuppressWarnings("unchecked")
 						List<Object> mutableList = (List<Object>) list;
 						mutableList.remove(args[0]);
@@ -277,7 +272,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 						if (filterType != null) {
 							List<EObject> result = new ArrayList<>();
 							for (EObject child : eo.eContents()) {
-								if (child.eClass() == filterType) {
+								if (QvtoModelOperations.isExactType(child, filterType)) {
 									result.add(child);
 								}
 							}
@@ -312,7 +307,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 							List<EObject> result = new ArrayList<>();
 							for (var iter = eo.eAllContents(); iter.hasNext(); ) {
 								EObject desc = iter.next();
-								if (desc.eClass() == filterType) {
+								if (QvtoModelOperations.isExactType(desc, filterType)) {
 									result.add(desc);
 								}
 							}
@@ -339,44 +334,27 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					}
 					return List.of();
 				}));
-		// §8.3.4.10: clone() — shallow copy (skip containments)
+		// §8.3.4.10: Element::clone() — shallow copy (skip containments); §8.3.9.11: List::clone()
+		// "Returns a new list that is a shallow clone of self"; §8.3.11.2ff: "Collections are
+		// immutable so a clone returns self" (#343)
 		ops.add(new OclOperation("clone", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
 					if (self instanceof EObject eo) {
-						EcoreUtil.Copier copier = new EcoreUtil.Copier() {
-							private static final long serialVersionUID = 1L;
-							@Override
-							protected void copyContainment(EReference ref,
-									EObject src, EObject tgt) {
-								// shallow: skip containment references
-							}
-						};
-						EObject result = copier.copy(eo);
-						copier.copyReferences();
-						return result;
+						return QvtoModelOperations.cloneElement(eo, false, evaluator.extentOf(eo));
 					}
-					return null;
+					if (self instanceof Map<?, ?> dict) {
+						return new LinkedHashMap<>(dict);
+					}
+					if (self instanceof Collection<?> collection) {
+						return evaluator.isList(collection) ? new ArrayList<>(collection) : collection;
+					}
+					return self;
 				}));
 		// §8.3.4.11: Element::deepclone() — deep copy (recursive)
-		// §8.3.9.13: List(T)::deepclone() — new list with each element deep-cloned
+		// §8.3.9.13: List(T)::deepclone() — "a new list in which each element is in turn a
+		// deepclone"; §8.3.12.3ff: a Bag, Set, … "that is a deep clone" — of its own kind (#343)
 		ops.add(new OclOperation("deepclone", ANY_TYPE, List.of(), ANY_TYPE,
-				(self, args) -> {
-					if (self instanceof EObject eo) {
-						return EcoreUtil.copy(eo);
-					}
-					if (self instanceof Collection<?> coll) {
-						List<Object> result = new ArrayList<>();
-						for (Object elem : coll) {
-							if (elem instanceof EObject eo) {
-								result.add(EcoreUtil.copy(eo));
-							} else {
-								result.add(elem); // primitives are immutable
-							}
-						}
-						return result;
-					}
-					return null;
-				}));
+				(self, args) -> deepClone(self)));
 		// §8.3.4 (MOF reflective): container() — containing object
 		ops.add(new OclOperation("container", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
@@ -445,7 +423,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 						if (args.length > 0 && instance.getModelBindings().isEmpty()) {
 							instance = QvtoTransformationOperations.bindModels(instance, args);
 						}
-						return QvtoTransformationOperations.handleParallelTransform(instance);
+						return QvtoTransformationOperations.handleParallelTransform(instance, evaluator);
 					}
 					return null;
 				}));
@@ -490,6 +468,14 @@ public class QvtoOperationProvider implements OclOperationProvider {
 	}
 
 	/**
+	 * The receiver of the static String counter operations: the type, {@code String.incrStrCounter('x')},
+	 * or a string, {@code 'c'.incrStrCounter('x')} — which was a silent no-op before #344.
+	 */
+	private static boolean isStringReceiver(Object self) {
+		return self instanceof PrimitiveType pt && "String".equals(pt.getName()) || self instanceof String;
+	}
+
+	/**
 	 * §8.3.16.31–35: String counter operations for generating unique names.
 	 *
 	 * <p>Static operations (31–34) are invoked as {@code String.startStrCounter('Foo')}
@@ -500,7 +486,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// §8.3.16.31: String::startStrCounter(s:String) : Void — initialize/reset counter to 0
 		ops.add(new OclOperation("startStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+					if (isStringReceiver(self)
 							&& args.length > 0 && args[0] instanceof String s) {
 						stringCounters.put(s, new int[]{0});
 					}
@@ -510,7 +496,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// §8.3.16.32: String::getStrCounter(s:String) : Integer — get current value or null
 		ops.add(new OclOperation("getStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+					if (isStringReceiver(self)
 							&& args.length > 0 && args[0] instanceof String s) {
 						int[] counter = stringCounters.get(s);
 						return counter != null ? (long) counter[0] : null;
@@ -521,7 +507,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// §8.3.16.33: String::incrStrCounter(s:String) : Integer — increment and return new value
 		ops.add(new OclOperation("incrStrCounter", ANY_TYPE, List.of(ANY_TYPE), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())
+					if (isStringReceiver(self)
 							&& args.length > 0 && args[0] instanceof String s) {
 						int[] counter = stringCounters.get(s);
 						if (counter == null) {
@@ -536,7 +522,7 @@ public class QvtoOperationProvider implements OclOperationProvider {
 		// §8.3.16.34: String::restartAllStrCounter() : Void — reset all counters to 0
 		ops.add(new OclOperation("restartAllStrCounter", ANY_TYPE, List.of(), ANY_TYPE,
 				(self, args) -> {
-					if (self instanceof PrimitiveType pt && "String".equals(pt.getName())) {
+					if (isStringReceiver(self)) {
 						for (int[] counter : stringCounters.values()) {
 							counter[0] = 0;
 						}
@@ -589,23 +575,74 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					// Blackbox operation — delegate to library's invoke()
 					ops.add(new OclOperation(name, ownerType, List.of(), ANY_TYPE,
 							(self, args) -> invokeBlackbox(impOp, self, args)));
+				} else if (impOp instanceof MappingOperation) {
+					// A mapping inside an OCL expression is called the way 'map' calls it: the
+					// candidates are chosen by argument count and type, a non-conforming source
+					// answers null (§8.2.1.15, #333). Registered once per name and arity, for any
+					// source, so the OCL dispatcher does not pick an overload by its context type.
+					int arity = QvtoEvaluator.parameterCount(impOp);
+					if (registeredMappings.add(name + "/" + arity)) {
+						ops.add(new OclOperation(name, ANY_TYPE, Collections.nCopies(arity, ANY_TYPE), ANY_TYPE,
+								(self, args) -> evaluator.callFromOcl(args,
+										() -> evaluator.callMappingByName(name, self, args, false))));
+					}
 				} else {
+					int arity = QvtoEvaluator.parameterCount(impOp);
 					ops.add(new OclOperation(
 							name,
 							ownerType,
-							List.of(),
+							Collections.nCopies(arity, ANY_TYPE),
 							ANY_TYPE,
 							(self, args) -> {
 								// §8.1.19: contextual operation on null → propagate null
 								if (self == null && impOp.getContext() != null) {
 									return null;
 								}
-								return evaluator.callOperation(impOp, self, args);
+								return evaluator.callFromOcl(args, () -> evaluator.callOperation(impOp, self, args));
 							}
 					));
+					// §8.2.2.7: list->foo() collects the elements' foo(). Defined on collections,
+					// after the operation itself — a null source takes the first of the name — and
+					// never where the transformation has a foo() of a collection; the standard
+					// library answers before any provider, so its operations win (#341)
+					if (impOp.getContext() != null && !(impOp.getContext().getEType() instanceof CollectionType)
+							&& !hasCollectionContext(name) && registeredElementCollects.add(name + "/" + arity)) {
+						ops.add(new OclOperation(name, COLLECTION_TYPE, Collections.nCopies(arity, ANY_TYPE), ANY_TYPE,
+								(self, args) -> evaluator.collectElementOperation(name, self, args)));
+					}
 				}
 			}
 		}
+	}
+
+	/** Whether the transformation defines an operation of this name on a collection. */
+	private boolean hasCollectionContext(String name) {
+		return operationResolver.findAllOperations(name).stream()
+				.anyMatch(op -> op.getContext() != null && op.getContext().getEType() instanceof CollectionType);
+	}
+
+	/**
+	 * A deep clone: a model object as {@code Element::deepclone} makes one (added to the model of
+	 * the original), a collection of its own kind and a Dict with their elements deep-cloned, a
+	 * value as itself.
+	 */
+	private Object deepClone(Object value) {
+		if (value instanceof EObject eo) {
+			return QvtoModelOperations.cloneElement(eo, true, evaluator.extentOf(eo));
+		}
+		if (value instanceof Map<?, ?> dict) {
+			Map<Object, Object> clone = new LinkedHashMap<>();
+			dict.forEach((key, element) -> clone.put(key, deepClone(element)));
+			return clone;
+		}
+		if (value instanceof Collection<?> collection) {
+			List<Object> elements = new ArrayList<>(collection.size());
+			for (Object element : collection) {
+				elements.add(deepClone(element));
+			}
+			return evaluator.newCollection(evaluator.kindOf(collection), elements);
+		}
+		return value;
 	}
 
 	/**
@@ -665,17 +702,6 @@ public class QvtoOperationProvider implements OclOperationProvider {
 					});
 		}
 		return ANY_TYPE;
-	}
-
-	/**
-	 * §8.1.3.2: Guards mutation operations on read-only extents.
-	 */
-	private static void checkExtentWritable(QvtoModelExtent extent) {
-		if (extent.isReadOnly()) {
-			throw new QvtoControlFlowException.RaiseException(
-					"InvalidModelMutation",
-					"Cannot modify read-only model extent (in-parameter)");
-		}
 	}
 
 	/**

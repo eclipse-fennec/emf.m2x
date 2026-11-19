@@ -16,6 +16,7 @@ package org.eclipse.fennec.m2x.qvtd.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EPackage;
@@ -114,6 +115,8 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 		}
 		support.positionAt(context);
 		Object built = super.visit(tree);
+		// where the node begins, so a type error about it is reported there (#378)
+		support.recordNode(built, context);
 		if (built instanceof EObject node) {
 			nodePositions.putIfAbsent(node, new SourcePosition(context.getStart().getLine(),
 					context.getStart().getCharPositionInLine()));
@@ -372,18 +375,18 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 
 		EClassifier elementType = support.inferElementType(source);
 		QvtRParser.IteratorVariablesContext varsCtx = ctx.iteratorVariables();
-		List<Variable> iterVars = new ArrayList<>();
+		List<String> iterNames = new ArrayList<>();
+		List<EClassifier> iterTypes = new ArrayList<>();
 		for (int i = 0; i < varsCtx.identifier().size(); i++) {
-			EClassifier varType = (i < varsCtx.typeExpression().size()
-					&& varsCtx.typeExpression(i) != null)
-					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType;
-			Variable iterVar = support.createVariable(
-					identifierText(varsCtx.identifier(i)), varType, null);
-			iterVars.add(iterVar);
+			iterNames.add(identifierText(varsCtx.identifier(i)));
+			iterTypes.add((i < varsCtx.typeExpression().size() && varsCtx.typeExpression(i) != null)
+					? resolveTypeExpression(varsCtx.typeExpression(i)) : elementType);
 		}
+		List<Variable> iterVars = support.declareIteratorVariables(iterNames, iterTypes);
 		support.validateIteratorVarCount(iterName, iterVars.size());
 
-		setEnv(env().nested(iterVars));
+		// Named iterator variables are implicit sources too (§9.3.25 [A], #320)
+		setEnv(env().nestedIterators(iterVars));
 		OclExpression body = (OclExpression) visit(ctx.expression());
 		setEnv(savedEnv);
 
@@ -394,20 +397,21 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 			QvtRParser.IterateCallContext ctx, boolean isSafe) {
 		OclEnvironment savedEnv = env();
 
-		EClassifier iterType = ctx.typeExpression().size() > 0
-				? resolveTypeExpression(ctx.typeExpression(0))
+		EClassifier iterType = ctx.iterType != null
+				? resolveTypeExpression(ctx.iterType)
 				: support.inferElementType(source);
-		Variable iterVar = support.createVariable(
-				identifierText(ctx.identifier(1)), iterType, null);
 
-		EClassifier accType = ctx.typeExpression().size() > 1
-				? resolveTypeExpression(ctx.typeExpression(1)) : null;
-		Variable accVar = support.createVariable(
-				identifierText(ctx.identifier(2)), accType,
-				(OclExpression) visit(ctx.expression(0)));
+		EClassifier accType = ctx.accType != null
+				? resolveTypeExpression(ctx.accType) : null;
+		// §9.3.26: without an iterator variable the body has an implicit one (#320)
+		String iterName = ctx.iterName != null ? identifierText(ctx.iterName) : support.implicitIteratorName();
+		List<Variable> iterateVars = support.declareIterateVariables(iterName, iterType,
+				identifierText(ctx.accName), accType, (OclExpression) visit(ctx.expression(0)));
+		Variable iterVar = iterateVars.get(0);
+		Variable accVar = iterateVars.get(1);
 
-		setEnv(env().nested(iterVar));
-		setEnv(env().nested(accVar));
+		// Iterator and result are both implicit sources (§9.3.26, #320)
+		setEnv(env().nestedIterators(List.of(iterVar, accVar)));
 
 		OclExpression body = (OclExpression) visit(ctx.expression(1));
 		setEnv(savedEnv);
@@ -471,9 +475,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 		for (QvtRParser.LetBindingContext bindCtx : bindings) {
 			EClassifier type = bindCtx.typeExpression() != null
 					? resolveTypeExpression(bindCtx.typeExpression()) : null;
-			Variable var = support.createVariable(
-					identifierText(bindCtx.identifier()),
-					type,
+			Variable var = support.declareLetVariable(identifierText(bindCtx.identifier()), type,
 					(OclExpression) visit(bindCtx.expression()));
 			setEnv(env().nested(var));
 
@@ -489,6 +491,7 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 
 		current.setOwnedIn((OclExpression) visit(ctx.expression()));
 		setEnv(savedEnv);
+		support.typeLet(outermost);
 		return outermost;
 	}
 
@@ -598,13 +601,32 @@ class QvtrExpressionBuilder extends QvtRBaseVisitor<Object> {
 			return AbstractExpressionBuilder.extractEscapedIdentifier(
 					ctx.ESCAPED_IDENTIFIER().getText());
 		}
-		return ctx.getText();
+		return unescapeDeprecated(ctx.getText());
+	}
+
+	/**
+	 * The reserved words of QVT-R (§7.13.2). "A simple underscore prefix may also be used but is
+	 * now deprecated": {@code _key} is the name {@code key} (#361).
+	 */
+	static final Set<String> RESERVED_WORDS = Set.of("checkonly", "domain", "enforce", "extends",
+			"implementedby", "import", "key", "overrides", "primitive", "query", "relation", "top",
+			"transformation", "when", "where");
+
+	/** The name a deprecated {@code _<reserved word>} stands for; any other text unchanged. */
+	static String unescapeDeprecated(String text) {
+		return text.length() > 1 && text.charAt(0) == '_' && RESERVED_WORDS.contains(text.substring(1))
+				? text.substring(1)
+				: text;
 	}
 
 	static List<String> pathNameSegments(QvtRParser.PathNameContext ctx) {
 		List<String> segments = new ArrayList<>();
-		for (var id : ctx.identifier()) {
-			segments.add(identifierText(id));
+		for (var child : ctx.children) {
+			if (child instanceof QvtRParser.IdentifierContext id) {
+				segments.add(identifierText(id));
+			} else if (child instanceof QvtRParser.RestrictedWordContext word) {
+				segments.add(word.getText()); // §7.4.11: a restricted word after '::' (#325)
+			}
 		}
 		return segments;
 	}

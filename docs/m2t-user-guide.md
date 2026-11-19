@@ -1,6 +1,6 @@
 # M2T Engine User Guide
 
-Fennec M2T is a lightweight, spec-compliant MOFM2T v1.0 (Model to Text) engine that works as a standalone Java library — no Eclipse platform required. Compatible with Acceleo 3.7 templates.
+Fennec M2T is a lightweight MOFM2T v1.0 (Model to Text) engine that works as a standalone Java library — no Eclipse platform required. It follows the specification, with the deviations listed in [§18](#18-deviations-from-mofm2t-10), and reads the Acceleo 3.7 forms most templates use (the `[comment … /]` and `[comment]…[/comment]` comments, `protected` visibility, `post`, same-named templates); it is not Acceleo, and Acceleo's AQL is not supported.
 
 ## Table of Contents
 
@@ -21,6 +21,7 @@ Fennec M2T is a lightweight, spec-compliant MOFM2T v1.0 (Model to Text) engine t
 15. [M2tGenerationStrategy](#15-m2tgenerationstrategy)
 16. [Whitespace Handling](#16-whitespace-handling)
 17. [Generating from a bnd Build](#17-generating-from-a-bnd-build)
+18. [Deviations from MOFM2T 1.0](#18-deviations-from-mofm2t-10)
 
 ---
 
@@ -69,7 +70,7 @@ M2tEngine engine = M2tEngines.create(config);
 
 // 2. Parse template
 Module module = engine.parse(
-    "[module m(Ecore)/]\n" +
+    "[module m(ecore)/]\n" +
     "[template public main(c : EClass)]\n" +
     "[file (c.name.concat('.java'), false)]\n" +
     "public class [c.name/] {}\n" +
@@ -182,7 +183,7 @@ M2tEngine engine = M2tEngines.create(config);
 | `maxCrossProductSize(int)` | 1,000,000 | Maximum cross-product size for set-argument invocations |
 | `maxOutputSize(long)` | 10,000,000 | Maximum total output size in characters (~10 MB), `0` for unlimited |
 | `protectedAreaEnabled(boolean)` | `true` | Enable/disable protected area markers and merging (see [§10.5](#105-disabling-protected-areas)) |
-| `unresolvedReferenceMode(mode)` | `FAIL` | What an unresolvable `extends`, `import`, `overrides` or invocation does (see [§5.5](#55-references-that-cannot-be-resolved)) |
+| `unresolvedReferenceMode(mode)` | `FAIL` | What an unresolvable `extends`, `import`, `overrides` or invocation does (see [§5.6](#56-references-that-cannot-be-resolved)) |
 
 ### 3.5 Which Metamodels the Engine Sees
 
@@ -430,17 +431,21 @@ MOFM2T templates use `[` and `]` as delimiters. Everything outside `[...]` is li
 Every template file starts with a module declaration:
 
 ```mtl
-[module myModule(Ecore)/]
+[module myModule(ecore)/]
 ```
 
-The parameter in parentheses is the metamodel used by the templates. For Ecore models, use `Ecore`.
+The parameter in parentheses is the metamodel the templates transform: a package of the engine's package registry, named by its nsURI as an escaped identifier (`_'http://www.eclipse.org/emf/2002/Ecore'`) or by its package name (`ecore` — the name is case-sensitive, `Ecore` is not it). A metamodel the registry does not have is a parse error with its position (MOFM2T §8.1.1); before, it was ignored silently.
+
+A module extends at most one module: `[module m(ecore) extends a, b/]` is a parse error, as §7 supports "only single inheritance".
 
 ### 4.2 Template
 
-Templates are the main code-generation constructs. A template marked `main` (or named `main`) is the entry point:
+A template declares its visibility, `public` or `private` (MOFM2T §8.2), or `protected` (Acceleo). A declaration without one is taken as public and reported as a WARNING "missing visibility (MOFM2T §8.2)"; the same holds for a query.
+
+Templates are the main code-generation constructs. A template marked `main` (or named `main`) is the entry point. The mark is the Acceleo comment `[comment @main/]` directly before the template; a module has one entry point, so a second `@main` is a parse error:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public main(c : EClass)]
 [file (c.name.concat('.java'), false)]
 class [c.name/]
@@ -475,7 +480,12 @@ Inline OCL expressions are enclosed in `[` and `/]`:
 [c.eAttributes->size()/]            [comment]collection operation[/comment]
 [c.name.toUpper()/]                 [comment]string operation[/comment]
 ['hello'.concat(' world')/]         [comment]string literal[/comment]
+[c.abstract ? 'A' : 'C'/]           [comment]conditional (MOFM2T §8.2 ifExp)[/comment]
 ```
+
+The expression part is OCL v2.4 as the OCL engine parses it — escaped identifiers (`_'it\'s'`), qualified features (`self.EClassifier::name`), `iterate` without an iterator variable and nested `/* */` comments included; a test runs the OCL expression corpus through `[expr/]` as well. `cond ? a : b` is the MOFM2T shorthand for `if cond then a else b endif`.
+
+In a template, query or macro, `self` is the first parameter; in a `post` expression it is the generated text.
 
 ### 4.4 For Block
 
@@ -513,6 +523,19 @@ The `i` variable is available inside for blocks as a 1-based iteration counter:
 
 Output: `1. ClasseA`, `2. ClasseB`, `3. AbstractClass`
 
+What a for block iterates over (MOFM2T §8.1.8):
+
+- a collection: its elements;
+- a single value: that value, once — as Acceleo and OCL's implicit `asSet` do: `[for (s : String | c.name)][s/][/for]` writes the name;
+- `null`: nothing;
+- `invalid`: nothing, and an ERROR.
+
+An element that is no instance of the loop variable's type is skipped, with one ERROR per block: `[for (a : EAttribute | c.eStructuralFeatures)]` leaves out the references. A for block takes an init section after its header; it is evaluated per iteration and sees the loop variable:
+
+```mtl
+[for (f : EStructuralFeature | c.eStructuralFeatures) { u : String = f.name.toUpper(); }][u/] [/for]
+```
+
 ### 4.5 If / ElseIf / Else
 
 Conditional output:
@@ -527,25 +550,30 @@ OTHER
 [/if]
 ```
 
+The spec end tags `[/elseif]` and `[/else]` are optional (MOFM2T §8.2): `[elseif (…)]B[/elseif][else]C[/else][/if]` is the same block.
+
+A condition "needs to evaluate to true" (MOFM2T §8.1.21). One that is neither `true` nor `false` — `null`, `invalid`, a String — decides nothing: no branch runs, the `else` branch included, and it is an ERROR. The same holds for a template guard and a for guard. A lenient navigation inside a comparison is not affected: `[if (c.ePackage.eSuperPackage.name = 'X')]` compares `null` with `'X'`, which is `false`.
+
 ### 4.6 Let Block
 
-Bind a variable for use within the block:
+A let block is a type test (MOFM2T §7, §8.1.16): its body runs when the value is an instance of the declared type, and the variable is then bound to it:
 
 ```mtl
-[let n : String = p.name]
-package: [n/]
+[let ac : EClass = c]
+class: [ac.name/]
 [/let]
 ```
 
-The `let` block also supports an `else` branch that executes when the binding evaluates to null:
+With `elselet` branches the first one whose value fits runs, otherwise the `else` branch:
 
 ```mtl
-[let prefix : String = p.nsPrefix]
-prefix: [prefix/]
-[else]
-no prefix
+[let r : EReference = f]reference [r.name/]
+[elselet a : EAttribute = f]attribute [a.name/]
+[else]other
 [/let]
 ```
+
+`null` is no instance of any type, so it takes the `else` branch. An `invalid` value is an ERROR, and the let block produces nothing — the `else` branch included. The type may be left out (`[let n = c.name]`); the variable then takes the type of its value, and only `null` fails the test. A declaration with neither type nor value is a parse error.
 
 ### 4.7 File Block
 
@@ -565,6 +593,15 @@ Generated: [c.name/]
 [/file]
 ```
 
+The arguments follow MOFM2T §7.3 and §8.2:
+
+1. **URL.** A path relative to the output, or a `file:` URI. `file:x`, `file:/x` and `file:\x` are relative to the output directory; `file:///abs/x` is absolute and must lie inside it. The keyword `stdout`, or the string `'stdout'`, sends the body to the standard output instead of a file: `M2tResult.standardOutput()`. Text the entry template writes outside any `[file]` block goes there too, in order with the `[file (stdout)]` blocks. The engine prints nothing itself; the host decides.
+2. **Append flag**, default `false`. Any Boolean expression is allowed (`[file ('log', c.abstract)]`). `null`, `invalid` or a value that is not a Boolean is an ERROR, and the block is skipped. Within one run, an overwrite block for a path replaces what earlier blocks wrote, on disk too.
+3. **Unique id** (`uniqId`). When nothing exists under the file's path, the protected areas of the file generated before under the same id are taken over (§7.3: "even when a model element was renamed"). This is reported as INFO, and the old file is kept. `FileSystemGenerationStrategy` remembers the ids in `.m2t-ids` in its output directory.
+4. **Charset** (extension). Without one, `M2tConfiguration.defaultCharset()` applies. Acceleo templates put the charset third; a charset name there is the unique id, and it is reported as a WARNING.
+
+The `let` block also takes `[elselet v : T = e]` branches; the spec's `[/elselet]` end tag may be written or left out (Acceleo leaves it out).
+
 ### 4.8 Query
 
 Queries are reusable OCL expressions that return a value:
@@ -579,15 +616,15 @@ Use in templates:
 [c.opCount()/]
 ```
 
+The body must conform to the declared return type. Where the parser knows the body's type, a mismatch is a parse error (`[query public q(c : EClass) : Integer = 'abc'/]`); otherwise the evaluator checks the value and reports a WARNING when it does not conform (MOFM2T §8.1.15).
+
 ### 4.9 Macro
 
-Macros are like templates that return a string value rather than writing to the output stream:
+A macro is a block that is expanded where it is called and writes to the output there, like a template (MOFM2T §7.4, §8.1.19):
 
 ```mtl
 [macro wrap(c : EClass)]<[c.name/]>[/macro]
 ```
-
-Use in templates:
 
 ```mtl
 Result: [wrap(c)/]
@@ -595,17 +632,53 @@ Result: [wrap(c)/]
 
 Output: `Result: <Employee>`
 
+A macro may take a body. Its last parameter is then of the predefined type `Body`, and the call passes the text between the start and the end tag; `[b/]` inserts it. The body is expanded in the context of the call, so it sees the caller's variables:
+
+```mtl
+[macro javaMethod(type : String, name : String, resultType : String, body : Body)]
+public [resultType/] [name/]() {
+  [body/]
+}
+[/macro]
+
+[javaMethod(t, 'm', 'r')]result = [c.name/];[/javaMethod]
+```
+
+Only the last parameter may be a `Body`. A macro with a `Body` parameter is called with a body (`[m(…)]…[/m]`), any other one without (`[m(…)/]`); the wrong form is an unresolved reference. The end tag must name the macro it closes. Recursion counts towards the template depth limit, and the body of a macro is normalised like that of a template (§16).
+
 ### 4.10 Comment
+
+Three forms are comments:
 
 ```mtl
 [comment]
-  this is a comment, and it is discarded
+  the Acceleo block form — its content is discarded
 [/comment]
+
+[comment()]the MOFM2T form: the predefined comment macro with a body (§7.4)[/comment]
+
+[comment a single-line comment, Acceleo /]
 ```
 
-Only the paired form exists. MOFM2T v1.0 specifies comments as a macro — `[comment()] … [/comment]` — and the grammar follows that; the single-expression form `[comment]…[/comment]` is an Acceleo 3.x extension the parser does not know.
+The body of a block comment is literal text up to the first `[/comment]`. Square brackets and template code inside it are neither parsed nor evaluated, so `[comment]// see [:tlsPort][/comment]` or `[comment][c.oldName/][/comment]` are fine. Because the first `[/comment]` closes the comment, comments do not nest. An unterminated `[comment]` is a parse error.
 
-A comment may not precede the `[module …/]` header.
+`[comment @main/]` directly before a template marks it as the entry point (§4.2).
+
+`//` is no comment in a template body: MOFM2T §8.2 treats text after `//` as a comment only in code-explicit mode, and in text-explicit mode it is output like any other text (the spec's own §7 example generates `// Constructor`).
+
+### 4.11 Trace
+
+```mtl
+[trace (c)]class [c.name/][/trace]
+```
+
+A trace block outputs its body. The model element is evaluated, and an invalid one is an ERROR (MOFM2T §8.1.18); trace records (file, range, model element, template) are not collected — `M2tResult` carries none.
+
+### 4.12 Text Outside Templates and Escape Modes
+
+Text between module elements is not generated. Text other than whitespace there is usually a tag whose `[` went missing, so the parser reports it as a WARNING with its position (`unit:line:col: text outside a template is not generated: '…' (MOFM2T §8.2)`). Parse warnings reach the caller as WARNING diagnostics of the `M2tResult`.
+
+The engine reads templates in text-explicit mode. `@text-explicit` before the module declaration is accepted and changes nothing; `@code-explicit` is a parse error "code-explicit mode is not supported" with its position.
 
 ---
 
@@ -616,7 +689,7 @@ A comment may not precede the `[module …/]` header.
 A template can call other templates defined in the same module:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public genAttribute(a : EAttribute)]
 private [a.eType.name/] [a.name/];
 [/template]
@@ -645,7 +718,7 @@ public class Employee {
 Templates can call templates that call further templates:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public attrGen(a : EAttribute)]
 [a.eType.name/] [a.name/]
 [/template]
@@ -665,6 +738,8 @@ Output: `class Employee(EString name, EDouble salary)`
 
 ### 5.3 Template Invocation with Before/After/Separator
 
+An invocation passes its arguments as MOFM2T §8.1.10 says: a collection argument for a single parameter invokes the template once per element (several such arguments: once per combination), a collection argument for a collection parameter invokes it once, and a single argument for a collection parameter is passed as a collection of one. `before` goes in front of the first invocation, `separator` between two and `after` behind the last — of the invocations that took place: a template its guard declines was not invoked, and gets neither. They apply to a single invocation too: `[t(c) before ('<') after ('>')/]` writes `<…>`.
+
 When invoking a template on a collection, use `before`, `after`, and `separator`:
 
 ```mtl
@@ -682,7 +757,7 @@ With `[template public fmt(c : EClassifier)][c.name/][/template]` this produces:
 Queries encapsulate reusable OCL logic:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [query public fieldCount(c : EClass) : Integer = c.eAttributes->size()/]
 [template public genSummary(c : EClass)]
 [c.name/] ([c.fieldCount()/] fields)
@@ -700,7 +775,7 @@ A query is callable wherever an OCL expression is evaluated, not only in a templ
 template guard, a `for` guard, a `let` and an `if` all reach it:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 [template public main(c : EClass) ? (c.hasOps())]
 [file ('out', false)]
@@ -714,13 +789,30 @@ Both call forms work: `c.hasOps()`, where the receiver is the query's first para
 their visibility, the public and protected ones of transitively extended modules, and the public ones
 of imported modules.
 
-### 5.5 References That Cannot Be Resolved
+### 5.5 Arguments, Arity and Overloading
+
+A call passes as many arguments as the template, query or macro has parameters; another number is a link error ("'t' takes 1 argument(s), the call passes 2"), handled as in §5.6. At runtime an argument that is `null` or `invalid`, or that is no instance of its parameter's type, is an ERROR at the argument, and the template is not invoked (MOFM2T §8.1.10). Unlike a QVT-O helper, which runs with a `null` argument, a template is skipped — as in Acceleo.
+
+`before`, `separator` and `after` belong to a template invocation; on a query call they are a link error, as a query yields a value.
+
+A template call may stand inside a larger OCL expression (§8.2 `<invocation>` is an `OclExpressionCS`); its value is the text it generates: `['<' + t(c) + '>'/]`.
+
+Same-named templates of one module are kept apart by their parameter types, and a call runs the most specific one its arguments fit:
+
+```mtl
+[template public t(x : EClass)]CLASS[/template]
+[template public t(p : EPackage)]PACKAGE[/template]
+```
+
+`[t(c)/]` writes `CLASS`, `[t(c.ePackage)/]` writes `PACKAGE`. This is Acceleo's overloading and a deliberate deviation from MOFM2T §8.1.2 ("A module element has a unique name within the containing module"). Two templates with the same parameter types are a link error, and so are a template, query or macro sharing a name with one of another kind, or two queries or macros of the same name.
+
+### 5.6 References That Cannot Be Resolved
 
 A reference naming something that is not there — an `extends`, an `import`, an `overrides` or an
 invocation — ends the generation with an error diagnostic and produces no files:
 
 ```mtl
-[module child(Ecore) extends missing/]
+[module child(ecore) extends missing/]
 [template public main(c : EClass)][file ('out', false)]body[/file][/template]
 ```
 
@@ -755,7 +847,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 A template can accept multiple parameters. Pass multiple input elements via `M2tContext.of(List, Path)`:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public main(p : EPackage, c : EClass)]
 [file ('out', false)]
 package [p.name/];
@@ -818,7 +910,7 @@ Output: `Employee_name : EString` / `Employee_salary : EDouble`
 Iterate over model elements and generate a separate file for each:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public genClass(c : EClass)]
 [file (c.name.concat('.java'), false)]
 public class [c.name/] {
@@ -842,7 +934,7 @@ Generates `Employee.java` and `Manager.java` with their respective attributes.
 Generate different kinds of files from the same model:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public main(p : EPackage)]
 [file ('MANIFEST.MF', false)]
 Bundle-Name: [p.name/]
@@ -864,7 +956,7 @@ Generates `MANIFEST.MF` plus one `.java` file per classifier.
 Use append mode (`true`) to accumulate output across iterations:
 
 ```mtl
-[module m(Ecore)/]
+[module m(ecore)/]
 [template public main(p : EPackage)]
 [for (c : EClassifier | p.eClassifiers)]
 [file (c.name.concat('.java'), false)]
@@ -979,6 +1071,10 @@ Override chains work transitively. With modules A -> B -> C, each overriding `re
 
 Result: `A+B+C`
 
+`[super/]` points to the template whose invocation led to the override (MOFM2T §8.1.3): with `t2 overrides t1, t3`, a call of `t3` that runs `t2` makes `[super/]` run `t3`, a call of `t1` runs `t1`. Where `t2` is called directly, the first listed template, `t1`, is the one. A main template in the child module that calls its own override reaches the base the same way.
+
+An override is checked when the modules are linked (MOFM2T §7, §8.1.3). It must name a public or protected template of a module the overriding one extends — not one of its own module, not itself, not one it only imports, not a private one — and have as many parameters, each of the same type as the overridden one's, a subtype or a supertype. Anything else is a link error, handled as in §5.6. At runtime an override applies when every argument is an instance of its parameter type and its guard holds; one parameter that decides for the overridden template decides for it.
+
 ### 8.4 Visibility
 
 | Visibility | Same module | Via extends | Via import |
@@ -994,6 +1090,18 @@ When multiple modules define a template with the same name, resolution priority 
 1. **Local** (defined in the current module)
 2. **Extended** (inherited from the parent module)
 3. **Imported** (from imported modules)
+
+Of the candidates in that order, the first with as many parameters as the call has arguments is taken.
+
+### 8.5.1 Entry Points
+
+`execute(module, context)` starts from the public template marked `[comment @main/]`, else the public template named `main`, of the module or a module it extends. MOFM2T §7 has no main template — "A transformation (template) can be started by directly invoking a public template with the correct parameters" — and that is `execute(module, templateName, context)`:
+
+```java
+M2tResult result = engine.execute(module, "classToJava", M2tContext.of(eClass));
+```
+
+In both, the input elements must fit the template's parameters in number and type. A module without an entry point, a private one, or inputs that do not fit are an ERROR in the result, and nothing is generated — no exception.
 
 ### 8.6 Linking API
 
@@ -1027,7 +1135,7 @@ A guard is an OCL boolean expression that controls whether a template produces o
 [/template]
 ```
 
-When the guard evaluates to `false`, the template produces no output.
+When the guard evaluates to `false`, the template produces no output. A guard that is neither `true` nor `false` is an ERROR, and the template is not invoked (§4.5).
 
 A guard is an ordinary OCL expression and may call the module's queries, like any other expression
 in the module — see [§5.4](#54-calling-queries-from-templates).
@@ -1105,13 +1213,30 @@ Protected areas mark regions in generated files that are preserved across regene
 [/protected]
 ```
 
-The generated output contains markers with a content hash (D31):
+The generated output contains markers with a content hash (D31). Both markers stand on lines of their own, indented like the `[protected]` tag (MOFM2T §7.2 example):
 
 ```
 // [protected 'unique_id' a1b2c3d4]
 // default content
 // [/protected]
 ```
+
+The comment syntax of the markers depends on the file's extension: `//` for `.java` and any extension not configured, `<!-- … -->` for `.xml` and `.html`, `#` for `.py`, `--` for `.sql`. More can be configured:
+
+```java
+M2tConfiguration config = M2tConfiguration.builder(oclConfig)
+    .protectedAreaDelimiter("yaml", ProtectedAreaDelimiter.HASH)
+    .protectedAreaDelimiter("vue", new ProtectedAreaDelimiter("<!--", "-->"))
+    .build();
+```
+
+An id is unique per file (§7.2: "a unique identification"). Several cases are an ERROR:
+
+- an id used twice in one file: the second area is not written;
+- an id held twice by the existing file: that id is not merged;
+- an empty or `invalid` id: the area is not written.
+
+An id containing `'` is written escaped (`'it\'s'`) and survives the round trip.
 
 ### 10.2 Dynamic IDs
 
@@ -1136,6 +1261,8 @@ The protected area merger uses SHA-256 hashes to detect changes:
 3. **Regeneration (user edited):** The existing content hash differs from the marker — user content is preserved
 
 This approach is more robust than marker-only matching because it detects when the default content was changed by the user.
+
+An area the existing file has but the templates no longer generate keeps its user code (§7.2: "preserved and not overwritten"). If the user changed it, it goes to `M2tGenerationStrategy.lostContent(path, areas, charset)` and is reported as a WARNING. `FileSystemGenerationStrategy` appends it to `<file>.lost`, as Acceleo does. An area left at its default goes without a word.
 
 ### 10.4 M2tGenerationStrategy for Protected Areas
 
@@ -1166,7 +1293,7 @@ M2tConfiguration config = M2tConfiguration.builder(oclConfig)
 
 ```mtl
 [template public main(c : EClass)]
-[file ('out.java', false, 'UTF-8')]
+[file ('out.java', false)]
 public class [c.name/] {
     [protected ('fields')]
     // custom fields
@@ -1200,23 +1327,33 @@ Use `protectedAreaEnabled(false)` when processing untrusted templates or when pr
 
 ## 11. Standard Library
 
-MOFM2T defines 13 string operations (§8.3) in addition to the full OCL standard library. These are automatically available in all templates:
+MOFM2T defines 13 string operations (§8.3.1) in addition to the full OCL standard library. These are automatically available in all templates:
 
 | Operation | Signature | Description | Example |
 |-----------|-----------|-------------|---------|
-| `substitute` | `substitute(s, r) : String` | Replace all occurrences of `s` with `r` | `'test'.substitute('es', 'se')` = `tset` |
-| `index` | `index(s) : Integer` | 1-based position of first occurrence | `'test'.index('es')` = `2` |
+| `substitute` | `substitute(r, t) : String` | Replace the **first** occurrence of `r` with `t` | `'aXbXc'.substitute('X', '-')` = `a-bXc` |
+| `index` | `index(r) : Integer` | 1-based position of the first occurrence, `-1` if none | `'test'.index('es')` = `2` |
 | `first` | `first(n) : String` | First `n` characters | `'hello'.first(3)` = `hel` |
 | `last` | `last(n) : String` | Last `n` characters | `'hello'.last(3)` = `llo` |
-| `strstr` | `strstr(s) : Boolean` | Contains check | `'test'.strstr('es')` = `true` |
-| `strcmp` | `strcmp(s) : Integer` | Lexicographic comparison (0 = equal) | `'test'.strcmp('test')` = `0` |
-| `isAlpha` | `isAlpha() : Boolean` | All characters are letters | `'abc'.isAlpha()` = `true` |
-| `isAlphanum` | `isAlphanum() : Boolean` | All characters are letters or digits | `'abc1'.isAlphanum()` = `true` |
+| `strstr` | `strstr(r) : Boolean` | Contains check | `'test'.strstr('es')` = `true` |
+| `strtok` | `strtok(s1, flag) : String` | Next token; flag `0` starts, `1` continues, `''` at the end | `'a,b'.strtok(',', 0)` = `a` |
+| `strcmp` | `strcmp(s1) : Integer` | Lexicographic comparison, the sign of C's `strcmp(self, s1)` | `'b'.strcmp('a')` > `0` |
+| `isAlpha` | `isAlpha() : Boolean` | All characters are letters (`''` included) | `'abc'.isAlpha()` = `true` |
+| `isAlphanum` | `isAlphanum() : Boolean` | All characters are letters or digits (`''` included) | `'abc1'.isAlphanum()` = `true` |
 | `toUpper` | `toUpper() : String` | Convert to uppercase | `'Hello'.toUpper()` = `HELLO` |
 | `toLower` | `toLower() : String` | Convert to lowercase | `'Hello'.toLower()` = `hello` |
 | `toUpperFirst` | `toUpperFirst() : String` | Capitalize first character | `'test'.toUpperFirst()` = `Test` |
 | `toLowerFirst` | `toLowerFirst() : String` | Lowercase first character | `'TEST'.toLowerFirst()` = `tEST` |
-| `trim` | `trim() : String` | Remove leading/trailing whitespace | `' hi '.trim()` = `hi` |
+
+§8.3.2 and §8.3.3 add `Integer::toString()` and `Real::toString()`, which the OCL library provides (`[42.toString()/]`).
+
+Notes on the deviations and decisions (#373):
+
+- **`substitute`.** It replaces the first occurrence, as the spec's singular "substring r" and Acceleo 3.7 read it. Every occurrence is replaced by `substituteAll`, an extension the OCL library provides, as it does `trim` (also an extension, not MOFM2T). An empty search string makes `substitute` invalid.
+- **`strcmp`.** It keeps the sign of C and Acceleo: positive when `self` is greater. The spec's sentence ("depending on whether s1 is lexicographically less than … self") reads the other way round; it is taken as an erratum.
+- **`strtok`.** Flag `1` without a preceding `0` starts the tokenization, as in Acceleo. Any flag other than `0` or `1` is invalid.
+- **Invalid calls.** A `null` or `invalid` source or argument, and a negative length (`first(-1)`), make the call `invalid` with an ERROR such as "Null argument for operation 'first'". They no longer yield `''` or the text of a Java exception — the line of #306 for the predefined operations.
+- **Case mapping** does not depend on the platform's default locale: on a Turkish system `'i'.toUpper()` is `I` as well.
 
 All OCL String and Collection operations are also available:
 
@@ -1333,7 +1470,7 @@ M2tEngine engine = M2tEngines.create(M2tConfiguration.builder(ocl)
 [/file]
 ```
 
-**`customOperationsEnabled(true)` on the OCL configuration is not optional.** M2T sets the flag on the *evaluation options* it uses, but a provider registered on the configuration is active only when the flag is set in **both** places (D29 — custom operations are off by default, deliberately). Leave it out and the calls resolve to nothing: `[file (b.docPath(), false)]` writes a file literally named `OclInvalid`. The run fails and says why — `Unknown operation: docPath` — because M2T forwards what the OCL engine reports; before #114 it discarded those diagnostics and reported success over a broken document. See [OCL User Guide §11](ocl-user-guide.md#11-custom-operations) for how to write a provider, and register as many as you need.
+**`customOperationsEnabled(true)` on the OCL configuration is not optional.** M2T sets the flag on the *evaluation options* it uses, but a provider registered on the configuration is active only when the flag is set in **both** places (D29 — custom operations are off by default, deliberately). Leave it out and the calls resolve to nothing: `[file (b.docPath(), false)]` evaluates to `invalid`, the block is skipped, and the run fails and says why — `Unknown operation: docPath` — because M2T forwards what the OCL engine reports. Before #114 it discarded those diagnostics and reported success over a broken document; before #270 the block went on and wrote a file literally named `OclInvalid`. See [OCL User Guide §11](ocl-user-guide.md#11-custom-operations) for how to write a provider, and register as many as you need.
 
 The whole configuration above runs as `M2tDocGenerationExampleTest` in `org.eclipse.fennec.m2x.m2t.tests` — the model, the three operations, the template, and the files it writes. It is the executable version of this section, so the two cannot drift apart.
 
@@ -1355,7 +1492,7 @@ One method that makes sense for two receiver types is registered twice, once per
 |---|---|
 | **A literal `[` cannot be written** | The lexer opens code mode on `[` with no escape, so neither `[text](url)` nor `![alt](url)` can be typed in template text. Let a Java operation return the finished link or image. A lone bracket: `['['/]`. |
 | **Types must resolve** | Without `packageRegistry(…)`, a type name in the template degrades and `oclIsKindOf` stops discriminating — see [§3.5](#35-which-metamodels-the-engine-sees). |
-| **An unset reference is your operation's problem** | M2T evaluates leniently, so a call on `null` reaches your lambda with a `null` receiver instead of failing — guard there, as `mdLinkFrom` does. Navigating *from* an unset reference (`b.author.name`) answers `null`, which renders as nothing and is reported as a warning. Neither writes `OclInvalid` into the document. |
+| **An unset reference is your operation's problem** | M2T evaluates leniently, so a call on `null` reaches your lambda with a `null` receiver instead of failing — guard there, as `mdLinkFrom` does. Navigating *from* an unset reference (`b.author.name`) answers `null`, which renders as nothing and is reported as a warning. Neither writes `OclInvalid` into the document — nothing does. A value that comes out `invalid` (`'by ' + b.author.name` with the name unset, say) leaves its spot empty and fails the run with an error at the expression's line, `Null argument for operation '+'` (#270). |
 | **An exception becomes a diagnostic** | The evaluator catches `RuntimeException`, reports it and yields `null`. An empty document usually means an operation threw — check `result.isSuccess()` and `result.diagnostics()`. |
 
 **What a generation diagnostic looks like.** A problem found while generating names the place it happened, so a log is enough to find it:
@@ -1427,6 +1564,14 @@ public interface M2tGenerationStrategy {
 
     // Read existing content for protected area merging (default: null)
     default String readExistingContent(String filePath, Charset charset) { ... }
+
+    // User code of protected areas no longer generated (default: dropped; file system: <file>.lost)
+    default void lostContent(String filePath, Map<String, String> areas, Charset charset) { ... }
+
+    // The path a [file] unique id was written to before, and remembering the paths of a run
+    // (default: none; file system: .m2t-ids)
+    default String pathOfUniqueId(String uniqueId) { ... }
+    default void recordUniqueIds(Map<String, String> pathsByUniqueId) { ... }
 }
 ```
 
@@ -1494,10 +1639,11 @@ MOFM2T §8.4 defines precise whitespace normalization rules. The engine supports
 The whitespace normalizer applies these rules:
 
 1. **Body-trimming** — The first and last newlines of template and multi-line block bodies are stripped
-2. **Standalone block stripping** — When a block tag (`[for]`, `[if]`, `[/for]`, `[/if]`, etc.) is alone on a line, the whitespace in front of the tag is removed from the output. What happens to the newline that ends the tag line follows the shape of the block — see 16.2.2
-3. **Default separator injection** — Standalone `[for]` blocks without an explicit `separator()` get a `"\n"` separator
-4. **BOL indicator** (**SPEC mode only**) — The `^` character at the beginning of a line resets indentation to column 0. In ACCELEO mode, `^` is passed through as literal text (Acceleo 3.7 does not implement this feature)
-5. **Indent propagation** — When a template invocation is indented, that indent is propagated to all subsequent lines of the invoked template's output
+2. **Standalone block stripping** — When a block tag (`[for]`, `[if]`, `[/for]`, `[/if]`, etc.) is alone on a line, the whitespace in front of the tag is removed from the output. What happens to the newline that ends the tag line follows the shape of the block — see 16.2.2. A block that shares its head or tail line with other body elements is *embedded* and is output as is — see 16.2.3
+3. **Default separator injection** — Standalone **multi-line** `[for]` blocks without an explicit `separator()` get a `"\n"` separator. A single-line `[for …]…[/for]` alone on its line runs its iterations together (`[for (c : EClass | p.eClassifiers)][i/][/for]` produces `123`), exactly as Acceleo 3.7 does
+4. **BOL indicator** (**SPEC mode only**) — The `^` character at the beginning of a line resets indentation to column 0. It removes only the whitespace the template writes itself: an invoked template's `^l2` under a caller's propagated indentation keeps that indentation, as propagation belongs to the call site. In ACCELEO mode, `^` is passed through as literal text (Acceleo 3.7 does not implement this feature)
+5. **Indent propagation** — When a template invocation stands on a line by itself and is indented, that indent is put in front of every line of the invoked template's output, the first line included
+6. **Iterative invocation separator** — A standalone template invocation whose argument is a collection separates the outputs of the iterations with `"\n"` unless it names a `separator()`, the same way a multi-line `[for]` does
 
 ### 16.2.2 The Newline After a Standalone Block
 
@@ -1507,10 +1653,11 @@ the newline ending the tail line:
 | Shape | Body per §8.4 | Newline after the tail |
 |-------|---------------|------------------------|
 | multi-line (`[for]` … `[/for]` on their own lines) | starts on the line after the head, ends **excluding** the newline in front of the tail | **kept** — the construct already spent a newline in front of its tail |
-| single-line (`[if (…)]text[/if]` on one line) | starts after the head's closing bracket, ends before the tail's opening bracket | **removed** — no newline was spent, so the tag line takes its own |
+| single-line (`[if (…)]text[/if]` on one line) | starts after the head's closing bracket, ends before the tail's opening bracket | **kept when the block wrote text**, removed when it wrote nothing |
 
-So a multi-line block leaves the line after it on its own line, while a single-line block on
-a line by itself contributes only the text it produced:
+The newline after a single-line block is a whitespace element of the enclosing body, which §8.4 outputs "as is". `A\n  [if (true)]X[/if]\nB\n  [if (false)]Y[/if]\nC` therefore produces `A\nX\nB\nC`: the `X` keeps its own line, and the line of the block that wrote nothing disappears instead of leaving an empty one, as in Acceleo's `testingIf`. This holds in both modes (#374).
+
+A multi-line block leaves the line after it on its own line:
 
 ```mtl
 A
@@ -1524,6 +1671,21 @@ produces `A\n  name;\n  salary;\nZ` — the `[for]` and `[/for]` tag lines are g
 line the body wrote keeps its newline. Every branch of an `[if]` behaves the same way,
 whether the `if`, an `elseif` or the `else` is taken.
 
+### 16.2.3 Embedded Blocks
+
+A block is standalone only when nothing else stands on the lines of its head and its tail.
+Blocks nest to any depth, and an inner block whose head follows the enclosing block's head
+on the same line is *embedded* — §8.4 says its text is "output as is", so it gets neither
+the stripping nor the default separator:
+
+```mtl
+<[if (p.name = 'company')][for (c : EClass | p.eClassifiers)][c.name/] [/for][/if]>
+```
+
+produces `<Employee Manager Marker >`. Being the first or last element of the enclosing
+body does not make a block standalone; what counts is whether the enclosing block is
+multi-line, so that the inner block's line is its own (#272).
+
 ### 16.2.1 SPEC vs ACCELEO Differences
 
 | Feature | SPEC | ACCELEO |
@@ -1533,6 +1695,10 @@ whether the `if`, an `elseif` or the `else` is taken.
 | Default separator injection | Yes | Yes |
 | BOL indicator `^` | Yes — strips leading whitespace | No — literal passthrough |
 | Indent propagation | Yes | Yes |
+
+A template saved with CRLF line ends is read as if it had `\n` ones (line and column numbers unchanged), so no stray `\r` remains where a rule takes a newline away; the output uses `\n`.
+
+The §8.2 keywords `guard`, `init`, `each` and `mode` have no tokens: a guard is written `? (…)`, an init section `{ … }`, the separator `separator (…)`, and only text-explicit mode exists (§4.12).
 
 ### 16.3 Configuration
 
@@ -1580,3 +1746,25 @@ run templates as a build step instead of from Java — configured entirely throu
 That has its own guide: **[M2T bnd Generator Guide](m2t-generator-guide.md)** — dependencies,
 the instruction and its attributes, how metamodels are registered under their namespace URI,
 and how the models are bound to `main`.
+
+---
+
+## 18. Deviations from MOFM2T 1.0
+
+Where the engine does something other than, or more than, the specification says — each a decision, made in the spec audit of 2026-10 (#363–#376):
+
+| Topic | Specification | Fennec M2T |
+|-------|---------------|------------|
+| Escape direction (§7.1, §8.2) | text-explicit and code-explicit mode | text-explicit only; `@code-explicit` is a parse error (§4.12) |
+| Trace block (§7.2, §8.1.18) | text is traced to model elements and templates | the body is written and the model element evaluated; no trace records (§4.11) |
+| Unique names (§8.1.2) | a module element has a unique name | same-named templates with different parameter types are kept and dispatched by argument type, as in Acceleo (§5.5) |
+| Visibility (§8.2) | `public` or `private`, required | also `protected` (Acceleo, §7 prose); a missing one is public with a WARNING (§4.2) |
+| Entry point (§7) | no main template; any public template is started by name | `execute(module, name, context)`, and `execute(module, context)` for `@main`/`main` (§8.5.1) |
+| Comments (§7.4, §8.2) | `[comment()]…[/comment]` | also `[comment]…[/comment]` and `[comment … /]` (Acceleo); `//` is text in text-explicit mode (§4.10) |
+| Keywords (§8.2) | `guard`, `init`, `each`, `mode` | `? (…)`, `{ … }`, `separator (…)`; no `mode` (§16) |
+| `post` | — | Acceleo extension (§9.4) |
+| `[file]` charset | — | optional fourth argument (§4.7) |
+| Protected-area delimiters (§7.2) | left to the tool | per file extension, configurable (§10.1) |
+| `substitute` (§8.3.1) | "substring r" | the first occurrence; `substituteAll` for all (§11) |
+| `strcmp` sign (§8.3.1) | the sentence reads s1 < self ⇒ negative | the sign of C's `strcmp(self, s1)`, as Acceleo (§11) |
+| Whitespace (§8.4) | the newline after a single-line stand-alone block is output | kept when the block wrote text, dropped when it wrote nothing (§16.2.2); ACCELEO mode passes `^` through |

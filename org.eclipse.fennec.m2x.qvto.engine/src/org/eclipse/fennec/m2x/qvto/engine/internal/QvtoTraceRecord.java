@@ -29,12 +29,14 @@ import org.eclipse.fennec.m2x.model.qvtoperational.MappingOperation;
  * @param mappingOp the mapping operation AST node
  * @param source the source object passed to the mapping
  * @param args the in/inout parameter values (snapshot for inhibition matching)
+ * @param outArgs the arguments with the out/inout values handed back to the caller, which an
+ *        inhibited call hands back again (§8.2.1.15, #336); {@code null} without any
  * @param result the result object created by the mapping
  *
  * @author Data In Motion Consulting
  * @since 1.0
  */
-record QvtoTraceRecord(String mappingName, MappingOperation mappingOp, Object source, Object[] args, Object result) {
+record QvtoTraceRecord(String mappingName, MappingOperation mappingOp, Object source, Object[] args, Object[] outArgs, Object result) {
 
 	/**
 	 * Checks whether the given arguments match this record's args for inhibition.

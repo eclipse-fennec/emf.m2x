@@ -41,6 +41,9 @@ public @interface QvtdEngineConfiguration {
 	@AttributeDefinition(name = "Blackbox Enabled", description = "Whether transformations may call Java blackbox libraries")
 	boolean blackboxEnabled() default false;
 
+	@AttributeDefinition(name = "Implementation Providers Enabled", description = "Whether relation implementation providers bound as services serve implementedby clauses (QVT-R/QVT-O hybrid, #286)")
+	boolean implementationProvidersEnabled() default false;
+
 	@AttributeDefinition(name = "Allowed Blackbox Modules", description = "Qualified names a transformation may import as a blackbox; empty puts no restriction on the names")
 	String[] allowedBlackboxModules() default {};
 
@@ -68,6 +71,9 @@ public @interface QvtdEngineConfiguration {
 	@AttributeDefinition(name = "Timeout (ms)", description = "Transformation timeout in milliseconds (0 = no timeout)")
 	long timeout() default QvtdConfiguration.DEFAULT_TIMEOUT_MS;
 
-	@AttributeDefinition(name = "Max Trace Records", description = "Maximum number of trace records one transformation may create")
-	int maxTraceRecords() default 100_000;
+	@AttributeDefinition(name = "Max Trace Records", description = "Maximum number of trace records one run may hold, across all relations; reaching it is an error")
+	int maxTraceRecords() default QvtdConfiguration.DEFAULT_MAX_TRACE_RECORDS;
+
+	@AttributeDefinition(name = "Delete Unmatched", description = "Whether an enforce run deletes target objects that no valid binding requires (§7.10.2)")
+	boolean deleteUnmatched() default true;
 }

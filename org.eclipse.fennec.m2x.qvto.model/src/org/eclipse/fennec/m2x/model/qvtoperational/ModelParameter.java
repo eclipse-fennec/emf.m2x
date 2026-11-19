@@ -24,7 +24,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * A model parameter representing a model extent of the transformation (QVT v1.3 Section 8.2.2.4). When collectionKind is set, this parameter accepts a collection of model extents (§8.1.1, §8.2.1.5).
+ * A model parameter representing a model extent of the transformation (QVT v1.3 Section 8.2.1.5). When collectionKind is set, this parameter accepts a collection of model extents (§8.1.1, §8.2.1.5).
  * <!-- end-model-doc -->
  *
  * <p>

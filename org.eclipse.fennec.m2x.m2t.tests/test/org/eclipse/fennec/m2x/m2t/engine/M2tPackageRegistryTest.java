@@ -68,7 +68,7 @@ class M2tPackageRegistryTest {
 			[/file]
 			[/template]
 			[template public render(b : Book)]BASE[/template]
-			[template public render(n : Novel) overrides render]OVERRIDE[/template]
+			[template public render(n : Novel)]OVERRIDE[/template]
 			""";
 
 	private EPackage bookshelfPackage;
@@ -118,8 +118,10 @@ class M2tPackageRegistryTest {
 	}
 
 	@Test
-	@DisplayName("oclIsKindOf and override dispatch work on a custom metamodel")
-	void kindOfAndOverrideDispatchWork() throws Exception {
+	// Within one module the more specific namesake is chosen, not an override: overriding takes a
+	// template of an extended module (MOFM2T §7, #365), same-named templates dispatch by type (#369)
+	@DisplayName("oclIsKindOf and dispatch by parameter type work on a custom metamodel")
+	void kindOfAndTypeDispatchWork() throws Exception {
 		M2tEngine engine = engineWith(builder -> builder.packageRegistry(registry));
 
 		String output = generate(engine);

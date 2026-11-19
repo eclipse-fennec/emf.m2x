@@ -1452,7 +1452,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
-	public EReference getConstraint_ContextClassifier() {
+	public EReference getConstraint_MessageExpression() {
 		return (EReference)constraintEClass.getEStructuralFeatures().get(3);
 	}
 
@@ -1462,7 +1462,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
-	public EReference getConstraint_ContextOperation() {
+	public EReference getConstraint_ContextClassifier() {
 		return (EReference)constraintEClass.getEStructuralFeatures().get(4);
 	}
 
@@ -1472,7 +1472,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
-	public EReference getConstraint_ContextProperty() {
+	public EReference getConstraint_ContextOperation() {
 		return (EReference)constraintEClass.getEStructuralFeatures().get(5);
 	}
 
@@ -1482,8 +1482,18 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 	 * @generated
 	 */
 	@Override
+	public EReference getConstraint_ContextProperty() {
+		return (EReference)constraintEClass.getEStructuralFeatures().get(6);
+	}
+
+	/**
+	 * <!-- begin-user-doc -->
+	 * <!-- end-user-doc -->
+	 * @generated
+	 */
+	@Override
 	public EAttribute getConstraint_IsStatic() {
-		return (EAttribute)constraintEClass.getEStructuralFeatures().get(6);
+		return (EAttribute)constraintEClass.getEStructuralFeatures().get(7);
 	}
 
 	/**
@@ -1870,6 +1880,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		createEAttribute(constraintEClass, CONSTRAINT__NAME);
 		createEAttribute(constraintEClass, CONSTRAINT__KIND);
 		createEReference(constraintEClass, CONSTRAINT__SPECIFICATION);
+		createEReference(constraintEClass, CONSTRAINT__MESSAGE_EXPRESSION);
 		createEReference(constraintEClass, CONSTRAINT__CONTEXT_CLASSIFIER);
 		createEReference(constraintEClass, CONSTRAINT__CONTEXT_OPERATION);
 		createEReference(constraintEClass, CONSTRAINT__CONTEXT_PROPERTY);
@@ -2118,6 +2129,7 @@ public class OclPackageImpl extends EPackageImpl implements OclPackage {
 		initEAttribute(getConstraint_Name(), ecorePackage.getEString(), "name", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEAttribute(getConstraint_Kind(), this.getConstraintKind(), "kind", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_UNSETTABLE, !IS_ID, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getConstraint_Specification(), this.getOclExpression(), null, "specification", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
+		initEReference(getConstraint_MessageExpression(), this.getOclExpression(), null, "messageExpression", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, IS_COMPOSITE, !IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getConstraint_ContextClassifier(), ecorePackage.getEClassifier(), null, "contextClassifier", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getConstraint_ContextOperation(), ecorePackage.getEOperation(), null, "contextOperation", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);
 		initEReference(getConstraint_ContextProperty(), ecorePackage.getEStructuralFeature(), null, "contextProperty", null, 0, 1, Constraint.class, !IS_TRANSIENT, !IS_VOLATILE, IS_CHANGEABLE, !IS_COMPOSITE, IS_RESOLVE_PROXIES, !IS_UNSETTABLE, IS_UNIQUE, !IS_DERIVED, IS_ORDERED);

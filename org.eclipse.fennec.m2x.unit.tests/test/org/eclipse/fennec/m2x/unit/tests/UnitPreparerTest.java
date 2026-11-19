@@ -169,7 +169,7 @@ class UnitPreparerTest {
 
 	@Test
 	void prepare_refusesASource_andAMissingUnit_andALanguageWithoutBinder() throws Exception {
-		UnitKey sourceKey = store.put("m2t", new StoredSourceUnit("gen.Src", "[module x(Ecore)/]"));
+		UnitKey sourceKey = store.put("m2t", new StoredSourceUnit("gen.Src", "[module x(ecore)/]"));
 		assertTrue(assertThrows(UnitPrepareException.class, () -> preparer(registry).prepare(sourceKey))
 				.getMessage().contains("compile()"));
 		assertTrue(assertThrows(UnitPrepareException.class,

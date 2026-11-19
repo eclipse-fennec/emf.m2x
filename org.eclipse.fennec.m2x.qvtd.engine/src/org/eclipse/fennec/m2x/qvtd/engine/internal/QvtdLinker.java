@@ -23,9 +23,13 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.model.qvtbase.Rule;
+import org.eclipse.fennec.m2x.model.qvtrelation.Relation;
+import org.eclipse.fennec.m2x.model.qvtrelation.RelationCallExp;
 import org.eclipse.fennec.m2x.model.qvtrelation.RelationalTransformation;
 import org.eclipse.fennec.m2x.ocl.api.LinkDiagnostics;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
@@ -44,9 +48,8 @@ import org.eclipse.fennec.m2x.unit.resolve.ResolutionPolicy;
  * the resolvers are consulted in order, and a name nothing answers for is an error rather
  * than a silence.
  *
- * <p>A resolved unit contributes its rules to the importing transformation, the way an
- * {@code extends} does — rules the importing transformation declares itself win, so an
- * import cannot quietly replace a relation.
+ * <p>A resolved unit makes its names visible (§7.1.1): the importing transformation takes its
+ * base from it and calls its relations, and nothing else of it runs (#360).
  *
  * @since 1.0
  */
@@ -91,6 +94,12 @@ public class QvtdLinker {
 			} catch (QvtdParseException failure) {
 				failures.add(failure.getMessage(), parserSupport.positionOfImport(transformation, qualifiedName),
 						failure);
+			}
+		}
+		if (!failures.hasErrors()) {
+			for (Unresolved missing : unresolved(transformation)) {
+				failures.add(missing.message(), missing.node() == null ? null : parserSupport.positionOf(missing.node()),
+						null);
 			}
 		}
 		if (failures.hasErrors()) {
@@ -173,24 +182,122 @@ public class QvtdLinker {
 	}
 
 	/**
-	 * Copies the imported rules in, leaving the importing transformation's own alone.
+	 * Binds an import (§7.1.1, §7.13.7): it makes the imported unit's names visible, it does not
+	 * bring its relations into the run (#360). What the importing transformation takes from it is
+	 * what it asks for — the base its {@code extends} names, inherited the way an {@code extends}
+	 * within one unit is (§7.11.1.1), and the relations it calls.
 	 *
-	 * <p>Deep-copied for the same reason {@code extends} does it: a rule is contained by its
-	 * transformation, so moving it would take it out of the unit it came from.
-	 */
-	/**
-	 * Binds an import the QVT-R way: the imported rules are copied into the importing
-	 * transformation, a rule whose name the target already carries is skipped (§7.11.1.1).
+	 * <p>A called relation is copied in as a non-top relation, so it runs when it is called and
+	 * only then, together with the queries of its transformation. Deep copies for the same reason
+	 * {@code extends} copies: a rule is contained by its transformation, so moving it would take
+	 * it out of the unit it came from.
 	 */
 	static void merge(RelationalTransformation target, RelationalTransformation imported) {
-		Set<String> own = new HashSet<>();
-		for (Rule rule : target.getRule()) {
-			own.add(rule.getName());
+		EAnnotation base = target.getEAnnotation(QvtrParserSupport.EXTENDS_ANNOTATION);
+		if (base != null && target.getExtends() == null && !base.getDetails().containsKey(INHERITED)
+				&& imported.getName().equals(base.getDetails().get("name"))) {
+			QvtrParserSupport.inherit(target, imported);
+			base.getDetails().put(INHERITED, imported.getName());
 		}
-		for (Rule rule : new ArrayList<>(imported.getRule())) {
-			if (own.add(rule.getName())) {
-				target.getRule().add(EcoreUtil.copy(rule));
+		EAnnotation pending = target.getEAnnotation(QvtrParserSupport.PENDING_CALLS_ANNOTATION);
+		if (pending == null) {
+			return;
+		}
+		for (int i = 0; i < pending.getReferences().size(); i++) {
+			if (!(pending.getReferences().get(i) instanceof RelationCallExp call) || call.getReferredRelation() != null) {
+				continue;
+			}
+			String called = pending.getDetails().get(String.valueOf(i));
+			int dot = called.lastIndexOf('.');
+			String qualifier = dot < 0 ? null : called.substring(0, dot);
+			String name = called.substring(dot + 1);
+			Relation relation = qualifier == null ? relationNamed(target, name) : null;
+			if (relation == null && (qualifier == null || qualifier.equals(imported.getName()))) {
+				relation = callable(target, imported, name);
+			}
+			call.setReferredRelation(relation);
+		}
+	}
+
+	/** Detail on the extends annotation once an imported base has been inherited. */
+	private static final String INHERITED = "inherited";
+
+	private static Relation relationNamed(RelationalTransformation transformation, String name) {
+		for (Rule rule : transformation.getRule()) {
+			if (rule instanceof Relation relation && name.equals(rule.getName())) {
+				return relation;
 			}
 		}
+		return null;
+	}
+
+	/** The imported relation of that name, copied into the target once, or {@code null}. */
+	private static Relation callable(RelationalTransformation target, RelationalTransformation imported, String name) {
+		Relation original = relationNamed(imported, name);
+		if (original == null) {
+			return null;
+		}
+		for (Rule rule : target.getRule()) {
+			EAnnotation from = rule.getEAnnotation(IMPORTED_ANNOTATION);
+			if (rule instanceof Relation relation && from != null && imported.getName().equals(from.getDetails().get("from"))
+					&& name.equals(from.getDetails().get("name"))) {
+				return relation;
+			}
+		}
+		Relation copy = EcoreUtil.copy(original);
+		copy.setIsTopLevel(false); // runs when it is called, not as a top relation of the importer
+		if (relationNamed(target, name) != null) {
+			copy.setName(imported.getName() + "." + name);
+		}
+		EAnnotation from = EcoreFactory.eINSTANCE.createEAnnotation();
+		from.setSource(IMPORTED_ANNOTATION);
+		from.getDetails().put("from", imported.getName());
+		from.getDetails().put("name", name);
+		copy.getEAnnotations().add(from);
+		target.getRule().add(copy);
+		QvtrParserSupport.inheritQueries(target, imported);
+		return copy;
+	}
+
+	/** Annotation on a relation copied in because the importing transformation calls it. */
+	static final String IMPORTED_ANNOTATION = "qvtr.imported";
+
+	/** A name the imports did not answer for, and the node that used it, if any. */
+	record Unresolved(String message, EObject node) {
+	}
+
+	/**
+	 * What is still unresolved once every import is bound: a base named by {@code extends}, a
+	 * rule named by {@code overrides}, a called relation. Each was left open by the parser
+	 * because the unit imports others (#360); none of them may reach a run.
+	 *
+	 * @param transformation the linked transformation
+	 * @return the open names, empty when everything resolved
+	 */
+	static List<Unresolved> unresolved(RelationalTransformation transformation) {
+		List<Unresolved> open = new ArrayList<>();
+		EAnnotation base = transformation.getEAnnotation(QvtrParserSupport.EXTENDS_ANNOTATION);
+		if (base != null && transformation.getExtends() == null && !base.getDetails().containsKey(INHERITED)) {
+			open.add(new Unresolved("Transformation '" + transformation.getName() + "' extends '"
+					+ base.getDetails().get("name") + "', which is neither a transformation of its unit nor an imported one",
+					null));
+		}
+		for (Rule rule : transformation.getRule()) {
+			EAnnotation overrides = rule.getEAnnotation("qvtr.overrides");
+			if (overrides != null && rule.getOverrides() == null) {
+				open.add(new Unresolved("Relation '" + rule.getName() + "' overrides '"
+						+ overrides.getDetails().get("name") + "', which is no relation of its transformation", null));
+			}
+		}
+		EAnnotation pending = transformation.getEAnnotation(QvtrParserSupport.PENDING_CALLS_ANNOTATION);
+		if (pending != null) {
+			for (int i = 0; i < pending.getReferences().size(); i++) {
+				if (pending.getReferences().get(i) instanceof RelationCallExp call && call.getReferredRelation() == null) {
+					open.add(new Unresolved("Unknown relation or query '" + pending.getDetails().get(String.valueOf(i))
+							+ "': neither this transformation nor an imported one declares it", call));
+				}
+			}
+		}
+		return open;
 	}
 }

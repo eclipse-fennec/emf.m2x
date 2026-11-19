@@ -23,13 +23,16 @@ import java.util.Objects;
 import java.util.Set;
 
 import org.eclipse.emf.common.util.EList;
+import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.fennec.m2x.m2t.parser.M2tParseResult;
 import org.eclipse.fennec.m2x.model.m2t.Block;
 import org.eclipse.fennec.m2x.model.m2t.IfBlock;
+import org.eclipse.fennec.m2x.model.m2t.InlineExpression;
 import org.eclipse.fennec.m2x.model.m2t.LetBlock;
 import org.eclipse.fennec.m2x.model.m2t.M2tFactory;
+import org.eclipse.fennec.m2x.model.m2t.M2tPackage;
 import org.eclipse.fennec.m2x.model.m2t.Macro;
 import org.eclipse.fennec.m2x.model.m2t.MacroInvocation;
 import org.eclipse.fennec.m2x.model.m2t.Module;
@@ -45,6 +48,7 @@ import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.model.ocl.Variable;
 import org.eclipse.fennec.m2x.model.ocl.VariableExp;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.ocl.parser.typing.OclTypeRules;
 
 /**
  * Links parsed MOFM2T modules by resolving cross-module references.
@@ -102,6 +106,7 @@ public class M2tModuleLinker {
 
 		// Phase 2: Resolve extends and imports
 		for (M2tParseResult result : results) {
+			checkUniqueNames(result);
 			resolveExtendsAndImports(result);
 		}
 
@@ -237,22 +242,144 @@ public class M2tModuleLinker {
 
 	// --- Phase 3: Overrides ---
 
+	/**
+	 * Links the overrides of a module's templates and checks them (MOFM2T §7, §8.1.3, #365): a
+	 * template overrides a public or protected template of a module it extends — not one of its
+	 * own module, not one it only imports, not a private one — with as many parameters, each of
+	 * the same type as the overridden one's, a subtype or a supertype.
+	 */
 	private void linkOverrides(M2tParseResult result) {
 		Module module = result.module();
 
 		for (Map.Entry<Template, List<String>> entry : result.overrideNames().entrySet()) {
 			Template template = entry.getKey();
+			SourcePosition position = result.positions().get(template);
 			for (String overrideName : entry.getValue()) {
-				Template target = resolveTemplate(overrideName, module);
+				Template target = resolveOverridden(overrideName, template, module);
 				if (target != null) {
-					template.getOverrides().add(target);
+					if (checkOverride(template, target, module, position)) {
+						template.getOverrides().add(target);
+					}
 				} else {
-					unresolved(module, "Unresolved override '" + overrideName
-							+ "' in template '" + template.getName()
-							+ "' of module '" + module.getName() + "'", result.positions().get(template));
+					unresolved(module, overrideProblem(overrideName, template, module)
+							+ " in template '" + template.getName()
+							+ "' of module '" + module.getName() + "'", position);
 				}
 			}
 		}
+	}
+
+	/**
+	 * The template of an extended module that {@code overrides name} names: of the same-named
+	 * ones the first with as many parameters as the overriding template, else the first.
+	 */
+	private static Template resolveOverridden(String name, Template overriding, Module module) {
+		Template first = null;
+		for (Module extended : collectTransitiveExtends(module)) {
+			for (ModuleElement element : extended.getOwnedModuleElement()) {
+				if (element instanceof Template candidate && name.equals(candidate.getName())
+						&& isVisible(candidate, VisibilityScope.EXTENDS)) {
+					if (candidate.getParameter().size() == overriding.getParameter().size()) {
+						return candidate;
+					}
+					if (first == null) {
+						first = candidate;
+					}
+				}
+			}
+		}
+		return first;
+	}
+
+	/** Why an override target was not found, where that is more than its absence. */
+	private static String overrideProblem(String name, Template overriding, Module module) {
+		for (Module extended : collectTransitiveExtends(module)) {
+			if (findElement(name, extended, VisibilityScope.ALL) instanceof Template) {
+				return "Template '" + name + "' of module '" + extended.getName()
+						+ "' is private and cannot be overridden (MOFM2T §7)";
+			}
+		}
+		for (Module imported : module.getImports()) {
+			if (findElement(name, imported, VisibilityScope.ALL) instanceof Template) {
+				return "Template '" + name + "' of module '" + imported.getName()
+						+ "' is only imported — only a template of an extended module can be overridden (MOFM2T §7)";
+			}
+		}
+		for (ModuleElement element : module.getOwnedModuleElement()) {
+			if (element != overriding && element instanceof Template && name.equals(element.getName())) {
+				return "Template '" + name + "' is of the same module — only a template of an extended module can be overridden (MOFM2T §7)";
+			}
+		}
+		if (name.equals(overriding.getName())) {
+			return "Template '" + name + "' overrides itself — an override needs a template of an extended module (MOFM2T §7)";
+		}
+		return "Unresolved override '" + name + "'";
+	}
+
+	private boolean checkOverride(Template template, Template target, Module module, SourcePosition position) {
+		List<Variable> own = template.getParameter();
+		List<Variable> overridden = target.getParameter();
+		if (own.size() != overridden.size()) {
+			unresolved(module, "Template '" + template.getName() + "' has " + own.size() + " parameter(s), the template '"
+					+ target.getName() + "' it overrides has " + overridden.size() + " (MOFM2T §8.1.3)", position);
+			return false;
+		}
+		for (int i = 0; i < own.size(); i++) {
+			EClassifier a = own.get(i).getType();
+			EClassifier b = overridden.get(i).getType();
+			if (!OclTypeRules.conformsTo(a, b) && !OclTypeRules.conformsTo(b, a)) {
+				unresolved(module, "Parameter '" + own.get(i).getName() + "' of template '" + template.getName()
+						+ "' is a " + OclTypeRules.nameOf(a) + ", which is neither the type " + OclTypeRules.nameOf(b)
+						+ " of the template it overrides, nor a subtype or supertype of it (MOFM2T §8.1.3)", position);
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * MOFM2T §8.1.2: "A module element has a unique name within the containing module". Same-named
+	 * templates with different parameters are kept, the evaluator dispatches among them by the
+	 * argument types, as Acceleo does (#369) — a deliberate deviation. Two templates with the same
+	 * parameter types, and a template, query or macro sharing a name with one of another kind
+	 * or with another query or macro, are errors.
+	 */
+	private void checkUniqueNames(M2tParseResult result) {
+		Module module = result.module();
+		Map<String, List<ModuleElement>> byName = new LinkedHashMap<>();
+		for (ModuleElement element : module.getOwnedModuleElement()) {
+			if (element.getName() != null) {
+				byName.computeIfAbsent(element.getName(), name -> new ArrayList<>()).add(element);
+			}
+		}
+		for (List<ModuleElement> namesakes : byName.values()) {
+			for (int i = 1; i < namesakes.size(); i++) {
+				ModuleElement element = namesakes.get(i);
+				for (int j = 0; j < i; j++) {
+					ModuleElement earlier = namesakes.get(j);
+					if (!(element instanceof Template t && earlier instanceof Template e) || sameParameterTypes(t, e)) {
+						unresolved(module, "'" + element.getName() + "' is declared twice in module '" + module.getName()
+								+ "' (MOFM2T §8.1.2" + (element instanceof Template ? "; same-named templates need different parameter types" : "")
+								+ ")", result.positions().get(element));
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	private static boolean sameParameterTypes(Template a, Template b) {
+		if (a.getParameter().size() != b.getParameter().size()) {
+			return false;
+		}
+		for (int i = 0; i < a.getParameter().size(); i++) {
+			EClassifier x = a.getParameter().get(i).getType();
+			EClassifier y = b.getParameter().get(i).getType();
+			if (!OclTypeRules.conformsTo(x, y) || !OclTypeRules.conformsTo(y, x)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	// --- Phase 4: Invocations ---
@@ -264,16 +391,22 @@ public class M2tModuleLinker {
 			TemplateInvocation invocation = entry.getKey();
 			String name = entry.getValue();
 
-			ModuleElement target = resolveModuleElement(name, module);
+			ModuleElement target = resolveModuleElement(name, module, invocation.getArgument().size());
 			if (target == null) {
 				unresolved(module, "Unresolved invocation '" + name
 						+ "' in module '" + module.getName() + "'", result.positions().get(invocation));
 				continue;
 			}
+			checkArity(target, invocation.getArgument().size(), module, result.positions().get(invocation));
 
 			if (target instanceof Template template) {
 				invocation.setDefinition(template);
 			} else if (target instanceof Query query) {
+				if (invocation.getBefore() != null || invocation.getEach() != null || invocation.getAfter() != null) {
+					// A query yields a value, not a series of invocations to put text around
+					unresolved(module, "Query '" + name + "' is called with before, separator or after —"
+							+ " they belong to a template invocation (MOFM2T §8.1.10)", result.positions().get(invocation));
+				}
 				replaceWithQueryInvocation(invocation, query);
 			} else if (target instanceof Macro macro) {
 				replaceWithMacroInvocation(invocation, macro);
@@ -318,8 +451,8 @@ public class M2tModuleLinker {
 	// --- Phase 5: Inline invocation resolution ---
 
 	/**
-	 * Walks the module AST to find inline expression wrappers (LetBlock with
-	 * __inline__ variable) that contain OperationCallExp matching a module element.
+	 * Walks the module AST to find inline expressions ({@code [expr/]}) whose expression is an
+	 * OperationCallExp matching a module element.
 	 * Replaces them with the appropriate invocation node.
 	 */
 	private void resolveInlineInvocations(Module module) {
@@ -338,16 +471,11 @@ public class M2tModuleLinker {
 		for (int i = 0; i < body.size(); i++) {
 			TemplateExpression expr = body.get(i);
 
-			// Check for __inline__ LetBlock wrapper around OperationCallExp
-			if (expr instanceof LetBlock letBlock
-					&& letBlock.getLetVariable() != null
-					&& letBlock.getLetVariable().getName().startsWith("__inline__")
-					&& letBlock.getBody().isEmpty()) {
+			// An inline expression whose expression calls a template, query or macro
+			if (expr instanceof InlineExpression inline) {
+				OclExpression init = inline.getExpression();
 
-				Variable letVar = letBlock.getLetVariable();
-				OclExpression init = letVar.getOwnedInit();
-
-				// Handle [super/] — parsed as VariableExp("super") inside __inline__ LetBlock
+				// Handle [super/] — parsed as VariableExp("super") inside an inline expression
 				if (init instanceof VariableExp ve
 						&& ve.getReferredVariable() != null
 						&& "super".equals(ve.getReferredVariable().getName())) {
@@ -361,10 +489,13 @@ public class M2tModuleLinker {
 					String opName = opCall.getName();
 
 					if (opName != null) {
-						ModuleElement target = resolveModuleElement(opName, contextModule);
+						ModuleElement target = resolveModuleElement(opName, contextModule, argumentCount(opCall));
 						if (target != null) {
+							checkBodyArgument(target, opCall, contextModule);
 							TemplateExpression replacement = createInvocation(target, opCall);
 							if (replacement != null) {
+								checkArity(target, invocationArguments(replacement).size(), contextModule,
+										positionOf(contextModule, opCall));
 								body.set(i, replacement);
 								continue;
 							}
@@ -406,9 +537,17 @@ public class M2tModuleLinker {
 
 	/**
 	 * Creates the appropriate invocation node for a resolved module element.
+	 *
+	 * <p>In the receiver form {@code [c.genClass()/]} the receiver is the first argument, as
+	 * {@link M2tOperationProvider} does for a query inside an expression. Dropping it left the
+	 * parameter unbound, and the call only worked while the caller happened to have a variable of
+	 * the same name in scope (#383).
 	 */
 	private TemplateExpression createInvocation(ModuleElement target, OperationCallExp opCall) {
 		List<OclExpression> args = new ArrayList<>(opCall.getOwnedArguments());
+		if (!isStandaloneCall(opCall) && args.size() < parameterCount(target)) {
+			args.add(0, opCall.getOwnedSource());
+		}
 
 		if (target instanceof Template template) {
 			TemplateInvocation inv = FACTORY.createTemplateInvocation();
@@ -433,6 +572,26 @@ public class M2tModuleLinker {
 			return inv;
 		}
 		return null;
+	}
+
+	/**
+	 * §7.4, §8.1.19, §8.1.20: a body goes to a macro whose last parameter is of type Body, and
+	 * such a macro is called with one (#371).
+	 */
+	private void checkBodyArgument(ModuleElement target, OperationCallExp call, Module contextModule) {
+		List<OclExpression> arguments = call.getOwnedArguments();
+		boolean withBody = !arguments.isEmpty() && arguments.get(arguments.size() - 1) instanceof Block;
+		boolean takesBody = target instanceof Macro macro && !macro.getParameter().isEmpty()
+				&& macro.getParameter().get(macro.getParameter().size() - 1).getType() == M2tPackage.Literals.BODY;
+		if (withBody && !takesBody) {
+			unresolved(contextModule, "'" + target.getName() + "' is called with a body, but "
+					+ (target instanceof Macro ? "the macro has no Body parameter" : "only a macro takes one")
+					+ " (MOFM2T §8.1.19)", positionOf(contextModule, call));
+		} else if (takesBody && !withBody) {
+			unresolved(contextModule, "Macro '" + target.getName()
+					+ "' takes a body: call it as [" + target.getName() + "(…)]…[/" + target.getName() + "] (MOFM2T §7.4)",
+					positionOf(contextModule, call));
+		}
 	}
 
 	// --- Resolution helpers ---
@@ -479,6 +638,43 @@ public class M2tModuleLinker {
 		return queries;
 	}
 
+	/**
+	 * Every {@link Template} the given module can call, under the rules of
+	 * {@link #visibleQueries(Module)} — for a template invocation inside an OCL expression (#364).
+	 * Of same-named templates the first stands for all: the evaluator dispatches among them.
+	 *
+	 * @param contextModule the module the call is written in
+	 * @return the callable templates by name, never {@code null}
+	 */
+	static Map<String, Template> visibleTemplates(Module contextModule) {
+		Map<String, Template> templates = new LinkedHashMap<>();
+		collectTemplates(contextModule, VisibilityScope.ALL, templates);
+		for (Module extended : collectTransitiveExtends(contextModule)) {
+			collectTemplates(extended, VisibilityScope.EXTENDS, templates);
+		}
+		for (Module imported : contextModule.getImports()) {
+			collectTemplates(imported, VisibilityScope.IMPORTS, templates);
+		}
+		return templates;
+	}
+
+	private static void collectTemplates(Module module, VisibilityScope scope, Map<String, Template> collected) {
+		for (ModuleElement element : module.getOwnedModuleElement()) {
+			if (element instanceof Template template && template.getName() != null && isVisible(element, scope)) {
+				collected.putIfAbsent(template.getName(), template);
+			}
+		}
+	}
+
+	private static boolean isVisible(ModuleElement element, VisibilityScope scope) {
+		VisibilityKind visibility = element.getVisibility();
+		return switch (scope) {
+			case ALL -> true;
+			case EXTENDS -> visibility != VisibilityKind.PRIVATE;
+			case IMPORTS -> visibility == VisibilityKind.PUBLIC;
+		};
+	}
+
 	private static void collectQueries(Module module, VisibilityScope scope,
 			Map<String, Query> collected) {
 		for (ModuleElement element : module.getOwnedModuleElement()) {
@@ -496,59 +692,61 @@ public class M2tModuleLinker {
 		}
 	}
 
-	private static ModuleElement resolveModuleElement(String name, Module contextModule) {
-		// 1. Local module (all visibilities)
-		ModuleElement local = findElement(name, contextModule, VisibilityScope.ALL);
-		if (local != null) {
-			return local;
-		}
-
-		// 2. Extended modules (transitive, public + protected)
+	/**
+	 * Resolves a module element by name: local module → extended modules (transitive) → imported
+	 * modules, under the visibility rules. Of the same-named elements visible, the first with as
+	 * many parameters as the call has arguments is taken, else the first — whose arity the caller
+	 * then reports (#364, #369).
+	 */
+	private static ModuleElement resolveModuleElement(String name, Module contextModule, int argumentCount) {
+		List<ModuleElement> candidates = new ArrayList<>();
+		collectElements(name, contextModule, VisibilityScope.ALL, candidates);
 		for (Module extended : collectTransitiveExtends(contextModule)) {
-			ModuleElement found = findElement(name, extended, VisibilityScope.EXTENDS);
-			if (found != null) {
-				return found;
-			}
+			collectElements(name, extended, VisibilityScope.EXTENDS, candidates);
 		}
-
-		// 3. Imported modules (public only)
 		for (Module imported : contextModule.getImports()) {
-			ModuleElement found = findElement(name, imported, VisibilityScope.IMPORTS);
-			if (found != null) {
-				return found;
+			collectElements(name, imported, VisibilityScope.IMPORTS, candidates);
+		}
+		for (ModuleElement candidate : candidates) {
+			if (parameterCount(candidate) == argumentCount) {
+				return candidate;
 			}
 		}
+		return candidates.isEmpty() ? null : candidates.get(0);
+	}
 
-		return null;
+	private static void collectElements(String name, Module module, VisibilityScope scope, List<ModuleElement> collected) {
+		for (ModuleElement element : module.getOwnedModuleElement()) {
+			if (name.equals(element.getName()) && isVisible(element, scope)) {
+				collected.add(element);
+			}
+		}
 	}
 
 	/**
-	 * Resolves a template by name (for override linking).
+	 * §8.1.10, §7: a template, query or macro is invoked "with the correct parameters" — as many
+	 * arguments as it has parameters (#364).
 	 */
-	private static Template resolveTemplate(String name, Module contextModule) {
-		// Search extended modules (the typical case for overrides)
-		for (Module extended : collectTransitiveExtends(contextModule)) {
-			ModuleElement found = findElement(name, extended, VisibilityScope.EXTENDS);
-			if (found instanceof Template t) {
-				return t;
-			}
+	private void checkArity(ModuleElement target, int argumentCount, Module contextModule, SourcePosition position) {
+		int parameterCount = parameterCount(target);
+		if (argumentCount != parameterCount) {
+			unresolved(contextModule, "'" + target.getName() + "' takes " + parameterCount + " argument(s), the call passes "
+					+ argumentCount + " (MOFM2T §8.1.10)", position);
 		}
+	}
 
-		// Also search local module
-		ModuleElement local = findElement(name, contextModule, VisibilityScope.ALL);
-		if (local instanceof Template t) {
-			return t;
-		}
+	/** The arguments of a call as written, the receiver of the receiver form counted. */
+	private static int argumentCount(OperationCallExp opCall) {
+		return opCall.getOwnedArguments().size() + (isStandaloneCall(opCall) ? 0 : 1);
+	}
 
-		// Search imported modules
-		for (Module imported : contextModule.getImports()) {
-			ModuleElement found = findElement(name, imported, VisibilityScope.IMPORTS);
-			if (found instanceof Template t) {
-				return t;
-			}
-		}
-
-		return null;
+	private static List<OclExpression> invocationArguments(TemplateExpression invocation) {
+		return switch (invocation) {
+			case TemplateInvocation call -> call.getArgument();
+			case QueryInvocation call -> call.getArgument();
+			case MacroInvocation call -> call.getArgument();
+			default -> List.of();
+		};
 	}
 
 	/**
@@ -556,15 +754,7 @@ public class M2tModuleLinker {
 	 */
 	private static ModuleElement findElement(String name, Module module, VisibilityScope scope) {
 		for (ModuleElement element : module.getOwnedModuleElement()) {
-			if (name.equals(element.getName())) {
-				VisibilityKind vis = element.getVisibility();
-				if (scope == VisibilityScope.IMPORTS && vis != VisibilityKind.PUBLIC) {
-					continue;
-				}
-				if (scope == VisibilityScope.EXTENDS && vis == VisibilityKind.PRIVATE) {
-					continue;
-				}
-				// ALL → everything visible
+			if (name.equals(element.getName()) && isVisible(element, scope)) {
 				return element;
 			}
 		}
@@ -594,6 +784,15 @@ public class M2tModuleLinker {
 	 * Returns true if the OperationCallExp has no explicit source (standalone call
 	 * like {@code helper(e)}) rather than a method call like {@code e.op()}.
 	 */
+	private static int parameterCount(ModuleElement element) {
+		return switch (element) {
+			case Template template -> template.getParameter().size();
+			case Query query -> query.getParameter().size();
+			case Macro macro -> macro.getParameter().size();
+			default -> 0;
+		};
+	}
+
 	private static boolean isStandaloneCall(OperationCallExp opCall) {
 		OclExpression source = opCall.getOwnedSource();
 		if (source == null) {

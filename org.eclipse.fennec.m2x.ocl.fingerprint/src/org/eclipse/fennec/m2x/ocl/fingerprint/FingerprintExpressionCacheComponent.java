@@ -47,6 +47,6 @@ public class FingerprintExpressionCacheComponent extends FingerprintExpressionCa
 	@Activate
 	public FingerprintExpressionCacheComponent(FingerprintExpressionCacheConfiguration config,
 			@Reference FingerprintService fingerprintService) {
-		super(OclLruExpressionCache.ofSize(config.maxSize()), fingerprintService);
+		super(OclLruExpressionCache.ofSize(config.maxSize(), config.maxFailures()), fingerprintService);
 	}
 }

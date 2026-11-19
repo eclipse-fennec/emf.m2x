@@ -74,6 +74,27 @@ class QvtdDiagnosticPositionTest extends AbstractQvtdEngineTest {
 				() -> "the when clause is on line 11: " + describe(failure));
 	}
 
+	@Test
+	@DisplayName("a type error in a relation is reported at what does not fit, also in the first of several transformations (#378)")
+	void aTypeErrorCarriesItsPosition_inEveryTransformationOfTheUnit() {
+		// before #378 the diagnostics of every transformation but the last were dropped
+		QvtdParseException failure = assertThrows(QvtdParseException.class,
+				() -> engine.parseAll("""
+						transformation T(uml : simpleuml, rdbms : simplerdbms) {
+							top relation R {
+								pn : String;
+								checkonly domain uml p : Package { name = pn };
+								enforce domain rdbms s : Schema { name = pn.substring('a', 1) };
+							}
+						}
+						transformation U(uml : simpleuml, rdbms : simplerdbms) {
+						}
+						""", "test"));
+
+		assertTrue(failure.getErrors().stream().anyMatch(d -> d.getMessage().contains("No operation String::substring(String, Integer)")
+				&& d.getLine() == 5 && d.getColumn() == 56), () -> "expected 5:56, the 'a': " + describe(failure));
+	}
+
 	private static String describe(QvtdParseException failure) {
 		return failure.getErrors().stream()
 				.map(d -> d.getLine() + ":" + d.getColumn() + " " + d.getMessage())

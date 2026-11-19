@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * Break expression to exit from a loop (QVT v1.3 Section 8.2.1.2).
+ * Break expression to exit from a loop (QVT v1.3 Section 8.2.2.17).
  * <!-- end-model-doc -->
  *
  *

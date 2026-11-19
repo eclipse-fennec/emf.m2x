@@ -22,7 +22,7 @@ import org.osgi.annotation.versioning.ProviderType;
  * <!-- end-user-doc -->
  *
  * <!-- begin-model-doc -->
- * The entry point operation (main) of a transformation (QVT v1.3 Section 8.2.2.9).
+ * The entry point operation (main) of a transformation (QVT v1.3 Section 8.2.1.11).
  * <!-- end-model-doc -->
  *
  *

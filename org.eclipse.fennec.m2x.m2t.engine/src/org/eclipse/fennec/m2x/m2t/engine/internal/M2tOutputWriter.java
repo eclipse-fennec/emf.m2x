@@ -23,7 +23,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.eclipse.emf.common.util.Diagnostic;
+import org.eclipse.fennec.m2x.m2t.api.M2tConfiguration;
 import org.eclipse.fennec.m2x.m2t.api.M2tGenerationStrategy;
+import org.eclipse.fennec.m2x.m2t.api.ProtectedAreaDelimiter;
 import org.eclipse.fennec.m2x.model.m2t.OpenModeKind;
 
 /**
@@ -56,19 +59,22 @@ final class M2tOutputWriter {
 	private final M2tGenerationStrategy strategy;
 	private final boolean protectedAreasEnabled;
 	private final Charset defaultCharset;
+	private final Map<String, ProtectedAreaDelimiter> delimiters;
 	private final M2tEvaluator diagnostics;
 
 	/**
 	 * @param strategy where the files go, must not be {@code null}
 	 * @param protectedAreasEnabled whether existing protected areas are merged back in (D31)
 	 * @param defaultCharset the charset for a file that declared none
+	 * @param delimiters the comment syntax of protected-area markers by file extension
 	 * @param diagnostics where a per-file failure is reported
 	 */
 	M2tOutputWriter(M2tGenerationStrategy strategy, boolean protectedAreasEnabled,
-			Charset defaultCharset, M2tEvaluator diagnostics) {
+			Charset defaultCharset, Map<String, ProtectedAreaDelimiter> delimiters, M2tEvaluator diagnostics) {
 		this.strategy = Objects.requireNonNull(strategy, "strategy must not be null");
 		this.protectedAreasEnabled = protectedAreasEnabled;
 		this.defaultCharset = Objects.requireNonNull(defaultCharset, "defaultCharset must not be null");
+		this.delimiters = Objects.requireNonNull(delimiters, "delimiters must not be null");
 		this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics must not be null");
 	}
 
@@ -78,24 +84,36 @@ final class M2tOutputWriter {
 	 * @param generated what the templates produced, by file path
 	 * @param openModes the open mode each file was opened with
 	 * @param charsets the charset each file declared
+	 * @param uniqueIds the unique id each file declared (§7.3), by file path
 	 * @return the content that was written — without the files that could not be
 	 */
 	Map<String, String> write(Map<String, String> generated, Map<String, OpenModeKind> openModes,
-			Map<String, Charset> charsets) {
+			Map<String, Charset> charsets, Map<String, String> uniqueIds) {
 		Map<String, String> files = protectedAreasEnabled
-				? merged(generated, openModes, charsets)
+				? merged(generated, openModes, charsets, uniqueIds)
 				: generated;
+		Map<String, String> written = new LinkedHashMap<>();
 		for (Map.Entry<String, String> entry : files.entrySet()) {
-			writeOne(entry.getKey(), entry.getValue(),
+			if (writeOne(entry.getKey(), entry.getValue(),
 					openModes.getOrDefault(entry.getKey(), OpenModeKind.OVERWRITE),
-					charsetFor(entry.getKey(), charsets));
+					charsetFor(entry.getKey(), charsets))) {
+				String uniqueId = uniqueIds.get(entry.getKey());
+				if (uniqueId != null) {
+					written.put(uniqueId, entry.getKey());
+				}
+			}
+		}
+		try {
+			strategy.recordUniqueIds(written);
+		} catch (RuntimeException failure) {
+			diagnostics.addOutputDiagnostic(Diagnostic.WARNING, "The unique ids of the generated files could not be"
+					+ " recorded, a later generation will not find renamed files by them: " + failure.getMessage());
 		}
 		return files;
 	}
 
 	private Map<String, String> merged(Map<String, String> generated,
-			Map<String, OpenModeKind> openModes, Map<String, Charset> charsets) {
-		M2tProtectedAreaMerger merger = new M2tProtectedAreaMerger();
+			Map<String, OpenModeKind> openModes, Map<String, Charset> charsets, Map<String, String> uniqueIds) {
 		Map<String, String> files = new LinkedHashMap<>(generated);
 		Set<String> unreadable = new HashSet<>();
 		for (Map.Entry<String, String> entry : files.entrySet()) {
@@ -103,10 +121,17 @@ final class M2tOutputWriter {
 				continue;
 			}
 			try {
-				String existing = strategy.readExistingContent(entry.getKey(),
-						charsetFor(entry.getKey(), charsets));
+				Charset charset = charsetFor(entry.getKey(), charsets);
+				String existing = strategy.readExistingContent(entry.getKey(), charset);
+				if (existing == null) {
+					existing = underEarlierPath(entry.getKey(), uniqueIds.get(entry.getKey()), charset);
+				}
 				if (existing != null) {
-					entry.setValue(merger.merge(entry.getValue(), existing));
+					M2tProtectedAreaMerger merger = new M2tProtectedAreaMerger(
+							M2tConfiguration.delimiterFor(delimiters, entry.getKey()));
+					M2tProtectedAreaMerger.Result merged = merger.mergeReporting(entry.getValue(), existing);
+					entry.setValue(merged.content());
+					report(entry.getKey(), merged, charset);
 				}
 			} catch (RuntimeException failure) {
 				diagnostics.addGenerationError(entry.getKey(), failure);
@@ -117,11 +142,46 @@ final class M2tOutputWriter {
 		return Map.copyOf(files);
 	}
 
-	private void writeOne(String filePath, String content, OpenModeKind mode, Charset charset) {
+	/**
+	 * §7.3: the content of the file a unique id was generated to before, when that was another
+	 * path — a renamed model element — so its protected areas carry over (#368).
+	 */
+	private String underEarlierPath(String filePath, String uniqueId, Charset charset) {
+		if (uniqueId == null) {
+			return null;
+		}
+		String earlier = strategy.pathOfUniqueId(uniqueId);
+		if (earlier == null || earlier.equals(filePath)) {
+			return null;
+		}
+		String existing = strategy.readExistingContent(earlier, charset);
+		if (existing != null) {
+			diagnostics.addOutputDiagnostic(Diagnostic.INFO, "'" + filePath + "' takes over the protected areas of '"
+					+ earlier + "', generated before under the same unique id '" + uniqueId
+					+ "' (MOFM2T §7.3); '" + earlier + "' is kept");
+		}
+		return existing;
+	}
+
+	/** What a merge could not do: user code that lost its area, and ids the file holds twice. */
+	private void report(String filePath, M2tProtectedAreaMerger.Result merged, Charset charset) {
+		for (String id : merged.duplicateIds()) {
+			diagnostics.addOutputDiagnostic(Diagnostic.ERROR, "The existing '" + filePath + "' holds protected area '" + id
+					+ "' more than once — its user code is not merged (MOFM2T §7.2)");
+		}
+		if (!merged.lost().isEmpty()) {
+			strategy.lostContent(filePath, merged.lost(), charset);
+			diagnostics.addOutputDiagnostic(Diagnostic.WARNING, "The protected area(s) " + merged.lost().keySet() + " of '" + filePath
+					+ "' are no longer generated; their user code went to the generation strategy (MOFM2T §7.2)");
+		}
+	}
+
+	/** @return whether the file was written */
+	private boolean writeOne(String filePath, String content, OpenModeKind mode, Charset charset) {
 		try {
 			Writer writer = strategy.createWriter(filePath, mode, charset);
 			if (writer == null) {
-				return;
+				return false;
 			}
 			boolean written = false;
 			try {
@@ -140,8 +200,10 @@ final class M2tOutputWriter {
 					}
 				}
 			}
+			return true;
 		} catch (IOException | RuntimeException e) {
 			diagnostics.addGenerationError(filePath, e);
+			return false;
 		}
 	}
 

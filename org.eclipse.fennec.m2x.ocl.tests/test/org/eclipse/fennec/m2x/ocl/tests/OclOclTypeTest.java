@@ -177,7 +177,7 @@ class OclOclTypeTest extends AbstractOclTest {
 
 	@Test
 	void oclType_collection() throws OclParseException {
-		Object result = eval("Sequence{1, 2, 3}.oclType()", person);
+		Object result = eval("Sequence{1, 2, 3}->oclType()", person);
 		assertInstanceOf(CollectionType.class, result);
 		assertEquals(CollectionKind.SEQUENCE, ((CollectionType) result).getKind());
 	}

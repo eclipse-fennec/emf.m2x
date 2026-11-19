@@ -15,15 +15,19 @@
 package org.eclipse.fennec.m2x.ocl.parser;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EParameter;
@@ -32,8 +36,10 @@ import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.fennec.m2x.model.ocl.Constraint;
 import org.eclipse.fennec.m2x.model.ocl.ConstraintKind;
+import org.eclipse.fennec.m2x.model.ocl.FeatureCallExp;
 import org.eclipse.fennec.m2x.model.ocl.OclExpression;
 import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.model.ocl.OperationCallExp;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 
 /**
@@ -97,7 +103,36 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	List<Constraint> buildDocument(OclParser.CompleteOclDocumentEntryContext tree) {
 		constraints.clear();
 		visit(tree);
+		for (Constraint constraint : constraints) {
+			rejectPreStateOutsidePostcondition(constraint);
+		}
 		return new ArrayList<>(constraints);
+	}
+
+	/**
+	 * OCL v2.4 §12.5.1 [3], §12.6.1 [2], §12.7.1 [2], §12.8.1 [2]: "Inside a … constraint the use
+	 * of @pre is not allowed"; A.3.2.2 likewise for {@code oclIsNew()}. Both read the state before
+	 * an operation, which exists in a postcondition only. Elsewhere they used to evaluate the
+	 * current state silently (#323).
+	 */
+	private void rejectPreStateOutsidePostcondition(Constraint constraint) {
+		if (constraint.getKind() == ConstraintKind.POST || constraint.getSpecification() == null) {
+			return;
+		}
+		String where = constraint.getKind().getName() + (constraint.getName() != null ? " " + constraint.getName() : "");
+		List<EObject> nodes = new ArrayList<>();
+		nodes.add(constraint.getSpecification());
+		constraint.getSpecification().eAllContents().forEachRemaining(nodes::add);
+		for (EObject node : nodes) {
+			if (node instanceof FeatureCallExp call && call.isIsPre()) {
+				addError("@pre is allowed in postconditions only, not in " + where, null);
+				return;
+			}
+			if (node instanceof OperationCallExp call && "oclIsNew".equals(call.getName())) {
+				addError("oclIsNew() is allowed in postconditions only, not in " + where, null);
+				return;
+			}
+		}
 	}
 
 	@Override
@@ -115,6 +150,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		// stands further down (chained defs, OCL v2.4 §12.12). Strict resolution would otherwise
 		// report it as unknown (#153).
 		collectDefNames(ctx, definedProperties);
+		collectDefinitions(ctx);
 		for (int i = 0; i < ctx.getChildCount(); i++) {
 			var child = ctx.getChild(i);
 			if (child instanceof OclParser.PackageDeclarationContext pkgCtx) {
@@ -127,6 +163,66 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	}
 
 	private final List<String> definedProperties = new ArrayList<>();
+
+	/** The signatures the document's defs declare, collected before any expression is built. */
+	private final List<AbstractExpressionBuilder.Definition> definitions = new ArrayList<>();
+
+	/**
+	 * Collects what each {@code def:} declares — its classifier, parameters and type — so that a
+	 * call of a defined operation is typed and its arguments checked, wherever in the document it
+	 * stands (#324, #378). A classifier or type that does not resolve is reported where the def
+	 * is built; here it is just left out.
+	 */
+	private void collectDefinitions(OclParser.CompleteOclDocumentContext ctx) {
+		for (int i = 0; i < ctx.getChildCount(); i++) {
+			if (ctx.getChild(i) instanceof OclParser.PackageDeclarationContext pkgCtx) {
+				String savedPackagePath = currentPackagePath;
+				currentPackagePath = pathNameText(pkgCtx.pathName());
+				pkgCtx.contextDeclaration().forEach(this::collectDefinitions);
+				currentPackagePath = savedPackagePath;
+			} else if (ctx.getChild(i) instanceof OclParser.ContextDeclarationContext ctxDecl) {
+				collectDefinitions(ctxDecl);
+			}
+		}
+	}
+
+	private void collectDefinitions(OclParser.ContextDeclarationContext ctx) {
+		OclParser.ClassifierContextDeclarationContext classifierCtx = ctx.classifierContextDeclaration();
+		if (classifierCtx == null) {
+			return;
+		}
+		EClassifier classifier = resolveClassifierFromPath(pathNameText(classifierCtx.pathName()));
+		if (classifier == null) {
+			return;
+		}
+		// A builder of its own only to resolve type names; what it reports is reported again
+		// when the definition is built
+		OclAstBuilder types = new OclAstBuilder(classifier, packageRegistry, strictPropertyResolution);
+		types.support.registerPackageAliases(packageAliases);
+		importedPackages.forEach(types.support::importPackage);
+		for (OclParser.ClassifierContextBodyContext body : classifierCtx.classifierContextBody()) {
+			OclParser.DefinitionConstraintContext def = body.definitionConstraint();
+			if (def == null || def.identifier().isEmpty() || def.typeExpression() == null) {
+				continue;
+			}
+			String name = OclAstBuilder.identifierText(def.identifier().get(def.identifier().size() - 1));
+			EClassifier type = types.resolveTypeExpression(def.typeExpression());
+			if (def.parameterList() == null && !isOperationDef(def)) {
+				definitions.add(new AbstractExpressionBuilder.Definition(classifier, name, null, null, type));
+				continue;
+			}
+			List<String> parameterNames = new ArrayList<>();
+			List<EClassifier> parameterTypes = new ArrayList<>();
+			if (def.parameterList() != null) {
+				for (OclParser.ParameterContext param : def.parameterList().parameter()) {
+					parameterNames.add(OclAstBuilder.identifierText(param.identifier()));
+					parameterTypes.add(types.resolveTypeExpression(param.typeExpression()));
+				}
+			}
+			definitions.add(new AbstractExpressionBuilder.Definition(classifier, name, parameterNames, parameterTypes,
+					type));
+		}
+	}
 
 	private static void collectDefNames(ParseTree node, List<String> names) {
 		if (node instanceof OclParser.DefinitionConstraintContext def) {
@@ -258,13 +354,15 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
 
-		// The body expression is the last expression in the rule
-		// Grammar: 'inv' (identifier ('(' expression ')')?)? ':' expression
-		// If there's a guard expression in parens, it's expression(0), body is expression(1)
-		// If no guard, body is expression(0)
+		// Grammar: 'inv' (identifier ('(' expression ')')?)? ':' expression. With the parenthesised
+		// expression, inv name('message'): body, it is the message reported when the invariant does
+		// not hold (OCL v2.4 §12.2.2); it was parsed and dropped before #324
 		OclParser.ExpressionContext bodyExpr = ctx.expression().size() > 1
 				? ctx.expression(1)
 				: ctx.expression(0);
+		if (ctx.expression().size() > 1) {
+			constraint.setMessageExpression(buildExpression(ctx.expression(0), classifier, selfAlias));
+		}
 		constraint.setSpecification(buildExpression(bodyExpr, classifier, selfAlias));
 		constraints.add(constraint);
 	}
@@ -288,6 +386,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (!ids.isEmpty()) {
 			constraint.setName(OclAstBuilder.identifierText(ids.get(ids.size() - 1)));
 		}
+		rejectConflictingDefinition(constraint.getName(), classifier,
+				ctx.parameterList() != null ? ctx.parameterList().parameter().size() : -1, ctx);
 
 		// Operation def: parameterList presence indicates operation definition.
 		// Store parameter names in a synthetic EOperation on contextOperation.
@@ -305,7 +405,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			constraint.setContextOperation(syntheticOp);
 		}
 
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier, selfAlias));
+		// The parameters of an operation def are variables of its body (§12.5, #324)
+		constraint.setSpecification(buildExpression(ctx.expression(), classifier, selfAlias, paramList, null));
 		constraints.add(constraint);
 	}
 
@@ -321,6 +422,32 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		}
 		return false;
 	}
+
+	/**
+	 * §7.4.4: "The names of the attributes / operations in a let [def] expression may not
+	 * conflict with the names of respective attributes/associationEnds and operations of the
+	 * Classifier." A definition that repeats a feature of the class was silently shadowed by it
+	 * at evaluation; one that repeats an earlier def of the same kind was ambiguous (#324).
+	 *
+	 * @param arity the number of parameters of an operation def, {@code -1} for an attribute def
+	 */
+	private void rejectConflictingDefinition(String name, EClassifier classifier, int arity, ParserRuleContext ctx) {
+		if (name == null || !(classifier instanceof EClass eClass)) {
+			return;
+		}
+		if (arity < 0 && eClass.getEStructuralFeature(name) != null) {
+			addError("Definition '" + name + "' conflicts with the property " + eClass.getName() + "::" + name, ctx);
+		}
+		if (arity >= 0 && resolveOperation(eClass, name, arity) != null) {
+			addError("Definition '" + name + "' conflicts with the operation " + eClass.getName() + "::" + name, ctx);
+		}
+		if (!definedSignatures.add(eClass.getName() + "::" + name + "/" + arity)) {
+			addError("'" + name + "' is defined twice for " + eClass.getName(), ctx);
+		}
+	}
+
+	/** The defs of this document so far, as {@code Class::name/arity}. */
+	private final Set<String> definedSignatures = new HashSet<>();
 
 	// ==================== Operation Context ====================
 
@@ -353,6 +480,16 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		opName = OclAstBuilder.identifierText(ctx.identifier());
 		int paramCount = ctx.parameterList() != null ? ctx.parameterList().parameter().size() : 0;
 		EOperation operation = resolveOperation(classifier, opName, paramCount);
+		if (operation == null && !definedProperties.contains(opName)) {
+			// §12.7/§12.10: pre, post and body belong to an existing operation of that signature;
+			// an unknown name or arity used to be skipped on load, silently (#324)
+			addError("Unknown operation '" + opName + "' with " + paramCount + " parameter(s) of "
+					+ classifier.getName() + " in operation context declaration", ctx);
+			return null;
+		}
+		currentParameters = ctx.parameterList();
+		currentResultType = ctx.typeExpression() != null ? ctx.typeExpression()
+				: operation != null && operation.getEType() != null ? operation.getEType() : RESULT_OF_UNKNOWN_TYPE;
 
 		for (OclParser.OperationContextBodyContext bodyCtx : ctx.operationContextBody()) {
 			if (bodyCtx instanceof OclParser.PreConditionContext preCtx) {
@@ -366,6 +503,14 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		return null;
 	}
 
+	/** The parameters of the operation context being built, for its pre, post and body. */
+	private OclParser.ParameterListContext currentParameters;
+	/** The type of {@code result} in the operation context being built. */
+	private Object currentResultType;
+
+	/** Marks a postcondition whose operation declares no return type the document can see. */
+	private static final Object RESULT_OF_UNKNOWN_TYPE = new Object();
+
 	private void buildPreCondition(OclParser.PreConditionContext ctx, EClassifier classifier,
 			EOperation operation) {
 		Constraint constraint = FACTORY.createConstraint();
@@ -375,7 +520,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (ctx.identifier() != null) {
 			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
+		constraint.setSpecification(buildExpression(ctx.expression(), classifier, null, currentParameters, null));
 		constraints.add(constraint);
 	}
 
@@ -388,7 +533,8 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (ctx.identifier() != null) {
 			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
+		constraint.setSpecification(
+				buildExpression(ctx.expression(), classifier, null, currentParameters, currentResultType));
 		constraints.add(constraint);
 	}
 
@@ -401,7 +547,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		if (ctx.identifier() != null) {
 			constraint.setName(OclAstBuilder.identifierText(ctx.identifier()));
 		}
-		constraint.setSpecification(buildExpression(ctx.expression(), classifier));
+		constraint.setSpecification(buildExpression(ctx.expression(), classifier, null, currentParameters, null));
 		constraints.add(constraint);
 	}
 
@@ -423,6 +569,13 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 		String propName = OclAstBuilder.identifierText(ctx.identifier());
 		EStructuralFeature property = resolveProperty(classifier, propName);
+		if (property == null && !definedProperties.contains(propName)) {
+			// §12.8/§12.9: init and derive state the value of an existing property. An unknown
+			// name used to be built and then skipped on load, silently (#324)
+			addError("Unknown property '" + propName + "' of " + classifier.getName()
+					+ " in property context declaration", ctx);
+			return null;
+		}
 
 		for (OclParser.PropertyContextBodyContext bodyCtx : ctx.propertyContextBody()) {
 			if (bodyCtx instanceof OclParser.InitExpressionContext initCtx) {
@@ -479,8 +632,9 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		}
 		for (String key : registryKeys()) {
 			EPackage pkg = packageRegistry.getEPackage(key);
-			if (pkg != null && matchesPackage(pkg, unquoted)) {
-				return pkg;
+			EPackage target = pkg == null ? null : OclNameResolver.packageAt(pkg, unquoted);
+			if (target != null) {
+				return target;
 			}
 		}
 		// A classifier path (import company::Company) imports the classifier's package
@@ -490,9 +644,9 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			String classifierName = unquoted.substring(separator + 2);
 			for (String key : registryKeys()) {
 				EPackage pkg = packageRegistry.getEPackage(key);
-				if (pkg != null && matchesPackage(pkg, packagePath)
-						&& pkg.getEClassifier(classifierName) != null) {
-					return pkg;
+				EPackage target = pkg == null ? null : OclNameResolver.packageAt(pkg, packagePath);
+				if (target != null && target.getEClassifier(classifierName) != null) {
+					return target;
 				}
 			}
 		}
@@ -526,12 +680,40 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 
 	private OclExpression buildExpression(OclParser.ExpressionContext ctx,
 			EClassifier contextType, String selfAlias) {
+		return buildExpression(ctx, contextType, selfAlias, null, null);
+	}
+
+	/**
+	 * Builds a constraint's expression with the variables in scope that evaluation binds: the
+	 * context variable's alias, the operation's parameters and, in a postcondition,
+	 * {@code result} (OCL v2.4 §12.2.1, #324).
+	 *
+	 * @param params the declared parameters, or {@code null}
+	 * @param result the type of {@code result}, a {@link OclParser.TypeExpressionContext} or an
+	 *        {@link EClassifier}, or {@code null} when the expression has no {@code result}
+	 */
+	private OclExpression buildExpression(OclParser.ExpressionContext ctx, EClassifier contextType,
+			String selfAlias, OclParser.ParameterListContext params, Object result) {
 		OclAstBuilder builder = new OclAstBuilder(contextType, packageRegistry, strictPropertyResolution);
 		builder.support.declareDefinedProperties(definedProperties);
+		builder.support.declareDefinitions(definitions);
 		builder.support.registerPackageAliases(packageAliases);
 		importedPackages.forEach(builder.support::importPackage);
 		if (selfAlias != null) {
 			builder.registerSelfAlias(selfAlias);
+		}
+		if (params != null) {
+			for (OclParser.ParameterContext param : params.parameter()) {
+				builder.support.declareVariable(OclAstBuilder.identifierText(param.identifier()),
+						builder.resolveTypeExpression(param.typeExpression()));
+			}
+		}
+		if (result instanceof OclParser.TypeExpressionContext resultType) {
+			builder.support.declareVariable("result", builder.resolveTypeExpression(resultType));
+		} else if (result instanceof EClassifier resultType) {
+			builder.support.declareVariable("result", resultType);
+		} else if (result == RESULT_OF_UNKNOWN_TYPE) {
+			builder.support.declareVariable("result", null);
 		}
 		OclExpression expression = (OclExpression) builder.visit(ctx);
 		diagnostics.addAll(builder.support.getDiagnostics());
@@ -552,7 +734,7 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 		// Build the package path prefix (if any segments before the classifier name)
 		String packagePath = null;
 		if (segments.length > 1) {
-			packagePath = String.join("::", java.util.Arrays.copyOf(segments, segments.length - 1));
+			packagePath = String.join("::", Arrays.copyOf(segments, segments.length - 1));
 		} else if (currentPackagePath != null) {
 			packagePath = currentPackagePath;
 		}
@@ -561,11 +743,10 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			// Qualified, or inside a package … endpackage: the named package, and only that one.
 			// What the document imported comes first — it named that package on purpose
 			for (EPackage imported : importedPackages) {
-				if (matchesPackage(imported, packagePath)) {
-					EClassifier found = imported.getEClassifier(classifierName);
-					if (found != null) {
-						return found;
-					}
+				EPackage target = OclNameResolver.packageAt(imported, packagePath);
+				EClassifier found = target == null ? null : target.getEClassifier(classifierName);
+				if (found != null) {
+					return found;
 				}
 			}
 			EPackage byUri = packageRegistry.getEPackage(packagePath);
@@ -577,11 +758,10 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			}
 			for (String key : registryKeys()) {
 				EPackage pkg = packageRegistry.getEPackage(key);
-				if (pkg != null && matchesPackage(pkg, packagePath)) {
-					EClassifier found = pkg.getEClassifier(classifierName);
-					if (found != null) {
-						return found;
-					}
+				EPackage target = pkg == null ? null : OclNameResolver.packageAt(pkg, packagePath);
+				EClassifier found = target == null ? null : target.getEClassifier(classifierName);
+				if (found != null) {
+					return found;
 				}
 			}
 			return null;
@@ -596,13 +776,6 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 			}
 		}
 		return null;
-	}
-
-	private boolean matchesPackage(EPackage pkg, String packagePath) {
-		// Match by package name or nsURI
-		return packagePath.equals(pkg.getName())
-				|| packagePath.equals(pkg.getNsURI())
-				|| packagePath.equals(pkg.getNsPrefix());
 	}
 
 	// ==================== Operation/Property Resolution ====================
@@ -629,10 +802,6 @@ class OclDocumentBuilder extends OclBaseVisitor<Object> {
 	// ==================== Utility ====================
 
 	private String pathNameText(OclParser.PathNameContext ctx) {
-		List<String> segments = new ArrayList<>();
-		for (var id : ctx.identifier()) {
-			segments.add(OclAstBuilder.identifierText(id));
-		}
-		return String.join("::", segments);
+		return String.join("::", OclAstBuilder.pathNameSegments(ctx));
 	}
 }

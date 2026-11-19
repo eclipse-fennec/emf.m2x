@@ -95,7 +95,7 @@ class M2tGuardExpressionRegressionTest {
 	@Test
 	void templateGuard_callsQuery_guardTrue() throws M2tParseException {
 		String mtl = """
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 				[template public main(c : EClass) ? (c.hasOps())]
 				[file ('out', false)]
@@ -111,7 +111,7 @@ class M2tGuardExpressionRegressionTest {
 	@Test
 	void templateGuard_callsQuery_guardFalse() throws M2tParseException {
 		String mtl = """
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 				[template public main(c : EClass) ? (c.hasOps())]
 				[file ('out', false)]
@@ -128,7 +128,7 @@ class M2tGuardExpressionRegressionTest {
 	@Test
 	void templateGuard_callsChainedQuery() throws M2tParseException {
 		String mtl = """
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[query public opCount(c : EClass) : Integer = c.eOperations->size()/]
 				[query public hasOps(c : EClass) : Boolean = c.opCount() > 0/]
 				[template public main(c : EClass) ? (c.hasOps())]
@@ -145,7 +145,7 @@ class M2tGuardExpressionRegressionTest {
 	@Test
 	void templateGuard_combinesQueryAndParameter() throws M2tParseException {
 		String mtl = """
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[query public opCount(c : EClass) : Integer = c.eOperations->size()/]
 				[template public main(c : EClass) ? (c.opCount() > 0 and c.name.startsWith('Emp'))]
 				[file ('out', false)]
@@ -163,7 +163,7 @@ class M2tGuardExpressionRegressionTest {
 	@Test
 	void loopGuard_callsQuery_filtersPerIteration() throws M2tParseException {
 		String mtl = """
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 				[template public main(p : EPackage)]
 				[file ('out', false)]
@@ -180,7 +180,7 @@ class M2tGuardExpressionRegressionTest {
 	@Test
 	void loopGuard_evaluatedPerElement() throws M2tParseException {
 		String mtl = """
-				[module m(Ecore)/]
+				[module m(ecore)/]
 				[query public opCount(c : EClass) : Integer = c.eOperations->size()/]
 				[template public main(p : EPackage)]
 				[file ('out', false)]
@@ -199,11 +199,11 @@ class M2tGuardExpressionRegressionTest {
 	@Test
 	void overridingTemplateGuard_callsQuery() throws M2tParseException {
 		String base = """
-				[module base(Ecore)/]
+				[module base(ecore)/]
 				[template public render(c : EClass)]base:[c.name/][/template]
 				""";
 		String child = """
-				[module child(Ecore) extends base/]
+				[module child(ecore) extends base/]
 				[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 				[template public render(c : EClass) overrides render ? (c.hasOps())]override:[c.name/][/template]
 				[template public main(c : EClass)]
@@ -223,11 +223,11 @@ class M2tGuardExpressionRegressionTest {
 	@Test
 	void overridingTemplateGuard_queryRejects_baseApplies() throws M2tParseException {
 		String base = """
-				[module base(Ecore)/]
+				[module base(ecore)/]
 				[template public render(c : EClass)]base:[c.name/][/template]
 				""";
 		String child = """
-				[module child(Ecore) extends base/]
+				[module child(ecore) extends base/]
 				[query public hasOps(c : EClass) : Boolean = c.eOperations->size() > 0/]
 				[template public render(c : EClass) overrides render ? (c.hasOps())]override:[c.name/][/template]
 				[template public main(c : EClass)]

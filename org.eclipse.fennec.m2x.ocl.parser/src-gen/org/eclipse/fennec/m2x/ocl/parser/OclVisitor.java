@@ -524,9 +524,21 @@ public interface OclVisitor<T> extends ParseTreeVisitor<T> {
 	 */
 	T visitPathName(OclParser.PathNameContext ctx);
 	/**
+	 * Visit a parse tree produced by {@link OclParser#restrictedWord}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitRestrictedWord(OclParser.RestrictedWordContext ctx);
+	/**
 	 * Visit a parse tree produced by {@link OclParser#identifier}.
 	 * @param ctx the parse tree
 	 * @return the visitor result
 	 */
 	T visitIdentifier(OclParser.IdentifierContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link OclParser#documentKeyword}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitDocumentKeyword(OclParser.DocumentKeywordContext ctx);
 }

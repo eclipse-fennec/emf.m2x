@@ -15,10 +15,9 @@ on:
     # This snapshot build should only happen on pushes to the snapshot branch.
     branches:
       - snapshot
-  pull_request:
-    # This snapshot build should NOT happen on pull requests.
-    branches-ignore:
-      - '*'
+  # No pull_request trigger. It was there with `branches-ignore: '*'` to exclude every PR,
+  # but '*' does not match a '/': a PR whose base is a feature branch (fix/…) ran this
+  # workflow with the organisation's secrets and published (2026-10-31, PR #390).
 
 permissions:
   contents: read
@@ -26,15 +25,14 @@ permissions:
   id-token: write # OIDC token for the Pages deployment
   actions: read # pages-deploy restores the previous site-full artifact
 
-# Serialize Pages publishing; let an in-flight deploy finish before the next.
-concurrency:
-  group: snapshot-pages
-  cancel-in-progress: false
+# Only the publishing jobs are serialized, each by its own job-level group: a run that
+# waited as a whole had no check yet, so the commit showed only the finished license check
+# and turned green while the build had not even started. verify now starts at once.
 
 jobs:
   verify:
     name: Verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-verify.yml@5b25efac2c99c0f88252d1a45302b8a1ae5876ce # v1.4.0
     with:
       # java-versions unset on purpose: the reusable default '["21","25"]' runs
       # both legs. m2x still targets Java 21; the 25 leg is a toolchain check.
@@ -47,8 +45,11 @@ jobs:
 
   release:
     name: Release snapshot
+    concurrency:
+      group: snapshot-publish
+      cancel-in-progress: false
     needs: verify
-    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-release.yml@5b25efac2c99c0f88252d1a45302b8a1ae5876ce # v1.4.0
     with:
       do-release: false
       # The p2 repository jar is produced by the normal build (-export: type=p2
@@ -59,6 +60,9 @@ jobs:
 
   p2:
     name: Publish p2 to download.eclipse.org
+    concurrency:
+      group: snapshot-p2
+      cancel-in-progress: false
     needs: release
     # Independent of the Pages deploy: `deploy` does not wait for it, so the two
     # publications never block each other.
@@ -78,7 +82,7 @@ jobs:
     # `snapshot` and `latest` channels must not wipe each other, so only
     # pages-deploy.yml may deploy. It also gates the build on the shared docs theme (Eclipse Foundation
     # footer, brand palette) matching eclipse-fennec/.github's docs-theme/.
-    uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-docs.yml@5b25efac2c99c0f88252d1a45302b8a1ae5876ce # v1.4.0
     with:
       deploy: false
       # `latest`/`snapshot` is a URL segment, not necessarily the ref name:
@@ -89,6 +93,9 @@ jobs:
 
   deploy:
     name: Publish merged Pages site
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     needs: docs
     uses: ./.github/workflows/pages-deploy.yml
     with:
@@ -108,6 +115,6 @@ jobs:
     # same XML as a job summary with inline annotations; this job adds the one
     # check run per JDK leg, which needs `checks: write` — granted on this job
     # alone, so verify itself keeps running with `contents: read`.
-    uses: eclipse-fennec/.github/.github/workflows/reusable-test-report.yml@2a98ad6e2459556b858e1273bff2f8d87fc11a06 # v1.3.0
+    uses: eclipse-fennec/.github/.github/workflows/reusable-test-report.yml@5b25efac2c99c0f88252d1a45302b8a1ae5876ce # v1.4.0
     # java-versions deliberately unset: it defaults to the same '["21","25"]' as
     # reusable-verify, so the two stay in step.

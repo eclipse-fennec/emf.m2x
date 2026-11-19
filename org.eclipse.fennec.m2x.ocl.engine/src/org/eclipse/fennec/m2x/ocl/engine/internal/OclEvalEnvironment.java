@@ -15,6 +15,7 @@
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -110,6 +111,21 @@ public class OclEvalEnvironment {
 			return parent.lookup(name);
 		}
 		return null;
+	}
+
+	/**
+	 * The variables bound since the root — by iterators and lets of the evaluation, not by
+	 * the context it started from. An inner binding shadows an outer one of the same name.
+	 *
+	 * @return the bindings, outermost first
+	 */
+	Map<String, Object> bindingsSinceRoot() {
+		if (parent == null) {
+			return new LinkedHashMap<>();
+		}
+		Map<String, Object> result = parent.bindingsSinceRoot();
+		result.putAll(bindings);
+		return result;
 	}
 
 	/**
