@@ -54,15 +54,6 @@ public final class OclConfigurationHelper {
 	 * Creates an {@link OclConfiguration} from the given OSGi configuration annotation,
 	 * parser, cache and operation providers.
 	 *
-	 * <p>Every provider is taken, not one: a runtime can hold several at once — the MOFM2T
-	 * standard library, a set of domain operations, the operations a generator brings — and
-	 * they have no reason to exclude each other.
-	 *
-	 * <p>{@code OclEngineComponent} no longer builds its configuration this way: its
-	 * providers arrive one bind at a time, because a reference that hands the whole list to
-	 * the constructor can only ever hold the providers that were there first (#431). The
-	 * method stays because it is public API of an exported package, and because handing a
-	 * known set of providers to a configuration is a reasonable thing to do from plain Java.
 	 *
 	 * @param config             the OSGi configuration annotation
 	 * @param parser             the OCL expression parser
