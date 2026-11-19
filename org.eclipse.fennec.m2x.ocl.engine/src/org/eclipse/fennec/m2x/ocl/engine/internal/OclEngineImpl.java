@@ -29,6 +29,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.emf.common.util.BasicEList;
 import org.eclipse.emf.common.util.BasicEMap;
@@ -96,6 +98,8 @@ import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
  * @since 1.0
  */
 public class OclEngineImpl implements OclDelegateSupport {
+	
+	private static final Logger LOG = Logger.getLogger(OclEngineImpl.class.getName());
 
 	private final OclExpressionParser parser;
 	private final OclExpressionCache expressionCache;
@@ -732,7 +736,11 @@ public class OclEngineImpl implements OclDelegateSupport {
 	 * @param provider the provider to take on, must not be {@code null}
 	 */
 	protected void addOperationProvider(OclOperationProvider provider) {
-		configProviders.add(Objects.requireNonNull(provider, "provider must not be null"));
+		if(provider == null) {
+			LOG.log(Level.WARNING, "OclOperationProvider is null. Nothing will be registered.");
+			return;
+		}
+		configProviders.add(provider);
 	}
 
 	/**
