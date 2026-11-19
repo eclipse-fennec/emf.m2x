@@ -1,0 +1,151 @@
+/*
+ * ******************************************************************
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation.
+ *
+ * This program and the accompanying materials are made
+ * available under the terms of the Eclipse Public License 2.0
+ * which is available at https://www.eclipse.org/legal/epl-2.0/
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *   Data In Motion Consulting - initial implementation
+ * ******************************************************************
+ */
+package org.eclipse.fennec.m2x.ocl.tests;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.util.Collection;
+import java.util.List;
+
+import org.eclipse.emf.ecore.EcoreFactory;
+import org.eclipse.fennec.m2x.model.ocl.AnyType;
+import org.eclipse.fennec.m2x.model.ocl.OclFactory;
+import org.eclipse.fennec.m2x.model.ocl.PrimitiveType;
+import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEngine;
+import org.eclipse.fennec.m2x.ocl.api.OclInvalid;
+import org.eclipse.fennec.m2x.ocl.api.OclOperation;
+import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
+import org.eclipse.fennec.m2x.ocl.api.annotation.require.RequireOCL;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.osgi.framework.BundleContext;
+import org.osgi.framework.ServiceReference;
+import org.osgi.framework.ServiceRegistration;
+import org.osgi.test.common.annotation.InjectBundleContext;
+import org.osgi.test.common.annotation.InjectService;
+import org.osgi.test.common.annotation.Property;
+import org.osgi.test.common.annotation.Property.Scalar;
+import org.osgi.test.common.annotation.config.WithFactoryConfiguration;
+import org.osgi.test.common.service.ServiceAware;
+import org.osgi.test.junit5.cm.ConfigurationExtension;
+import org.osgi.test.junit5.context.BundleContextExtension;
+import org.osgi.test.junit5.service.ServiceExtension;
+
+/**
+ * An {@link OclOperationProvider} that arrives after the engine is running (#431).
+ *
+ * <p>A bundle carrying domain operations is not guaranteed to start before the bundle that
+ * starts an engine: start levels, lazy activation and a {@code Configurator} dropping a
+ * configuration in later all make the other order ordinary. When it happens, every
+ * expression calling one of those operations evaluates to {@code invalid} — not an error
+ * anybody can see the cause of, just a result that is wrong.
+ *
+ * <p>The {@code operationProvider} reference of {@code OclEngineComponent} is static with
+ * the default {@code RELUCTANT} policy option, and OSGi Compendium §112.3.6 (Table 112.1)
+ * says what that means for a {@code 0..n} reference: a target service registered afterwards
+ * is <em>ignored</em> — no bind, no reactivation. The javadoc on the component claims the
+ * opposite, that "a provider appearing or disappearing rebuilds the engine".
+ *
+ * <p>This test holds the engine the way a consumer does — it looks the service up again each
+ * time, so a rebuilt engine is found — and asks for an operation only the late provider
+ * defines.
+ *
+ * @see OclOperationProviderOSGiTest for the providers that are there before the engine
+ */
+@RequireOCL
+@ExtendWith(BundleContextExtension.class)
+@ExtendWith(ServiceExtension.class)
+@ExtendWith(ConfigurationExtension.class)
+class OclLateOperationProviderOSGiTest {
+
+	private static final String TAG = "late-provider-eng";
+
+	private static final String TAGGED = "(engine.tag=" + TAG + ")";
+
+	private static final long TIMEOUT_MS = 5_000;
+
+	@WithFactoryConfiguration(factoryPid = "DefaultOclEngine", location = "?", name = "late-provider", properties = {
+			@Property(key = "ocl.customOperationsEnabled", scalar = Scalar.Boolean, value = "true"),
+			@Property(key = "engine.tag", value = TAG)
+	})
+	@Test
+	@DisplayName("an operation provider registered after the engine is still asked")
+	void aProviderArrivingAfterTheEngineIsPickedUp(@InjectBundleContext BundleContext context,
+			@InjectService(filter = TAGGED, timeout = TIMEOUT_MS) ServiceAware<OclEngine> engineAware)
+			throws Exception {
+
+		assertNotNull(engineAware.waitForService(TIMEOUT_MS), "the engine has to be up first");
+
+		// Nothing defines lateOp() yet, so this is what a wrong answer looks like.
+		assertInstanceOf(OclInvalid.class, evaluate(context, "self.lateOp()"),
+				"before the provider is registered the operation does not exist");
+
+		ServiceRegistration<OclOperationProvider> registration = context.registerService(
+				OclOperationProvider.class, lateProvider(), null);
+		try {
+			assertEquals(41, await(context, "self.lateOp()", 41),
+					"the engine has to take an operation provider that comes up after it");
+		} finally {
+			registration.unregister();
+		}
+	}
+
+	// --- helpers ---
+
+	/**
+	 * Evaluates until the expected value shows up or the timeout runs out, and answers with
+	 * whatever came last. Putting the provider into the registry and the engine taking
+	 * notice are two different moments, whether the engine is rebuilt or bound to.
+	 */
+	private static Object await(BundleContext context, String expression, Object expected)
+			throws Exception {
+		long deadline = System.currentTimeMillis() + TIMEOUT_MS;
+		Object result;
+		do {
+			result = evaluate(context, expression);
+			if (expected.equals(result)) {
+				return result;
+			}
+			Thread.sleep(50);
+		} while (System.currentTimeMillis() < deadline);
+		return result;
+	}
+
+	/**
+	 * Looks the engine up afresh every time, the way a consumer with a static reference ends
+	 * up doing: if the component was rebuilt, the old service is gone and this finds the new
+	 * one; if it was not, this is the same instance as before.
+	 */
+	private static Object evaluate(BundleContext context, String expression) throws Exception {
+		Collection<ServiceReference<OclEngine>> references =
+				context.getServiceReferences(OclEngine.class, TAGGED);
+		assertEquals(1, references.size(), "exactly one engine carries " + TAGGED);
+		OclEngine engine = context.getService(references.iterator().next());
+		assertNotNull(engine);
+		return engine.evaluate(expression, OclContext.of(EcoreFactory.eINSTANCE.createEClass()));
+	}
+
+	private static OclOperationProvider lateProvider() {
+		AnyType anyType = OclFactory.eINSTANCE.createAnyType();
+		anyType.setName("OclAny");
+		PrimitiveType intType = OclFactory.eINSTANCE.createPrimitiveType();
+		intType.setName("Integer");
+		return () -> List.of(OclOperation.of("lateOp", anyType, intType, (self, args) -> 41));
+	}
+}
