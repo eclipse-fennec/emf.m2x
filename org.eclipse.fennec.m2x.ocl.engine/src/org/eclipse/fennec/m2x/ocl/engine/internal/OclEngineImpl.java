@@ -29,6 +29,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BiFunction;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.emf.common.util.BasicEList;
 import org.eclipse.emf.common.util.BasicEMap;
@@ -96,11 +98,13 @@ import org.eclipse.fennec.m2x.unit.compile.UnitPackager;
  * @since 1.0
  */
 public class OclEngineImpl implements OclDelegateSupport {
+	
+	private static final Logger LOG = Logger.getLogger(OclEngineImpl.class.getName());
 
 	private final OclExpressionParser parser;
 	private final OclExpressionCache expressionCache;
 	private final PropertyAccessorCache accessorCache;
-	private final List<OclOperationProvider> configProviders;
+	private final List<OclOperationProvider> configProviders = new CopyOnWriteArrayList<>();
 	private final boolean configCustomOpsEnabled;
 	private final OclEvaluationOptions defaultOptions;
 	private final List<OclOperationProvider> defProviders = new CopyOnWriteArrayList<>();
@@ -129,10 +133,10 @@ public class OclEngineImpl implements OclDelegateSupport {
 		this.parser = config.parser();
 		this.expressionCache = config.expressionCache();
 		this.accessorCache = new PropertyAccessorCache();
-		this.configProviders = List.copyOf(config.operationProviders());
 		this.configCustomOpsEnabled = config.customOperationsEnabled();
 		this.defaultOptions = toDefaultOptions(config);
 		this.delegateOptions = defaultOptions;
+		this.configProviders.addAll(config.operationProviders());
 	}
 
 	/**
@@ -710,6 +714,47 @@ public class OclEngineImpl implements OclDelegateSupport {
 	}
 
 	// --- Internal accessors for subclasses and evaluator ---
+
+	/**
+	 * Takes on an operation provider that was not there when the engine was built (#431).
+	 *
+	 * <p>The seam a container binds a late provider through — in OSGi, the
+	 * {@code operationProvider} reference of {@code OclEngineComponent} — next to
+	 * {@link #registerCompleteOclDocument(CompleteOclContribution)} for the other reference
+	 * that changes while the engine runs.
+	 *
+	 * <p>Nothing has to be invalidated for this. {@link #getOperationProviders} is consulted
+	 * once when an evaluation starts and the evaluator dispatches against that snapshot at
+	 * call time, so the next evaluation sees the provider and one already in flight does not
+	 * change underneath it.
+	 *
+	 * <p>The provider is appended, which is what keeps {@link #getOperationProviders} in the
+	 * order operations are looked up in: where two providers define the same operation name,
+	 * the one added first still answers. For services that means the order they were bound
+	 * in, and a provider that goes away and comes back lands at the end.
+	 *
+	 * @param provider the provider to take on, must not be {@code null}
+	 */
+	protected void addOperationProvider(OclOperationProvider provider) {
+		if(provider == null) {
+			LOG.log(Level.WARNING, "OclOperationProvider is null. Nothing will be registered.");
+			return;
+		}
+		configProviders.add(provider);
+	}
+
+	/**
+	 * Takes an operation provider back out.
+	 *
+	 * <p>An evaluation that is already running keeps the providers it started with; the next
+	 * one no longer sees this one. Unknown providers are ignored, so an unbind that follows
+	 * a bind that never happened is harmless.
+	 *
+	 * @param provider the provider to take out
+	 */
+	protected void removeOperationProvider(OclOperationProvider provider) {
+		configProviders.remove(provider);
+	}
 
 	/**
 	 * Returns the effective operation providers for a given evaluation.

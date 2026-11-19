@@ -54,9 +54,6 @@ public final class OclConfigurationHelper {
 	 * Creates an {@link OclConfiguration} from the given OSGi configuration annotation,
 	 * parser, cache and operation providers.
 	 *
-	 * <p>Every provider is taken, not one: a runtime can hold several at once — the MOFM2T
-	 * standard library, a set of domain operations, the operations a generator brings — and
-	 * they have no reason to exclude each other.
 	 *
 	 * @param config             the OSGi configuration annotation
 	 * @param parser             the OCL expression parser

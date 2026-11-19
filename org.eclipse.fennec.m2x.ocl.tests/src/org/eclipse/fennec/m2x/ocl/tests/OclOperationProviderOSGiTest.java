@@ -45,6 +45,7 @@ import org.osgi.test.junit5.service.ServiceExtension;
  *   <li>An engine with no provider registered has no custom operations</li>
  *   <li>A custom provider with {@code customOperationsEnabled=true} makes operations available</li>
  *   <li>A custom provider with {@code customOperationsEnabled=false} (default) blocks operations</li>
+ *   <li>{@code operationProvider.target} narrows the binding to the provider it names</li>
  * </ul>
  *
  * <p>Uses {@link TestOclOperationProvider} — a DS component registered with
@@ -89,6 +90,31 @@ class OclOperationProviderOSGiTest {
 		Object result = engine.evaluate("self.testOp()",
 				OclContext.of(EcoreFactory.eINSTANCE.createEClass()));
 		assertEquals(42, result);
+	}
+
+	// --- Test 2a: The target filter narrows the binding ---
+
+	@WithFactoryConfiguration(factoryPid = "DefaultOclEngine", location = "?", name = "targeted-provider", properties = {
+			@Property(key = "ocl.customOperationsEnabled", scalar = Scalar.Boolean, value = "true"),
+			@Property(key = "operationProvider.target", value = "(provider.name=testProvider)"),
+			@Property(key = "engine.tag", value = "targeted-provider-eng")
+	})
+	@Test
+	void oclEngine_targetedProvider_bindsOnlyTheProviderNamed(
+			@InjectService(filter = "(engine.tag=targeted-provider-eng)", timeout = 5000) ServiceAware<OclEngine> engineAware) throws OclParseException {
+
+		OclEngine engine = engineAware.getService();
+		assertNotNull(engine);
+
+		// The target names testProvider, so secondProvider has to stay out. Asking only for
+		// testOp() cannot tell a filter that works from one that is ignored: with no filter
+		// in force every provider binds and testOp() resolves either way. What the filter
+		// does is keep secondOp() from resolving.
+		assertEquals(42, engine.evaluate("self.testOp()",
+				OclContext.of(EcoreFactory.eINSTANCE.createEClass())));
+		assertInstanceOf(OclInvalid.class, engine.evaluate("self.secondOp()",
+				OclContext.of(EcoreFactory.eINSTANCE.createEClass())),
+				"a provider the target filter excludes is not bound");
 	}
 
 	// --- Test 2b: Several providers coexist ---

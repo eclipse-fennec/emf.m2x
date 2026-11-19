@@ -14,7 +14,6 @@
  */
 package org.eclipse.fennec.m2x.ocl.engine.internal;
 
-import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -58,20 +57,20 @@ import org.osgi.service.metatype.annotations.Designate;
  * }
  * </pre>
  *
- * <p>Every registered {@link org.eclipse.fennec.m2x.ocl.api.OclOperationProvider} is bound,
- * not one of them: a runtime can hold several at once — the MOFM2T standard library, a set
+ * <p>Every registered {@link org.eclipse.fennec.m2x.ocl.api.OclOperationProvider} is bound: 
+ * a runtime can hold several at once — the MOFM2T standard library, a set
  * of domain operations, the operations a generator brings — and they have no reason to
- * exclude each other. The reference used to be a single mandatory one, which meant a
- * placeholder had to exist for the common case of none, and that only one provider could
- * ever be in play.
+ * exclude each other.
  *
  * <p>The {@code customOperationsEnabled} gate still decides whether config-registered
  * operations are resolved at evaluation time; binding a provider does not switch it on.
  *
- * <p>The reference is static, so a provider appearing or disappearing rebuilds the engine.
- * That costs its property accessor cache and nothing else — the expression cache is a
- * service of its own and survives — and it keeps the set of operations fixed for the life
- * of an engine, which is what makes a resolved operation stay resolved.
+ * <p>The reference is dynamic, so a provider that comes up after the engine reaches the
+ * engine that is already running, and the engine is not rebuilt for it. 
+ * 
+ * <p>Nothing is lost by letting the set change. No resolved operation is held anywhere:
+ * the providers are snapshotted when an evaluation starts and dispatched against at call
+ * time, so a bind or unbind is seen by the next evaluation and never by one in flight.
  *
  * <p>Engine-wide defaults (security limits, null handling, error recovery) can
  * be configured via ConfigurationAdmin using {@code ocl.*} properties:
@@ -95,10 +94,8 @@ public class OclEngineComponent extends OclEngineImpl {
 	public OclEngineComponent(
 			OclEngineConfiguration config,
 			@Reference(name = "parser", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclExpressionParser parser,
-			@Reference(name = "expressionCache") OclExpressionCache cache,
-			@Reference(name = "operationProvider", cardinality = ReferenceCardinality.MULTIPLE)
-			List<OclOperationProvider> operationProviders) {
-		super(OclConfigurationHelper.from(config, parser, cache, operationProviders));
+			@Reference(name = "expressionCache") OclExpressionCache cache) {
+		super(OclConfigurationHelper.from(config, parser, cache));
 	}
 
 	/**
@@ -106,10 +103,11 @@ public class OclEngineComponent extends OclEngineImpl {
 	 *
 	 * <p>What the {@link CompleteOclContribution} javadoc has promised since 1.0 and nothing
 	 * implemented: a bundle ships constraints and {@code def:} operations for a metamodel it
-	 * does not own, and the engine picks them up. The reference is dynamic and greedy, so a
-	 * contribution that arrives later applies without rebuilding the engine — unlike the
-	 * operation providers above, whose set has to stay fixed for a resolved operation to stay
-	 * resolved, a document is loaded and can be unloaded again.
+	 * does not own, and the engine picks them up. The reference is dynamic with multiple
+	 * cardinality, which binds a service that arrives later whichever policy option is in
+	 * force (§112.3.6), so a contribution that arrives later applies without rebuilding the
+	 * engine — as for the operation providers below, a document is loaded and can be
+	 * unloaded again.
 	 *
 	 * <p>A document that cannot be parsed is logged and skipped. The programmatic path throws,
 	 * because there the caller asked for this document; a bind cannot — refusing it would
@@ -136,5 +134,34 @@ public class OclEngineComponent extends OclEngineImpl {
 	 */
 	void removeCompleteOclDocument(CompleteOclContribution contribution) {
 		unregisterCompleteOclDocument(contribution);
+	}
+
+	/**
+	 * Takes on an operation provider published as a service.
+	 *
+	 * <p>The {@code customOperationsEnabled} gate still decides whether these operations are
+	 * resolved at evaluation time; binding a provider does not switch it on.
+	 *
+	 * <p>The method is not called {@code addOperationProvider}: that is the protected seam
+	 * on {@link OclEngineImpl} this delegates to, and a package-private method cannot
+	 * override it.
+	 *
+	 * @param operationProvider the provider to take on
+	 */
+	@Reference(name = "operationProvider", cardinality = ReferenceCardinality.MULTIPLE,
+			policy = ReferencePolicy.DYNAMIC)
+	void addOclOperationProvider(OclOperationProvider operationProvider) {
+		addOperationProvider(operationProvider);
+	}
+
+	/**
+	 * Takes an operation provider back out.
+	 *
+	 * <p>An evaluation that is already running keeps the providers it started with.
+	 *
+	 * @param operationProvider the provider to take out
+	 */
+	void removeOclOperationProvider(OclOperationProvider operationProvider) {
+		removeOperationProvider(operationProvider);
 	}
 }
