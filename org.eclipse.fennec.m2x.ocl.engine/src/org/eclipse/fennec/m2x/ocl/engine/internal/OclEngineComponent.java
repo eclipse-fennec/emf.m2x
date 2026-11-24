@@ -24,6 +24,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclExpressionParser;
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.engine.OclConfigurationHelper;
 import org.eclipse.fennec.m2x.ocl.engine.OclEngineConfiguration;
+import org.eclipse.fennec.m2x.ocl.engine.OclOperationProviderProvider;
 import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.ConfigurationPolicy;
@@ -66,8 +67,22 @@ import org.osgi.service.metatype.annotations.Designate;
  * operations are resolved at evaluation time; binding a provider does not switch it on.
  *
  * <p>The reference is dynamic, so a provider that comes up after the engine reaches the
- * engine that is already running, and the engine is not rebuilt for it. 
- * 
+ * engine that is already running, and the engine is not rebuilt for it.
+ *
+ * <p>That is also why binding alone cannot tell a consumer its provider has arrived: a
+ * multiple reference is satisfied by nothing at all, so the engine is published whether or
+ * not the targeted provider is there yet. A consumer that needs one to be there targets
+ * {@link OclOperationProviderProvider} as well, which stays unsatisfied until the names it
+ * asks for are registered:
+ * <pre>
+ * "DefaultOclEngine~myEngine": {
+ *     "operationProvider.target": "(|(provider.name=A)(provider.name=B))",
+ *     "operationProvidersReady.target": "(&amp;(operationProviderNames=A)(operationProviderNames=B))"
+ * }
+ * </pre>
+ * The two filters are independent: the first decides which providers bind, the second only
+ * decides when the engine appears. Nothing checks that they agree.
+ *
  * <p>Nothing is lost by letting the set change. No resolved operation is held anywhere:
  * the providers are snapshotted when an evaluation starts and dispatched against at call
  * time, so a bind or unbind is seen by the next evaluation and never by one in flight.
@@ -90,11 +105,19 @@ public class OclEngineComponent extends OclEngineImpl {
 
 	private static final Logger LOG = Logger.getLogger(OclEngineComponent.class.getName());
 
+	/**
+	 * @param config                  the engine configuration
+	 * @param parser                  the OCL expression parser
+	 * @param cache                   the shared expression cache
+	 * @param operationProvidersReady the readiness gate; referenced for its satisfiability
+	 *                                only and deliberately unused in the body
+	 */
 	@Activate
 	public OclEngineComponent(
 			OclEngineConfiguration config,
 			@Reference(name = "parser", scope = ReferenceScope.PROTOTYPE_REQUIRED) OclExpressionParser parser,
-			@Reference(name = "expressionCache") OclExpressionCache cache) {
+			@Reference(name = "expressionCache") OclExpressionCache cache,
+			@Reference(name = "operationProvidersReady") OclOperationProviderProvider operationProvidersReady) {
 		super(OclConfigurationHelper.from(config, parser, cache));
 	}
 
