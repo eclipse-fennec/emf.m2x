@@ -25,6 +25,7 @@ import java.util.logging.Logger;
 
 import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.engine.OclOperationProviderProvider;
+import org.osgi.annotation.bundle.Capability;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
 import org.osgi.framework.ServiceRegistration;
@@ -45,10 +46,16 @@ import org.osgi.service.component.annotations.ReferencePolicy;
  * because its properties have to change while it stays the same service: re-registering
  * would briefly withdraw it and take every component gated on it down with it.
  *
+ * <p>Registering by hand also means bnd generates no {@code osgi.service} capability for
+ * it, while the DS reference in {@code OclEngineComponent} does generate the matching
+ * requirement. The {@link Capability} below declares it, so a resolve that checks
+ * {@code effective:=active} requirements can satisfy the engine (#435).
+ *
  * @author Data In Motion Consulting
  * @since 1.0
  */
 @Component(immediate = true, service = {})
+@Capability(namespace = "osgi.service", attribute = { "objectClass:List<String>=\"org.eclipse.fennec.m2x.ocl.engine.OclOperationProviderProvider\"", "uses:=\"org.eclipse.fennec.m2x.ocl.engine\"" })
 public class OclOperationProviderProviderImpl implements OclOperationProviderProvider {
 
 	private static final Logger LOG = Logger.getLogger(OclOperationProviderProviderImpl.class.getName());
