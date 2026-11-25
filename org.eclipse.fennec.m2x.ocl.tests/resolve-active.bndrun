@@ -1,0 +1,19 @@
+# Resolve check for #435: the OCL engine and parser resolved with `effective:=active`
+# requirements honoured, as a downstream test or runtime bndrun with
+# `-resolve.effective: active` does. The default resolve ignores those requirements, so a
+# DS reference to a service no bundle declares as a capability goes unnoticed here and
+# only fails downstream. build.gradle runs this resolve as part of `check`; it is not
+# launched.
+#
+# Generated with the assistance of AI (Anthropic Claude); reviewed by a project
+# committer before merge.
+
+-runrequires: \
+	bnd.identity;id='org.eclipse.fennec.m2x.ocl.engine',\
+	bnd.identity;id='org.eclipse.fennec.m2x.ocl.parser',\
+	bnd.identity;id='org.apache.felix.scr'
+
+-resolve.effective: active
+
+-runfw: org.apache.felix.framework
+-runee: JavaSE-21

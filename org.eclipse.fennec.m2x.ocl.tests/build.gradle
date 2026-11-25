@@ -16,3 +16,14 @@ def resolveTask = tasks.named("resolve.test") {
 tasks.named("testOSGi") {
 	bndrun = resolveTask.flatMap { it.outputBndrun }
 }
+
+// #435: resolve the engine with `effective:=active` requirements honoured, as downstream
+// bndruns do, so a service required via DS but provided without a capability fails here.
+// Written to build/, the checked-in bndrun stays without -runbundles.
+def resolveActiveTask = tasks.named("resolve.resolve-active") {
+	outputBndrun = layout.buildDirectory.file("resolve-active.bndrun")
+}
+
+tasks.named("check") {
+	dependsOn resolveActiveTask
+}
