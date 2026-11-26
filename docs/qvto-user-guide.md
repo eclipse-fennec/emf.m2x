@@ -661,6 +661,12 @@ try {
 
 **Positions are real for both kinds now** (#110). A syntax error carries what ANTLR reported; an unresolved name, unknown type or unknown metamodel carries the place it stands. `0:0` still means "position unknown", which is what a diagnostic reported without any parse context gets.
 
+**Names that are keywords** (§8.4.7, OCL §9.3, #430): QVT-O takes its identifier from OCL, so OCL's document keywords — `body`, `context`, `def`, `derive`, `endpackage`, `include`, `post`, `pre`, plus `init`, `inv`, `library`, `package`, `static` — are ordinary names: `self.post` reads a feature called `post`. `import` is QVT-O syntax (§8.4) and is not among them. A word QVT-O does reserve — `if`, `then`, `self`, `in`, `out` and the rest — is written `_'if'`.
+
+The underscore alone, `_post`, is the escape OCL 2.0 and 2.2 used. It still resolves, for every keyword of the language, and a run reports a WARNING at its place, since the parse has no channel for one: `T:4:50: '_post' is a deprecated escape of 'post'; write _'post' (§9.3)`. An underscore before a word that is not a keyword is part of the name, so `self._label` stays `_label`.
+
+Because the escape is a spelling of the name and is resolved before anything is looked up, a feature the metamodel really calls `_post` is **not** reached by writing `_post` — that reads `post`. Write `_'_post'` for it (§9.3.4). The same holds in QVT-R and in M2T.
+
 ### 9.1.1 Type Errors (#378)
 
 A transformation is type-checked when it is parsed, with the OCL rules (see the OCL user guide,

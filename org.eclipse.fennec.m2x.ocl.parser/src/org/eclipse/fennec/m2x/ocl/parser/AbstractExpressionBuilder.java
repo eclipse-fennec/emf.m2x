@@ -2049,6 +2049,9 @@ public class AbstractExpressionBuilder {
 	 * kept for compatibility. Only a keyword is unescaped, so a name that merely starts with an
 	 * underscore stays as written.
 	 *
+	 * <p>This is a spelling of the name, applied before anything is looked up: a feature really
+	 * called {@code _post} is reached by {@code _'_post'}, not by {@code _post}.
+	 *
 	 * @param text the identifier as written
 	 * @param keywords the keywords of the language, which an escape may stand for
 	 * @return the name to resolve

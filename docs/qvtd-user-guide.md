@@ -1317,7 +1317,7 @@ Unresolvable imports are not parse errors: they surface at `compile()` or `execu
 
 A syntax error that expects a name says `identifier`, not the list of every word that may stand as one.
 
-**Reserved words** (§7.13.2): `checkonly`, `domain`, `enforce`, `extends`, `implementedby`, `import`, `key`, `overrides`, `primitive`, `query`, `relation`, `top`, `transformation`, `when`, `where` cannot be names; `_'key'` escapes one. `abstract`, `opposite` and `default_values` are not on the list and can be names. The deprecated escape `_key` still means `key`; as the parse has no channel for warnings, a run of the transformation reports a WARNING at its place: `T:4:42: '_key' is a deprecated escape of 'key'; write _'key' (§7.13.2)`.
+**Reserved words** (§7.13.2): `checkonly`, `domain`, `enforce`, `extends`, `implementedby`, `import`, `key`, `overrides`, `primitive`, `query`, `relation`, `top`, `transformation`, `when`, `where` cannot be names; `_'key'` escapes one. `abstract`, `opposite` and `default_values` are not on the list and can be names. The deprecated escape `_key` still means `key`; as the parse has no channel for warnings, a run of the transformation reports a WARNING at its place: `T:4:42: '_key' is a deprecated escape of 'key'; write _'key' (§7.13.2)`. Because the escape is a spelling of the name, resolved before anything is looked up, a feature really called `_key` is **not** reached by writing `_key` — that reads `key`; write `_'_key'` for it (§9.3.4).
 
 ### 11.2 Execution Diagnostics
 
