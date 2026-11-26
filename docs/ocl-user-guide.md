@@ -306,7 +306,7 @@ OclEngine engine = OclEngines.create(new OclParserSupport(resourceSet));
 OclEngine engine = OclEngines.create(new OclParserSupport(registry));
 ```
 
-Under OSGi you do not construct the parser. `OclParserSupport` is a DS component that binds the `ResourceSet` `emf.osgi` publishes as a prototype-scoped service — as a **mandatory** reference, deliberately not an optional one with a fallback to the global registry. A metamodel registered for the resource set only (`emf.model.scope=resourceset`) lives in that resource set's package registry and never in the global one, so a parser built on the fallback would report a valid qualified name as unknown; and an optional reference cannot say *when* the service arrives. Mandatory means the parser exists once the resource set does. Where several resource sets are published, pick one:
+Under OSGi you do not construct the parser. `OclParserSupport` is published by a DS component that binds the `ResourceSet` `emf.osgi` publishes as a prototype-scoped service — as a **mandatory** reference, deliberately not an optional one with a fallback to the global registry. A metamodel registered for the resource set only (`emf.model.scope=resourceset`) lives in that resource set's package registry and never in the global one, so a parser built on the fallback would report a valid qualified name as unknown; and an optional reference cannot say *when* the service arrives. Mandatory means the parser exists once the resource set does. Where several resource sets are published, pick one:
 
 ```json
 {
