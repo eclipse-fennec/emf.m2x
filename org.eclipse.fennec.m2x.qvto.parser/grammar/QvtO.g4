@@ -851,6 +851,7 @@ qualifiedName
 qvtoIdentifier
     : IDENTIFIER
     | ESCAPED_IDENTIFIER
+    | qvtoDocumentKeyword
     | 'access'
     | 'blackbox'
     | 'configuration'
@@ -863,15 +864,12 @@ qvtoIdentifier
     | 'forOne'
     | 'helper'
     | 'inherits'
-    | 'init'
-    | 'inv'
     | 'intermediate'
     | 'invresolve'
     | 'invresolveone'
     | 'invresolveIn'
     | 'invresolveoneIn'
     | 'late'
-    | 'library'
     | 'main'
     | 'map'
     | 'mapping'
@@ -886,7 +884,6 @@ qvtoIdentifier
     | 'resolveone'
     | 'resolveoneIn'
     | 'result'
-    | 'static'
     | 'tag'
     | 'transformation'
     | 'typedef'
@@ -921,7 +918,6 @@ qvtoIdentifier
     | 'exception'
     | 'metamodel'
     | 'ordered'
-    | 'package'
     | 'primitive'
     | 'readonly'
     | 'composes'
@@ -930,6 +926,16 @@ qvtoIdentifier
     | 'class'
     | 'default'
     | 'refines'
+    ;
+
+/**
+ * OCL v2.4 §13.2 (4): these names are keywords of a Complete OCL document only, so a feature may
+ * be called post or context (#430). 'import' is left out — QVT-O uses it as syntax (§8.4), the
+ * same exclusion QvtR.g4 makes.
+ */
+qvtoDocumentKeyword
+    : 'body' | 'context' | 'def' | 'derive' | 'endpackage' | 'init' | 'inv' | 'package'
+    | 'post' | 'pre' | 'static' | 'include' | 'library'
     ;
 
 // ==================== Comment Override ====================

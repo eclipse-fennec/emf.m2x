@@ -1,4 +1,4 @@
-// Generated from /opt/git/m2m/workspace/org.eclipse.fennec.m2x.qvto.parser/grammar/QvtO.g4 by ANTLR 4.13.2
+// Generated from /opt/git/emf.m2x/org.eclipse.fennec.m2x.qvto.parser/grammar/QvtO.g4 by ANTLR 4.13.2
 package org.eclipse.fennec.m2x.qvto.parser;
 import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
 
@@ -10,6 +10,7 @@ import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
  * @param <T> The return type of the visit operation. Use {@link Void} for
  * operations with no return type.
  */
+@SuppressWarnings("CheckReturnValue")
 public class QvtOBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements QvtOVisitor<T> {
 	/**
 	 * {@inheritDoc}
@@ -1467,6 +1468,13 @@ public class QvtOBaseVisitor<T> extends AbstractParseTreeVisitor<T> implements Q
 	 * {@link #visitChildren} on {@code ctx}.</p>
 	 */
 	@Override public T visitQvtoIdentifier(QvtOParser.QvtoIdentifierContext ctx) { return visitChildren(ctx); }
+	/**
+	 * {@inheritDoc}
+	 *
+	 * <p>The default implementation returns the result of calling
+	 * {@link #visitChildren} on {@code ctx}.</p>
+	 */
+	@Override public T visitQvtoDocumentKeyword(QvtOParser.QvtoDocumentKeywordContext ctx) { return visitChildren(ctx); }
 	/**
 	 * {@inheritDoc}
 	 *
