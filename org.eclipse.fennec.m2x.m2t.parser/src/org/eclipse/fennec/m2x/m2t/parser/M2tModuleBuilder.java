@@ -115,6 +115,7 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 	@Override
 	public Module visitModule(M2tParser.ModuleContext ctx) {
 		module = FACTORY.createModule();
+		warnAboutDeprecatedEscapes(ctx);
 
 		// Module declaration
 		if (ctx.moduleDecl() != null) {
@@ -212,6 +213,23 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 			return VisibilityKind.PRIVATE;
 		}
 		return ctx.KW_PROTECTED() != null ? VisibilityKind.PROTECTED : VisibilityKind.PUBLIC;
+	}
+
+	/** One warning per {@code _<keyword>}: the deprecated escape OCL §9.3 still allows (#430). */
+	private void warnAboutDeprecatedEscapes(ParseTree tree) {
+		if (tree instanceof TerminalNode terminal) {
+			Token token = terminal.getSymbol();
+			String text = token.getText();
+			if (token.getType() == M2tLexer.IDENTIFIER
+					&& !M2tExpressionBuilder.unescapeDeprecated(text).equals(text)) {
+				warn("'" + text + "' is a deprecated escape of '" + text.substring(1)
+						+ "'; write _'" + text.substring(1) + "' (\u00a79.3)", token);
+			}
+			return;
+		}
+		for (int i = 0; i < tree.getChildCount(); i++) {
+			warnAboutDeprecatedEscapes(tree.getChild(i));
+		}
 	}
 
 	private void warn(String message, Token at) {

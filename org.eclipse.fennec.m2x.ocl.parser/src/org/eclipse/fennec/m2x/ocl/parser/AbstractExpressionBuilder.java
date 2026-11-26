@@ -2042,6 +2042,23 @@ public class AbstractExpressionBuilder {
 		return unescapeString(inner.replace("''", "\\'"));
 	}
 
+	/**
+	 * The name a {@code _<keyword>} stands for, or {@code text} unchanged.
+	 *
+	 * <p>§9.3: the underscore prefix is the escape OCL 2.0 and 2.2 used, deprecated since and
+	 * kept for compatibility. Only a keyword is unescaped, so a name that merely starts with an
+	 * underscore stays as written.
+	 *
+	 * @param text the identifier as written
+	 * @param keywords the keywords of the language, which an escape may stand for
+	 * @return the name to resolve
+	 */
+	public static String unescapeDeprecated(String text, Set<String> keywords) {
+		return text.length() > 1 && text.charAt(0) == '_' && keywords.contains(text.substring(1))
+				? text.substring(1)
+				: text;
+	}
+
 	// ==================== Internal Helpers ====================
 
 	/**

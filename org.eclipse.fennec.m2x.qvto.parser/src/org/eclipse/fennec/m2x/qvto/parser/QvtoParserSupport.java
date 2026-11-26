@@ -25,6 +25,9 @@ import java.util.Set;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.antlr.v4.runtime.Token;
+import org.eclipse.emf.ecore.EAnnotation;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
@@ -136,7 +139,42 @@ public class QvtoParserSupport {
 			result.setName(unitName);
 		}
 
+		recordWarnings(result, deprecatedEscapes(parser, unitName));
+
 		return result;
+	}
+
+	/**
+	 * Annotation on a parsed transformation carrying the warnings of its parse — the parse has
+	 * no channel for them, so a run reports them (#430).
+	 */
+	public static final String WARNINGS_ANNOTATION = "qvto.warnings";
+
+	/** One warning per {@code _<reserved word>}: the deprecated escape OCL §9.3 still allows. */
+	private static List<String> deprecatedEscapes(QvtOParser parser, String unitName) {
+		List<String> warnings = new ArrayList<>();
+		for (Token token : ((CommonTokenStream) parser.getTokenStream()).getTokens()) {
+			String text = token.getText();
+			if (token.getType() == QvtOLexer.IDENTIFIER
+					&& !QvtoExpressionBuilder.unescapeDeprecated(text).equals(text)) {
+				warnings.add(new SourcePosition(unitName, token.getLine(), token.getCharPositionInLine())
+						+ ": '" + text + "' is a deprecated escape of '" + text.substring(1)
+						+ "'; write _'" + text.substring(1) + "' (\u00a79.3)");
+			}
+		}
+		return warnings;
+	}
+
+	private static void recordWarnings(OperationalTransformation transformation, List<String> warnings) {
+		if (warnings.isEmpty()) {
+			return;
+		}
+		EAnnotation annotation = EcoreFactory.eINSTANCE.createEAnnotation();
+		annotation.setSource(WARNINGS_ANNOTATION);
+		for (int i = 0; i < warnings.size(); i++) {
+			annotation.getDetails().put(String.valueOf(i), warnings.get(i));
+		}
+		transformation.getEAnnotations().add(annotation);
 	}
 
 	/**

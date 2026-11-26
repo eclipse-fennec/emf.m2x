@@ -3132,7 +3132,37 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 			String inner = raw.substring(2, raw.length() - 1);
 			return inner.replace("''", "'");
 		}
-		return ctx.getText();
+		return unescapeDeprecated(ctx.getText());
+	}
+
+	/**
+	 * Every keyword of the QVT-O grammar, OCL's included (§8.4.7 takes {@code <identifier>} from
+	 * OCL). A deprecated escape stands for one of these.
+	 *
+	 * <p>Deliberately not "the words {@code qvtoIdentifier} refuses": an author writes
+	 * {@code _post} because {@code post} is an OCL keyword, not because of what QVT-O admits as a
+	 * name — those two drifted apart in #430. {@code QvtoGrammarKeywordsTest} holds this in step
+	 * with the grammar.
+	 */
+	static final Set<String> KEYWORDS = Set.of(
+			"Bag", "Boolean", "Collection", "Dict", "Integer", "List", "Map", "OclAny", "OclInvalid",
+			"OclMessage", "OclVoid", "OrderedSet", "Real", "Sequence", "Set", "String", "Tuple",
+			"UnlimitedNatural", "abstract", "access", "and", "assert", "blackbox", "body", "break", "case",
+			"catch", "class", "composes", "compute", "configuration", "constructor", "context", "continue",
+			"datatype", "def", "default", "derive", "derived", "disjuncts", "do", "elif", "else", "elseif",
+			"end", "endif", "endpackage", "entry", "enum", "except", "exception", "extends", "false", "forEach",
+			"forOne", "from", "helper", "if", "implies", "import", "in", "include", "inherits", "init", "inout",
+			"intermediate", "inv", "invalid", "invresolve", "invresolveIn", "invresolveone", "invresolveoneIn",
+			"late", "let", "library", "literal", "log", "main", "map", "mapping", "merges", "metamodel",
+			"modeltype", "new", "not", "null", "object", "opposites", "or", "ordered", "out", "package",
+			"population", "post", "pre", "primitive", "property", "query", "raise", "readonly", "references",
+			"refines", "resolve", "resolveIn", "resolveone", "resolveoneIn", "result", "return", "self",
+			"static", "switch", "tag", "then", "this", "transformation", "true", "try", "typedef", "unlimited",
+			"uses", "var", "when", "where", "while", "with", "xmap", "xor");
+
+	/** The name a deprecated {@code _<keyword>} stands for; any other text unchanged. */
+	static String unescapeDeprecated(String text) {
+		return AbstractExpressionBuilder.unescapeDeprecated(text, KEYWORDS);
 	}
 
 	static CollectionKind resolveCollectionKind(String kindText) {
