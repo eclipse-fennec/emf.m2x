@@ -14,10 +14,14 @@
  */
 package org.eclipse.fennec.m2x.qvto.tests.mapping;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
+import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.fennec.m2x.qvto.api.BasicQvtoModelExtent;
 import org.eclipse.fennec.m2x.qvto.api.QvtoExecutionResult;
 import org.eclipse.fennec.m2x.qvto.tests.AbstractQvtoEngineTest;
@@ -171,6 +175,83 @@ class QvtoMappingReuseSpecConformanceTest extends AbstractQvtoEngineTest {
 		assertFalse(result.isSuccess());
 		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getMessage().contains("pre-condition failed for mapping: c3a")),
 				() -> result.diagnostics().toString());
+	}
+
+	@Test
+	void inherits_isTransitive_theGrandparentRunsToo() throws Exception {
+		// §8.2.1.15: an inherited mapping is invoked with the standard semantics, so the mappings
+		// it inherits run before its own population (#464)
+		QvtoExecutionResult result = run("""
+				transformation test(in s : SRC, out t : TGT) {
+				    abstract mapping SourceElement::named() : TargetElement {
+				        init { log('step:named-init'); }
+				        name := self.name + '-named';
+				        end { log('step:named-end'); }
+				    }
+				    abstract mapping SourceElement::labelled() : TargetElement inherits SourceElement::named {
+				        init { log('step:labelled-init'); }
+				        label := 'set-by-labelled';
+				        end { log('step:labelled-end'); }
+				    }
+				    mapping SourceElement::copy() : TargetElement inherits SourceElement::labelled {
+				        init { log('step:copy-init'); }
+				        value := 7;
+				        end { log('step:copy-end'); }
+				    }
+				    main() {
+				        var res := s.objectsOfType(SourceElement)->first().map copy();
+				        log('name:' + res.name + ' label:' + res.label + ' value:' + res.value.toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "name:plain-named label:set-by-labelled value:7");
+		List<String> steps = result.diagnostics().stream().map(Diagnostic::getMessage)
+				.filter(m -> m.contains("step:")).map(m -> m.substring(m.indexOf("step:") + 5)).toList();
+		assertEquals(List.of("copy-init", "labelled-init", "named-init", "named-end", "labelled-end", "copy-end"), steps);
+	}
+
+	@Test
+	void merges_ofAnInheritedMapping_run() throws Exception {
+		QvtoExecutionResult result = run("""
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::extra() : TargetElement {
+				        label := 'merged-into-base';
+				    }
+				    abstract mapping SourceElement::base() : TargetElement merges SourceElement::extra {
+				        name := 'base';
+				    }
+				    mapping SourceElement::derived() : TargetElement inherits SourceElement::base {
+				        value := 3;
+				    }
+				    main() {
+				        var res := s.objectsOfType(SourceElement)->first().map derived();
+				        log('name:' + res.name + ' label:' + res.label + ' value:' + res.value.toString());
+				    }
+				}
+				""");
+		assertSuccess(result);
+		assertLogged(result, "name:base label:merged-into-base value:3");
+	}
+
+	@Test
+	void inherits_cycle_isAnError_notAnEndlessRecursion() throws Exception {
+		QvtoExecutionResult result = run("""
+				transformation test(in s : SRC, out t : TGT) {
+				    mapping SourceElement::a() : TargetElement inherits SourceElement::b {
+				        name := 'a';
+				    }
+				    mapping SourceElement::b() : TargetElement inherits SourceElement::a {
+				        label := 'b';
+				    }
+				    main() {
+				        s.objectsOfType(SourceElement)->first().map a();
+				    }
+				}
+				""");
+		assertFalse(result.isSuccess());
+		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getSeverity() == Diagnostic.ERROR
+				&& d.getMessage().contains("reuses itself through inherits or merges")), () -> result.diagnostics().toString());
 	}
 
 	private static void assertSuccess(QvtoExecutionResult result) {
