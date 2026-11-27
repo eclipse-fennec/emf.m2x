@@ -1982,7 +1982,9 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 		}
 
 		// §8.1.18: the implicit 'result' is the single result's type, or a tuple of the named
-		// results when there are several — result.a is then a tuple part (#430)
+		// results when there are several, which is how the evaluator binds it (#336). The parse
+		// has to agree: result.a is a tuple part, not a feature of the first result's type, and
+		// QvtoParserSupport#unknownProperties would otherwise reject it (#430).
 		Variable resultVar = OCL.createVariable();
 		resultVar.setName("result");
 		if (operation.getResult().size() == 1) {

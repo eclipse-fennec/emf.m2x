@@ -667,6 +667,8 @@ The underscore alone, `_post`, is the escape OCL 2.0 and 2.2 used. It still work
 
 The second lookup is a metamodel lookup and nothing else: a variable, parameter or iterator you declare with a leading underscore keeps the name you gave it. `var _result : String` is a variable called `_result`, not `result`.
 
+Both lookups happen while the unit is parsed, so they need the source type. Where the parser does not have it — `self.oclAsType(OclAny)._post` — the name is resolved when the transformation runs, and that lookup takes `_post` literally: there is no second lookup and no warning at run time.
+
 The prefix is deprecated since OCL 2.3 and goes in OCL 3.0 — §9.3 names the ambiguity above as the reason. Write `_'post'` for a name that is a keyword.
 
 ### 9.1.1 Type Errors (#378)

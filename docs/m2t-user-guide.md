@@ -493,6 +493,8 @@ The underscore alone, `_post`, is the escape OCL 2.0 and 2.2 used. It still work
 
 The second lookup is a metamodel lookup and nothing else: an iterator variable or template parameter you declare with a leading underscore keeps the name you gave it. The prefix is deprecated since OCL 2.3 and goes in OCL 3.0.
 
+Both lookups happen while the module is parsed, so they need the type of the expression's source. Where the parser does not have it — a template over `EObject`, say — the name is resolved when the generation runs, and that lookup takes `_post` literally: there is no second lookup and no warning at run time.
+
 ### 4.4 For Block
 
 Iterate over collections with optional separator, before, after, and guard:
