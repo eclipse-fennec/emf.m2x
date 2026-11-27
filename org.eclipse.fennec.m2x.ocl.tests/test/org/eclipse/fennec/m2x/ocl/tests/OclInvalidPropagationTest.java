@@ -15,9 +15,18 @@
 package org.eclipse.fennec.m2x.ocl.tests;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Map;
 
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.fennec.m2x.ocl.api.OclContext;
+import org.eclipse.fennec.m2x.ocl.api.OclEvaluationOptions;
 import org.eclipse.fennec.m2x.ocl.api.OclParseException;
+import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -196,5 +205,47 @@ class OclInvalidPropagationTest extends AbstractOclTest {
 	@Test
 	void at_outOfBounds_high_collection() throws OclParseException {
 		assertInvalid("Sequence{1, 2, 3}->at(4)", self);
+	}
+
+	// --- A tuple literal with an invalid part is invalid, as a collection literal is (#448) ---
+
+	@Test
+	void tupleLiteral_withInvalidPart_isInvalid() throws OclParseException {
+		assertInvalid("Tuple{a = 1, b = 1 / 0}", self);
+		assertInvalid("Tuple{a = 1 / 0, b = 1}", self);
+		assertInvalid("Tuple{a = 1, b = Tuple{c = 1 / 0}}", self);
+	}
+
+	@Test
+	void tupleLiteral_withInvalidPart_isInvalid_lenientAndStrict() throws OclParseException {
+		for (OclEvaluationOptions options : new OclEvaluationOptions[] {
+				OclEvaluationOptions.lenient(), OclEvaluationOptions.strict() }) {
+			OclResult result = engine.evaluateWithDiagnostics(engine.parse("Tuple{a = 1, b = 1 / 0}", self.eClass()),
+					OclContext.of(self), options);
+			assertTrue(result.isInvalid(), () -> "expected invalid under " + options + ", got " + result.value());
+		}
+	}
+
+	@Test
+	void tupleLiteral_withNullPart_isATuple() throws OclParseException {
+		Object value = eval("Tuple{a = 1, b = null}", self);
+		Map<?, ?> tuple = assertInstanceOf(Map.class, value);
+		assertEquals(1, ((Number) tuple.get("a")).intValue());
+		assertTrue(tuple.containsKey("b"));
+		assertNull(tuple.get("b"));
+	}
+
+	@Test
+	void tupleLiteral_withInvalidPart_propagates() throws OclParseException {
+		assertInvalid("Tuple{a = 1, b = 1 / 0}.a", self);
+		assertEquals(true, eval("Tuple{a = 1, b = 1 / 0}.oclIsInvalid()", self));
+		assertEquals(false, eval("Tuple{a = 1, b = null}.oclIsInvalid()", self));
+	}
+
+	@Test
+	void tupleLiteral_withInvalidPart_insideCollect_isInvalid() throws OclParseException {
+		assertInvalid("Sequence{1, 2}->collect(x | Tuple{a = 1 / (x - 1)})", self);
+		OclResult ok = evalWithDiagnostics("Sequence{1, 2}->collect(x | Tuple{a = x})", self);
+		assertFalse(ok.isInvalid());
 	}
 }
