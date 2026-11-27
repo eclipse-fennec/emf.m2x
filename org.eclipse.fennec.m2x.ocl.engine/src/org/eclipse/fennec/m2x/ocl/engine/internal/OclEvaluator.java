@@ -798,6 +798,11 @@ public class OclEvaluator extends OclSwitch<Object> {
 			if (part.getOwnedInit() != null) {
 				value = eval(part.getOwnedInit());
 			}
+			// An expression with an invalid part is invalid itself (§7.4.13), as a collection
+			// literal is since #316; null stays a legal part value (#448)
+			if (value == OclInvalid.INSTANCE) {
+				return OclInvalid.INSTANCE;
+			}
 			tuple.put(part.getName(), value);
 		}
 		return tuple;
