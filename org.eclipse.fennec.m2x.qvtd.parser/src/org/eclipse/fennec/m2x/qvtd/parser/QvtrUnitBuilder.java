@@ -112,8 +112,10 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 	/** Current transformation being built. */
 	private RelationalTransformation currentTransformation;
-	/** Map of typed model name → TypedModel object for domain resolution. */
-	private final Map<String, TypedModel> typedModelMap = new HashMap<>();
+	/** Map of typed model name → TypedModel object for domain resolution, in declaration order. */
+	private final Map<String, TypedModel> typedModelMap = new LinkedHashMap<>();
+	/** The typed model of the domain being built: a class name is looked up in its metamodels first (#458). */
+	private TypedModel domainModel;
 	/** Map of relation name → Relation object for RelationCallExp resolution. */
 	private final Map<String, Relation> relationMap = new HashMap<>();
 	/** The query names of the transformation being built, known before its relations (#358). */
@@ -733,6 +735,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 		}
 
 		// Process templates → DomainPattern(s)
+		domainModel = tm;
 		for (QvtRParser.TemplateContext tmplCtx : ctx.template()) {
 			TemplateExp templateExp = visitTemplate(tmplCtx);
 			if (templateExp instanceof CollectionTemplateExp) {
@@ -773,6 +776,7 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			bindTemplateVariables(pattern, templateExp);
 			domain.getPattern().add(pattern);
 		}
+		domainModel = null;
 
 		// implementedby clause (§7.11.3.6)
 		if (ctx.IMPLEMENTEDBY() != null && ctx.pathName() != null && currentRelation != null) {
@@ -1384,12 +1388,35 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 	}
 
 	/**
-	 * Resolves an EClassifier from a path name using all typed models' packages.
+	 * Resolves an EClassifier from a path name using all typed models' packages: those of the
+	 * domain being built first, then the others in declaration order. A qualified name is first
+	 * looked up by its qualifier, so {@code b::Item} is the {@code Item} of package {@code b} even
+	 * when another metamodel has an {@code Item} too (#458); only if no package matches the
+	 * qualifier is the simple name looked up, as before.
 	 */
 	private EClassifier resolveClassifier(List<String> path) {
+		List<TypedModel> models = new ArrayList<>();
+		if (domainModel != null) {
+			models.add(domainModel);
+		}
+		for (TypedModel tm : typedModelMap.values()) {
+			if (tm != domainModel) {
+				models.add(tm);
+			}
+		}
+		if (path.size() > 1) {
+			for (TypedModel tm : models) {
+				for (EPackage pkg : tm.getUsedPackage()) {
+					EClassifier cls = findQualifiedClassifier(pkg, path);
+					if (cls != null) {
+						return cls;
+					}
+				}
+			}
+		}
 
 		// Search in all typed models' packages
-		for (TypedModel tm : typedModelMap.values()) {
+		for (TypedModel tm : models) {
 			for (EPackage pkg : tm.getUsedPackage()) {
 				EClassifier cls = findClassifierInPackage(pkg, path);
 				if (cls != null) {
@@ -1400,6 +1427,35 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 
 		// No fallback to the whole package registry: a class resolves only in the metamodels of
 		// the declared model types (decided in #358)
+		return null;
+	}
+
+	/**
+	 * Finds a classifier whose qualifier names the package or one of its subpackages, without
+	 * falling back to the simple name (#458).
+	 */
+	private static EClassifier findQualifiedClassifier(EPackage pkg, List<String> path) {
+		if (path.get(0).equals(pkg.getName())) {
+			if (path.size() == 2) {
+				EClassifier cls = pkg.getEClassifier(path.get(1));
+				if (cls != null) {
+					return cls;
+				}
+			} else {
+				for (EPackage sub : pkg.getESubpackages()) {
+					EClassifier cls = findQualifiedClassifier(sub, path.subList(1, path.size()));
+					if (cls != null) {
+						return cls;
+					}
+				}
+			}
+		}
+		for (EPackage sub : pkg.getESubpackages()) {
+			EClassifier cls = findQualifiedClassifier(sub, path);
+			if (cls != null) {
+				return cls;
+			}
+		}
 		return null;
 	}
 
