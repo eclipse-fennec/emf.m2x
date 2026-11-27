@@ -17,6 +17,7 @@ package org.eclipse.fennec.m2x.qvto.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -56,9 +57,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * OCL v2.4 §9.3: {@code _post} is the escape OCL 2.0 and 2.2 used for a keyword, deprecated and
- * kept for compatibility. The keywords are those of the grammar, OCL's included — not the ones
- * {@code qvtoIdentifier} refuses, which is a different and moving set (#430).
+ * OCL v2.4 §9.4.1: a property name with a leading underscore "is first looked up in the metamodel
+ * with the underscore prefix, and if no value is found, the symbol is looked up again without the
+ * underscore prefix" — the escape OCL 2.0 and 2.2 used, deprecated by §9.3 and kept for
+ * compatibility (#430).
+ *
+ * <p>Second, not first: the name as written wins, and only a miss falls back. Nothing outside a
+ * metamodel lookup is touched, so a variable or parameter keeps the name it was declared with.
  */
 class QvtoDeprecatedEscapeTest {
 
@@ -68,8 +73,50 @@ class QvtoDeprecatedEscapeTest {
 	private static final Pattern KEYWORD = Pattern.compile("'([A-Za-z][A-Za-z0-9_]*)'");
 
 	@Test
-	@DisplayName("_<keyword> resolves to <keyword>, for every keyword of the grammar")
+	@DisplayName("_post reaches the feature post when the metamodel has no _post")
+	void aMissingUnderscoreName_fallsBackToTheNameWithoutIt() throws Exception {
+		EPackage kw = packageWithFeaturesNamed(Set.of("post"));
+		EClass item = (EClass) kw.getEClassifier("Item");
+
+		OperationalTransformation t = engine(kw).parse(probe("_post"), "T");
+
+		assertSame(item.getEStructuralFeature("post"), referredProperty(t));
+	}
+
+	@Test
+	@DisplayName("a feature really called _post wins: the lookup as written comes first (§9.4.1)")
+	void anExistingUnderscoreName_isNotShadowed() throws Exception {
+		EPackage kw = packageWithFeaturesNamed(Set.of("post"));
+		EClass item = (EClass) kw.getEClassifier("Item");
+		EAttribute underscored = EcoreFactory.eINSTANCE.createEAttribute();
+		underscored.setName("_post");
+		underscored.setEType(EcorePackage.Literals.ESTRING);
+		item.getEStructuralFeatures().add(underscored);
+
+		assertSame(underscored, referredProperty(engine(kw).parse(probe("_post"), "T")),
+				"_post has to reach the feature of that name, not post");
+		assertSame(item.getEStructuralFeature("post"),
+				referredProperty(engine(kw).parse(probe("_'post'"), "T")));
+	}
+
+	@Test
+	@DisplayName("an underscore name with nothing to fall back to is rejected, not invented")
+	void anUnderscorePrefixedName_isNotInvented() {
+		EPackage kw = packageWithFeaturesNamed(Set.of("post"));
+
+		QvtoParseException rejected = assertThrows(QvtoParseException.class,
+				() -> engine(kw).parse(probe("_label"), "T"));
+
+		assertTrue(rejected.getMessage().contains("Unknown property (Item::_label)"),
+				"neither _label nor label is a feature, so the name is reported as written: "
+						+ rejected.getMessage());
+	}
+
+	@Test
+	@DisplayName("_<keyword> reaches the feature <keyword>, for every keyword of the grammar")
 	void everyKeyword_isReachableThroughTheDeprecatedEscape() {
+		// Not the set the code keys on — it keys on nothing. These are the names an author would
+		// have escaped in OCL 2.0, so they are what the compatibility behaviour is for.
 		Set<String> keywords = grammarKeywords();
 		assertTrue(keywords.contains("post"), "'post' has to be among the grammar's keywords");
 
@@ -92,41 +139,47 @@ class QvtoDeprecatedEscapeTest {
 	}
 
 	@Test
-	@DisplayName("a feature really called _post is reached by the explicit escape, not the deprecated one")
-	void aFeatureNamedWithALeadingUnderscore_needsTheExplicitEscape() throws Exception {
+	@DisplayName("a variable declared with a leading underscore keeps its name")
+	void anUnderscoreVariable_isNotRewritten() throws Exception {
+		// _result used to be rewritten to result before anything was looked up, which made the
+		// local the mapping's own result variable: the transformation ran and wrote nothing.
+		assertEquals("local", copyWith(
+				"var _result : String := 'local'; result.post := _result;"));
+	}
+
+	@Test
+	@DisplayName("a variable called _self does not rebind self")
+	void anUnderscoreSelfVariable_isNotRewritten() throws Exception {
+		assertEquals("local", copyWith("var _self : String := 'local'; result.post := _self;"));
+	}
+
+	@Test
+	@DisplayName("a parameter declared with a leading underscore keeps its name")
+	void anUnderscoreParameter_isNotRewritten() throws Exception {
 		EPackage kw = packageWithFeaturesNamed(Set.of("post"));
 		EClass item = (EClass) kw.getEClassifier("Item");
-		EAttribute underscored = EcoreFactory.eINSTANCE.createEAttribute();
-		underscored.setName("_post");
-		underscored.setEType(EcorePackage.Literals.ESTRING);
-		item.getEStructuralFeatures().add(underscored);
+		QvtoEngine engine = engine(kw);
+		OperationalTransformation t = engine.parse("""
+				modeltype KW uses '%s';
+				transformation T(in src : KW, out dst : KW);
+				main() { src.rootObjects()[Item]->map copy(); }
+				mapping Item::copy() : Item { result.post := self.q('p'); }
+				query Item::q(_in : String) : String { _in }
+				""".formatted(NS_URI), "T");
 
-		// The deprecated escape is a spelling of the name, resolved before any lookup, so it
-		// reaches 'post' even where a feature '_post' exists. That one keeps _'_post' (§9.3.4).
-		assertSame(item.getEStructuralFeature("post"),
-				referredProperty(engine(kw).parse(probe("_post"), "T")));
-		assertSame(underscored,
-				referredProperty(engine(kw).parse(probe("_\'_post\'"), "T")));
+		Run run = run(engine, t, item);
+
+		assertTrue(run.result().isSuccess(), "" + run.result().diagnostics());
+		assertEquals(List.of(), run.result().diagnostics().stream().map(Object::toString).toList(),
+				"a parameter name is not a metamodel lookup, so nothing is deprecated here");
+		assertEquals("p", run.post());
 	}
 
 	@Test
-	@DisplayName("an underscore before a word that is not a keyword stays part of the name")
-	void anUnderscorePrefixedName_staysAsItIs() throws Exception {
-		EPackage kw = packageWithFeaturesNamed(Set.of("name"));
-		EClass item = (EClass) kw.getEClassifier("Item");
-
-		OperationalTransformation t = engine(kw).parse(probe("_name"), "T");
-
-		assertEquals("_name", referredProperty(t).getName());
-		assertNotNull(item);
-	}
-
-	@Test
-	@DisplayName("_post is reported as deprecated: a WARNING at its place when the transformation runs")
+	@DisplayName("the fallback is reported as deprecated: a WARNING at the name when the transformation runs")
 	void theDeprecatedEscape_isWarnedAbout() throws Exception {
 		EPackage kw = packageWithFeaturesNamed(Set.of("post"));
 		EClass item = (EClass) kw.getEClassifier("Item");
-		EStructuralFeature post = item.getEStructuralFeature("post");
 
 		QvtoEngine engine = engine(kw);
 		OperationalTransformation t = engine.parse("""
@@ -136,23 +189,49 @@ class QvtoDeprecatedEscapeTest {
 				mapping Item::copy() : Item { result.post := self._post; }
 				""".formatted(NS_URI), "T");
 
+		Run run = run(engine, t, item);
+
+		assertTrue(run.result().isSuccess(), "" + run.result().diagnostics());
+		assertEquals("hello", run.post(), "the escape reached the feature");
+		assertTrue(run.result().diagnostics().stream().anyMatch(d -> d.getSeverity() == Diagnostic.WARNING
+				&& d.getMessage().equals(
+						"T:4:50: '_post' is a deprecated escape of 'post'; write _'post' (§9.3)")),
+				"" + run.result().diagnostics());
+	}
+
+	// ==================== Helpers ====================
+
+	/** Runs {@code body} as the whole of {@code Item::copy}, and returns the copied post. */
+	private static String copyWith(String body) throws Exception {
+		EPackage kw = packageWithFeaturesNamed(Set.of("post"));
+		EClass item = (EClass) kw.getEClassifier("Item");
+		QvtoEngine engine = engine(kw);
+		OperationalTransformation t = engine.parse("""
+				modeltype KW uses '%s';
+				transformation T(in src : KW, out dst : KW);
+				main() { src.rootObjects()[Item]->map copy(); }
+				mapping Item::copy() : Item { %s }
+				""".formatted(NS_URI, body), "T");
+
+		Run run = run(engine, t, item);
+		assertTrue(run.result().isSuccess(), "" + run.result().diagnostics());
+		return (String) run.post();
+	}
+
+	/** A run of a transformation: what it reported, and the {@code post} it copied. */
+	private record Run(QvtoExecutionResult result, Object post) {}
+
+	private static Run run(QvtoEngine engine, OperationalTransformation t, EClass item) {
+		EStructuralFeature post = item.getEStructuralFeature("post");
 		EObject in = EcoreUtil.create(item);
 		in.eSet(post, "hello");
 		BasicQvtoModelExtent src = new BasicQvtoModelExtent(in);
 		BasicQvtoModelExtent dst = new BasicQvtoModelExtent();
-
 		QvtoExecutionResult result = engine.execute(t,
 				QvtoExecutionContext.of(List.of(src, dst), Map.of()));
-
-		assertTrue(result.isSuccess(), "" + result.diagnostics());
-		assertEquals("hello", dst.getContents().get(0).eGet(post), "the escape reached the feature");
-		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getSeverity() == Diagnostic.WARNING
-				&& d.getMessage().equals(
-						"T:4:50: '_post' is a deprecated escape of 'post'; write _'post' (§9.3)")),
-				"" + result.diagnostics());
+		return new Run(result, dst.getContents().isEmpty() ? null
+				: dst.getContents().get(0).eGet(post));
 	}
-
-	// ==================== Helpers ====================
 
 	/** Every keyword literal of the QVT-O grammar and the OCL grammar it imports. */
 	private static Set<String> grammarKeywords() {

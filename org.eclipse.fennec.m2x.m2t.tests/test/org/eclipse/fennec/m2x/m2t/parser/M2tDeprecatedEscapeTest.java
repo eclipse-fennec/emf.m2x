@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,8 +52,12 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * OCL v2.4 §9.3: {@code _post} is the escape OCL 2.0 and 2.2 used for a keyword, deprecated and
- * kept for compatibility. The keywords are the M2T grammar's own (#430).
+ * OCL v2.4 §9.4.1: a property name with a leading underscore "is first looked up in the metamodel
+ * with the underscore prefix, and if no value is found, the symbol is looked up again without the
+ * underscore prefix" — the escape OCL 2.0 and 2.2 used, deprecated by §9.3 (#430).
+ *
+ * <p>Second, not first: a feature really called {@code _post} keeps {@code _post}, and a name that
+ * is not a metamodel lookup — an iterator variable, a template parameter — is never rewritten.
  */
 class M2tDeprecatedEscapeTest {
 
@@ -82,17 +87,41 @@ class M2tDeprecatedEscapeTest {
 	}
 
 	@Test
-	@DisplayName("an underscore before a word that is not a keyword stays part of the name")
-	void anUnderscorePrefixedName_staysAsItIs() throws Exception {
-		// 'label' is not a keyword, so _label stays _label — and the metamodel has no such feature
-		M2tResult result = generate("label", "[i._label/]");
+	@DisplayName("an underscore name with nothing to fall back to stays unresolved")
+	void anUnderscorePrefixedName_isNotInvented() throws Exception {
+		// the metamodel has 'post' only, so neither _label nor label is a feature
+		M2tResult result = generate("post", "[i._label/]");
 
 		assertTrue(result.diagnostics().stream().anyMatch(d -> d.getSeverity() >= Diagnostic.ERROR),
-				"a name that is not a deprecated escape has to stay unresolved: " + result.diagnostics());
+				"a name with no second spelling has to stay unresolved: " + result.diagnostics());
 	}
 
 	@Test
-	@DisplayName("_post is reported as deprecated, at its place")
+	@DisplayName("a feature really called _post wins: the lookup as written comes first (§9.4.1)")
+	void anExistingUnderscoreName_isNotShadowed() throws Exception {
+		M2tResult result = generateOn(item -> {
+			addAttribute(item, "post", "keyword");
+			addAttribute(item, "_post", "underscored");
+		}, "[i._post/]");
+
+		assertTrue(result.isSuccess(), "" + result.diagnostics());
+		assertEquals("underscored", output(result));
+		assertEquals(List.of(), result.diagnostics().stream().map(Object::toString).toList(),
+				"the name as written resolved, so nothing is deprecated here");
+	}
+
+	@Test
+	@DisplayName("an iterator variable with a leading underscore keeps its name")
+	void anUnderscoreIterator_isNotRewritten() throws Exception {
+		// _self used to be rewritten to self before anything was looked up
+		M2tResult result = generate("post", "[for (_self : String | Sequence{i.post})][_self/][/for]");
+
+		assertTrue(result.isSuccess(), "" + result.diagnostics());
+		assertEquals("value", output(result));
+	}
+
+	@Test
+	@DisplayName("the fallback is reported as deprecated, at its place")
 	void theDeprecatedEscape_isWarnedAbout() throws Exception {
 		M2tResult result = generate("post", "[i._post/]");
 
@@ -108,16 +137,28 @@ class M2tDeprecatedEscapeTest {
 
 	/** Generates {@code body} over an {@code Item} whose single feature {@code feature} is "value". */
 	private static M2tResult generate(String feature, String body) throws M2tParseException {
+		return generateOn(item -> addAttribute(item, feature, "value"), body);
+	}
+
+	/** Adds an {@code EString} feature, and remembers the value an instance of it carries. */
+	private static void addAttribute(EClass item, String name, String value) {
+		EAttribute attribute = EcoreFactory.eINSTANCE.createEAttribute();
+		attribute.setName(name);
+		attribute.setEType(EcorePackage.Literals.ESTRING);
+		attribute.setDefaultValueLiteral(value);
+		item.getEStructuralFeatures().add(attribute);
+	}
+
+	/** Generates {@code body} over an {@code Item} the caller gives the features of. */
+	private static M2tResult generateOn(Consumer<EClass> features, String body)
+			throws M2tParseException {
 		EPackage kw = EcoreFactory.eINSTANCE.createEPackage();
 		kw.setName("kw");
 		kw.setNsPrefix("kw");
 		kw.setNsURI(NS_URI);
 		EClass item = EcoreFactory.eINSTANCE.createEClass();
 		item.setName("Item");
-		EAttribute attribute = EcoreFactory.eINSTANCE.createEAttribute();
-		attribute.setName(feature);
-		attribute.setEType(EcorePackage.Literals.ESTRING);
-		item.getEStructuralFeatures().add(attribute);
+		features.accept(item);
 		kw.getEClassifiers().add(item);
 
 		EPackage.Registry registry = new EPackageRegistryImpl();
@@ -138,7 +179,9 @@ class M2tDeprecatedEscapeTest {
 		engine.link(module);
 
 		EObject instance = EcoreUtil.create(item);
-		instance.eSet(attribute, "value");
+		for (EAttribute attribute : item.getEAttributes()) {
+			instance.eSet(attribute, attribute.getDefaultValueLiteral());
+		}
 		return engine.execute(module, M2tContext.of(instance));
 	}
 

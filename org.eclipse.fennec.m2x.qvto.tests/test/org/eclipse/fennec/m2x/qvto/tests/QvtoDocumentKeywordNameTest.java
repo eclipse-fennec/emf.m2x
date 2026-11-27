@@ -17,12 +17,19 @@ package org.eclipse.fennec.m2x.qvto.tests;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
@@ -53,10 +60,11 @@ import org.junit.jupiter.api.Test;
  */
 class QvtoDocumentKeywordNameTest {
 
-	/** The names {@code qvtoDocumentKeyword} admits — OCL's list without {@code import}. */
-	private static final List<String> DOCUMENT_KEYWORDS = List.of("body", "context", "def",
-			"derive", "endpackage", "init", "inv", "package", "post", "pre", "static", "include",
-			"library");
+	/**
+	 * The names {@code qvtoDocumentKeyword} admits, read from the grammar rather than copied —
+	 * a hand-kept list drifting from the grammar beside it is what #430 was.
+	 */
+	private static final List<String> DOCUMENT_KEYWORDS = documentKeywords();
 
 	private static final String NS_URI = "http://example.org/m2x/qvto/document-keywords";
 
@@ -137,6 +145,27 @@ class QvtoDocumentKeywordNameTest {
 	}
 
 	// ==================== Helpers ====================
+
+	/** The alternatives of the {@code qvtoDocumentKeyword} rule of {@code QvtO.g4}. */
+	private static List<String> documentKeywords() {
+		String grammar;
+		try (InputStream in = QvtoDocumentKeywordNameTest.class.getResourceAsStream("/grammar/QvtO.g4")) {
+			assertNotNull(in, "/grammar/QvtO.g4 has to be on the classpath");
+			grammar = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+		} catch (IOException e) {
+			return fail("cannot read /grammar/QvtO.g4", e);
+		}
+		Matcher rule = Pattern.compile("(?m)^qvtoDocumentKeyword\\s*:(.*?);", Pattern.DOTALL)
+				.matcher(grammar);
+		assertTrue(rule.find(), "QvtO.g4 has to declare a qvtoDocumentKeyword rule");
+		List<String> words = new ArrayList<>();
+		Matcher word = Pattern.compile("'([A-Za-z][A-Za-z0-9_]*)'").matcher(rule.group(1));
+		while (word.find()) {
+			words.add(word.group(1));
+		}
+		assertTrue(words.contains("post"), "'post' has to be one of them");
+		return words;
+	}
 
 	/** {@code Item} with one {@code EString} feature per document keyword. */
 	private static EPackage keywordPackage() {

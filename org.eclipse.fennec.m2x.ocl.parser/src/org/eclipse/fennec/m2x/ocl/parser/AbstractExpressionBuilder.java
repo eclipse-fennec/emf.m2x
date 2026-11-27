@@ -368,6 +368,23 @@ public class AbstractExpressionBuilder {
 		this.diagnosticSink = Objects.requireNonNull(sink, "sink must not be null");
 	}
 
+	/** Where deprecated-escape warnings go; {@code null} leaves the second lookup off. */
+	private Consumer<Resource.Diagnostic> deprecatedEscapeSink;
+
+	/**
+	 * Turns the §9.4.1 second lookup on and says where its warnings go.
+	 *
+	 * <p>Off until a host asks for it, because the lookup is a compatibility behaviour the spec
+	 * deprecates and OCL 3.0 removes, and because a warning the host cannot carry anywhere is
+	 * worse than none. QVT-O and M2T hand their parse warnings to a run of the unit; OCL has no
+	 * channel for them yet (#440).
+	 *
+	 * @param sink receives each warning, positioned at this builder's cursor
+	 */
+	public void setDeprecatedEscapeSink(Consumer<Resource.Diagnostic> sink) {
+		this.deprecatedEscapeSink = Objects.requireNonNull(sink, "sink must not be null");
+	}
+
 	/**
 	 * Tells this builder where the host is, by line and column.
 	 *
@@ -1536,6 +1553,22 @@ public class AbstractExpressionBuilder {
 				}
 				return;
 			}
+			// §9.4.1 second lookup: the name as written found nothing, so a leading underscore
+			// may be the escape OCL 2.0 and 2.2 used. Only for a language that asked for it by
+			// saying where the warning goes (#430).
+			if (deprecatedEscapeSink != null) {
+				EStructuralFeature escaped = deprecatedUnderscoreLookup(eClass, propName);
+				if (escaped != null) {
+					exp.setReferredProperty(escaped);
+					EClassifier escapedType = escaped.getEType();
+					if (escapedType != null) {
+						exp.setType(escaped.isMany() ? createCollectionTypeForFeature(escaped) : escapedType);
+					}
+					deprecatedEscapeSink.accept(diagnostics.at(
+							deprecatedEscapeMessage(propName, escaped.getName())));
+					return;
+				}
+			}
 			// Silent by default, and deliberately so: a property this type does not declare may
 			// still be one the evaluator finds — a Complete OCL def: registered by an earlier
 			// parse, a library property such as oclLocale, a feature of the runtime type where
@@ -2043,23 +2076,37 @@ public class AbstractExpressionBuilder {
 	}
 
 	/**
-	 * The name a {@code _<keyword>} stands for, or {@code text} unchanged.
+	 * The feature a {@code _name} reaches through the deprecated underscore prefix, or
+	 * {@code null}.
 	 *
-	 * <p>§9.3: the underscore prefix is the escape OCL 2.0 and 2.2 used, deprecated since and
-	 * kept for compatibility. Only a keyword is unescaped, so a name that merely starts with an
-	 * underscore stays as written.
+	 * <p>§9.4.1: a name with a leading underscore "is first looked up in the metamodel with the
+	 * underscore prefix, and if no value is found, the symbol is looked up again without the
+	 * underscore prefix". This is that second lookup, so the caller asks for it only after the
+	 * name as written found nothing — a feature really called {@code _post} keeps {@code _post}.
 	 *
-	 * <p>This is a spelling of the name, applied before anything is looked up: a feature really
-	 * called {@code _post} is reached by {@code _'_post'}, not by {@code _post}.
+	 * <p>The prefix is deprecated since OCL 2.3 and goes in OCL 3.0; §9.3 names this double
+	 * lookup as the reason. A caller that uses it warns (#430).
 	 *
-	 * @param text the identifier as written
-	 * @param keywords the keywords of the language, which an escape may stand for
-	 * @return the name to resolve
+	 * @param eClass the type the name is looked up in
+	 * @param propName the name as written
+	 * @return the feature of the name without the prefix, or {@code null}
 	 */
-	public static String unescapeDeprecated(String text, Set<String> keywords) {
-		return text.length() > 1 && text.charAt(0) == '_' && keywords.contains(text.substring(1))
-				? text.substring(1)
-				: text;
+	public static EStructuralFeature deprecatedUnderscoreLookup(EClass eClass, String propName) {
+		return propName.length() > 1 && propName.charAt(0) == '_'
+				? eClass.getEStructuralFeature(propName.substring(1))
+				: null;
+	}
+
+	/**
+	 * The warning §9.3 asks a tool to give for the deprecated prefix.
+	 *
+	 * @param written the name as written, with the prefix
+	 * @param resolved the name it was found under
+	 * @return the message, without a position
+	 */
+	public static String deprecatedEscapeMessage(String written, String resolved) {
+		return "'" + written + "' is a deprecated escape of '" + resolved
+				+ "'; write _'" + resolved + "' (\u00a79.3)";
 	}
 
 	// ==================== Internal Helpers ====================

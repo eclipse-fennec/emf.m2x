@@ -487,9 +487,11 @@ The expression part is OCL v2.4 as the OCL engine parses it — escaped identifi
 
 In a template, query or macro, `self` is the first parameter; in a `post` expression it is the generated text.
 
-**Names that are keywords** (OCL §9.3, #430): a word M2T reserves — `template`, `file`, `let`, `if`, `self`, `post` and the rest of the grammar's keywords — is written `_'post'` where a feature of that name is meant. The underscore alone, `_post`, is the escape OCL 2.0 and 2.2 used; it still resolves, and a generation reports a WARNING at its place: `doc:4:3: '_post' is a deprecated escape of 'post'; write _'post' (§9.3)`. An underscore before a word that is not a keyword is part of the name, so `[i._label/]` stays `_label`.
+**Names that are keywords** (OCL §9.3, §9.4.1, #430): a word M2T reserves — `template`, `file`, `let`, `if`, `self`, `post` and the rest of the grammar's keywords — is written `_'post'` where a feature of that name is meant.
 
-Because the escape is a spelling of the name and is resolved before anything is looked up, a feature the metamodel really calls `_post` is **not** reached by writing `_post` — that reads `post`. Write `_'_post'` for it (§9.3.4).
+The underscore alone, `_post`, is the escape OCL 2.0 and 2.2 used. It still works, as §9.4.1 describes it: a property name with a leading underscore is looked up **as written first**, and only if the metamodel has no such feature is it looked up again without the underscore. So `[i._post/]` reaches `post` when there is no `_post` — and a feature really called `_post` keeps `_post`. A generation reports a WARNING where the second lookup was needed: `doc:4:3: '_post' is a deprecated escape of 'post'; write _'post' (§9.3)`.
+
+The second lookup is a metamodel lookup and nothing else: an iterator variable or template parameter you declare with a leading underscore keeps the name you gave it. The prefix is deprecated since OCL 2.3 and goes in OCL 3.0.
 
 ### 4.4 For Block
 

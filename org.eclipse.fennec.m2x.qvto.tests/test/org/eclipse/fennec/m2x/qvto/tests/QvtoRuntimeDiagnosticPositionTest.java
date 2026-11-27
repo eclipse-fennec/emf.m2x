@@ -40,12 +40,14 @@ class QvtoRuntimeDiagnosticPositionTest extends AbstractQvtoEngineTest {
 	void runtimeDiagnosticIsForwarded() throws QvtoParseException {
 		// The extent holds no EPackage, so ![EPackage] is null (§8.2.2.7) and navigating it is
 		// the problem. It used to be ![EClass], which found nothing only because of #298.
+		// eClassifiers, not eSuperTypes: the latter is not a feature of EPackage at all, which
+		// the parser now rejects before the run this test is about (#430).
 		var transformation = engine.parse("""
 				modeltype ECORE uses ecore('http://www.eclipse.org/emf/2002/Ecore');
 				transformation T(inout m : ECORE);
 				main() {
 				    var c := m.rootObjects()![EPackage];
-				    log(c.eSuperTypes->first().name);
+				    log(c.eClassifiers->first().name);
 				}
 				""", "positions");
 
@@ -55,7 +57,7 @@ class QvtoRuntimeDiagnosticPositionTest extends AbstractQvtoEngineTest {
 				QvtoExecutionContext.of(extent));
 
 		assertTrue(result.diagnostics().stream()
-				.anyMatch(d -> d.getMessage().contains("Null source for property 'eSuperTypes'")),
+				.anyMatch(d -> d.getMessage().contains("Null source for property 'eClassifiers'")),
 				() -> "the expression's own report has to arrive: " + messages(result));
 	}
 

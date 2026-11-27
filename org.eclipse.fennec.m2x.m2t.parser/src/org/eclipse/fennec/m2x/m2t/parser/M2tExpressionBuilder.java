@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.tree.ParseTree;
@@ -345,6 +344,9 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 				support.checkQualifier(source, pathNameSegments(propCtx.pathName()));
 			}
 			String propName = identifierText(propCtx.identifier());
+			// at the name, not at the expression it ends: a problem with a property is about the
+			// property (#430)
+			support.positionAt(propCtx.identifier());
 			return support.buildPropertyCall(source, propName, isSafe, false);
 		} else if (suffix instanceof M2tParser.DotCallSuffixContext callCtx) {
 			if (callCtx.pathName() != null) {
@@ -619,24 +621,7 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 			return AbstractExpressionBuilder.extractEscapedIdentifier(
 					ctx.ESCAPED_IDENTIFIER().getText());
 		}
-		return unescapeDeprecated(ctx.getText());
-	}
-
-	/**
-	 * Every keyword of the M2T grammar. A deprecated {@code _<keyword>} escape stands for one of
-	 * these (OCL §9.3, #430). {@code M2tDeprecatedEscapeTest} holds this in step with the grammar.
-	 */
-	static final Set<String> KEYWORDS = Set.of(
-			"Bag", "Boolean", "Collection", "Integer", "Map", "OclAny", "OclInvalid", "OclMessage", "OclVoid",
-			"OrderedSet", "Real", "Sequence", "Set", "String", "Tuple", "UnlimitedNatural", "after", "and",
-			"before", "comment", "else", "elseif", "elselet", "endif", "extends", "false", "file", "for", "if",
-			"implies", "import", "in", "invalid", "let", "macro", "module", "not", "null", "or", "overrides",
-			"post", "private", "protected", "public", "query", "self", "separator", "stdout", "super",
-			"template", "then", "trace", "true", "with", "xor");
-
-	/** The name a deprecated {@code _<keyword>} stands for; any other text unchanged. */
-	static String unescapeDeprecated(String text) {
-		return AbstractExpressionBuilder.unescapeDeprecated(text, KEYWORDS);
+		return ctx.getText();
 	}
 
 	static List<String> pathNameSegments(M2tParser.PathNameContext ctx) {
