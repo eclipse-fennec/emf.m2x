@@ -1208,13 +1208,22 @@ class QvtrUnitBuilder extends QvtRBaseVisitor<Object> {
 			for (int i = 0; i < roots.size(); i++) {
 				if (roots.get(i).getType() instanceof EClass expected
 						&& call.getArgument().get(i).getType() instanceof EClass actual
-						&& !expected.isSuperTypeOf(actual) && !actual.isSuperTypeOf(expected)) {
+						&& !conforms(actual, expected) && !conforms(expected, actual)) {
 					callError(at, "Argument " + (i + 1) + " of the call of '" + called.getName() + "' is a "
 							+ actual.getName() + ", but its root variable '" + roots.get(i).getName() + "' is a "
 							+ expected.getName());
 				}
 			}
 		}
+	}
+
+	/**
+	 * Whether {@code type} conforms to {@code general}: a subclass, or any class against
+	 * {@code ecore::EObject} — every class has it as implicit supertype, though no metamodel
+	 * lists it among the supertypes (#471).
+	 */
+	private static boolean conforms(EClass type, EClass general) {
+		return general == EcorePackage.Literals.EOBJECT || general.isSuperTypeOf(type);
 	}
 
 	private void callError(SourcePosition at, String message) {

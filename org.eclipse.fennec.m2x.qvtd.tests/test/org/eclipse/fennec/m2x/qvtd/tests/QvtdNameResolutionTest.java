@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 
 import org.eclipse.emf.common.util.Diagnostic;
+import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
@@ -243,6 +245,33 @@ class QvtdNameResolutionTest extends AbstractQvtdEngineTest {
 						enforce domain rdbms s : Schema { name = pn };
 					}
 					"""), "HR"));
+		}
+
+		@Test
+		@DisplayName("#471: an argument of any class conforms to a root typed ecore::EObject")
+		void relationCall_rootTypedEObject_acceptsAnyClass() throws QvtdParseException {
+			String source = """
+					transformation T(s : ecore, t : ecore) {
+						top relation PackageOut {
+							n : String;
+							checkonly domain s p : ecore::EPackage { name = n };
+							enforce domain t q : ecore::EPackage { name = n };
+							where { Mark(p, q); }
+						}
+						relation Mark {
+							checkonly domain s x : ecore::EPackage {};
+							checkonly domain t o : ecore::EObject {};
+						}
+					}
+					""";
+			EPackage input = EcoreFactory.eINSTANCE.createEPackage();
+			input.setName("pkg");
+			QvtdModelExtent s = QvtdModelExtent.of();
+			s.getContents().add(input);
+			QvtdModelExtent t = emptyExtent();
+			QvtdExecutionResult result = executeEnforce(source, "t", Map.of("s", s, "t", t));
+			assertTrue(result.isSuccess(), "" + result.diagnostics());
+			assertEquals(List.of("pkg"), t.getContents().stream().map(o -> ((EPackage) o).getName()).toList());
 		}
 	}
 
