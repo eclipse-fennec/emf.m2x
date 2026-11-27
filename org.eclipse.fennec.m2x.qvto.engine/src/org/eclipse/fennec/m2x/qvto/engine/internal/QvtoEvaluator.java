@@ -14,9 +14,11 @@
  */
 package org.eclipse.fennec.m2x.qvto.engine.internal;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -1430,6 +1432,9 @@ public class QvtoEvaluator {
 		return extentManager == null ? null : extentManager.extentOf(object);
 	}
 
+	/** The mappings whose reuse is running, innermost first — guards inherits/merges cycles (#464). */
+	private final Deque<MappingOperation> reuseChain = new ArrayDeque<>();
+
 	/**
 	 * Invokes an inherited or merged mapping (§8.2.1.15): "Invocation of the inherited mappings
 	 * follows the 'standard' invocation semantics, except that the out parameters may now start
@@ -1443,6 +1448,22 @@ public class QvtoEvaluator {
 		if (!typesConform(reused, self, args)) {
 			return;
 		}
+		// Reuse is transitive (#464), so a mapping that reaches itself through inherits or merges
+		// would recurse without end
+		if (reused == caller || reuseChain.contains(reused)) {
+			addError("Mapping '" + reused.getName() + "' reuses itself through inherits or merges"
+					+ " — it is not invoked again (§8.2.1.15)");
+			return;
+		}
+		reuseChain.push(caller);
+		try {
+			invokeReusedInChain(reused, caller, self, args);
+		} finally {
+			reuseChain.pop();
+		}
+	}
+
+	private void invokeReusedInChain(MappingOperation reused, MappingOperation caller, Object self, Object[] args) {
 		EList<VarParameter> callerResults = caller.getResult();
 		EList<VarParameter> results = reused.getResult();
 		// "including the actual value of the out parameters" — passed positionally (#336)
@@ -1476,14 +1497,30 @@ public class QvtoEvaluator {
 				}
 			}
 			OperationBody body = reused.getBody();
+			// "Invocation of the inherited mappings follows the 'standard' invocation semantics"
+			// (§8.2.1.15): the mappings the reused one inherits and merges run as they would on
+			// a direct call, so reuse is transitive (#464)
 			if (body instanceof MappingBody mappingBody) {
 				mappingBody.getInitSection().forEach(this::eval);
 				instantiateResults(results);
 				instantiateOutParams(reused);
+				for (MappingOperation inherited : reused.getInherited()) {
+					invokeReused(inherited, reused, self, passed);
+				}
 				mappingBody.getContent().forEach(this::eval);
 				mappingBody.getEndSection().forEach(this::eval);
+				for (MappingOperation merged : reused.getMerged()) {
+					invokeReused(merged, reused, self, passed);
+				}
 			} else if (body != null) {
 				body.getContent().forEach(this::eval);
+			} else {
+				for (MappingOperation inherited : reused.getInherited()) {
+					invokeReused(inherited, reused, self, passed);
+				}
+				for (MappingOperation merged : reused.getMerged()) {
+					invokeReused(merged, reused, self, passed);
+				}
 			}
 			for (VarParameter result : results) {
 				passedBack.add(env.lookup(result.getName()));
