@@ -661,6 +661,16 @@ try {
 
 **Positions are real for both kinds now** (#110). A syntax error carries what ANTLR reported; an unresolved name, unknown type or unknown metamodel carries the place it stands. `0:0` still means "position unknown", which is what a diagnostic reported without any parse context gets.
 
+**Names that are keywords** (§8.4.7, OCL §9.3, #430): QVT-O takes its identifier from OCL, so OCL's document keywords — `body`, `context`, `def`, `derive`, `endpackage`, `include`, `post`, `pre`, plus `init`, `inv`, `library`, `package`, `static` — are ordinary names: `self.post` reads a feature called `post`. `import` is QVT-O syntax (§8.4) and is not among them. A word QVT-O does reserve — `if`, `then`, `self`, `in`, `out` and the rest — is written `_'if'`.
+
+The underscore alone, `_post`, is the escape OCL 2.0 and 2.2 used. It still works, as §9.4.1 describes it: a property name with a leading underscore is looked up **as written first**, and only if the metamodel has no such feature is it looked up again without the underscore. So `self._post` reaches `post` when there is no `_post` — and a feature the metamodel really calls `_post` keeps `_post`, with nothing to write differently. A run reports a WARNING where the second lookup was needed, since the parse has no channel for one: `T:4:50: '_post' is a deprecated escape of 'post'; write _'post' (§9.3)`.
+
+The second lookup is a metamodel lookup and nothing else: a variable, parameter or iterator you declare with a leading underscore keeps the name you gave it. `var _result : String` is a variable called `_result`, not `result`.
+
+Both lookups happen while the unit is parsed, so they need the source type. Where the parser does not have it — `self.oclAsType(OclAny)._post` — the name is resolved when the transformation runs, and that lookup takes `_post` literally: there is no second lookup and no warning at run time.
+
+The prefix is deprecated since OCL 2.3 and goes in OCL 3.0 — §9.3 names the ambiguity above as the reason. Write `_'post'` for a name that is a keyword.
+
 ### 9.1.1 Type Errors (#378)
 
 A transformation is type-checked when it is parsed, with the OCL rules (see the OCL user guide,
@@ -690,6 +700,17 @@ Unknown types are never an error: a value of a dynamic model, a blackbox result,
 imported unit. Intermediate class attributes have their declared type (#404), so
 `h.label := 5` for `label : String` is a type error too. What the evaluator
 meets at run time is checked there, as before.
+
+**Unknown properties** (#430): a property the source type does not declare is a parse error at the
+name, `Unknown property (Item::nmae)`, where it used to surface only at `execute` as
+`Unknown property 'nmae' on Item` with the output object written anyway. The source type has to be
+known for this: `self.oclAsType(OclAny).anything` says nothing to the parser and is still left to
+the run.
+
+The check waits for the whole unit, because a unit adds features to its classes after the
+expressions that read them. An `intermediate property` is kept beside the transformation and
+resolved by name at run time, and an opposite is added once every intermediate class exists —
+neither is a mistake, wherever it is declared relative to the mapping that uses it.
 
 ### 9.2 Execution Diagnostics
 

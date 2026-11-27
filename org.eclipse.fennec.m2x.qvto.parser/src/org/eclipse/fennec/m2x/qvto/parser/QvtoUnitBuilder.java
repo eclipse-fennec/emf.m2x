@@ -143,6 +143,10 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	private final List<AbstractExpressionBuilder.Definition> definitions = new ArrayList<>();
 	/** The declared result type of each mapping, by name, known before any body is built. */
 	private final Map<String, List<EClassifier>> mappingResults = new HashMap<>();
+	/** Warnings of this parse, reported when the transformation runs (#430). */
+	private final List<Resource.Diagnostic> warnings = new ArrayList<>();
+	/** Properties that resolved nowhere, checked once the unit is complete (#430). */
+	private final List<QvtoExpressionBuilder.UnknownProperty> unknownProperties = new ArrayList<>();
 	/** What this unit knows so far, shared with every expression builder it creates. */
 	private final QvtoScope scope;
 	private String intermediatePackageUri;
@@ -151,8 +155,8 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	QvtoUnitBuilder(EPackage.Registry packageRegistry) {
 		this.packageRegistry = packageRegistry;
 		this.environment = QvtoEnvironment.root();
-		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, declaredPackages, definitions,
-				mappingResults);
+		this.scope = new QvtoScope(importedModuleStubs, localTypes, diagnostics, warnings, unknownProperties,
+				declaredPackages, definitions, mappingResults);
 		this.expressionBuilder = new QvtoExpressionBuilder(environment, packageRegistry, scope);
 	}
 
@@ -1977,12 +1981,25 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 			this.environment = this.environment.nested(resultVar);
 		}
 
-		// Implicit 'result' variable — use first result param type if available
+		// §8.1.18: the implicit 'result' is the single result's type, or a tuple of the named
+		// results when there are several, which is how the evaluator binds it (#336). The parse
+		// has to agree: result.a is a tuple part, not a feature of the first result's type, and
+		// QvtoParserSupport#unknownProperties would otherwise reject it (#430).
 		Variable resultVar = OCL.createVariable();
 		resultVar.setName("result");
-		if (!operation.getResult().isEmpty() && operation.getResult().get(0).getEType() != null) {
-			resultVar.setType(
-					operation.getResult().get(0).getEType());
+		if (operation.getResult().size() == 1) {
+			if (operation.getResult().get(0).getEType() != null) {
+				resultVar.setType(operation.getResult().get(0).getEType());
+			}
+		} else if (operation.getResult().size() > 1) {
+			var tuple = OCL.createTupleType();
+			for (var resultParam : operation.getResult()) {
+				var part = OCL.createTuplePart();
+				part.setName(resultParam.getName());
+				part.setType(resultParam.getEType());
+				tuple.getOwnedParts().add(part);
+			}
+			resultVar.setType(tuple);
 		}
 		this.environment = this.environment.nested(resultVar);
 
@@ -2129,6 +2146,16 @@ class QvtoUnitBuilder extends QvtOBaseVisitor<Object> {
 	 */
 	List<Resource.Diagnostic> getDiagnostics() {
 		return diagnostics;
+	}
+
+	/** @return what the parse wants to say without rejecting the unit (#430) */
+	List<Resource.Diagnostic> getWarnings() {
+		return warnings;
+	}
+
+	/** @return the properties that resolved nowhere while the expressions were built (#430) */
+	List<QvtoExpressionBuilder.UnknownProperty> getUnknownProperties() {
+		return unknownProperties;
 	}
 
 	private EPackage resolvePackageRef(QvtOParser.PackageRefContext ctx) {

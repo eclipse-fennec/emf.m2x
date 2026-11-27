@@ -25,11 +25,14 @@ import java.util.Set;
 
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EOperation;
 import org.eclipse.emf.ecore.EPackage;
+import org.eclipse.emf.ecore.EStructuralFeature;
+import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.util.EcoreUtil;
@@ -37,6 +40,7 @@ import org.eclipse.fennec.m2x.model.imperativeocl.BreakExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ContinueExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.ImperativeLoopExp;
 import org.eclipse.fennec.m2x.model.imperativeocl.WhileExp;
+import org.eclipse.fennec.m2x.model.qvtoperational.ContextualProperty;
 import org.eclipse.fennec.m2x.model.qvtoperational.EntryOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.ImperativeOperation;
 import org.eclipse.fennec.m2x.model.qvtoperational.MappingBody;
@@ -123,6 +127,7 @@ public class QvtoParserSupport {
 		List<Resource.Diagnostic> diagnostics = new ArrayList<>(builder.getDiagnostics());
 		diagnostics.addAll(misplacedLoopControl(result, builder.getNodePositions()));
 		diagnostics.addAll(illFormedOperations(result));
+		diagnostics.addAll(unknownProperties(result, builder.getUnknownProperties()));
 		checkResolutionErrors(diagnostics);
 
 		// Kept with the transformation rather than returned: the parse signature is API, and the
@@ -136,7 +141,73 @@ public class QvtoParserSupport {
 			result.setName(unitName);
 		}
 
+		recordWarnings(result, builder.getWarnings(), unitName);
+
 		return result;
+	}
+
+	/**
+	 * The properties no type of the finished unit declares (#430).
+	 *
+	 * <p>Checked here rather than where the expression was built, because a unit adds features to
+	 * its classes after the expressions that read them: an {@code intermediate property} is kept
+	 * beside the transformation and resolved by name at run time, and an opposite is added once
+	 * every intermediate class exists. Only a name that is still nowhere once the whole unit
+	 * stands is a mistake.
+	 *
+	 * @param unit the finished transformation
+	 * @param candidates what resolved nowhere while the expressions were built
+	 * @return one diagnostic per name that is still unknown
+	 */
+	private static List<Resource.Diagnostic> unknownProperties(OperationalTransformation unit,
+			List<QvtoExpressionBuilder.UnknownProperty> candidates) {
+		List<Resource.Diagnostic> unknown = new ArrayList<>();
+		for (QvtoExpressionBuilder.UnknownProperty candidate : candidates) {
+			if (candidate.owner().getEStructuralFeature(candidate.name()) == null
+					&& !isIntermediateProperty(unit, candidate)) {
+				unknown.add(new ParseDiagnostic("Unknown property ("
+						+ candidate.owner().getName() + "::" + candidate.name() + ")",
+						candidate.line(), candidate.column()));
+			}
+		}
+		return unknown;
+	}
+
+	/** Whether the unit declares the name as an intermediate property of that type (§8.1.10). */
+	private static boolean isIntermediateProperty(OperationalTransformation unit,
+			QvtoExpressionBuilder.UnknownProperty candidate) {
+		for (EStructuralFeature feature : unit.getIntermediateProperty()) {
+			if (feature instanceof ContextualProperty property
+					&& candidate.name().equals(property.getName())
+					&& (property.getContext() == null
+							|| property.getContext().isSuperTypeOf(candidate.owner()))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Annotation on a parsed transformation carrying the warnings of its parse — the parse has
+	 * no channel for them, so a run reports them (#430).
+	 */
+	public static final String WARNINGS_ANNOTATION = "qvto.warnings";
+
+	/** Stamps each warning with the unit, which the builders do not know, and keeps them. */
+	private static void recordWarnings(OperationalTransformation transformation,
+			List<Resource.Diagnostic> warnings, String unitName) {
+		if (warnings.isEmpty()) {
+			return;
+		}
+		EAnnotation annotation = EcoreFactory.eINSTANCE.createEAnnotation();
+		annotation.setSource(WARNINGS_ANNOTATION);
+		for (int i = 0; i < warnings.size(); i++) {
+			Resource.Diagnostic warning = warnings.get(i);
+			annotation.getDetails().put(String.valueOf(i),
+					new SourcePosition(unitName, warning.getLine(), warning.getColumn())
+							+ ": " + warning.getMessage());
+		}
+		transformation.getEAnnotations().add(annotation);
 	}
 
 	/**

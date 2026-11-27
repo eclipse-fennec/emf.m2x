@@ -41,6 +41,10 @@ import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
  * @param importedModuleStubs the modules this unit imports, by name, stubs until the link
  * @param localTypes module-local type names ({@code typedef})
  * @param diagnostics where both builders report what they could not resolve
+ * @param warnings what the parse wants to say without rejecting the unit — the parse has no
+ *        channel of its own, so a run of the transformation reports them (#430)
+ * @param unknownProperties the properties that resolved nowhere while the expressions were
+ *        built, checked again once the unit is complete (#430)
  * @param declaredPackages the metamodels this unit declared, in declaration order
  * @param definitions the signatures of the unit's helpers and queries, collected before any
  *        body is built, so that a call is typed and checked wherever it stands (#378)
@@ -53,6 +57,8 @@ record QvtoScope(
 		Map<String, Module> importedModuleStubs,
 		Map<String, EClassifier> localTypes,
 		List<Resource.Diagnostic> diagnostics,
+		List<Resource.Diagnostic> warnings,
+		List<QvtoExpressionBuilder.UnknownProperty> unknownProperties,
 		Set<EPackage> declaredPackages,
 		List<AbstractExpressionBuilder.Definition> definitions,
 		Map<String, List<EClassifier>> mappingResults) {
@@ -61,6 +67,8 @@ record QvtoScope(
 		Objects.requireNonNull(importedModuleStubs, "importedModuleStubs must not be null");
 		Objects.requireNonNull(localTypes, "localTypes must not be null");
 		Objects.requireNonNull(diagnostics, "diagnostics must not be null");
+		Objects.requireNonNull(warnings, "warnings must not be null");
+		Objects.requireNonNull(unknownProperties, "unknownProperties must not be null");
 		Objects.requireNonNull(declaredPackages, "declaredPackages must not be null");
 		Objects.requireNonNull(definitions, "definitions must not be null");
 		Objects.requireNonNull(mappingResults, "mappingResults must not be null");

@@ -344,6 +344,9 @@ class M2tExpressionBuilder extends M2tParserBaseVisitor<Object> {
 				support.checkQualifier(source, pathNameSegments(propCtx.pathName()));
 			}
 			String propName = identifierText(propCtx.identifier());
+			// at the name, not at the expression it ends: a problem with a property is about the
+			// property (#430)
+			support.positionAt(propCtx.identifier());
 			return support.buildPropertyCall(source, propName, isSafe, false);
 		} else if (suffix instanceof M2tParser.DotCallSuffixContext callCtx) {
 			if (callCtx.pathName() != null) {

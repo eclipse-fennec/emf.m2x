@@ -101,6 +101,10 @@ class M2tModuleBuilder extends M2tParserBaseVisitor<Object> {
 		this.unitName = unitName;
 		this.exprBuilder = new M2tExpressionBuilder(contextType, packageRegistry);
 		this.packageRegistry = packageRegistry;
+		// §9.4.1's second lookup, and where its warning goes (#430)
+		exprBuilder.support.setDeprecatedEscapeSink(warning -> warnings.add(
+				new SourcePosition(unitName, warning.getLine(), warning.getColumn())
+						+ ": " + warning.getMessage()));
 	}
 
 	/**

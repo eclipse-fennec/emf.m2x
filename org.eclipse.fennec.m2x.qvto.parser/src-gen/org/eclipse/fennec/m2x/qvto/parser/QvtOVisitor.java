@@ -1,4 +1,4 @@
-// Generated from /opt/git/m2m/workspace/org.eclipse.fennec.m2x.qvto.parser/grammar/QvtO.g4 by ANTLR 4.13.2
+// Generated from /opt/git/emf.m2x/org.eclipse.fennec.m2x.qvto.parser/grammar/QvtO.g4 by ANTLR 4.13.2
 package org.eclipse.fennec.m2x.qvto.parser;
 import org.antlr.v4.runtime.tree.ParseTreeVisitor;
 
@@ -1352,6 +1352,12 @@ public interface QvtOVisitor<T> extends ParseTreeVisitor<T> {
 	 * @return the visitor result
 	 */
 	T visitQvtoIdentifier(QvtOParser.QvtoIdentifierContext ctx);
+	/**
+	 * Visit a parse tree produced by {@link QvtOParser#qvtoDocumentKeyword}.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	T visitQvtoDocumentKeyword(QvtOParser.QvtoDocumentKeywordContext ctx);
 	/**
 	 * Visit a parse tree produced by {@link QvtOParser#expressionEntry}.
 	 * @param ctx the parse tree

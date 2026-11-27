@@ -33,6 +33,7 @@ import org.eclipse.emf.common.util.BasicDiagnostic;
 import org.eclipse.emf.common.util.Diagnostic;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.TreeIterator;
+import org.eclipse.emf.ecore.EAnnotation;
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
 import org.eclipse.emf.ecore.EClassifier;
@@ -105,6 +106,7 @@ import org.eclipse.fennec.m2x.ocl.api.OclOperationProvider;
 import org.eclipse.fennec.m2x.ocl.api.OclResult;
 import org.eclipse.fennec.m2x.ocl.api.OclValues;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
+import org.eclipse.fennec.m2x.qvto.parser.QvtoParserSupport;
 import org.eclipse.fennec.m2x.qvto.api.QvtoBlackboxRegistry;
 import org.eclipse.fennec.m2x.qvto.api.QvtoEvaluationOptions;
 import org.eclipse.fennec.m2x.qvto.api.QvtoModelExtent;
@@ -251,6 +253,14 @@ public class QvtoEvaluator {
 	 * @return the collected diagnostics
 	 */
 	public List<Diagnostic> execute() {
+		// What the parse found worth a warning and had no channel for (#430)
+		EAnnotation warnings = transformation.getEAnnotation(QvtoParserSupport.WARNINGS_ANNOTATION);
+		if (warnings != null) {
+			for (String warning : warnings.getDetails().values()) {
+				diagnostics.add(new BasicDiagnostic(Diagnostic.WARNING, SOURCE_ID, 0, warning, null));
+			}
+		}
+
 		prepare();
 		if (!modelsConform()) {
 			return diagnostics;

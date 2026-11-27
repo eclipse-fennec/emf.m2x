@@ -103,6 +103,7 @@ import org.eclipse.fennec.m2x.model.qvtoperational.ResolveExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.ResolveInExp;
 import org.eclipse.fennec.m2x.model.qvtoperational.VarParameter;
 import org.eclipse.fennec.m2x.ocl.api.OclStandardLibrary;
+import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostic;
 import org.eclipse.fennec.m2x.ocl.api.ParseDiagnostics;
 import org.eclipse.fennec.m2x.ocl.api.SourcePosition;
 import org.eclipse.fennec.m2x.ocl.parser.AbstractExpressionBuilder;
@@ -132,6 +133,10 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	private final Map<String, Module> importedModuleStubs;
 	private final Map<String, EClassifier> localTypes;
 	private final List<Resource.Diagnostic> diagnostics;
+	/** Warnings of this parse, reported when the transformation runs (#430). */
+	private final List<Resource.Diagnostic> warnings;
+	/** Properties that resolved nowhere, checked again once the unit is complete (#430). */
+	private final List<UnknownProperty> unknownProperties;
 
 	/**
 	 * Where the visitor currently is, for problems found while building rather than while reading
@@ -373,6 +378,8 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		this.declaredPackages = scope.declaredPackages();
 		this.localTypes = scope.localTypes();
 		this.diagnostics = scope.diagnostics();
+		this.warnings = scope.warnings();
+		this.unknownProperties = scope.unknownProperties();
 		this.importedModuleStubs = scope.importedModuleStubs();
 		this.environment = Objects.requireNonNull(environment,
 				"environment must not be null");
@@ -2150,9 +2157,31 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 	}
 
 	private void resolveProperty(PropertyCallExp exp, String propName) {
+		resolveProperty(exp, propName, null);
+	}
+
+	/**
+	 * Resolves a property, falling back to the deprecated underscore prefix (§9.4.1, #430).
+	 *
+	 * @param exp the property call being built
+	 * @param propName the name as written
+	 * @param nameCtx where the name stands, for the deprecation warning; {@code null} reports at
+	 *        the cursor
+	 */
+	private void resolveProperty(PropertyCallExp exp, String propName,
+			QvtOParser.QvtoIdentifierContext nameCtx) {
 		EClassifier sourceType = getSourceClassifier(exp.getOwnedSource());
 		if (sourceType instanceof EClass eClass) {
 			EStructuralFeature feature = eClass.getEStructuralFeature(propName);
+			if (feature == null) {
+				// §9.4.1: the name as written found nothing, so a leading underscore may be the
+				// escape OCL 2.0 and 2.2 used. Second, so that a feature really called _post
+				// keeps _post.
+				feature = AbstractExpressionBuilder.deprecatedUnderscoreLookup(eClass, propName);
+				if (feature != null) {
+					warnDeprecatedEscape(propName, feature.getName(), nameCtx);
+				}
+			}
 			if (feature != null) {
 				exp.setReferredProperty(feature);
 				EClassifier featureType = feature.getEType();
@@ -2166,9 +2195,37 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 				return;
 			}
 		}
+		if (sourceType instanceof EClass eClass) {
+			// Not reported here: an intermediate property and an opposite are added to the unit
+			// after the expressions that read them were built. The unit checks these once it is
+			// complete — see QvtoUnitBuilder#reportUnknownProperties (#430).
+			unknownProperties.add(new UnknownProperty(eClass, propName,
+					nameCtx != null ? nameCtx.getStart().getLine() : 0,
+					nameCtx != null ? nameCtx.getStart().getCharPositionInLine() : 0));
+		}
 		EAttribute synth = EcoreFactory.eINSTANCE.createEAttribute();
 		synth.setName(propName);
 		exp.setReferredProperty(synth);
+	}
+
+	/**
+	 * A property no class of the unit declared when the expression reading it was built.
+	 *
+	 * @param owner the type the name was looked up in
+	 * @param name the property name as written
+	 * @param line 1-based line of the name
+	 * @param column 0-based column of the name
+	 */
+	record UnknownProperty(EClass owner, String name, int line, int column) {}
+
+	/** The warning §9.3 asks for, at the name rather than at the enclosing expression. */
+	private void warnDeprecatedEscape(String written, String resolved,
+			QvtOParser.QvtoIdentifierContext nameCtx) {
+		String message = AbstractExpressionBuilder.deprecatedEscapeMessage(written, resolved);
+		warnings.add(nameCtx != null
+				? new ParseDiagnostic(message, nameCtx.getStart().getLine(),
+						nameCtx.getStart().getCharPositionInLine())
+				: positions.at(message));
 	}
 
 	private void resolveOperation(OperationCallExp exp, String opName) {
@@ -2225,7 +2282,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		exp.setIsPre(ctx.isMarkedPre() != null);
 
 		String propName = qvtoIdentifierText(ctx.qvtoIdentifier());
-		resolveProperty(exp, propName);
+		resolveProperty(exp, propName, ctx.qvtoIdentifier());
 		return exp;
 	}
 
@@ -2364,7 +2421,7 @@ class QvtoExpressionBuilder extends QvtOBaseVisitor<Object> {
 		PropertyCallExp propAccess = OCL.createPropertyCallExp();
 		propAccess.setOwnedSource(iterRef);
 		String propName = qvtoIdentifierText(propCtx.qvtoIdentifier());
-		resolveProperty(propAccess, propName);
+		resolveProperty(propAccess, propName, propCtx.qvtoIdentifier());
 		collectExp.setOwnedBody(propAccess);
 
 		return withoutNulls(collectExp);
