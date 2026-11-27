@@ -19,10 +19,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+import java.util.Map;
 import java.util.function.UnaryOperator;
 
 import org.eclipse.emf.ecore.EAttribute;
 import org.eclipse.emf.ecore.EClass;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.EcoreFactory;
 import org.eclipse.emf.ecore.EcorePackage;
@@ -35,6 +38,9 @@ import org.eclipse.fennec.m2x.ocl.api.OclConfiguration;
 import org.eclipse.fennec.m2x.ocl.parser.OclParserSupport;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdConfiguration;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdEngine;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionContext;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdExecutionResult;
+import org.eclipse.fennec.m2x.qvtd.api.QvtdModelExtent;
 import org.eclipse.fennec.m2x.qvtd.api.QvtdParseException;
 import org.eclipse.fennec.m2x.qvtd.engine.QvtdEngines;
 import org.junit.jupiter.api.AfterEach;
@@ -140,6 +146,73 @@ class QvtdPackageRegistryTest {
 				() -> "diagnostics: " + failure.getErrors());
 	}
 
+	@Test
+	@DisplayName("#458: a package-qualified class resolves in its package, not by its simple name")
+	void qualifiedClass_resolvesByItsQualifier() throws QvtdParseException {
+		assertCopiedInto("b", """
+				transformation T(s : a, t : b) {
+				    top relation Copy {
+				        l : String;
+				        checkonly domain s x : a::Item { label = l };
+				        enforce domain t y : b::Item { label = l };
+				    }
+				}
+				""");
+	}
+
+	@Test
+	@DisplayName("#458: an unqualified class resolves in the metamodel of its domain's typed model first")
+	void unqualifiedClass_resolvesInItsDomainsMetamodelFirst() throws QvtdParseException {
+		assertCopiedInto("b", """
+				transformation T(s : a, t : b) {
+				    top relation Copy {
+				        l : String;
+				        checkonly domain s x : Item { label = l };
+				        enforce domain t y : Item { label = l };
+				    }
+				}
+				""");
+	}
+
+	/** Runs a copy between two packages {@code a} and {@code b} that both have a class {@code Item}. */
+	private void assertCopiedInto(String expectedPackage, String source) throws QvtdParseException {
+		EPackage a = itemPackage("a");
+		EPackage b = itemPackage("b");
+		EPackage.Registry twoPackages = new EPackageRegistryImpl();
+		twoPackages.put(a.getNsURI(), a);
+		twoPackages.put(b.getNsURI(), b);
+		QvtdEngine engine = engineWith(builder -> builder.packageRegistry(twoPackages));
+
+		EClass sourceItem = (EClass) a.getEClassifier("Item");
+		EObject item = a.getEFactoryInstance().create(sourceItem);
+		item.eSet(sourceItem.getEStructuralFeature("label"), "x");
+		QvtdModelExtent s = QvtdModelExtent.of(item);
+		QvtdModelExtent t = QvtdModelExtent.of();
+
+		QvtdExecutionResult result = engine.execute(engine.parse(source, "T"),
+				QvtdExecutionContext.enforce("t", Map.of("s", s, "t", t)));
+		assertTrue(result.isSuccess(), () -> "diagnostics: " + result.diagnostics());
+		assertEquals(1, t.getContents().size());
+		EObject copy = t.getContents().get(0);
+		assertEquals(expectedPackage, copy.eClass().getEPackage().getName());
+		assertEquals("x", copy.eGet(copy.eClass().getEStructuralFeature("label")));
+	}
+
+	private static EPackage itemPackage(String name) {
+		EPackage pkg = EcoreFactory.eINSTANCE.createEPackage();
+		pkg.setName(name);
+		pkg.setNsURI("http://example.org/m2x/qvtr-458/" + name);
+		pkg.setNsPrefix(name);
+		EClass item = EcoreFactory.eINSTANCE.createEClass();
+		item.setName("Item");
+		EAttribute label = EcoreFactory.eINSTANCE.createEAttribute();
+		label.setName("label");
+		label.setEType(EcorePackage.Literals.ESTRING);
+		item.getEStructuralFeatures().add(label);
+		pkg.getEClassifiers().add(item);
+		return pkg;
+	}
+
 	// --- helpers ---
 
 	private QvtdEngine engineWith(UnaryOperator<QvtdConfiguration.Builder> customizer) {
@@ -153,7 +226,7 @@ class QvtdPackageRegistryTest {
 	private EPackage usedPackage(RelationalTransformation transformation) {
 		return transformation.getModelParameter().stream()
 				.map(TypedModel::getUsedPackage)
-				.flatMap(java.util.List::stream)
+				.flatMap(List::stream)
 				.findFirst()
 				.orElse(null);
 	}
